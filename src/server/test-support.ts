@@ -7,6 +7,7 @@ import type { Kysely } from 'kysely';
 import type { DestinationStream } from 'pino';
 import { onTestFinished } from 'vitest';
 import { z } from 'zod';
+import { pickSystemFreePort } from '../../scripts/ci/lib/ports.ts';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
@@ -16,6 +17,12 @@ import { type AppConfig, loadConfig } from './config/env.ts';
 const LogLine = z.record(z.string(), z.unknown());
 
 export const UNREACHABLE_DATABASE_URL = 'postgres://user:pw@127.0.0.1:1/db';
+
+/**
+ * A random free port from 32769 to 60999 on 127.0.0.1, chosen by us as docs/ci-runners.md (Ports) requires. Tests that
+ * listen use this and never port 0, which asks the kernel for a port from its ephemeral range (a host sysctl).
+ */
+export const freePort = pickSystemFreePort;
 
 /** A pino destination that keeps what was written, so tests can assert on log lines (and on their absence). */
 export interface LogCapture {
@@ -81,8 +88,8 @@ export async function silentPostgres(): Promise<{ url: string; close: () => Prom
     sockets.add(socket);
     socket.on('error', console.error);
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = z.object({ port: z.number() }).parse(server.address());
+  const port = await freePort();
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
   return {
     url: `postgres://user:pw@127.0.0.1:${port}/db`,
     close: async () => {

@@ -6,15 +6,19 @@ import process from 'node:process';
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { type BootOptions, boot, type RunningServer } from './boot.ts';
-import { UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 class FakeProcess extends EventEmitter {
   exitCode: number | string | null | undefined;
 }
 
-const ENV = { DATABASE_URL: UNREACHABLE_DATABASE_URL, HOST: '127.0.0.1', PORT: '0', LOG_LEVEL: 'silent' };
+const BASE_ENV = { DATABASE_URL: UNREACHABLE_DATABASE_URL, HOST: '127.0.0.1', LOG_LEVEL: 'silent' };
 
-async function start(env: Record<string, string> = ENV, shutdownTimeoutMs?: number) {
+/** The base environment plus a random free port: never PORT=0, which asks the kernel's ephemeral range. */
+const freshEnv = async (): Promise<Record<string, string>> => ({ ...BASE_ENV, PORT: String(await freePort()) });
+
+async function start(given?: Record<string, string>, shutdownTimeoutMs?: number) {
+  const env = given ?? (await freshEnv());
   const signals = new FakeProcess();
   const db = await openPgliteDatabase();
   const createDb = vi.fn<NonNullable<BootOptions['createDb']>>(() => db);
@@ -82,7 +86,7 @@ async function openUnfinishedRequest(address: string | undefined): Promise<{ clo
 }
 
 test('a request that never finishes cannot hold the shutdown past its deadline: the connection is dropped, exit code 1', async () => {
-  const { server, signals } = await start(ENV, 50);
+  const { server, signals } = await start(undefined, 50);
   const request = await openUnfinishedRequest(server?.address);
   signals.emit('SIGTERM');
   await server?.close();
@@ -92,7 +96,7 @@ test('a request that never finishes cannot hold the shutdown past its deadline: 
 });
 
 test('a second signal drops the open connections at once instead of waiting for the deadline', async () => {
-  const { server, signals } = await start(ENV, 600_000);
+  const { server, signals } = await start(undefined, 600_000);
   const request = await openUnfinishedRequest(server?.address);
   signals.emit('SIGTERM');
   expect(signals.listenerCount('SIGTERM')).toBe(1);
@@ -135,7 +139,7 @@ test('without an err sink the report goes to stderr', async () => {
 test('a port that is taken fails the start, releases the database and sets the exit code', async () => {
   const first = await start();
   const port = new URL(first.server?.address ?? '').port;
-  const second = await start({ ...ENV, PORT: port });
+  const second = await start({ ...BASE_ENV, PORT: port });
   expect(second.server).toBeUndefined();
   expect(second.signals.exitCode).toBe(1);
   await expect(second.db.selectFrom('users').selectAll().execute()).rejects.toThrow(
@@ -146,7 +150,7 @@ test('a port that is taken fails the start, releases the database and sets the e
 
 test('by default it connects with node-postgres, so an unreachable database means live but not ready', async () => {
   const signals = new FakeProcess();
-  const server = await boot({ env: ENV, signals });
+  const server = await boot({ env: await freshEnv(), signals });
   onTestFinished(async () => {
     await server?.close();
   });

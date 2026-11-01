@@ -122,17 +122,22 @@ Items marked (planned) do not exist yet.
 ├── src/web/                     (planned) React SPA
 ├── migrations/                  forward-only SQL, never edited after merge (001_initial.sql)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
-├── docker-compose.yml           local PostgreSQL 18
+├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
+├── docs/ci-runners.md           CI runner policy: shared self-hosted runners, fork approval, ports, job rules
 ├── scripts/eslint-layers.ts     the layering rules of the ESLint config, and their test
 ├── scripts/check-code-caps.ts   structure-cap ratchet, entry (runs natively on Node 26)
 ├── scripts/code-caps/           its modules (types, naming, nesting, collector, measure, files, baseline,
 │                                report, cli) and tests; a port of the Python tool
+├── scripts/ci/                  CI helpers, run natively: free-port, postgres (start/stop the CI database container),
+│                                check-runners (the workflow guard); logic and tests in lib/
+├── scripts/dev/                 db.ts: local database on a random port (up, down, url, run); install-hooks.ts: the postinstall; logic and tests in lib/
+├── .local/                      (git-ignored) the port that yarn db:up chose
 ├── types/                       ambient .d.ts for tools without types (eslint-plugin-no-unsanitized)
 ├── e2e/                         (planned) Playwright specs and visual baselines
 ├── tests/leaks/                 (planned) memlab scenarios and the @memlab/api wrapper
 ├── LICENSE                      AGPL-3.0-only
 ├── rules/                       (planned) Semgrep rules cache (git-ignored, never committed)
-├── .github/workflows/ci.yml     jobs static, coverage and postgres; .github/dependabot.yml
+├── .github/workflows/ci.yml     jobs static, coverage and postgres, all on self-hosted runners; .github/dependabot.yml
 ├── .code-caps-baseline.json
 ├── lefthook.yml  biome.json  eslint.config.mjs  fta.json  knip.json  vitest.config.ts
 ├── stryker.config.mjs  playwright.config.ts  qodana.yaml  vite.config.ts      (planned)
@@ -251,7 +256,7 @@ Everything is strict by default: 100% coverage, zero lint findings, 100% type co
 | memlab | Adopt (deferred: lands with its CI job) | CI nightly and release | Puppeteer based with its own Chromium; no leak-based exit code was found (unverified), so wrap it with `@memlab/api` and fail on leaks |
 | Vitest `--logHeapUsage`, Node `--heap-prof` / `--cpu-prof` | Adopt, diagnostic only | on demand | Not gates. Used to investigate memlab or CI memory findings |
 | Qodana (`qodana-js`) | Adopt, limited (deferred: lands with its CI job) | CI | Paid licence and token; fork PRs get no secrets, so make it a maintainer-side check |
-| Lefthook | Adopt | hooks | v2 `jobs:` syntax. Hooks installed from root `postinstall` (Yarn never runs `prepare`) |
+| Lefthook | Adopt | hooks | v2 `jobs:` syntax. Hooks installed from root `postinstall` (Yarn never runs `prepare`), skipped in CI and without `.git` (`scripts/dev/install-hooks.ts`) |
 | GitNexus | Adopt as dev tooling | dev | Not a gate. PolyForm Noncommercial licence, and it edits CLAUDE.md |
 
 ### Hook pipeline
@@ -262,22 +267,22 @@ Order is cheap and deterministic first, expensive and flaky last, and each step 
 |---|---|---|---|
 | `pre-commit` | staged files | 15 s | 1. `biome check --write --error-on-warnings` (restages fixes). Then in parallel: ESLint on staged files, `vitest related --run` (no coverage), `check-code-caps`, `trivy fs --scanners secret` |
 | `commit-msg` | none | n/a | Not used |
-| `pre-push` | whole repo | 3 min | 1. `biome ci --error-on-warnings` 2. `tsc -b` 3. in parallel: ESLint full, `type-coverage --strict --at-least 100`, Knip (both modes), FTA, `check-code-caps`, `trivy fs` (HIGH/CRITICAL plus secret/misconfig), Semgrep (skipped if not installed) 4. `CI=1 vitest run --coverage` at 100% |
+| `pre-push` | whole repo | 3 min | 1. `biome ci --error-on-warnings` 2. `tsc -b` 3. in parallel: ESLint full, `type-coverage --strict --at-least 100`, Knip (both modes), FTA, `check-code-caps`, the runner guard (`yarn ci:runners`), `trivy fs` (HIGH/CRITICAL plus secret/misconfig), Semgrep (skipped if not installed) 4. `CI=1 vitest run --coverage` at 100% |
 | `post-merge`, `post-checkout`, `post-rewrite` | lockfile change | 1 min | `yarn install --immutable` when `yarn.lock` or `.yarnrc.yml` changed |
 
-Today `lefthook.yml` has no Trivy or Semgrep job: they land with their CI jobs (a hook job must have a CI counterpart), and the `pre-push` hook calls the same `package.json` scripts as CI and `yarn gate` (`yarn lint:biome`, `yarn typecheck`, `yarn lint:eslint`, `yarn type-coverage`, `yarn knip`, `yarn fta`, `yarn caps`, `yarn coverage`). `pre-commit` runs staged-file variants of the binaries (`biome check --write`, `eslint`, `vitest related`) and shares only `yarn caps`. `skip: [merge, rebase]` is set on the slow `pre-commit` jobs only; on `pre-push` it would let `yarn gate` pass without running during a rebase. Budgets are targets, not measurements. `lefthook.yml` uses `piped: true` so a failed step stops the rest, with `group: parallel` for the independent static checks in step 3. Formatting runs before linting so lint sees the final text; types run before tests; coverage is last in the hook because it is the most expensive and meaningless if static gates fail. `CI=1` makes Vitest refuse to write new snapshots, so a push cannot go green with uncommitted snapshot files. Mutation, e2e, leak and Qodana runs are nondeterministic or slow and stay in CI.
+Today `lefthook.yml` has no Trivy or Semgrep job: they land with their CI jobs (a hook job must have a CI counterpart), and the `pre-push` hook calls the same `package.json` scripts as CI and `yarn gate` (`yarn lint:biome`, `yarn typecheck`, `yarn lint:eslint`, `yarn type-coverage`, `yarn knip`, `yarn fta`, `yarn caps`, `yarn ci:runners`, `yarn coverage`). `pre-commit` runs staged-file variants of the binaries (`biome check --write`, `eslint`, `vitest related`) and shares only `yarn caps`. `skip: [merge, rebase]` is set on the slow `pre-commit` jobs only; on `pre-push` it would let `yarn gate` pass without running during a rebase. Budgets are targets, not measurements. `lefthook.yml` uses `piped: true` so a failed step stops the rest, with `group: parallel` for the independent static checks in step 3. Formatting runs before linting so lint sees the final text; types run before tests; coverage is last in the hook because it is the most expensive and meaningless if static gates fail. `CI=1` makes Vitest refuse to write new snapshots, so a push cannot go green with uncommitted snapshot files. Mutation, e2e, leak and Qodana runs are nondeterministic or slow and stay in CI.
 
 Network-bound jobs (Trivy vulnerability DB, Semgrep registry rules) can be skipped offline with `LEFTHOOK_EXCLUDE=trivy,semgrep`; that is the only sanctioned hook exclusion, and CI still enforces them. Downloading Semgrep rules into a git-ignored `rules/` cache removes the registry dependency; do not commit them (see CLAUDE.md, Semgrep).
 
 ### CI (authoritative)
 
-`.github/workflows/ci.yml`, every third-party Action pinned to a full commit SHA. `static`, `coverage` and `postgres` exist today; rows marked deferred land together with their tool. Job graph:
+`.github/workflows/ci.yml`, every third-party Action pinned to a full commit SHA. `static`, `coverage` and `postgres` exist today; rows marked deferred land together with their tool. All three jobs run on the maintainer's shared, persistent, self-hosted runners (`runs-on: [self-hosted, Linux, X64]`), protected only by the fork-PR approval gate; the policy, the risks, the job rules and the port rules are in [`docs/ci-runners.md`](docs/ci-runners.md). Every job starts with a fail-fast preflight (git, curl, tar, free disk space, and Docker for `postgres`) and keeps Corepack (installed into a per-job prefix, not the shared tool cache), Yarn, npm, the XDG directories and `TMPDIR` under the runner's temp directory. CI installs no git hooks: on a persistent workspace one would fail the next run's checkout. `release.yml` and `scorecard.yml`, if they are ever added, must use GitHub-hosted `ubuntu-24.04`. Job graph:
 
 | Job | Needs | Runs |
 |---|---|---|
-| `static` | none | Explicit named steps running the same scripts as the `pre-push` hook minus the coverage step: Biome, `tsc -b`, ESLint, type-coverage per project, Knip (both modes), FTA, caps |
+| `static` | none | Explicit named steps running the same scripts as the `pre-push` hook minus the coverage step: Biome, `tsc -b`, ESLint, type-coverage per project, Knip (both modes), FTA, caps, and the runner guard `yarn ci:runners` (every job must name an allowed runner, have a timeout of at most 60 minutes, least-privilege permissions and no `container:` or `services:`; see `docs/ci-runners.md`) |
 | `coverage` | none | `CI=1 vitest run --coverage` at 100%. Runs in parallel with `static` (both are required checks, so a skipped dependent job could not mask a failure). Later: upload `coverage/` for Qodana |
-| `postgres` | none | `yarn test` with `DATABASE_URL` pointing at a PostgreSQL 18 service container (image pinned by tag and digest). The Vitest globalSetup creates a throw-away `cla_test_<hex>` database, the whole suite runs in it, and it is dropped afterwards. Not a required check; it exists to catch a difference between PGlite and a real server (the advisory-lock test only runs here) |
+| `postgres` | none | `yarn ci:postgres start` runs a PostgreSQL 18 container (image pinned by tag and digest, no `services:` block) on a random free loopback port with a unique per-run name and password, and exports `DATABASE_URL`; then `yarn test`; an `if: always()` step runs `yarn ci:postgres stop`. The Vitest globalSetup creates a throw-away `cla_test_<hex>` database, the whole suite runs in it, and it is dropped afterwards. Not a required check; it exists to catch a difference between PGlite and a real server (the advisory-lock test only runs here) |
 | `mutation` (deferred) | `static` | Stryker `--incremental`, `reports/stryker-incremental.json` restored from cache |
 | `e2e` (deferred) | `static` | Playwright in the pinned container, including visual baselines |
 | `semgrep`, `trivy` (deferred) | none | Full scans; mandatory, not skippable |
@@ -292,7 +297,9 @@ Branch protection on `main` requires `static` and `coverage` today (`postgres` i
 |---|---|
 | TypeScript `~6.0.x`, not 7 | TS 7.0 (native Go) ships no classic compiler API; 7.1 adds a different one. typescript-eslint 8.72 peers `typescript <6.1`, and Stryker's typescript-checker, `type-coverage --strict` and `check-code-caps.ts` all need the classic JS API. Revisit when those tools support the new API |
 | Kysely, not Drizzle | Drizzle 1.0 is still release-candidate (breaking changes pending); Kysely 0.29 is stable and pg-boss ships a Kysely adapter. The schema types are written by hand and a test compares them with the live catalog, so drift fails the build. The tests use a small own PGlite dialect (`kysely-pglite-dialect` sends every statement through the extended protocol, which rejects multi-statement migrations) |
-| PGlite for the gated test suite, real Postgres 18 in CI | Fast and hook-friendly; CI re-runs the same suite against a Postgres service container |
+| PGlite for the gated test suite, real Postgres 18 in CI | Fast and hook-friendly; CI re-runs the same suite against a real Postgres 18 container started by `scripts/ci/postgres.ts` |
+| CI on the maintainer's shared self-hosted runners, the fork-PR approval gate as the only protection | Maintainer decision, 2026-11-01. Approved fork code runs as the runner user on a host shared with other repositories, and a `runs-on` expression is no boundary because the workflow file comes from the PR. Approval is `all_external_contributors`; the maintainer reads the whole diff first. `release.yml` and `scorecard.yml` stay on GitHub-hosted `ubuntu-24.04`. See [`docs/ci-runners.md`](docs/ci-runners.md) |
+| Random free loopback ports, never well-known ones | Any port CI, compose, scripts or tests need is random, free at the time of use, between 32769 and 60999, bound to `127.0.0.1`; `yarn dev` and every test that listens pick one. The one exception is the application's own default `PORT` (3000, the deployment setting of `yarn start`), recorded in `docs/ci-runners.md`. Shared hosts have 5432 taken; Docker's own assignment is sequential, so not enough |
 | Check Runs, not commit statuses | Pinnable to the app, richer output, built-in Re-run button |
 | `SameSite=Lax` session cookie | Contributors arrive from a cross-site link (the PR comment) and must be recognised on first navigation; compensated by CSRF token and `Origin` check. Deviates from RFC 10017's `Strict` suggestion |
 | Code-based TanStack routing | No generated `routeTree.gen.ts` to exclude from every gate |
@@ -308,24 +315,29 @@ Prerequisites: [mise](https://mise.jdx.dev) or any Node 26.13.0, Docker for the 
 ```sh
 mise install                                 # Node 26 first; or: fnm use (reads .nvmrc)
 npm install -g corepack && corepack enable   # Node 26 no longer bundles Corepack
-yarn install --immutable                     # also installs git hooks via postinstall (needs .git)
+yarn install --immutable                     # also installs git hooks via postinstall (skipped when CI is set or there is no .git)
 yarn gate                                    # local equivalent of CI's static + coverage jobs
 ```
 
 Run the server against a local database:
 
 ```sh
-docker compose up -d --wait postgres         # PostgreSQL 18 on 127.0.0.1:5432; creates roles cla_owner and cla_app
+yarn db:up                                   # PostgreSQL 18 on 127.0.0.1 at a random free port (32769-60999); creates roles cla_owner and cla_app
 yarn db:migrate                              # applies migrations/ as the owner role
-yarn dev                                     # node --watch src/server/main.ts as the cla_app role
-curl -s localhost:3000/readyz                # {"status":"ready"}
+yarn dev                                     # node --watch src/server/main.ts as the cla_app role; prints its address, a random free port above 32768
+curl -s http://127.0.0.1:<port>/readyz       # {"status":"ready"}, with the port that yarn dev printed (an explicit PORT wins)
+yarn db:down                                 # stops it; add --volumes to delete the data
 ```
 
-Production style: `yarn build && yarn start` (`node dist/server/main.js`), and `node dist/server/migrate.js` for migrations. The defaults of `yarn dev` and `yarn db:migrate` are the well-known development passwords in `docker-compose.yml`, for a database on 127.0.0.1; override them with `DATABASE_URL` and `MIGRATION_DATABASE_URL`. `yarn test` needs no database (it uses in-memory PGlite). To run the same suite against a real server, point `DATABASE_URL` at one whose user may create databases; the run creates and drops its own `cla_test_<hex>` database and never touches the one the URL names:
+`yarn db:up` picks the port, writes it to the git-ignored `.local/db.json`, and reuses it while the stack runs, so `docker-compose.yml` has no default port and fails with a hint if you run `docker compose` by hand. `yarn dev` and `yarn db:migrate` read that port and use the well-known development passwords in `docker-compose.yml` (a database on 127.0.0.1 only); a `DATABASE_URL` or `MIGRATION_DATABASE_URL` that is already set wins. `yarn db:url [app|owner]` prints the connection string.
+
+Production style: `yarn build && yarn start` (`node dist/server/main.js`), and `node dist/server/migrate.js` for migrations. `yarn test` needs no database (it uses in-memory PGlite). To run the same suite against a real server, point `DATABASE_URL` at one whose user may create databases; the run creates and drops its own `cla_test_<hex>` database and never touches the one the URL names:
 
 ```sh
-DATABASE_URL=postgres://cla_owner:cla_owner_dev_only@127.0.0.1:5432/cla yarn test
+DATABASE_URL="$(yarn db:url owner)" yarn test
 ```
+
+The CI `postgres` job does the same with a throw-away container (`yarn ci:postgres start`, then `yarn test`, then `yarn ci:postgres stop`). A random port: `yarn ci:port`. Check the workflows against the runner policy: `yarn ci:runners`.
 
 Optional: `gitnexus analyze --skip-agents-md` builds a code knowledge graph (dev tooling only). A webhook tunnel (smee.io or similar) arrives with the GitHub App slice. Script names and their state (exists or deferred) are in [`CLAUDE.md`](CLAUDE.md).
 
@@ -337,7 +349,7 @@ The server reads only environment variables, validates them with zod at start-up
 |---|---|---|
 | `NODE_ENV` | `development` | `development`, `test` or `production`. Production requires an `https://` `PUBLIC_BASE_URL` |
 | `HOST` | `127.0.0.1` | Interface to listen on. Containers set `0.0.0.0` |
-| `PORT` | `3000` | TCP port, 0 to 65535 |
+| `PORT` | `3000` | TCP port, 0 to 65535. `yarn dev` sets a random free one above 32768 unless you set it |
 | `LOG_LEVEL` | `info` | pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`, `silent` |
 | `DATABASE_URL` | none, required | `postgres://` connection string of the unprivileged runtime role `cla_app`. A secret: it is masked in logs and errors |
 | `MIGRATION_DATABASE_URL` | falls back to `DATABASE_URL`, except in production where it is required | Owner connection used by `yarn db:migrate` only; the app never reads it. Tables created by the runtime role would be owned by it, and an owner can disable the immutability triggers |
