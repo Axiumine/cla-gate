@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# Local development database: `docker compose up -d postgres`, then `yarn db:migrate` and `yarn dev`.
+# The passwords below are well-known development defaults for a database that listens on 127.0.0.1 only. They are not
+# secrets and must never be reused anywhere else. Production gets its credentials from the environment or a secret
+# manager (see the Configuration table in README.md).
+#
+# Two roles on purpose: `cla_owner` owns the schema and runs the migrations (`MIGRATION_DATABASE_URL`), `cla_app` is the
+# unprivileged runtime role (`DATABASE_URL`) that migration 001 grants minimal privileges to. The application never
+# owns its tables, which is what keeps the immutability triggers meaningful.
+name: cla-gate
+
+services:
+  postgres:
+    # Same major version as the CI service container and as PGlite (PostgreSQL 18).
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cla_owner
+      POSTGRES_PASSWORD: cla_owner_dev_only
+      POSTGRES_DB: cla
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # PostgreSQL 18 images keep the cluster in a versioned subdirectory, so the volume mounts one level up.
+      - cla-postgres-data:/var/lib/postgresql
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cla_owner -d cla"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  cla-postgres-data:

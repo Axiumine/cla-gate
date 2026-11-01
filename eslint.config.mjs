@@ -10,14 +10,16 @@
 // `nursery` with severity `info` in Biome 2.6. Dropping them would weaken the gate.
 //
 // Type information comes from the TypeScript project service: the solution-style tsconfig.json points at
-// tsconfig.scripts.json (scripts/) and tsconfig.node.json (root config files). The architecture
-// no-restricted-imports overrides (src/shared, src/server, src/web) join this file with the code they restrict.
+// tsconfig.server.json (src/server and src/shared, built), tsconfig.server.test.json (the same sources plus their
+// tests), tsconfig.scripts.json (scripts/) and tsconfig.node.json (root config files). The architecture blocks at the
+// end of this file (scripts/eslint-layers.ts) enforce the layering from README.md.
 import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import noUnsanitized from 'eslint-plugin-no-unsanitized';
 import security from 'eslint-plugin-security';
 import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
+import { layerConfigs } from './scripts/eslint-layers.ts';
 
 /** Same counting as scripts/code-caps/measure.ts: a function or file is its whole line span, blanks and comments included. */
 const counting = { skipBlankLines: false, skipComments: false };
@@ -82,4 +84,6 @@ export default defineConfig([
     rules: Object.fromEntries(securityEntries),
   },
   { files, ...noUnsanitized.configs.recommended },
+  // Layering (README.md, Layering): scripts/eslint-layers.ts, with the tests that prove each direction.
+  ...layerConfigs,
 ]);

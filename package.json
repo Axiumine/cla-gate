@@ -13,8 +13,11 @@
   },
   "scripts": {
     "postinstall": "lefthook install",
+    "dev": "DATABASE_URL=${DATABASE_URL:-postgres://cla_app:cla_app_dev_only@127.0.0.1:5432/cla} node --watch src/server/main.ts",
+    "build": "tsc -b",
+    "start": "node dist/server/main.js",
     "typecheck": "tsc -b",
-    "type-coverage": "type-coverage --strict --at-least 100 -p tsconfig.scripts.json && type-coverage --strict --at-least 100 -p tsconfig.node.json",
+    "type-coverage": "type-coverage --strict --at-least 100 -p tsconfig.server.json && type-coverage --strict --at-least 100 -p tsconfig.server.test.json && type-coverage --strict --at-least 100 -p tsconfig.scripts.json && type-coverage --strict --at-least 100 -p tsconfig.node.json",
     "lint": "yarn lint:biome && yarn lint:eslint",
     "lint:biome": "biome ci --error-on-warnings .",
     "lint:eslint": "eslint . --max-warnings 0 --no-warn-ignored",
@@ -24,12 +27,24 @@
     "knip": "knip && knip --production --strict",
     "fta": "fta . --config-path fta.json",
     "caps": "node scripts/check-code-caps.ts",
+    "db:migrate": "MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-postgres://cla_owner:cla_owner_dev_only@127.0.0.1:5432/cla} node src/server/migrate.ts",
     "gate": "lefthook run pre-push --all-files"
+  },
+  "dependencies": {
+    "@fastify/helmet": "^13.2.0",
+    "fastify": "^5.12.7",
+    "fastify-type-provider-zod": "^7.0.0",
+    "kysely": "^0.29.7",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
+    "@electric-sql/pglite": "0.5.14",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "5.0.5",
     "eslint": "^10.14.0",
     "eslint-plugin-no-unsanitized": "^4.1.5",
