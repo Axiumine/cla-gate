@@ -306,7 +306,7 @@ Branch protection on `main` requires `static` and `coverage` today (`postgres` i
 | `radix-ui` primitives, not shadcn copy-in | Copied components would count toward coverage, caps and FTA |
 | React Compiler off in v0 | `@vitejs/plugin-react` 6 needs `@rolldown/plugin-babel` with a peer-range mismatch; lint rules for it are still enabled via `eslint-plugin-react-hooks` |
 | No user tokens stored | Least privilege and liability; identity is read once at login |
-| Self-hostable, multi-tenant by installation | One code path; SaaS is a deployment choice, not a fork |
+| Self-hosted only, one instance per server, multi-org | Any developer runs it on their own server with one GitHub App; that instance serves several GitHub orgs, each org being a tenant keyed by its GitHub installation id. An instance-level admission policy decides which orgs may use the server. No hosted SaaS and no published container image: operators build the image from the checkout |
 
 ## Development
 
@@ -360,6 +360,8 @@ The server reads only environment variables, validates them with zod at start-up
 
 What the foundation guarantees: every response carries a strict CSP and the other helmet headers (HSTS only for `https://` origins); every request gets an `x-request-id` (a well-formed incoming one is kept, otherwise a UUID) that appears in the log lines and in the error body; error bodies are `{ "error": { "code", "message", "requestId" } }` with the standard status text, so an exception message never reaches a client, and that holds for failures that never reach a route too (an invalid URL escape, an over-long parameter, garbage on the socket, oversized headers: Fastify's `frameworkErrors` and `clientErrorHandler` answer them with the same body, the request id and the same security headers); logs never hold headers, cookies, query strings, bodies or secrets. The HTTP server has explicit limits (`adapters/http/limits.ts`): 30 s for a silent socket and for a whole request, 10 s for the headers, a 65 s keep-alive, 1000 requests per connection and a 1 MiB body (a route that needs more, such as the webhook, raises it for itself). SIGINT and SIGTERM drain in-flight requests, but after 10 s (`shutdownTimeoutMs`) the open connections are dropped and the exit code is 1; a second signal does it at once. `GET /healthz` is liveness (touches nothing), `GET /readyz` is readiness (the database answers `select 1` within two seconds, else `503 {"status":"unavailable"}`). The client address is neither logged nor stored (network metadata stays off unless a configuration flag asks for it).
 
+The work queue (epics, stories and their acceptance criteria) is in [`docs/EPICS_STORIES.md`](docs/EPICS_STORIES.md).
+
 ## Roadmap
 
 1. **Scaffold**: toolchain, hooks and CI passing every gate at 100% (done), and the server foundation: configuration, logging, security headers, health routes, the schema and its migration runner, Postgres 18 in the tests (done). Stryker, Playwright, memlab, Semgrep, Trivy and Qodana follow with their CI jobs.
@@ -371,11 +373,10 @@ What the foundation guarantees: every response carries a strict CSP and the othe
 
 ## Open questions
 
-- Hosted SaaS, self-host only, or both?
+Resolved: self-hosted only (one instance per server, serving several orgs, no hosted SaaS, no published image), corporate CLA is not in the MVP (epic E21), hosting target and region are the operator's choice (the operator is the data controller).
+
 - AGPLv3 "only" or "or later"? `AGPL-3.0-only` is assumed. GitNexus (dev tooling) is PolyForm Noncommercial, which matters if this becomes a commercial product.
-- Is a Qodana licence and token available?
-- Is corporate CLA required in the MVP?
-- Hosting target and region (affects GDPR posture).
+- Is a Qodana licence and token available? Until then Qodana stays an optional maintainer-side check (epic E20).
 
 ## License
 

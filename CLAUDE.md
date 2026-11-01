@@ -10,6 +10,8 @@ CLA Platform: a GitHub App plus React dashboard that enforces Contributor Licens
 
 **Status: server foundation built, product not built.** The toolchain is in place and green on all the code that exists: the caps tool (`scripts/check-code-caps.ts` plus `scripts/code-caps/`) and the server foundation in `src/server` and `src/shared` (environment config, pino logging, helmet headers, request ids, error handler, `/healthz` and `/readyz`, Kysely over node-postgres, the forward-only migration runner, `migrations/001_initial.sql` with the whole MVP schema, a PGlite test database that can be swapped for real Postgres). Tooling: `package.json`, Yarn 4, TypeScript, Biome, ESLint, Vitest at 100% coverage, type-coverage, Knip, FTA, the caps ratchet, Lefthook hooks and `.github/workflows/ci.yml` (required jobs `static` and `coverage`, plus the informative `postgres`). There is no GitHub App, webhook, job queue, session, signing route or `src/web` yet, and no placeholder routes, jobs or UI for them; the `GITHUB_*` and `SESSION_SECRET` variables are validated placeholders (`config/env-fields.ts`) that later slices make required. Gates for tools that are not wired (Stryker, Playwright, memlab, Semgrep, Trivy, Qodana) are deferred and marked in the Commands table; they join with their CI jobs. Versions were verified 2026-11-01; re-check with `yarn npm info <pkg> version` before pinning, and update this file when a decision changes.
 
+Stories live in `docs/epics/` (index: `docs/EPICS_STORIES.md`); a story's acceptance criteria are part of its definition of done.
+
 ## Commands (`package.json` scripts)
 
 The `State` column says whether the script exists now or is deferred until its tool lands. A deferred script is a contract; do not add a placeholder.
@@ -189,5 +191,5 @@ Dev tooling only, never a gate. `gitnexus analyze` writes `.gitnexus/` (self-ign
 - memlab having no leak-based exit code.
 - Whether Yarn 4 resolves both `tsc` binaries cleanly if a TS 7 native alias is ever added (not planned).
 - Stryker `vitest-runner` 10.1.x against Vitest 5.0.x in this repo's layout; memlab on Node 26; `@rolldown/plugin-babel` peer range if React Compiler is enabled.
-- The `postgres` CI job (`scripts/ci/postgres.ts` container, pinned by tag and digest, `yarn test` against it) was validated locally with the same helper commands, but no job has yet run on the self-hosted runners: the preflight, tool cache, Docker access and disk are unverified until the first run.
+- The shared runners: the first run (2026-11-01) verified the preflight, tool cache, Docker access, disk, the random port and the job's cleanup step, and a re-run verified the warm cache and a checkout on a used workspace. Still unverified: host-side container leftovers after a cancelled run, new files in the runner user's home or `/tmp`, and the fork "Approve and run" prompt (E23-S11, `docs/ci-runners.md`).
 - Legal: e-signature validity (ESIGN, eIDAS) and GDPR retention choices need counsel; this repo contains no legal advice.
