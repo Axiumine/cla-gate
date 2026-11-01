@@ -1,5 +1,15 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/*.ts!"],
-  "project": ["scripts/**/*.ts!", "!scripts/code-caps/test-support.ts!", "*.{ts,mjs}", "types/**/*.d.ts"]
+  "entry": ["scripts/*.ts!", "src/server/main.ts!", "src/server/migrate.ts!"],
+  "project": [
+    "scripts/**/*.ts!",
+    "!scripts/code-caps/test-support.ts!",
+    "src/**/*.ts!",
+    "!src/**/test-support.ts!",
+    "!src/server/adapters/db/pglite.ts!",
+    "!src/server/adapters/db/pglite/**!",
+    "!src/server/adapters/db/global-setup.ts!",
+    "*.{ts,mjs}",
+    "types/**/*.d.ts"
+  ]
 }

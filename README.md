@@ -2,7 +2,7 @@
 
 Contributor License Agreements for GitHub projects. Maintainers publish a CLA, contributors sign it once with their GitHub account, and every pull request gets an automatic `license/cla` check.
 
-> **Status: planning, tooling scaffolded.** The toolchain (Yarn 4, TypeScript, Biome, ESLint, Vitest at 100%, type-coverage, Knip, FTA, the caps ratchet, Lefthook hooks, GitHub Actions CI) is in place and green on the code-caps tool, the only code that exists; no application code is scaffolded yet. This README and [`CLAUDE.md`](CLAUDE.md) are the source of truth for scope, stack and quality gates. Version numbers, flags and config keys below were verified against live sources on 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
+> **Status: server foundation.** The toolchain (Yarn 4, TypeScript, Biome, ESLint, Vitest at 100%, type-coverage, Knip, FTA, the caps ratchet, Lefthook hooks, GitHub Actions CI) is in place and green on everything that exists: the code-caps tool and the server foundation (configuration, structured logging, security headers, health routes, the PostgreSQL schema with its migration runner, and a Postgres 18 test setup). The GitHub App, webhooks, jobs, login, signing and the web UI are not built yet. This README and [`CLAUDE.md`](CLAUDE.md) are the source of truth for scope, stack and quality gates. Version numbers, flags and config keys below were verified against live sources on 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
 
 ## Why another CLA tool
 
@@ -88,7 +88,7 @@ Outcomes: `success` (all covered), `failure` (unsigned authors and unlinked emai
 | Database | PostgreSQL 18, Kysely, forward-only SQL migrations |
 | Jobs | pg-boss (queue lives in Postgres, no Redis) |
 | GitHub | GitHub App, `octokit` + `@octokit/webhooks` (ESM only) |
-| Tests | Vitest 5 (node + jsdom projects), Testing Library, MSW 3, PGlite, Playwright |
+| Tests | Vitest 5 (`scripts`, `server` and later `web` projects), Testing Library, MSW 3, PGlite, Playwright |
 | Deploy | Single container: Fastify serves API and the built SPA from one origin |
 
 ### Layering
@@ -101,7 +101,7 @@ src/web               React SPA, talks to the API only through src/shared schema
 src/shared            zod schemas and API contract types; imports neither server nor web
 ```
 
-Boundaries are enforced by ESLint `no-restricted-imports` overrides per directory and by Knip. Keeping the decision logic pure makes the 100% coverage and mutation gates cheap to satisfy honestly.
+Boundaries are enforced by ESLint, one block per directory (`scripts/eslint-layers.ts`, with a test that lints real snippets for every direction). The rules match relative specifiers only, so `node:stream/web` or `react-dom/server` are not mistaken for `src/web` and `src/server`, and they cover dynamic `import()` too. `src/server/domain` has an allow-list rather than a list of banned modules: it may import its own files, `src/shared` and `zod`, nothing else (no Node built-in, no I/O library, no `app`, `boot`, `config`, `adapters` or `services`), and it may not use `fetch`, `process`, `require` or the global object. Keeping the decision logic pure makes the 100% coverage and mutation gates cheap to satisfy honestly.
 
 ### Repository layout
 
@@ -109,8 +109,21 @@ Items marked (planned) do not exist yet.
 
 ```text
 .
-├── src/{server,web,shared}/     (planned) unit tests co-located as *.test.ts(x)
-├── migrations/                  (planned) forward-only, never edited after merge
+├── src/server/                  Fastify app; unit tests co-located as *.test.ts
+│   ├── main.ts  migrate.ts      process entries (kept logic-free; covered by boot tests)
+│   ├── boot.ts  app.ts          start-up and signals; the Fastify instance (buildApp)
+│   ├── config/                  environment parsing (zod), Secret, TRUST_PROXY parsing
+│   ├── adapters/db/             Kysely over node-postgres, hand-written schema types, migration runner and CLI,
+│   │                            PGlite dialect and test helpers (test only, outside the build)
+│   ├── adapters/http/           logger, request ids, security headers, error handling (also for failures that never
+│   │                            reach a route), HTTP limits, health routes
+│   └── domain/, services/       (planned) pure decision logic; orchestration
+├── src/shared/                  zod schemas shared by server and web (health, error body)
+├── src/web/                     (planned) React SPA
+├── migrations/                  forward-only SQL, never edited after merge (001_initial.sql)
+├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
+├── docker-compose.yml           local PostgreSQL 18
+├── scripts/eslint-layers.ts     the layering rules of the ESLint config, and their test
 ├── scripts/check-code-caps.ts   structure-cap ratchet, entry (runs natively on Node 26)
 ├── scripts/code-caps/           its modules (types, naming, nesting, collector, measure, files, baseline,
 │                                report, cli) and tests; a port of the Python tool
@@ -119,16 +132,19 @@ Items marked (planned) do not exist yet.
 ├── tests/leaks/                 (planned) memlab scenarios and the @memlab/api wrapper
 ├── LICENSE                      AGPL-3.0-only
 ├── rules/                       (planned) Semgrep rules cache (git-ignored, never committed)
-├── .github/workflows/ci.yml     jobs static and coverage; .github/dependabot.yml
+├── .github/workflows/ci.yml     jobs static, coverage and postgres; .github/dependabot.yml
 ├── .code-caps-baseline.json
 ├── lefthook.yml  biome.json  eslint.config.mjs  fta.json  knip.json  vitest.config.ts
 ├── stryker.config.mjs  playwright.config.ts  qodana.yaml  vite.config.ts      (planned)
-├── .semgrepignore  .trivyignore  Dockerfile  docker-compose.yml  .env.example (planned)
-├── .nvmrc  mise.toml  .yarnrc.yml  package.json  yarn.lock
+├── .semgrepignore  .trivyignore  Dockerfile                                   (planned)
+├── .nvmrc  mise.toml  .yarnrc.yml  package.json  yarn.lock  .gitattributes
 ├── tsconfig.json                solution-style root (files: [])
-├── tsconfig.base.json  tsconfig.scripts.json  tsconfig.node.json
+├── tsconfig.base.json  tsconfig.server.json  tsconfig.server.test.json
+├── tsconfig.scripts.json  tsconfig.node.json
 ├── README.md  CLAUDE.md
 ```
+
+The server compiles with `tsconfig.server.json` (composite, emits `dist/`, excludes tests, test helpers and the PGlite adapter). `tsconfig.server.test.json` type-checks the same sources plus every test, and ESLint and type-coverage run over both.
 
 ### Auth model
 
@@ -153,19 +169,21 @@ Every query is filtered by installation id and covered by cross-tenant tests. Un
 | `sessions` | Server-side sessions: hashed session id, expiry, CSRF secret |
 | `installations` | GitHub App installation: `github_installation_id` UNIQUE, account id, login, type, `suspended_at` |
 | `repositories` | `github_repo_id` UNIQUE, installation, `full_name` snapshot, `enabled`, active CLA document |
-| `cla_documents` | Named CLA per installation or repo; kind is individual or corporate |
-| `cla_versions` | Immutable once published (DB trigger): unique (document, major, minor), `content_md`, `content_sha256`, publisher, rationale, `published_at`. The document points at the active version; a rollback publishes a new version, never reactivates an old one |
-| `signatures` | Immutable core: user id, version, text hash, consent text id, `signed_at` UTC, signer type, source repo and PR, plus `revoked_at`, `revoked_by`, reason (the only mutable columns). Partial unique index on (user, document, major) where not revoked. The sign request carries the version id and hash, verified server-side |
+| `cla_documents` | Named CLA per installation or repo; kind is individual or corporate. `installation_id` and `kind` never change (trigger). The active version only moves forward: it must be the document's highest (major, minor) |
+| `cla_versions` | Immutable once published (DB trigger): unique (document, major, minor), `content_md`, `content_sha256`, publisher, rationale, `published_at`. The document points at the active version; a rollback publishes a new version, never reactivates an old one (a trigger refuses to point at anything but the highest version). `published_at` must be within five minutes of the database clock |
+| `signatures` | Immutable core: user id, version, text hash, consent text id, `signed_at` UTC, signer type, source repo and PR, plus `revoked_at`, `revoked_by`, reason (the only mutable columns; the reason is a code from a fixed set, never free text, because a revoked row can never be scrubbed). The document's kind must equal `signer_type` (composite foreign key), `revoked_at` cannot precede `signed_at`, and `signed_at` must be within five minutes of the database clock. Partial unique index on (user, document, major) where not revoked. The sign request carries the version id and hash, verified server-side |
 | `signer_pii` | Erasable personal data for a signature: name, verified email and login snapshots. Split out so GDPR erasure never touches the immutable core |
 | `commit_overrides` | Audited maintainer override per (repo, commit SHA); never implies a signature |
 | `corporate_agreements`, `corporate_approvals` | Phase 2: company CCLA and manager-approved employees |
 | `allowlist_entries` | Scope (installation or repo), kind (user, bot, org members), numeric GitHub id, never a login string |
 | `pr_evaluations` | Unique (repo, PR number, head SHA): result, details, `check_run_id`, `comment_id` |
 | `webhook_deliveries` | `delivery_id` PK for idempotency (GitHub reuses the id on redelivery), event, received and processed times |
-| `audit_log` | Append-only: actor numeric id, action, subject ids, metadata. **No personal data** (no names or emails) |
+| `audit_log` | Append-only: actor numeric id, action, subject ids, metadata. **No personal data**: metadata is a flat object whose keys come from a fixed list and whose values are numbers, booleans, null or lower-case codes (`audit_metadata_is_clean`); a new key needs a migration |
 | `pgboss.*` | Queue schema owned by pg-boss |
 
-Immutability is enforced by DB triggers that block `UPDATE` (beyond the allowed columns), `DELETE` and `TRUNCATE`; the runtime DB role does not own the tables, so it cannot disable triggers. Erasure goes through one audited SQL function that deletes `signer_pii` rows and keeps the minimal signature core (GDPR Art. 17(3)(e), legal claims).
+Immutability is enforced by DB triggers that block `UPDATE` (beyond the allowed columns), `DELETE` and `TRUNCATE`; the runtime DB role does not own the tables, so it cannot disable triggers. The identity columns the rest of the schema hangs on (`users.github_id`, `installations.github_installation_id` and `account_id`, `repositories.github_repo_id` and `installation_id`, `cla_documents.installation_id` and `kind`) cannot be updated either, although the runtime role may update the other columns of those tables: re-pointing a GitHub id would re-attribute every signature that references the row. Erasure goes through one audited SQL function (`erase_signer_pii`) that deletes the person's `signer_pii` rows and sessions, scrubs the display snapshot in `users` and keeps the minimal signature core (GDPR Art. 17(3)(e), legal claims). A `signer_pii` row cannot be stored for a signature that predates the person's erasure (trigger), so a signing request that was in flight during the erasure cannot write the data back. The acting administrator is a required argument; it is the caller's attribution, which the database cannot verify, and the audit row is append-only rather than hash-chained. Other text that is not signer data and is outside erasure: `installations.account_login` and `repositories.full_name` (public names of the maintainers' accounts and repositories; for a user-type installation that is the maintainer's own login) and `commit_overrides.reason` (a maintainer's note). `pr_evaluations.details` must hold numeric ids and codes only; the slice that writes it enforces that.
+
+`migrations/001_initial.sql` creates every table above except `corporate_agreements`, `corporate_approvals` (phase 2) and `pgboss.*` (pg-boss creates its own schema). Tenant tables carry `installation_id` and tie it to their parent with composite foreign keys, so a row can never point at another tenant's repository or document. Two roles: the migration owner (`MIGRATION_DATABASE_URL`) owns the schema; the runtime role `cla_app` (`DATABASE_URL`) gets only the privileges it needs, granted by the migration when the role exists. The runner (`src/server/adapters/db/migrator.ts`) holds a session advisory lock, applies each file in its own transaction, records a SHA-256 checksum in `schema_migrations`, and refuses to run when an applied file changed, went missing or sorts before an applied one. bigint columns come back as JS numbers (GitHub ids are far below 2^53) and a value outside the safe range throws instead of rounding.
 
 Revocation is prospective: `revoked_at` marks the signature invalid for *future* PRs; contributions already accepted stay licensed. Network metadata (IP, user agent) is **off by default**; if enabled it needs a documented legitimate interest and short retention (Art. 5(1)(c), 5(1)(e)).
 
@@ -253,26 +271,27 @@ Network-bound jobs (Trivy vulnerability DB, Semgrep registry rules) can be skipp
 
 ### CI (authoritative)
 
-`.github/workflows/ci.yml`, every third-party Action pinned to a full commit SHA. Only `static` and `coverage` exist today; rows marked deferred land together with their tool. Job graph:
+`.github/workflows/ci.yml`, every third-party Action pinned to a full commit SHA. `static`, `coverage` and `postgres` exist today; rows marked deferred land together with their tool. Job graph:
 
 | Job | Needs | Runs |
 |---|---|---|
 | `static` | none | Explicit named steps running the same scripts as the `pre-push` hook minus the coverage step: Biome, `tsc -b`, ESLint, type-coverage per project, Knip (both modes), FTA, caps |
-| `coverage` | none | `CI=1 vitest run --coverage` at 100%. Runs in parallel with `static` (both are required checks, so a skipped dependent job could not mask a failure). Later: again against a Postgres 18 service container, and upload `coverage/` for Qodana |
+| `coverage` | none | `CI=1 vitest run --coverage` at 100%. Runs in parallel with `static` (both are required checks, so a skipped dependent job could not mask a failure). Later: upload `coverage/` for Qodana |
+| `postgres` | none | `yarn test` with `DATABASE_URL` pointing at a PostgreSQL 18 service container (image pinned by tag and digest). The Vitest globalSetup creates a throw-away `cla_test_<hex>` database, the whole suite runs in it, and it is dropped afterwards. Not a required check; it exists to catch a difference between PGlite and a real server (the advisory-lock test only runs here) |
 | `mutation` (deferred) | `static` | Stryker `--incremental`, `reports/stryker-incremental.json` restored from cache |
 | `e2e` (deferred) | `static` | Playwright in the pinned container, including visual baselines |
 | `semgrep`, `trivy` (deferred) | none | Full scans; mandatory, not skippable |
 | `leaks` (deferred) | `coverage` | memlab; nightly and release only |
 | `qodana` (deferred) | `coverage` | Maintainer-side; needs a token, skipped for fork PRs |
 
-Branch protection on `main` requires `static` and `coverage` today; `mutation`, `e2e`, `semgrep` and `trivy` become required once they are stable in CI (see CLAUDE.md, Repository protection). `yarn gate` is the local equivalent of `static` plus `coverage`. Dependabot (`.github/dependabot.yml`) keeps the SHA-pinned Actions and the npm dependencies current, with a one-week cooldown, grouped; TypeScript stays on 6.0.x.
+Branch protection on `main` requires `static` and `coverage` today (`postgres` is informative until the team decides to require it); `mutation`, `e2e`, `semgrep` and `trivy` become required once they are stable in CI (see CLAUDE.md, Repository protection). `yarn gate` is the local equivalent of `static` plus `coverage`. Dependabot (`.github/dependabot.yml`) keeps the SHA-pinned Actions and the npm dependencies current, with a one-week cooldown, grouped; TypeScript stays on 6.0.x.
 
 ## Decisions
 
 | Decision | Why |
 |---|---|
 | TypeScript `~6.0.x`, not 7 | TS 7.0 (native Go) ships no classic compiler API; 7.1 adds a different one. typescript-eslint 8.72 peers `typescript <6.1`, and Stryker's typescript-checker, `type-coverage --strict` and `check-code-caps.ts` all need the classic JS API. Revisit when those tools support the new API |
-| Kysely, not Drizzle | Drizzle 1.0 is still release-candidate (breaking changes pending); Kysely 0.29 is stable, has a PGlite dialect, and pg-boss ships a Kysely adapter. 100% coverage integration tests catch type/schema drift |
+| Kysely, not Drizzle | Drizzle 1.0 is still release-candidate (breaking changes pending); Kysely 0.29 is stable and pg-boss ships a Kysely adapter. The schema types are written by hand and a test compares them with the live catalog, so drift fails the build. The tests use a small own PGlite dialect (`kysely-pglite-dialect` sends every statement through the extended protocol, which rejects multi-statement migrations) |
 | PGlite for the gated test suite, real Postgres 18 in CI | Fast and hook-friendly; CI re-runs the same suite against a Postgres service container |
 | Check Runs, not commit statuses | Pinnable to the app, richer output, built-in Re-run button |
 | `SameSite=Lax` session cookie | Contributors arrive from a cross-site link (the PR comment) and must be recognised on first navigation; compensated by CSRF token and `Origin` check. Deviates from RFC 10017's `Strict` suggestion |
@@ -284,7 +303,7 @@ Branch protection on `main` requires `static` and `coverage` today; `mutation`, 
 
 ## Development
 
-The toolchain runs today; the application does not exist yet. Prerequisites: [mise](https://mise.jdx.dev) or any Node 26.13.0, Docker (later), [Trivy](https://trivy.dev) and [Semgrep](https://semgrep.dev) once their gates land.
+Prerequisites: [mise](https://mise.jdx.dev) or any Node 26.13.0, Docker for the local database, [Trivy](https://trivy.dev) and [Semgrep](https://semgrep.dev) once their gates land.
 
 ```sh
 mise install                                 # Node 26 first; or: fnm use (reads .nvmrc)
@@ -293,20 +312,45 @@ yarn install --immutable                     # also installs git hooks via posti
 yarn gate                                    # local equivalent of CI's static + coverage jobs
 ```
 
-Planned, once the app is scaffolded:
+Run the server against a local database:
 
 ```sh
-docker compose up -d postgres                # PostgreSQL 18
-yarn db:migrate
-yarn dev                                     # Vite + Fastify; webhook tunnel (smee.io or similar) for GitHub
-gitnexus analyze --skip-agents-md            # optional: code knowledge graph (dev tooling only)
+docker compose up -d --wait postgres         # PostgreSQL 18 on 127.0.0.1:5432; creates roles cla_owner and cla_app
+yarn db:migrate                              # applies migrations/ as the owner role
+yarn dev                                     # node --watch src/server/main.ts as the cla_app role
+curl -s localhost:3000/readyz                # {"status":"ready"}
 ```
 
-Script names and their state (exists or deferred) are in [`CLAUDE.md`](CLAUDE.md).
+Production style: `yarn build && yarn start` (`node dist/server/main.js`), and `node dist/server/migrate.js` for migrations. The defaults of `yarn dev` and `yarn db:migrate` are the well-known development passwords in `docker-compose.yml`, for a database on 127.0.0.1; override them with `DATABASE_URL` and `MIGRATION_DATABASE_URL`. `yarn test` needs no database (it uses in-memory PGlite). To run the same suite against a real server, point `DATABASE_URL` at one whose user may create databases; the run creates and drops its own `cla_test_<hex>` database and never touches the one the URL names:
+
+```sh
+DATABASE_URL=postgres://cla_owner:cla_owner_dev_only@127.0.0.1:5432/cla yarn test
+```
+
+Optional: `gitnexus analyze --skip-agents-md` builds a code knowledge graph (dev tooling only). A webhook tunnel (smee.io or similar) arrives with the GitHub App slice. Script names and their state (exists or deferred) are in [`CLAUDE.md`](CLAUDE.md).
+
+### Configuration
+
+The server reads only environment variables, validates them with zod at start-up, and exits with the NAMES of the invalid variables (never a value). An empty variable counts as unset. No dotenv file is read.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NODE_ENV` | `development` | `development`, `test` or `production`. Production requires an `https://` `PUBLIC_BASE_URL` |
+| `HOST` | `127.0.0.1` | Interface to listen on. Containers set `0.0.0.0` |
+| `PORT` | `3000` | TCP port, 0 to 65535 |
+| `LOG_LEVEL` | `info` | pino level: `fatal`, `error`, `warn`, `info`, `debug`, `trace`, `silent` |
+| `DATABASE_URL` | none, required | `postgres://` connection string of the unprivileged runtime role `cla_app`. A secret: it is masked in logs and errors |
+| `MIGRATION_DATABASE_URL` | falls back to `DATABASE_URL`, except in production where it is required | Owner connection used by `yarn db:migrate` only; the app never reads it. Tables created by the runtime role would be owned by it, and an owner can disable the immutability triggers |
+| `PUBLIC_BASE_URL` | `http://localhost:<PORT>` | Origin the public reaches the app on (no path); required, as `https://`, in production |
+| `TRUST_PROXY` | `false` | `true`, `false`, a hop count (`1`), or a comma separated list of IPs and CIDRs of trusted proxies. A typo is a start-up error, so it never silently trusts every proxy. Set it correctly behind a load balancer or every client looks like the proxy |
+| `SESSION_SECRET` | none | At least 32 characters. Optional until sessions land |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | none | Placeholders: validated when set, required by the GitHub App slice |
+
+What the foundation guarantees: every response carries a strict CSP and the other helmet headers (HSTS only for `https://` origins); every request gets an `x-request-id` (a well-formed incoming one is kept, otherwise a UUID) that appears in the log lines and in the error body; error bodies are `{ "error": { "code", "message", "requestId" } }` with the standard status text, so an exception message never reaches a client, and that holds for failures that never reach a route too (an invalid URL escape, an over-long parameter, garbage on the socket, oversized headers: Fastify's `frameworkErrors` and `clientErrorHandler` answer them with the same body, the request id and the same security headers); logs never hold headers, cookies, query strings, bodies or secrets. The HTTP server has explicit limits (`adapters/http/limits.ts`): 30 s for a silent socket and for a whole request, 10 s for the headers, a 65 s keep-alive, 1000 requests per connection and a 1 MiB body (a route that needs more, such as the webhook, raises it for itself). SIGINT and SIGTERM drain in-flight requests, but after 10 s (`shutdownTimeoutMs`) the open connections are dropped and the exit code is 1; a second signal does it at once. `GET /healthz` is liveness (touches nothing), `GET /readyz` is readiness (the database answers `select 1` within two seconds, else `503 {"status":"unavailable"}`). The client address is neither logged nor stored (network metadata stays off unless a configuration flag asks for it).
 
 ## Roadmap
 
-1. **Scaffold**: toolchain, hooks and CI passing every gate at 100% (done for the tooling; Stryker, Playwright, memlab, Semgrep, Trivy and Qodana follow), then an empty app passing the same gates.
+1. **Scaffold**: toolchain, hooks and CI passing every gate at 100% (done), and the server foundation: configuration, logging, security headers, health routes, the schema and its migration runner, Postgres 18 in the tests (done). Stryker, Playwright, memlab, Semgrep, Trivy and Qodana follow with their CI jobs.
 2. **Core**: GitHub App, webhook intake, PR evaluation, Check Run and comment.
 3. **Signing**: login, CLA versions, consent flow, signature storage.
 4. **Dashboard**: repos, signatures, CSV export, revoke, audit log.
@@ -323,6 +367,6 @@ Script names and their state (exists or deferred) are in [`CLAUDE.md`](CLAUDE.md
 
 ## License
 
-[GNU Affero General Public License v3.0](LICENSE), SPDX identifier `AGPL-3.0-only`. `package.json` will set `"license": "AGPL-3.0-only"`. Dependencies must be AGPLv3-compatible (the same set as GPLv3: permissive licences such as MIT, Apache-2.0 and BSD are fine).
+[GNU Affero General Public License v3.0](LICENSE), SPDX identifier `AGPL-3.0-only`. `package.json` sets `"license": "AGPL-3.0-only"`. Dependencies must be AGPLv3-compatible (the same set as GPLv3: permissive licences such as MIT, Apache-2.0 and BSD are fine).
 
 Why AGPL and not GPL: this is a network service. Under GPLv3, someone could run a modified copy as a hosted CLA service without publishing their changes; AGPLv3 section 13 closes that. The dashboard therefore links to the corresponding source. Running it unmodified for your own repositories, or self-hosting it inside your company, needs nothing beyond keeping that link.

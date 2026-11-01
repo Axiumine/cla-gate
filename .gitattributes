@@ -1,0 +1,2 @@
+# Migrations are checksummed (src/server/adapters/db/migrator.ts): a CRLF checkout on Windows must not change the hash.
+migrations/*.sql text eol=lf

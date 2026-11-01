@@ -93,3 +93,54 @@ jobs:
       # CI=1 (set by the script) makes Vitest refuse to write new snapshots; thresholds are 100%.
       - name: Tests with 100% coverage
         run: yarn coverage
+
+  # Not a required check (branch protection requires only `static` and `coverage`): it repeats the unit tests against
+  # a real PostgreSQL 18 server instead of PGlite, so a difference between the two shows up here. DATABASE_URL makes the
+  # Vitest globalSetup create a throw-away `cla_test_<hex>` database (the postgres user may), run the whole suite in it
+  # (single-file-at-a-time, one connection per file) and drop it afterwards. The credentials are throw-away: they exist only
+  # for this job's service container on an ephemeral runner, and `ports: 5432:5432` publishes on every interface of that
+  # runner (not just loopback), so they must never be reused anywhere else. Coverage is measured by the `coverage` job,
+  # not here.
+  postgres:
+    name: postgres
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        # Tag and digest: the tag documents the major version, the digest pins the image. Bump both together, ideally
+        # with the PGlite pin in package.json (PGlite 0.5.14 is PostgreSQL 18.6).
+        image: postgres:18@sha256:3a4264520e121176619f54ff867d12774bc81e95e7b84db58d63bccdb6144b81
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: npm install -g corepack@0.36.0 && corepack enable
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Tests against PostgreSQL 18
+        run: yarn test
