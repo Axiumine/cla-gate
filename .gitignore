@@ -22,6 +22,9 @@ test-results/
 # offline Semgrep rules: the Semgrep Rules License forbids redistribution
 rules/
 
+# local state (the development database port chosen by `yarn db:up`)
+.local/
+
 # secrets and local configuration
 .env
 .env.*

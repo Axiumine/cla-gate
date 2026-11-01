@@ -12,8 +12,8 @@
     }
   },
   "scripts": {
-    "postinstall": "lefthook install",
-    "dev": "DATABASE_URL=${DATABASE_URL:-postgres://cla_app:cla_app_dev_only@127.0.0.1:5432/cla} node --watch src/server/main.ts",
+    "postinstall": "node scripts/dev/install-hooks.ts",
+    "dev": "node scripts/dev/db.ts run app -- node --watch src/server/main.ts",
     "build": "tsc -b",
     "start": "node dist/server/main.js",
     "typecheck": "tsc -b",
@@ -27,7 +27,13 @@
     "knip": "knip && knip --production --strict",
     "fta": "fta . --config-path fta.json",
     "caps": "node scripts/check-code-caps.ts",
-    "db:migrate": "MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-postgres://cla_owner:cla_owner_dev_only@127.0.0.1:5432/cla} node src/server/migrate.ts",
+    "ci:port": "node scripts/ci/free-port.ts",
+    "ci:postgres": "node scripts/ci/postgres.ts",
+    "ci:runners": "node scripts/ci/check-runners.ts",
+    "db:up": "node scripts/dev/db.ts up",
+    "db:url": "node scripts/dev/db.ts url",
+    "db:down": "node scripts/dev/db.ts down",
+    "db:migrate": "node scripts/dev/db.ts run owner -- node src/server/migrate.ts",
     "gate": "lefthook run pre-push --all-files"
   },
   "dependencies": {
@@ -57,6 +63,7 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.5",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "yaml": "^2.9.1"
   }
 }

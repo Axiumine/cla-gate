@@ -1,9 +1,11 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/*.ts!", "src/server/main.ts!", "src/server/migrate.ts!"],
+  "entry": ["scripts/*.ts!", "scripts/ci/*.ts", "scripts/dev/*.ts", "src/server/main.ts!", "src/server/migrate.ts!"],
   "project": [
     "scripts/**/*.ts!",
     "!scripts/code-caps/test-support.ts!",
+    "!scripts/ci/**!",
+    "!scripts/dev/**!",
     "src/**/*.ts!",
     "!src/**/test-support.ts!",
     "!src/server/adapters/db/pglite.ts!",

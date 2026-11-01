@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
 import { expect, onTestFinished, test, vi } from 'vitest';
-import { UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // main.ts runs on import: these tests are its boot test. It is imported fresh each time, from the environment.
 
@@ -23,7 +23,7 @@ test('main boots the server from process.env and shuts down on SIGTERM', async (
   const { server } = await importMain({
     DATABASE_URL: UNREACHABLE_DATABASE_URL,
     HOST: '127.0.0.1',
-    PORT: '0',
+    PORT: String(await freePort()),
     LOG_LEVEL: 'silent',
   });
   expect(server?.address).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);

@@ -3,7 +3,7 @@
 import { PassThrough } from 'node:stream';
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
-import { sendRaw, testApp, testConfig } from '../../test-support.ts';
+import { freePort, sendRaw, testApp, testConfig } from '../../test-support.ts';
 import { frameworkErrorHandlers } from './framework-errors.ts';
 import { createLogger } from './logger.ts';
 
@@ -57,7 +57,7 @@ test.each([
   '%s is answered with the standard body and the security headers, then the connection closes',
   async (_case, text, statusLine, code) => {
     const { app } = await testApp();
-    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = await app.listen({ host: '127.0.0.1', port: await freePort() });
     const normal = await app.inject('/healthz');
     const raw = await sendRaw(address, text);
     expect(raw.statusLine).toBe(statusLine);

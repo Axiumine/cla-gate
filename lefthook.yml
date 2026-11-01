@@ -56,6 +56,9 @@ pre-push:
             run: yarn fta
           - name: caps
             run: yarn caps
+          # The same script as the CI static job: no job may run on a runner docs/ci-runners.md does not allow.
+          - name: ci-runners
+            run: yarn ci:runners
     # Last because it is the most expensive and meaningless when a static check fails. CI=1 is set by the script.
     - name: coverage
       run: yarn coverage
@@ -65,10 +68,12 @@ post-merge:
   jobs:
     - name: yarn-install
       run: git diff --quiet ORIG_HEAD HEAD -- yarn.lock .yarnrc.yml || yarn install --immutable
+# Git passes the previous and the new HEAD to post-checkout, and Lefthook hands them on as {1} and {2}. (`HEAD@{1}` is no
+# substitute: Lefthook rewrites its {1} too, which leaves the bad revision `HEAD@<sha>`.)
 post-checkout:
   jobs:
     - name: yarn-install
-      run: git diff --quiet 'HEAD@{1}' HEAD -- yarn.lock .yarnrc.yml || yarn install --immutable
+      run: git diff --quiet {1} {2} -- yarn.lock .yarnrc.yml || yarn install --immutable
 post-rewrite:
   jobs:
     - name: yarn-install

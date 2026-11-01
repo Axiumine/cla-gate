@@ -15,6 +15,40 @@ const FILLER = '  const x = 1;\n';
 const MEMBER_FILLER = '  a = 1;\n';
 const created: string[] = [];
 
+/**
+ * What git exports to a hook so that the commands it runs find the repository being committed: a temporary index (with
+ * `git commit <paths>` or `-a`), the git directory, the work tree and the author and committer identity. A scratch
+ * repository made by a test must not inherit them, or `git add` there writes into the real repository's index.
+ */
+export const GIT_HOOK_VARIABLES = [
+  'GIT_INDEX_FILE',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_PREFIX',
+  'GIT_COMMON_DIR',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_QUARANTINE_PATH',
+  'GIT_AUTHOR_NAME',
+  'GIT_AUTHOR_EMAIL',
+  'GIT_AUTHOR_DATE',
+  'GIT_COMMITTER_NAME',
+  'GIT_COMMITTER_EMAIL',
+  'GIT_COMMITTER_DATE',
+] as const;
+
+/** Removes `GIT_HOOK_VARIABLES` from `env` in place. */
+export function scrubGitHookEnv(env: Record<string, string | undefined>): void {
+  for (const name of GIT_HOOK_VARIABLES) {
+    Reflect.deleteProperty(env, name);
+  }
+}
+
+// Every test file that builds a scratch repository imports this module, so the scrub happens once per worker, before
+// any of them runs git.
+scrubGitHookEnv(process.env);
+
 afterEach(() => {
   for (const dir of created.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
