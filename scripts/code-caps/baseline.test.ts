@@ -94,6 +94,7 @@ test('the baseline round-trips, sorted, with the caps and version', () => {
       ['c', 3],
     ]),
   );
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test: file inside a temp directory created by the test
   const text = fs.readFileSync(file, 'utf8');
   const parsed: unknown = JSON.parse(text);
   expect(text.endsWith('}\n')).toBe(true);
@@ -105,6 +106,7 @@ test('an empty baseline is written like the committed one', () => {
   const file = path.join(tempDir(), BASELINE_NAME);
   writeBaseline(file, new Map());
   const expected = `{\n  "version": 1,\n  "caps": {\n    "file": 500,\n    "function": 50,\n    "class": 300,\n    "params": 4,\n    "nesting": 4\n  },\n  "violations": {}\n}\n`;
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test: file inside a temp directory created by the test
   expect(fs.readFileSync(file, 'utf8')).toBe(expected);
 });
 
@@ -138,5 +140,6 @@ test('writing replaces the baseline atomically and leaves no temporary file', ()
   writeBaseline(file, new Map([['a', 1]]));
   writeBaseline(file, new Map([['b', 2]]));
   expect(loadBaseline(file)).toEqual(new Map([['b', 2]]));
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test: temp directory created by the test
   expect(fs.readdirSync(root)).toEqual([BASELINE_NAME]);
 });

@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# Actions are pinned to full commit SHAs, so Dependabot is what keeps them current (it rewrites the SHA and the
+# version comment together). The cooldown keeps brand-new releases out for a week, on top of Yarn's one-day
+# npmMinimalAgeGate. Dependabot opens PRs only; nothing here merges anything.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    ignore:
+      # CLAUDE.md, "TypeScript": stay on ~6.0.x until typescript-eslint, Stryker, type-coverage and the caps tool
+      # support the TypeScript 7 compiler API. Patch releases still come through.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      # @vitest/coverage-v8 must match the exact Vitest version, so they move together.
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
+      eslint:
+        patterns: ["eslint", "@eslint/*", "eslint-plugin-*", "typescript-eslint"]
+      dev-tooling:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "deps"

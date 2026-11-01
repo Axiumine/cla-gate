@@ -5,7 +5,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { expect, test, vi } from 'vitest';
 import { loadBaseline } from './baseline.ts';
-import { describeMeasure, main, parseOptions, report, STD_IO } from './cli.ts';
+import { main, parseOptions, STD_IO } from './cli.ts';
+import { describeMeasure, report } from './report.ts';
 import { capture, func, makeRepo, tempDir } from './test-support.ts';
 import { BASELINE_NAME, type Measure } from './types.ts';
 

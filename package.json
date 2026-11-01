@@ -1,0 +1,47 @@
+{
+  "name": "cla-gate",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "packageManager": "yarn@4.18.1+sha512.b2e1e7524f654f2749d32b4ebcb4622473cb5bcbc485df2007e12a154e50162a4d795526768bc5f5b8f81717bfd79deb2472813d86fb5ae2eb551fa9c872b08f",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.13.0",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "postinstall": "lefthook install",
+    "typecheck": "tsc -b",
+    "type-coverage": "type-coverage --strict --at-least 100 -p tsconfig.scripts.json && type-coverage --strict --at-least 100 -p tsconfig.node.json",
+    "lint": "yarn lint:biome && yarn lint:eslint",
+    "lint:biome": "biome ci --error-on-warnings .",
+    "lint:eslint": "eslint . --max-warnings 0 --no-warn-ignored",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "coverage": "CI=1 vitest run --coverage",
+    "knip": "knip && knip --production --strict",
+    "fta": "fta . --config-path fta.json",
+    "caps": "node scripts/check-code-caps.ts",
+    "gate": "lefthook run pre-push --all-files"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
+    "@vitest/coverage-v8": "5.0.5",
+    "eslint": "^10.14.0",
+    "eslint-plugin-no-unsanitized": "^4.1.5",
+    "eslint-plugin-security": "^4.2.1",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "fta-cli": "3.1.0",
+    "knip": "^6.44.1",
+    "lefthook": "^2.2.2",
+    "type-coverage": "^2.31.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vitest": "5.0.5"
+  }
+}

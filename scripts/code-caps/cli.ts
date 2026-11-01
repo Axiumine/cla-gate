@@ -4,15 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { parseArgs } from 'node:util';
-import { compare, hasFailed, loadBaseline, ratcheted, type Verdict, writeBaseline } from './baseline.ts';
+import { compare, hasFailed, loadBaseline, ratcheted, writeBaseline } from './baseline.ts';
 import { measureRepo } from './files.ts';
-import { BASELINE_NAME, CAPS, type Measure, measureKey, printable } from './types.ts';
+import { type Io, report } from './report.ts';
+import { BASELINE_NAME, type Measure, measureKey, printable } from './types.ts';
 
-export interface Io {
-  readonly out: (line: string) => void;
-  readonly err: (line: string) => void;
-}
-
+/** @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode). */
 export interface Options {
   readonly root: string;
   readonly init: boolean;
@@ -20,14 +17,16 @@ export interface Options {
   readonly updateBaseline: boolean;
 }
 
+/** @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode). */
 export const STD_IO: Io = {
   out: (line) => process.stdout.write(`${line}\n`),
   err: (line) => process.stderr.write(`${line}\n`),
 };
 
-const SIZE_KINDS: ReadonlySet<string> = new Set(['file', 'function', 'class']);
-
-/** Throws on an unknown option (reported as exit code 2). */
+/**
+ * Throws on an unknown option (reported as exit code 2).
+ * @internal Exported for the unit tests.
+ */
 export function parseOptions(argv: readonly string[], defaultRoot: string): Options {
   const { values } = parseArgs({
     args: [...argv],
@@ -47,29 +46,9 @@ export function parseOptions(argv: readonly string[], defaultRoot: string): Opti
   };
 }
 
-export function describeMeasure(item: Measure): string {
-  const what = item.kind === 'file' ? 'file' : `${item.kind} '${printable(item.name)}'`;
-  const unit = SIZE_KINDS.has(item.kind) ? ' lines' : '';
-  return `${printable(item.path)}:${item.line}: ${what} = ${item.value}${unit} (cap ${CAPS[item.kind]})`;
-}
-
-export function report(verdict: Verdict, io: Io): void {
-  for (const item of verdict.added) {
-    io.err(`NEW   ${describeMeasure(item)}`);
-  }
-  for (const { item, allowed } of verdict.grown) {
-    io.err(`GREW  ${describeMeasure(item)} (baseline ${allowed})`);
-  }
-  for (const { key, allowed, now } of verdict.improved) {
-    io.out(`better: ${printable(key)} ${allowed} -> ${now} (run --update-baseline to lock it in)`);
-  }
-  for (const key of verdict.fixed) {
-    io.out(`fixed: ${printable(key)} (run --update-baseline to drop it)`);
-  }
-}
-
 function runInit(options: Options, current: readonly Measure[], io: Io): number {
   const target = path.join(options.root, BASELINE_NAME);
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- developer CLI: the baseline path, root from --root or the cwd
   if (fs.existsSync(target) && !options.force) {
     io.err(`${BASELINE_NAME} exists: use --force to overwrite`);
     return 2;
