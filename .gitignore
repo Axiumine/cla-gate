@@ -1,0 +1,35 @@
+# dependencies and package-manager state
+node_modules/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+.pnp.*
+
+# build and report output (the caps tool trusts .gitignore inside git, so every output dir must be listed)
+dist/
+build/
+coverage/
+reports/
+playwright-report/
+test-results/
+.stryker-tmp/
+.vitest/
+*.tsbuildinfo
+
+# offline Semgrep rules: the Semgrep Rules License forbids redistribution
+rules/
+
+# secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# editor, OS and local tool state
+.idea/
+.vscode/
+.gitnexus/
+.claude/settings.local.json
+*.log
+.DS_Store
