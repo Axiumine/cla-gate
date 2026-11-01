@@ -127,6 +127,17 @@ CLA Platform: a GitHub App plus React dashboard that enforces Contributor Licens
 - Known differences from the Python original, accepted: no `--help` or argparse prefix abbreviations (unknown options exit 2), lenient UTF-8 decoding of file contents, TS parser rejects sloppy-mode JS octal literals, TS syntax inside a `.js` file is a parse error, a nonexistent `--root` exits 2, lines split on `\n`, `\r\n`, `\r`, U+2028, U+2029 only, an empty `switch {}` has depth 0. Not guarded: huge files, symlinks pointing outside the root, baseline `version` validation.
 - Needs the `typescript` 6.x package (classic compiler API), default import only. Syntax errors are detected through a one-file `ts.createProgram` (`getSyntacticDiagnostics`) and exit with 2.
 
+## Repository protection
+
+Repo: `Axiumine/cla-gate` (public, `main`). Branch protection on `main`, set 2026-11-01 and applied to admins too (`enforce_admins`):
+
+- Required status checks: `static` and `coverage` (not strict, so a branch need not be up to date). These are the exact job names the CI workflow must use; renaming a job breaks the rule.
+- Linear history required (squash or rebase merges only), force pushes and deletion blocked, conversation resolution required.
+- No required reviews (single maintainer; a self-approval is impossible).
+- Consequence: there are no direct pushes to `main`. Every change, including docs, goes through a PR whose two checks pass. Until `.github/workflows/ci.yml` exists no PR can merge; the scaffold PR must add that workflow with real `static` and `coverage` jobs, never placeholders that always pass.
+- Emergency unblock (maintainer only, re-add the checks afterwards): `gh api -X DELETE repos/Axiumine/cla-gate/branches/main/protection/required_status_checks`.
+- Add `e2e`, `mutation`, `semgrep` or `trivy` as required checks only after they are stable in CI. If this protection changes, update this section in the same PR.
+
 ## GitHub App rules
 
 - Minimum permissions are in README. Do not add permissions without a reason recorded in the README table.
