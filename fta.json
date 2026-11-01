@@ -1,0 +1,15 @@
+{
+  "score_cap": 50,
+  "output_limit": 100,
+  "exclude_filenames": ["*.test.ts", "*.test.tsx", "test-support.ts", "*.d.ts"],
+  "exclude_directories": [
+    "/node_modules",
+    "/coverage",
+    "/dist",
+    "/build",
+    "/reports",
+    "/.vitest",
+    "/.yarn",
+    "/.stryker-tmp"
+  ]
+}

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# Canonical Node version for mise (mise ignores .nvmrc unless configured). Keep in sync with .nvmrc,
+# package.json devEngines.runtime and the CI workflow (which reads .nvmrc).
+[tools]
+node = "26.13.0"

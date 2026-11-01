@@ -4,6 +4,9 @@ node_modules/
 .yarn/unplugged/
 .yarn/install-state.gz
 .pnp.*
+# The Yarn config must be committed (nodeLinker: node-modules; without it CI falls back to PnP and fails), but some
+# global git ignores list it, so re-include it explicitly.
+!.yarnrc.yml
 
 # build and report output (the caps tool trusts .gitignore inside git, so every output dir must be listed)
 dist/

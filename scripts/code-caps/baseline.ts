@@ -25,6 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readJson(file: string): unknown {
   try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- developer CLI: the baseline path is <root>/.code-caps-baseline.json, root from --root or the cwd
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (cause) {
     throw new CapsError(`${path.basename(file)}: ${String(cause)}`, { cause });
@@ -33,6 +34,7 @@ function readJson(file: string): unknown {
 
 /** `{key: value}` from the baseline file; empty if missing. Throws `CapsError` if corrupt. */
 export function loadBaseline(file: string): Baseline {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- developer CLI: the same baseline path
   if (!fs.existsSync(file)) {
     return new Map();
   }
@@ -56,7 +58,9 @@ export function writeBaseline(file: string, violations: Baseline): void {
   const sorted = [...violations].sort(([a], [b]) => compareNames(a, b));
   const payload = { version: BASELINE_VERSION, caps: CAPS, violations: Object.fromEntries(sorted) };
   const temporary = `${file}.${process.pid}.tmp`;
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- developer CLI: temporary file next to the baseline path
   fs.writeFileSync(temporary, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- developer CLI: atomic rename of the temporary file onto the baseline path
   fs.renameSync(temporary, file);
 }
 

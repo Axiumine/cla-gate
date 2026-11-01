@@ -2,7 +2,7 @@
 
 Contributor License Agreements for GitHub projects. Maintainers publish a CLA, contributors sign it once with their GitHub account, and every pull request gets an automatic `license/cla` check.
 
-> **Status: planning.** The git repository is initialised; no application code is scaffolded yet. This README and [`CLAUDE.md`](CLAUDE.md) are the source of truth for scope, stack and quality gates. Version numbers, flags and config keys below were verified against live sources on 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
+> **Status: planning, tooling scaffolded.** The toolchain (Yarn 4, TypeScript, Biome, ESLint, Vitest at 100%, type-coverage, Knip, FTA, the caps ratchet, Lefthook hooks, GitHub Actions CI) is in place and green on the code-caps tool, the only code that exists; no application code is scaffolded yet. This README and [`CLAUDE.md`](CLAUDE.md) are the source of truth for scope, stack and quality gates. Version numbers, flags and config keys below were verified against live sources on 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
 
 ## Why another CLA tool
 
@@ -103,24 +103,30 @@ src/shared            zod schemas and API contract types; imports neither server
 
 Boundaries are enforced by ESLint `no-restricted-imports` overrides per directory and by Knip. Keeping the decision logic pure makes the 100% coverage and mutation gates cheap to satisfy honestly.
 
-### Planned repository layout
+### Repository layout
+
+Items marked (planned) do not exist yet.
 
 ```text
 .
-├── src/{server,web,shared}/     unit tests co-located as *.test.ts(x)
-├── migrations/                  forward-only, never edited after merge
+├── src/{server,web,shared}/     (planned) unit tests co-located as *.test.ts(x)
+├── migrations/                  (planned) forward-only, never edited after merge
 ├── scripts/check-code-caps.ts   structure-cap ratchet, entry (runs natively on Node 26)
-├── scripts/code-caps/           its modules and tests (port of the Python tool; already written)
-├── e2e/                         Playwright specs and visual baselines
-├── tests/leaks/                 memlab scenarios and the @memlab/api wrapper
+├── scripts/code-caps/           its modules (types, naming, nesting, collector, measure, files, baseline,
+│                                report, cli) and tests; a port of the Python tool
+├── types/                       ambient .d.ts for tools without types (eslint-plugin-no-unsanitized)
+├── e2e/                         (planned) Playwright specs and visual baselines
+├── tests/leaks/                 (planned) memlab scenarios and the @memlab/api wrapper
 ├── LICENSE                      AGPL-3.0-only
-├── rules/                       Semgrep rules cache (git-ignored, never committed)
-├── .github/workflows/ci.yml
+├── rules/                       (planned) Semgrep rules cache (git-ignored, never committed)
+├── .github/workflows/ci.yml     jobs static and coverage; .github/dependabot.yml
 ├── .code-caps-baseline.json
-├── lefthook.yml  biome.json  eslint.config.mjs  fta.json  knip.json
-├── stryker.config.mjs  playwright.config.ts  qodana.yaml  vite.config.ts
-├── .semgrepignore  .trivyignore  Dockerfile  docker-compose.yml  .env.example
-├── .nvmrc  mise.toml  .yarnrc.yml  package.json  tsconfig*.json
+├── lefthook.yml  biome.json  eslint.config.mjs  fta.json  knip.json  vitest.config.ts
+├── stryker.config.mjs  playwright.config.ts  qodana.yaml  vite.config.ts      (planned)
+├── .semgrepignore  .trivyignore  Dockerfile  docker-compose.yml  .env.example (planned)
+├── .nvmrc  mise.toml  .yarnrc.yml  package.json  yarn.lock
+├── tsconfig.json                solution-style root (files: [])
+├── tsconfig.base.json  tsconfig.scripts.json  tsconfig.node.json
 ├── README.md  CLAUDE.md
 ```
 
@@ -201,7 +207,7 @@ Gotchas worth remembering: the required check must have reported within 7 days t
 
 ## Quality gates
 
-Everything is strict by default: 100% coverage, zero lint findings, 100% type coverage, no unused code, ratcheted structural caps, and a mutation-score floor. Hooks give fast local feedback; **CI is authoritative** because hooks are bypassable.
+Everything is strict by default: 100% coverage, zero lint findings, 100% type coverage, no unused code and ratcheted structural caps; a mutation-score floor joins when Stryker lands (deferred). Hooks give fast local feedback; **CI is authoritative** because hooks are bypassable.
 
 ### Tool evaluation
 
@@ -209,24 +215,24 @@ Everything is strict by default: 100% coverage, zero lint findings, 100% type co
 |---|---|---|---|
 | Node 26 LTS + Corepack + Yarn 4 | Adopt, adjusted | everywhere | Corepack is **no longer bundled** since Node 25: `npm i -g corepack && corepack enable`. Pin via `.nvmrc`, `mise.toml`, `devEngines`, `packageManager`. Yarn 4.18 |
 | mise (over fnm) | Adopt | dev | mise ignores `.nvmrc` unless configured, so commit `mise.toml`; fnm's `--corepack-enabled` is broken on Node 25+ |
-| Biome | Adopt | hooks, CI | Formatter, import sorting, a11y, non-type-aware lint, cognitive complexity |
-| ESLint + typescript-eslint `strictTypeChecked` + sonarjs | Adopt | hooks, CI | `--max-warnings 0`, **no `--cache`** (stale for type-aware rules). Type-aware rules, sonarjs, security, complexity |
-| eslint-plugin-security, no-unsanitized | Adopt | hooks, CI | Plus Biome `noDangerouslySetInnerHtml` because no-unsanitized does not cover React |
+| Biome | Adopt | hooks, CI | Formatter, import sorting, a11y, non-type-aware lint, cognitive complexity. Formats YAML too; its Markdown formatter is switched off (it rewrites table separators) |
+| ESLint + typescript-eslint `strictTypeChecked` + sonarjs | Adopt | hooks, CI | `--max-warnings 0`, **no `--cache`** (stale for type-aware rules). Type-aware rules, sonarjs, security, complexity. `eslint-config-biome` is not used: it would switch off the type-aware `no-floating-promises` and `no-misused-promises` |
+| eslint-plugin-security, no-unsanitized | Adopt | hooks, CI | Both work on ESLint 10; the security preset is escalated from warn to error. Plus Biome `noDangerouslySetInnerHtml` because no-unsanitized does not cover React |
 | jsx-a11y | Skip | n/a | Plugin peers stop at ESLint 9; Biome a11y rules cover it |
 | tsc -b + strict flags + type-coverage | Adopt | pre-push, CI | TypeScript pinned to 6.0.x (see Decisions) |
 | Vitest + coverage-v8 | Adopt | hooks, CI | `thresholds: { 100: true }`, explicit `coverage.include` |
 | Snapshots | Adopt | CI | `toMatchSnapshot`, inline, `toMatchFileSnapshot` (CSV export, API JSON); Playwright `toHaveScreenshot` |
-| StrykerJS | Adopt | CI | `core`, `vitest-runner`, `typescript-checker` 10.1+; `--incremental`, `thresholds.break`. Server/domain code only at first; the web project is outside the floor until a plan exists |
-| Playwright | Adopt | CI | Pinned container for deterministic visual baselines |
+| StrykerJS | Adopt (deferred: lands with its CI job) | CI | `core`, `vitest-runner`, `typescript-checker` 10.1+; `--incremental`, `thresholds.break`. Server/domain code only at first; the web project is outside the floor until a plan exists |
+| Playwright | Adopt (deferred: lands with its CI job) | CI | Pinned container for deterministic visual baselines |
 | ESLint `complexity: 10` + Biome cognitive complexity | Adopt | hooks, CI | Biome's rule is cognitive (not cyclomatic), default severity is `info`: set it to `error` |
 | FTA | Adopt | pre-push, CI | `score_cap: 50`; pin exact version; exclude tests |
 | Knip | Adopt | pre-push, CI | Run default and `--production --strict` |
 | `check-code-caps.ts` | Adopt | pre-commit, pre-push, CI | Needs the TypeScript compiler API, hence TS 6 |
-| Semgrep | Adopt | pre-push if installed, CI | Five rulesets, `semgrep scan --error --metrics off` (never `semgrep ci`) |
-| Trivy | Adopt | pre-commit (secrets), pre-push, CI | v0.76.1 or later, Action pinned to full SHA. Two passes: vulnerabilities (HIGH/CRITICAL, prod deps in the gate, dev deps in a scheduled CI run) and an unfiltered secret + misconfig pass |
-| memlab | Adopt | CI nightly and release | Puppeteer based with its own Chromium; no leak-based exit code was found (unverified), so wrap it with `@memlab/api` and fail on leaks |
+| Semgrep | Adopt (deferred: lands with its CI job) | pre-push if installed, CI | Five rulesets, `semgrep scan --error --metrics off` (never `semgrep ci`) |
+| Trivy | Adopt (deferred: lands with its CI job) | pre-commit (secrets), pre-push, CI | v0.76.1 or later, Action pinned to full SHA. Two passes: vulnerabilities (HIGH/CRITICAL, prod deps in the gate, dev deps in a scheduled CI run) and an unfiltered secret + misconfig pass |
+| memlab | Adopt (deferred: lands with its CI job) | CI nightly and release | Puppeteer based with its own Chromium; no leak-based exit code was found (unverified), so wrap it with `@memlab/api` and fail on leaks |
 | Vitest `--logHeapUsage`, Node `--heap-prof` / `--cpu-prof` | Adopt, diagnostic only | on demand | Not gates. Used to investigate memlab or CI memory findings |
-| Qodana (`qodana-js`) | Adopt, limited | CI | Paid licence and token; fork PRs get no secrets, so make it a maintainer-side check |
+| Qodana (`qodana-js`) | Adopt, limited (deferred: lands with its CI job) | CI | Paid licence and token; fork PRs get no secrets, so make it a maintainer-side check |
 | Lefthook | Adopt | hooks | v2 `jobs:` syntax. Hooks installed from root `postinstall` (Yarn never runs `prepare`) |
 | GitNexus | Adopt as dev tooling | dev | Not a gate. PolyForm Noncommercial licence, and it edits CLAUDE.md |
 
@@ -241,25 +247,25 @@ Order is cheap and deterministic first, expensive and flaky last, and each step 
 | `pre-push` | whole repo | 3 min | 1. `biome ci --error-on-warnings` 2. `tsc -b` 3. in parallel: ESLint full, `type-coverage --strict --at-least 100`, Knip (both modes), FTA, `check-code-caps`, `trivy fs` (HIGH/CRITICAL plus secret/misconfig), Semgrep (skipped if not installed) 4. `CI=1 vitest run --coverage` at 100% |
 | `post-merge`, `post-checkout`, `post-rewrite` | lockfile change | 1 min | `yarn install --immutable` when `yarn.lock` or `.yarnrc.yml` changed |
 
-Budgets are targets, not measurements. `lefthook.yml` uses `piped: true` so a failed step stops the rest, with `group: parallel` for the independent static checks in step 3. Formatting runs before linting so lint sees the final text; types run before tests; coverage is last in the hook because it is the most expensive and meaningless if static gates fail. `CI=1` makes Vitest refuse to write new snapshots, so a push cannot go green with uncommitted snapshot files. Mutation, e2e, leak and Qodana runs are nondeterministic or slow and stay in CI.
+Today `lefthook.yml` has no Trivy or Semgrep job: they land with their CI jobs (a hook job must have a CI counterpart), and the `pre-push` hook calls the same `package.json` scripts as CI and `yarn gate` (`yarn lint:biome`, `yarn typecheck`, `yarn lint:eslint`, `yarn type-coverage`, `yarn knip`, `yarn fta`, `yarn caps`, `yarn coverage`). `pre-commit` runs staged-file variants of the binaries (`biome check --write`, `eslint`, `vitest related`) and shares only `yarn caps`. `skip: [merge, rebase]` is set on the slow `pre-commit` jobs only; on `pre-push` it would let `yarn gate` pass without running during a rebase. Budgets are targets, not measurements. `lefthook.yml` uses `piped: true` so a failed step stops the rest, with `group: parallel` for the independent static checks in step 3. Formatting runs before linting so lint sees the final text; types run before tests; coverage is last in the hook because it is the most expensive and meaningless if static gates fail. `CI=1` makes Vitest refuse to write new snapshots, so a push cannot go green with uncommitted snapshot files. Mutation, e2e, leak and Qodana runs are nondeterministic or slow and stay in CI.
 
 Network-bound jobs (Trivy vulnerability DB, Semgrep registry rules) can be skipped offline with `LEFTHOOK_EXCLUDE=trivy,semgrep`; that is the only sanctioned hook exclusion, and CI still enforces them. Downloading Semgrep rules into a git-ignored `rules/` cache removes the registry dependency; do not commit them (see CLAUDE.md, Semgrep).
 
 ### CI (authoritative)
 
-`.github/workflows/ci.yml`, every third-party Action pinned to a full commit SHA. Job graph:
+`.github/workflows/ci.yml`, every third-party Action pinned to a full commit SHA. Only `static` and `coverage` exist today; rows marked deferred land together with their tool. Job graph:
 
 | Job | Needs | Runs |
 |---|---|---|
-| `static` | none | `lefthook run pre-push --all-files --no-auto-install` minus the coverage step (the same commands as the hook) |
-| `coverage` | `static` | `vitest run --coverage` against PGlite, then again against a Postgres 18 service container; uploads `coverage/` for Qodana |
-| `mutation` | `static` | Stryker `--incremental`, `reports/stryker-incremental.json` restored from cache |
-| `e2e` | `static` | Playwright in the pinned container, including visual baselines |
-| `semgrep`, `trivy` | none | Full scans; mandatory, not skippable |
-| `leaks` | `coverage` | memlab; nightly and release only |
-| `qodana` | `coverage` | Maintainer-side; needs a token, skipped for fork PRs |
+| `static` | none | Explicit named steps running the same scripts as the `pre-push` hook minus the coverage step: Biome, `tsc -b`, ESLint, type-coverage per project, Knip (both modes), FTA, caps |
+| `coverage` | none | `CI=1 vitest run --coverage` at 100%. Runs in parallel with `static` (both are required checks, so a skipped dependent job could not mask a failure). Later: again against a Postgres 18 service container, and upload `coverage/` for Qodana |
+| `mutation` (deferred) | `static` | Stryker `--incremental`, `reports/stryker-incremental.json` restored from cache |
+| `e2e` (deferred) | `static` | Playwright in the pinned container, including visual baselines |
+| `semgrep`, `trivy` (deferred) | none | Full scans; mandatory, not skippable |
+| `leaks` (deferred) | `coverage` | memlab; nightly and release only |
+| `qodana` (deferred) | `coverage` | Maintainer-side; needs a token, skipped for fork PRs |
 
-A repository ruleset requires `static`, `coverage`, `mutation`, `e2e`, `semgrep` and `trivy`. `yarn gate` is the local equivalent of `static` plus `coverage`.
+Branch protection on `main` requires `static` and `coverage` today; `mutation`, `e2e`, `semgrep` and `trivy` become required once they are stable in CI (see CLAUDE.md, Repository protection). `yarn gate` is the local equivalent of `static` plus `coverage`. Dependabot (`.github/dependabot.yml`) keeps the SHA-pinned Actions and the npm dependencies current, with a one-week cooldown, grouped; TypeScript stays on 6.0.x.
 
 ## Decisions
 
@@ -276,26 +282,31 @@ A repository ruleset requires `static`, `coverage`, `mutation`, `e2e`, `semgrep`
 | No user tokens stored | Least privilege and liability; identity is read once at login |
 | Self-hostable, multi-tenant by installation | One code path; SaaS is a deployment choice, not a fork |
 
-## Development (planned)
+## Development
 
-Nothing runs yet. Prerequisites: [mise](https://mise.jdx.dev), Docker, [Trivy](https://trivy.dev) (required: the pre-commit secret scan uses it), [Semgrep](https://semgrep.dev) (optional locally, mandatory in CI). After scaffolding:
+The toolchain runs today; the application does not exist yet. Prerequisites: [mise](https://mise.jdx.dev) or any Node 26.13.0, Docker (later), [Trivy](https://trivy.dev) and [Semgrep](https://semgrep.dev) once their gates land.
 
 ```sh
 mise install                                 # Node 26 first; or: fnm use (reads .nvmrc)
 npm install -g corepack && corepack enable   # Node 26 no longer bundles Corepack
-yarn install --immutable                     # also installs git hooks via postinstall
+yarn install --immutable                     # also installs git hooks via postinstall (needs .git)
+yarn gate                                    # local equivalent of CI's static + coverage jobs
+```
+
+Planned, once the app is scaffolded:
+
+```sh
 docker compose up -d postgres                # PostgreSQL 18
 yarn db:migrate
 yarn dev                                     # Vite + Fastify; webhook tunnel (smee.io or similar) for GitHub
-yarn gate                                    # local equivalent of CI's static + coverage jobs
 gitnexus analyze --skip-agents-md            # optional: code knowledge graph (dev tooling only)
 ```
 
-Script names in [`CLAUDE.md`](CLAUDE.md) are the contract.
+Script names and their state (exists or deferred) are in [`CLAUDE.md`](CLAUDE.md).
 
 ## Roadmap
 
-1. **Scaffold**: toolchain, hooks, empty app passing every gate at 100%.
+1. **Scaffold**: toolchain, hooks and CI passing every gate at 100% (done for the tooling; Stryker, Playwright, memlab, Semgrep, Trivy and Qodana follow), then an empty app passing the same gates.
 2. **Core**: GitHub App, webhook intake, PR evaluation, Check Run and comment.
 3. **Signing**: login, CLA versions, consent flow, signature storage.
 4. **Dashboard**: repos, signatures, CSV export, revoke, audit log.

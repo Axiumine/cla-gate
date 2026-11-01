@@ -7,8 +7,9 @@ import path from 'node:path';
 import process from 'node:process';
 import ts from 'typescript';
 import { afterEach } from 'vitest';
-import type { Io } from './cli.ts';
-import { measureSource, nestingDepth } from './measure.ts';
+import { measureSource } from './measure.ts';
+import { nestingDepth } from './nesting.ts';
+import type { Io } from './report.ts';
 
 const FILLER = '  const x = 1;\n';
 const MEMBER_FILLER = '  a = 1;\n';
@@ -30,7 +31,9 @@ export function tempDir(): string {
 export function makeRepo(root: string, files: Readonly<Record<string, string>>): void {
   for (const [rel, text] of Object.entries(files)) {
     const target = path.join(root, rel);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test helper: target inside a temp directory created by the test
     fs.mkdirSync(path.dirname(target), { recursive: true });
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test helper: target inside a temp directory created by the test
     fs.writeFileSync(target, text, 'utf8');
   }
 }

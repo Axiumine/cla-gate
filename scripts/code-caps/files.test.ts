@@ -105,6 +105,7 @@ test.skipIf(process.platform !== 'linux')(
   'a source file whose name is not valid UTF-8 is an error, not skipped',
   () => {
     const root = tempDir();
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- test: file inside a temp directory created by the test
     fs.writeFileSync(Buffer.concat([Buffer.from(`${root}/caf`), Buffer.from([0xe9]), Buffer.from('.ts')]), SMALL);
     expect(() => sourceFiles(root)).toThrow(CapsError);
     expect(() => sourceFiles(root)).toThrow(/^file name is not valid UTF-8: caf\ufffd\.ts$/u);
@@ -113,6 +114,7 @@ test.skipIf(process.platform !== 'linux')(
 
 test.skipIf(process.platform !== 'linux')('a non-source file with a bad name is ignored', () => {
   const root = tempDir();
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test: file inside a temp directory created by the test
   fs.writeFileSync(Buffer.concat([Buffer.from(`${root}/caf`), Buffer.from([0xe9]), Buffer.from('.png')]), SMALL);
   expect(sourceFiles(root)).toEqual([]);
 });

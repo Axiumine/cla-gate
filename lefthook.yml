@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# Git hooks (Lefthook v2). Installed by the root `postinstall` script (Yarn Berry never runs `prepare`).
+# README.md has the hook pipeline table. Hooks are bypassable, so .github/workflows/ci.yml repeats every check
+# and is the authority. `yarn gate` runs the pre-push pipeline over the whole repo.
+#
+# Order is cheap and deterministic first, expensive last; `piped: true` stops at the first failing step.
+# `parallel` and `piped` cannot be combined on one level, hence the nested `group` for the independent checks.
+# Trivy and Semgrep join this file together with their CI jobs (a hook job must have a CI counterpart).
+min_version: 2.0.0
+assert_lefthook_installed: true
+glob_matcher: doublestar
+
+pre-commit:
+  piped: true
+  jobs:
+    # Format and fix first so every later step sees the final text; fixed files are re-staged.
+    - name: biome
+      run: yarn biome check --write --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+    - name: staged-checks
+      group:
+        parallel: true
+        jobs:
+          - name: eslint
+            glob: "**/*.{ts,mjs}"
+            run: yarn eslint --max-warnings 0 --no-warn-ignored {staged_files}
+            skip: [merge, rebase]
+          # Never add --coverage here: the 100% thresholds fail on a partial run.
+          - name: vitest-related
+            glob: "**/*.ts"
+            run: yarn vitest related --run --passWithNoTests {staged_files}
+            skip: [merge, rebase]
+          - name: caps
+            run: yarn caps
+
+pre-push:
+  piped: true
+  jobs:
+    - name: biome
+      run: yarn lint:biome
+    - name: typecheck
+      run: yarn typecheck
+    - name: static-analysis
+      group:
+        parallel: true
+        jobs:
+          - name: eslint
+            run: yarn lint:eslint
+          - name: type-coverage
+            run: yarn type-coverage
+          - name: knip
+            run: yarn knip
+          - name: fta
+            run: yarn fta
+          - name: caps
+            run: yarn caps
+    # Last because it is the most expensive and meaningless when a static check fails. CI=1 is set by the script.
+    - name: coverage
+      run: yarn coverage
+
+# Reinstall dependencies when the lockfile or the Yarn config changed (a convenience, not a gate).
+post-merge:
+  jobs:
+    - name: yarn-install
+      run: git diff --quiet ORIG_HEAD HEAD -- yarn.lock .yarnrc.yml || yarn install --immutable
+post-checkout:
+  jobs:
+    - name: yarn-install
+      run: git diff --quiet 'HEAD@{1}' HEAD -- yarn.lock .yarnrc.yml || yarn install --immutable
+post-rewrite:
+  jobs:
+    - name: yarn-install
+      run: git diff --quiet ORIG_HEAD HEAD -- yarn.lock .yarnrc.yml || yarn install --immutable

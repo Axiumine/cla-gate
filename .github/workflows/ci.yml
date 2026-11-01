@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# CI is the authority: git hooks (lefthook.yml) are bypassable, this workflow repeats every check.
+# `static` and `coverage` are the exact job names that branch protection requires on main (CLAUDE.md,
+# "Repository protection"): renaming a job breaks the rule.
+#
+# Every third-party action is pinned to a full commit SHA (the version is in the comment); Dependabot bumps them.
+# No secrets, no pull_request_target, and no untrusted input is interpolated into a `run:` block.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+  YARN_ENABLE_TELEMETRY: "0"
+
+jobs:
+  static:
+    name: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      # Corepack is not bundled with Node 25+. Pinned exactly, like everything else in the supply chain.
+      - name: Enable Corepack
+        run: npm install -g corepack@0.36.0 && corepack enable
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Biome (format, imports, lint)
+        run: yarn lint:biome
+      - name: Typecheck (tsc -b)
+        run: yarn typecheck
+      - name: ESLint
+        run: yarn lint:eslint
+      - name: Type coverage (per tsconfig project)
+        run: yarn type-coverage
+      - name: Knip (default and production modes)
+        run: yarn knip
+      - name: FTA (complexity score cap)
+        run: yarn fta
+      - name: Code caps (ratchet against .code-caps-baseline.json)
+        run: yarn caps
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: npm install -g corepack@0.36.0 && corepack enable
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      # CI=1 (set by the script) makes Vitest refuse to write new snapshots; thresholds are 100%.
+      - name: Tests with 100% coverage
+        run: yarn coverage
