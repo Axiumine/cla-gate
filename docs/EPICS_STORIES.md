@@ -2,11 +2,13 @@
 
 ## Purpose
 
-This file is the work queue for the CLA Gate platform. Each epic has one file in [`docs/epics/`](epics/) (`E01.md` to `E22.md`) with its goal, dependencies, out-of-scope list and numbered stories, and every story has acceptance criteria that a reviewer can check. The tables below are the index; the epic files are the source of truth.
+This file is the work queue for the CLA Gate platform. Each epic has one file in [`docs/epics/`](epics/) (`E01.md` to `E23.md`) with its goal, dependencies, out-of-scope list and numbered stories, and every story has acceptance criteria that a reviewer can check. The tables below are the index; the epic files are the source of truth.
+
+The CI runs on shared, self-hosted runners under the policy in [`ci-runners.md`](ci-runners.md) (E23). A story that writes a CI job, a workflow, a container, a port or a test database ends its acceptance criteria with a link to that policy, so the policy is a contract the story must meet.
 
 The files are living documents. When a story is finished, its status (and, if the work changed it, its wording) is updated in the same change as the code, and the header status of the epic follows its stories: all done is Done, all todo is Todo, anything else is In progress. A new story is appended with the next sequential id, ids are never renumbered, and a decision that changes is recorded in `README.md` and `CLAUDE.md` in the same change.
 
-**Definition of done for a story:** every acceptance criterion is met, all gates listed under Thresholds in [`CLAUDE.md`](../CLAUDE.md) are green, and the documentation (`README.md`, `CLAUDE.md`, the epic file and this index) is kept true.
+**Definition of done for a story:** every acceptance criterion is met, all gates listed under Thresholds in [`CLAUDE.md`](../CLAUDE.md) are green, and the documentation (`README.md`, `CLAUDE.md`, the epic file and this index) is kept true. CI jobs follow the [CI runners policy](ci-runners.md): shared self-hosted runners, a literal `runs-on`, random free loopback ports, timeouts and cleanup, and the fork pull request approval checklist for anything that comes from a fork.
 
 ## Legend
 
@@ -33,7 +35,7 @@ The files are living documents. When a story is finished, its status (and, if th
 | BC-05 | GitHub App and webhooks | The single GitHub App of the instance, installations as tenants, webhook intake. |
 | BC-06 | Maintainer and web | The React application, maintainer administration of repositories, allowlists and overrides. |
 | BC-07 | Compliance and audit | Audit trail, exports, erasure of personal data and retention. |
-| BC-08 | Quality and governance | Repository governance, licence, toolchain, gates and CI. |
+| BC-08 | Quality and governance | Repository governance, licence, toolchain, gates, CI and the CI runner policy. |
 | BC-09 | Self-hosting | Container image, compose stack, provisioning, first-run setup and operator documentation. |
 
 ## Epic overview
@@ -64,15 +66,16 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 | E20 | Extended quality gates | BC-08 | 🟠 Should have | ⬜ Todo | 16 | [E20.md](epics/E20.md) |
 | E21 | Corporate CLA (later) | BC-03 | 🟢 Could have | ⬜ Todo | 5 | [E21.md](epics/E21.md) |
 | E22 | Merge queue, badge and public verification (later) | BC-04 / BC-03 | 🟢 Could have | ⬜ Todo | 5 | [E22.md](epics/E22.md) |
+| E23 | Self-hosted CI runners | BC-08 | 🔴 Must have | ⏳ In progress | 11 | [E23.md](epics/E23.md) |
 
 ## Progress summary
 
 | Status | Stories | Epics |
 |---|---|---|
 | ✅ Done | 21 | 3 |
-| ⏳ In progress | 8 | 1 |
-| ⬜ Todo | 158 | 18 |
-| Total | 187 | 22 |
+| ⏳ In progress | 18 | 2 |
+| ⬜ Todo | 159 | 18 |
+| Total | 198 | 23 |
 
 ## Dependency and sequencing
 
@@ -82,11 +85,11 @@ The waves below come from the Depends on lines of the epic files (a wave is the 
 |---|---|---|
 | 1 | E01 | none |
 | 2 | E02 | E01 |
-| 3 | E03, E04, E20 | E02 |
-| 4 | E05, E08 | E04 |
-| 5 | E06, E10 | E04, E05 |
-| 6 | E07, E11, E17 | E04, E05, E06, E10 |
-| 7 | E09, E12, E16, E19 | E04, E05, E07, E08, E11, E17 |
+| 3 | E03, E04 | E02 |
+| 4 | E05, E08, E23 | E02, E04 |
+| 5 | E06, E10, E20 | E02, E04, E05, E23 |
+| 6 | E07, E11, E17 | E04, E05, E06, E10, E23 |
+| 7 | E09, E12, E16, E19 | E04, E05, E07, E08, E11, E17, E23 |
 | 8 | E13, E14 | E09, E10, E11, E12 |
 | 9 | E15, E22 | E09, E11, E13 |
 | 10 | E18, E21 | E12, E13, E14, E15, E16, E17 |
