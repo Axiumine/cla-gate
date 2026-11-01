@@ -72,9 +72,9 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 
 | Status | Stories | Epics |
 |---|---|---|
-| ✅ Done | 21 | 3 |
-| ⏳ In progress | 18 | 2 |
-| ⬜ Todo | 159 | 18 |
+| ✅ Done | 39 | 3 |
+| ⏳ In progress | 1 | 2 |
+| ⬜ Todo | 158 | 18 |
 | Total | 198 | 23 |
 
 ## Dependency and sequencing

@@ -191,5 +191,5 @@ Dev tooling only, never a gate. `gitnexus analyze` writes `.gitnexus/` (self-ign
 - memlab having no leak-based exit code.
 - Whether Yarn 4 resolves both `tsc` binaries cleanly if a TS 7 native alias is ever added (not planned).
 - Stryker `vitest-runner` 10.1.x against Vitest 5.0.x in this repo's layout; memlab on Node 26; `@rolldown/plugin-babel` peer range if React Compiler is enabled.
-- The `postgres` CI job (`scripts/ci/postgres.ts` container, pinned by tag and digest, `yarn test` against it) was validated locally with the same helper commands, but no job has yet run on the self-hosted runners: the preflight, tool cache, Docker access and disk are unverified until the first run.
+- The shared runners: the first run (2026-11-01) verified the preflight, tool cache, Docker access, disk, the random port and the job's cleanup step, and a re-run verified the warm cache and a checkout on a used workspace. Still unverified: host-side container leftovers after a cancelled run, new files in the runner user's home or `/tmp`, and the fork "Approve and run" prompt (E23-S11, `docs/ci-runners.md`).
 - Legal: e-signature validity (ESIGN, eIDAS) and GDPR retention choices need counsel; this repo contains no legal advice.
