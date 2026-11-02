@@ -173,9 +173,9 @@ test('fixes of every source come out sorted by code, then by id or SHA', () => {
 
 test('commits are counted once per SHA, merge commits included, and the skipped merges are counted apart', () => {
   const commits = [
-    commitFacts(2),
-    commitFacts(2),
-    { ...commitFacts(2), sha: sha(2).toUpperCase() },
+    commitFacts(0xab),
+    commitFacts(0xab),
+    { ...commitFacts(0xab), sha: sha(0xab).toUpperCase() },
     commitFacts(3, { parents: [sha(1), sha(2)] }),
     commitFacts(4, { parents: [] }),
   ];
