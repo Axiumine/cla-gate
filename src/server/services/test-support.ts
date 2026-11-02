@@ -10,6 +10,7 @@ import type {
   GitHubInstallation,
   GitHubOrgMembership,
   GitHubRepository,
+  GitHubRepositoryPermission,
 } from './ports/github.ts';
 import {
   InstallationGoneError,
@@ -80,7 +81,8 @@ export type GitHubMethod =
   | 'listInstallations'
   | 'listInstallationRepositories'
   | 'getRepositoryById'
-  | 'getOrgMembership';
+  | 'getOrgMembership'
+  | 'getRepositoryPermission';
 
 /** One call the fake served: the method and the installation id it was made for (undefined: not about one). */
 export interface RecordedCall {
@@ -117,6 +119,7 @@ export class FakeGitHub implements GitHubClient {
   readonly #gate: InstallationGate | undefined;
   readonly #installations = new Map<GithubId, FakeInstallation>();
   readonly #memberships = new Map<string, GitHubOrgMembership>();
+  readonly #permissions = new Map<string, GitHubRepositoryPermission>();
   readonly #failures: { method: GitHubMethod; error: Error }[] = [];
   readonly #hooks: { method: GitHubMethod; run: () => Promise<void> }[] = [];
   #app: GitHubAppInfo = FAKE_APP;
@@ -152,6 +155,16 @@ export class FakeGitHub implements GitHubClient {
 
   addMembership(githubInstallationId: GithubId, org: string, login: string, membership: GitHubOrgMembership): void {
     this.#memberships.set(membershipKey(githubInstallationId, org, login), membership);
+  }
+
+  /** Scripts what `GET /repos/{owner}/{repo}/collaborators/{username}/permission` answers to `login` for `fullName` (`owner/name`). */
+  addRepositoryPermission(
+    githubInstallationId: GithubId,
+    fullName: string,
+    login: string,
+    permission: GitHubRepositoryPermission,
+  ): void {
+    this.#permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
   }
 
   /** The next call of `method` throws `error` (once, after it is recorded). Several calls queue in order. */
@@ -207,6 +220,19 @@ export class FakeGitHub implements GitHubClient {
     );
   }
 
+  getRepositoryPermission(
+    githubInstallationId: GithubId,
+    owner: string,
+    repo: string,
+    login: string,
+  ): Promise<GitHubRepositoryPermission | null> {
+    return this.#serveInstallation(
+      'getRepositoryPermission',
+      githubInstallationId,
+      () => this.#permissions.get(permissionKey(githubInstallationId, `${owner}/${repo}`, login)) ?? null,
+    );
+  }
+
   #known(githubInstallationId: GithubId): FakeInstallation {
     const entry = this.#installations.get(githubInstallationId);
     if (entry === undefined) {
@@ -257,5 +283,8 @@ function takeFirst<T extends { readonly method: GitHubMethod }>(queue: T[], meth
 /** GitHub compares organisation and login names without regard to case. */
 const membershipKey = (githubInstallationId: GithubId, org: string, login: string): string =>
   `${githubInstallationId}/${org.toLowerCase()}/${login.toLowerCase()}`;
+
+const permissionKey = (githubInstallationId: GithubId, fullName: string, login: string): string =>
+  `${githubInstallationId}/${fullName.toLowerCase()}/${login.toLowerCase()}`;
 
 const OPEN_GATE: InstallationGate = { assertAdmitted: () => Promise.resolve() };

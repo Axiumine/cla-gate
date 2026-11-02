@@ -14,6 +14,7 @@ test('every call is recorded with its method and installation id, in order; App-
   await fake.listInstallationRepositories(id(11));
   await fake.getRepositoryById(id(11), id(101));
   await fake.getOrgMembership(id(11), 'acme', 'alice');
+  await fake.getRepositoryPermission(id(11), 'acme', 'api', 'alice');
   await fake.getInstallation(id(99));
   expect(fake.calls).toEqual([
     { method: 'getApp', installationId: undefined },
@@ -22,6 +23,7 @@ test('every call is recorded with its method and installation id, in order; App-
     { method: 'listInstallationRepositories', installationId: 11 },
     { method: 'getRepositoryById', installationId: 11 },
     { method: 'getOrgMembership', installationId: 11 },
+    { method: 'getRepositoryPermission', installationId: 11 },
     { method: 'getInstallation', installationId: 99 },
   ]);
 });

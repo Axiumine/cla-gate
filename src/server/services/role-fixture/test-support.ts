@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { parseGithubId } from '../../../shared/github-id.ts';
 import type { OrgAdminInstallation, RoleViewer } from '../org-admin.ts';
+import type { RepoAdminInstallation, RepoAdminRepository } from '../repo-admin.ts';
 
 // The people and installations the role lookups of E11 are tested with: made-up ids, as the stored rows hold them.
 
@@ -29,3 +30,14 @@ export function orgInstallation(
 export function userInstallation(githubInstallationId: number, accountId: number): OrgAdminInstallation {
   return orgInstallation(githubInstallationId, 'alice', { account_id: accountId, account_type: 'User' });
 }
+
+/** An installation as the repository lookup reads its stored row. */
+export const installationRow = (githubInstallationId: number): RepoAdminInstallation => ({
+  github_installation_id: githubInstallationId,
+});
+
+/** A stored repository as the repository lookup reads it: the display name, and not removed unless `removedAt` says so. */
+export const storedRepository = (fullName: string, removedAt: Date | null = null): RepoAdminRepository => ({
+  full_name: fullName,
+  removed_at: removedAt,
+});

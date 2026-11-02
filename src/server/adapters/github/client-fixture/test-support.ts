@@ -170,3 +170,13 @@ export function membershipJson(userId: number, overrides: Record<string, unknown
     ...overrides,
   };
 }
+
+/** A repository permission as GitHub spells it, with the fields the platform does not use. */
+export function permissionJson(userId: number, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    permission: 'admin',
+    role_name: 'admin',
+    user: { login: 'alice', id: userId, type: 'User', site_admin: false },
+    ...overrides,
+  };
+}

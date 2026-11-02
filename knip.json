@@ -16,6 +16,9 @@
     "src/server/domain/authz.ts!",
     "src/server/services/installation-store.ts!",
     "src/server/services/org-admin.ts!",
+    "src/server/services/probe-budget.ts!",
+    "src/server/services/repo-admin.ts!",
+    "src/server/services/repo-admin-discovery.ts!",
     "src/server/services/revoke-user-sessions.ts!"
   ],
   "project": [

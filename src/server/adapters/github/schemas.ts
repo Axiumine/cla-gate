@@ -96,3 +96,15 @@ export const orgMembershipSchema = z
     user: z.object({ id: githubIdSchema }),
   })
   .transform(({ state, role, user }) => ({ state, role, userId: user.id }));
+
+/**
+ * `GET /repos/{owner}/{repo}/collaborators/{username}/permission` (E11-S03): the base `permission` of a person on a
+ * repository and their numeric id. `role_name` is dropped on purpose: a custom role maps onto the base `permission`, and the
+ * name of a role is a label a maintainer can choose.
+ */
+export const repositoryPermissionSchema = z
+  .object({
+    permission: z.enum(['admin', 'maintain', 'write', 'triage', 'read', 'none']),
+    user: z.object({ id: githubIdSchema }),
+  })
+  .transform(({ permission, user }) => ({ permission, userId: user.id }));

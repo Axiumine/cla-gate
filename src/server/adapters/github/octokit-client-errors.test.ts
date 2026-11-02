@@ -15,6 +15,7 @@ import {
   installationJson,
   json,
   membershipJson,
+  permissionJson,
   repositoryJson,
 } from './client-fixture/test-support.ts';
 
@@ -135,11 +136,21 @@ test('getOrgMembership resolves null on 404 and fails on a 403 (Members: read mi
   await expect(refused.client.getOrgMembership(id(11), 'acme', 'alice')).rejects.toBeInstanceOf(GitHubForbiddenError);
 });
 
+test('getRepositoryPermission resolves null on 404 and fails on a 403 (the permission is missing)', async () => {
+  const route = 'GET /repos/:owner/:repo/collaborators/:username/permission';
+  const missing = clientFixture({ [route]: () => json({ message: 'Not Found' }, 404) });
+  expect(await missing.client.getRepositoryPermission(id(11), 'acme', 'api', 'alice')).toBeNull();
+  const refused = clientFixture({ [route]: () => json({ message: 'no' }, 403) });
+  await expect(refused.client.getRepositoryPermission(id(11), 'acme', 'api', 'alice')).rejects.toBeInstanceOf(
+    GitHubForbiddenError,
+  );
+});
+
 /** Fields no schema keeps; a failure must not echo them. */
 const SECRET_FIELD = { token: 'ghs_must_not_be_echoed', note: LEAK };
 
 interface Bad {
-  readonly call: 'installation' | 'repository' | 'membership' | 'list';
+  readonly call: 'installation' | 'repository' | 'membership' | 'permission' | 'list';
   readonly body: object;
   readonly route: string;
   readonly paths: string[];
@@ -159,6 +170,13 @@ const membershipWith = (overrides: Record<string, unknown>, paths: string[]): Ba
   call: 'membership',
   body: membershipJson(501, { ...overrides, ...SECRET_FIELD }),
   route: MEMBERSHIP,
+  paths,
+});
+
+const permissionWith = (overrides: Record<string, unknown>, paths: string[]): Bad => ({
+  call: 'permission',
+  body: permissionJson(501, { ...overrides, ...SECRET_FIELD }),
+  route: 'GET /repos/{owner}/{repo}/collaborators/{username}/permission',
   paths,
 });
 
@@ -196,6 +214,10 @@ const BAD: [name: string, bad: Bad][] = [
   ['a membership with no user', membershipWith({ user: null }, ['user'])],
   ['a membership with a role we do not know', membershipWith({ role: 'owner' }, ['role'])],
   ['a membership with a state we do not know', membershipWith({ state: 'banned' }, ['state'])],
+  ['a permission with no user', permissionWith({ user: null }, ['user'])],
+  ['a permission whose user id is not a positive integer', permissionWith({ user: { id: 0 } }, ['user.id'])],
+  ['a permission we do not know', permissionWith({ permission: 'owner' }, ['permission'])],
+  ['a permission with no permission field', permissionWith({ permission: undefined }, ['permission'])],
 ];
 
 test.each(BAD)('%s is a GitHubResponseError with the route and the paths, never the body', async (_name, bad) => {
@@ -204,12 +226,14 @@ test.each(BAD)('%s is a GitHubResponseError with the route and the paths, never 
     'GET /app/installations': () => json(bad.body),
     'GET /repositories/:id': () => json(bad.body),
     'GET /orgs/:org/memberships/:username': () => json(bad.body),
+    'GET /repos/:owner/:repo/collaborators/:username/permission': () => json(bad.body),
   });
   const attempts = {
     installation: () => client.getInstallation(id(11)),
     list: () => client.listInstallations(),
     repository: () => client.getRepositoryById(id(11), id(101)),
     membership: () => client.getOrgMembership(id(11), 'acme', 'alice'),
+    permission: () => client.getRepositoryPermission(id(11), 'acme', 'api', 'alice'),
   };
   const failure = await attempts[bad.call]().catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(GitHubResponseError);

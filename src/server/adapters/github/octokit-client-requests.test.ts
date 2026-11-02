@@ -12,6 +12,7 @@ import {
   line,
   MADE_UP_JWT,
   membershipJson,
+  permissionJson,
   type Routes,
   repositoryJson,
 } from './client-fixture/test-support.ts';
@@ -27,6 +28,7 @@ const routes: Routes = {
   'GET /installation/repositories': () => json({ total_count: 1, repositories: [repositoryJson(101)] }),
   'GET /repositories/:id': () => json(repositoryJson(101)),
   'GET /orgs/:org/memberships/:username': () => json(membershipJson(501)),
+  'GET /repos/:owner/:repo/collaborators/:username/permission': () => json(permissionJson(501)),
 };
 
 const JWT = `Bearer ${MADE_UP_JWT}`;
@@ -49,6 +51,12 @@ const ROWS: Row[] = [
     'getOrgMembership',
     (client) => client.getOrgMembership(id(11), 'my-org_1', 'Alice-9'),
     'GET /orgs/my-org_1/memberships/Alice-9',
+    TOKEN,
+  ],
+  [
+    'getRepositoryPermission',
+    (client) => client.getRepositoryPermission(id(11), 'my-org_1', '.my-repo.v2', 'Alice-9'),
+    'GET /repos/my-org_1/.my-repo.v2/collaborators/Alice-9/permission',
     TOKEN,
   ],
 ];
@@ -88,6 +96,44 @@ test.each([
   const { client, calls } = clientFixture(routes);
   expect(await client.getOrgMembership(id(11), org, login)).toBeNull();
   expect(calls).toEqual([]);
+});
+
+test.each([
+  ['an owner with a path in it', '../orgs/other', 'api', 'alice'],
+  ['an owner with a percent escape', '%2e%2e', 'api', 'alice'],
+  ['a repository name that is a dot', 'acme', '.', 'alice'],
+  ['a repository name that climbs out of the route', 'acme', '..', 'alice'],
+  ['a repository name with a slash', 'acme', 'api/collaborators', 'alice'],
+  ['a repository name with a query', 'acme', 'api?x=1', 'alice'],
+  ['an empty repository name', 'acme', '', 'alice'],
+  ['a repository name with a space', 'acme', 'my api', 'alice'],
+  ['a repository name over 100 characters', 'acme', 'r'.repeat(101), 'alice'],
+  ['a login with a slash', 'acme', 'api', 'a/b'],
+  ['a login that climbs out of the route', 'acme', 'api', '..'],
+  ['an empty login', 'acme', 'api', ''],
+  ['a login over 100 characters', 'acme', 'api', 'a'.repeat(101)],
+])('getRepositoryPermission resolves null for %s and sends nothing', async (_name, owner, repo, login) => {
+  const { client, calls } = clientFixture(routes);
+  expect(await client.getRepositoryPermission(id(11), owner, repo, login)).toBeNull();
+  expect(calls).toEqual([]);
+});
+
+test('getRepositoryPermission takes a repository name of exactly 100 characters, and a name that starts with a dot', async () => {
+  const { client, calls } = clientFixture(routes);
+  await client.getRepositoryPermission(id(11), 'acme', 'r'.repeat(100), 'alice');
+  await client.getRepositoryPermission(id(11), 'acme', '.github', 'alice');
+  expect(calls.map(line)).toEqual([
+    `GET /repos/acme/${'r'.repeat(100)}/collaborators/alice/permission`,
+    'GET /repos/acme/.github/collaborators/alice/permission',
+  ]);
+});
+
+test('getRepositoryPermission keeps the permission and the person id, and drops role_name and the rest of the answer', async () => {
+  const { client } = clientFixture(routes);
+  expect(await client.getRepositoryPermission(id(11), 'acme', 'api', 'alice')).toStrictEqual({
+    permission: 'admin',
+    userId: 501,
+  });
 });
 
 function assertMemberOf(fixture: ClientFixture): void {

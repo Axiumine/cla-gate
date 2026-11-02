@@ -2,7 +2,13 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
-import type { GitHubClient, GitHubInstallation, GitHubOrgMembership, GitHubRepository } from '../ports/github.ts';
+import type {
+  GitHubClient,
+  GitHubInstallation,
+  GitHubOrgMembership,
+  GitHubRepository,
+  GitHubRepositoryPermission,
+} from '../ports/github.ts';
 import {
   InstallationGoneError,
   InstallationNotAdmittedError,
@@ -26,6 +32,13 @@ export interface GitHubWorld {
     org: string,
     login: string,
     membership: GitHubOrgMembership,
+  ) => void;
+  /** What the permission call answers to `login` for the repository `fullName` (`owner/name`). */
+  readonly addRepositoryPermission: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    login: string,
+    permission: GitHubRepositoryPermission,
   ) => void;
   /** The instance does not serve this installation: its gate refuses it. */
   readonly refuse: (githubInstallationId: GithubId, reason: NotAdmittedReason) => void;
@@ -60,6 +73,8 @@ export function repositories(first: number, count: number): GitHubRepository[] {
 
 const MEMBER: GitHubOrgMembership = { state: 'active', role: 'member', userId: id(77) };
 
+const WRITER: GitHubRepositoryPermission = { permission: 'write', userId: id(77) };
+
 /** The fake as a world: scripts FakeGitHub, with a gate that admits everyone but the installations a test refuses. */
 export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
   const gate = new FakeGate();
@@ -75,6 +90,9 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
     },
     addMembership: (githubInstallationId, org, login, membership) => {
       fake.addMembership(githubInstallationId, org, login, membership);
+    },
+    addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
+      fake.addRepositoryPermission(githubInstallationId, fullName, login, permission);
     },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);
@@ -234,6 +252,57 @@ export const CONTRACT_CASES: readonly ContractCase[] = [
     },
   ],
   [
+    'getRepositoryPermission returns the base permission and the id of the person',
+    async ({ client, addInstallation, addRepositoryPermission }) => {
+      addInstallation(installation(11, 'acme'));
+      addRepositoryPermission(id(11), 'acme/api', 'alice', { permission: 'admin', userId: id(501) });
+      addRepositoryPermission(id(11), 'acme/api', 'bob', { permission: 'maintain', userId: id(502) });
+      expect(await client.getRepositoryPermission(id(11), 'acme', 'api', 'alice')).toEqual({
+        permission: 'admin',
+        userId: 501,
+      });
+      expect(await client.getRepositoryPermission(id(11), 'acme', 'api', 'bob')).toEqual({
+        permission: 'maintain',
+        userId: 502,
+      });
+    },
+  ],
+  [
+    'getRepositoryPermission treats names without regard to case, as GitHub does, and takes the dots of a repository name',
+    async ({ client, addInstallation, addRepositoryPermission }) => {
+      addInstallation(installation(11, 'acme'));
+      addRepositoryPermission(id(11), 'acme/.github', 'alice', WRITER);
+      addRepositoryPermission(id(11), 'acme/my.repo', 'alice', WRITER);
+      expect(await client.getRepositoryPermission(id(11), 'ACME', '.GitHub', 'Alice')).toEqual(WRITER);
+      expect(await client.getRepositoryPermission(id(11), 'acme', 'my.repo', 'alice')).toEqual(WRITER);
+    },
+  ],
+  [
+    'getRepositoryPermission resolves null for a person or a repository GitHub has not got, and for a permission of another installation',
+    async ({ client, addInstallation, addRepositoryPermission }) => {
+      addInstallation(installation(11, 'acme'));
+      addInstallation(installation(12, 'globex'));
+      addRepositoryPermission(id(11), 'acme/api', 'alice', WRITER);
+      addRepositoryPermission(id(12), 'globex/api', 'alice', WRITER);
+      expect(await client.getRepositoryPermission(id(11), 'acme', 'api', 'bob')).toBeNull();
+      expect(await client.getRepositoryPermission(id(11), 'acme', 'web', 'alice')).toBeNull();
+      expect(await client.getRepositoryPermission(id(11), 'globex', 'api', 'alice')).toBeNull();
+    },
+  ],
+  [
+    'getRepositoryPermission resolves null for a name GitHub cannot hold',
+    async ({ client, addInstallation }) => {
+      addInstallation(installation(11, 'acme'));
+      for (const login of ['../app', 'a/b', 'alice?x=1', '', '..', 'a b']) {
+        expect(await client.getRepositoryPermission(id(11), 'acme', 'api', login)).toBeNull();
+      }
+      for (const repo of ['..', '.', 'a/b', '', 'api?x=1', 'a b', '%2e%2e']) {
+        expect(await client.getRepositoryPermission(id(11), 'acme', repo, 'alice')).toBeNull();
+      }
+      expect(await client.getRepositoryPermission(id(11), '../orgs/other', 'api', 'alice')).toBeNull();
+    },
+  ],
+  [
     'an installation the gate refuses is refused by every installation-level method, before GitHub is asked',
     async ({ client, addInstallation, refuse, reached }) => {
       addInstallation(installation(11, 'acme'), [repository(101, 'acme/api')]);
@@ -244,6 +313,8 @@ export const CONTRACT_CASES: readonly ContractCase[] = [
         () => client.getRepositoryById(id(11), id(101)),
         () => client.getOrgMembership(id(11), 'acme', 'alice'),
         () => client.getOrgMembership(id(11), '../orgs/other', '..'),
+        () => client.getRepositoryPermission(id(11), 'acme', 'api', 'alice'),
+        () => client.getRepositoryPermission(id(11), 'acme', '..', '..'),
       ];
       for (const call of refused) {
         await expect(call()).rejects.toEqual(new InstallationNotAdmittedError('rejected'));
@@ -258,6 +329,7 @@ export const CONTRACT_CASES: readonly ContractCase[] = [
       await expect(client.listInstallationRepositories(id(11))).rejects.toEqual(gone);
       await expect(client.getRepositoryById(id(11), id(101))).rejects.toEqual(gone);
       await expect(client.getOrgMembership(id(11), 'acme', 'alice')).rejects.toEqual(gone);
+      await expect(client.getRepositoryPermission(id(11), 'acme', 'api', 'alice')).rejects.toEqual(gone);
     },
   ],
   [
@@ -269,6 +341,7 @@ export const CONTRACT_CASES: readonly ContractCase[] = [
       await expect(client.listInstallationRepositories(id(11))).rejects.toEqual(suspended);
       await expect(client.getRepositoryById(id(11), id(101))).rejects.toEqual(suspended);
       await expect(client.getOrgMembership(id(11), 'acme', 'alice')).rejects.toEqual(suspended);
+      await expect(client.getRepositoryPermission(id(11), 'acme', 'api', 'alice')).rejects.toEqual(suspended);
       expect((await client.getInstallation(id(11)))?.id).toBe(11);
     },
   ],

@@ -65,6 +65,17 @@ export interface GitHubOrgMembership {
   readonly userId: GithubId;
 }
 
+/**
+ * A person's permission on one repository (`GET /repos/{owner}/{repo}/collaborators/{username}/permission`). `permission`
+ * is the base level GitHub reports: a custom role maps onto one of these, so `role_name` is never read. Only `admin`
+ * makes someone a repository admin (E11-S03).
+ */
+export interface GitHubRepositoryPermission {
+  readonly permission: 'admin' | 'maintain' | 'write' | 'triage' | 'read' | 'none';
+  /** The numeric GitHub id of the person the answer is about: the identity the caller compares with its own. */
+  readonly userId: GithubId;
+}
+
 export interface GitHubClient {
   /** `GET /app`, signed as the App. */
   getApp(): Promise<GitHubAppInfo>;
@@ -98,4 +109,17 @@ export interface GitHubClient {
    * the exemption lookup (E07-S10) and the admin role (E11-S02) both use it.
    */
   getOrgMembership(githubInstallationId: GithubId, org: string, login: string): Promise<GitHubOrgMembership | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/collaborators/{username}/permission` with the installation's token (Metadata: read).
+   * Resolves null when GitHub has no such repository for this installation or no such person (404) and for a name
+   * GitHub cannot hold (no request is sent for it; the installation is checked first all the same). The repository
+   * admin role (E11-S03) reads it.
+   */
+  getRepositoryPermission(
+    githubInstallationId: GithubId,
+    owner: string,
+    repo: string,
+    login: string,
+  ): Promise<GitHubRepositoryPermission | null>;
 }
