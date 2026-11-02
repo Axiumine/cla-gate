@@ -15,6 +15,7 @@ import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
 import type { Clock } from './services/ports/clock.ts';
 import type { JobEnqueuer } from './services/ports/jobs.ts';
+import type { RoleCache } from './services/role-cache.ts';
 
 const LogLine = z.record(z.string(), z.unknown());
 
@@ -79,6 +80,8 @@ export interface TestAppOptions {
   readonly enqueuer?: JobEnqueuer;
   /** Where the webhook route answers `503` `webhook_timeout` (E06-S07). Defaults to the app's own, 8 seconds. */
   readonly webhookDeadlineMs?: number;
+  /** The cache of the roles GitHub reported (E11-S04); defaults to the app's own, which a test reads from `app.roleCache`. */
+  readonly roleCache?: RoleCache;
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */
@@ -96,6 +99,7 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
     ...(options.githubTimeoutMs === undefined ? {} : { githubTimeoutMs: options.githubTimeoutMs }),
     ...(options.enqueuer === undefined ? {} : { enqueuer: options.enqueuer }),
     ...(options.webhookDeadlineMs === undefined ? {} : { webhookDeadlineMs: options.webhookDeadlineMs }),
+    ...(options.roleCache === undefined ? {} : { roleCache: options.roleCache }),
   });
   onTestFinished(async () => {
     await app.close();

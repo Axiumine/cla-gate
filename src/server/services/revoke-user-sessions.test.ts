@@ -17,23 +17,48 @@ const valid = { type: REVOKE_SESSIONS_JOB, githubUserId: 1001 };
 
 function handlerWith(removed: number | Error = 3) {
   const asked: GithubId[] = [];
+  const events: string[] = [];
   const info = vi.fn();
   const handler = createRevokeUserSessionsHandler({
     sessions: {
       removeAllOfGithubId: (githubId) => {
         asked.push(githubId);
+        events.push('sessions removed');
         return removed instanceof Error ? Promise.reject(removed) : Promise.resolve(removed);
+      },
+    },
+    roles: {
+      invalidateViewer: (githubId) => {
+        events.push(`roles of ${githubId} forgotten`);
       },
     },
     log: { info },
   });
-  return { handler, asked, info };
+  return { handler, asked, events, info };
 }
 
 test('a valid envelope deletes the sessions of that id and resolves to the count', async () => {
   const { handler, asked } = handlerWith(3);
   expect(await handler(valid)).toBe(3);
   expect(asked).toEqual([1001]);
+});
+
+test('the roles cached for the person are forgotten once their sessions are gone, and for nobody else', async () => {
+  const { handler, events } = handlerWith(3);
+  await handler(valid);
+  expect(events).toEqual(['sessions removed', 'roles of 1001 forgotten']);
+});
+
+test('a person with no session has their cached roles forgotten too, and a run again does it again', async () => {
+  const { handler, events } = handlerWith(0);
+  await handler(valid);
+  await handler(valid);
+  expect(events).toEqual([
+    'sessions removed',
+    'roles of 1001 forgotten',
+    'sessions removed',
+    'roles of 1001 forgotten',
+  ]);
 });
 
 test('the log line carries the numeric id and the count and nothing else', async () => {
@@ -76,9 +101,9 @@ test.each([
   ['a delivery id of 101 characters', { ...valid, deliveryId: 'd'.repeat(101) }],
   ['a delivery id that is not text', { ...valid, deliveryId: 7 }],
 ])('%s is refused as job_payload_invalid before anything is deleted or logged', async (_label, data) => {
-  const { handler, asked, info } = handlerWith();
+  const { handler, asked, events, info } = handlerWith();
   await expect(handler(data)).rejects.toBeInstanceOf(InvalidJobPayloadError);
-  expect(asked).toEqual([]);
+  expect([asked, events]).toEqual([[], []]);
   expect(info).not.toHaveBeenCalled();
 });
 
@@ -92,9 +117,11 @@ test('the refusal has a fixed message and a code, and never quotes the payload',
 
 test('a failing deletion is not swallowed: the same error reaches the worker, which retries, and nothing is logged as done', async () => {
   const failure = new Error('connection terminated');
-  const { handler, info } = handlerWith(failure);
+  const { handler, events, info } = handlerWith(failure);
   await expect(handler(valid)).rejects.toBe(failure);
   expect(info).not.toHaveBeenCalled();
+  // The retry will forget them: the job is idempotent, and the cache is only dropped once the sessions are.
+  expect(events).toEqual(['sessions removed']);
 });
 
 test('the schema accepts the largest GitHub id a JavaScript number holds and a delivery id of 100 characters', () => {

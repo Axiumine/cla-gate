@@ -5,8 +5,8 @@ import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { RoleViewer } from './org-admin.ts';
 import { type ProbeBudget, ProbeBudgetExhaustedError } from './probe-budget.ts';
-import type { RepoAdminLookup } from './repo-admin.ts';
 import { listRepoAdminCandidates } from './repo-admin-candidates.ts';
+import type { CachedRepoAdminLookup } from './role-lookups.ts';
 
 // The role-in-installation rule of E11-S01 (E11-S03): a person who is no org admin has a role in an installation when they
 // are admin of at least one of its repositories that carries a repo-scoped CLA document. The endpoints that list what a
@@ -28,8 +28,11 @@ export interface RoleDiscovery {
 
 export interface RepoAdminDiscoveryDeps {
   readonly db: Kysely<Database>;
-  /** The permission lookup; in front of it sits the role cache (E11-S04), which makes a hit cost nothing. */
-  readonly lookup: RepoAdminLookup;
+  /**
+   * The permission lookup with the role cache in front of it (E11-S04), which makes a hit cost nothing. The bare lookup of
+   * E11-S03 fits too: it asks for fewer fields.
+   */
+  readonly lookup: CachedRepoAdminLookup;
 }
 
 export type DiscoverRepoAdminRole = (
@@ -60,7 +63,12 @@ export function createRepoAdminDiscovery({ db, lookup }: RepoAdminDiscoveryDeps)
     const listed = await listRepoAdminCandidates(db, installationId, allowed + 1);
     const candidates = listed.slice(0, allowed);
     const probes = new Probes(candidates, (candidate) =>
-      lookup({ github_installation_id: candidate.github_installation_id }, candidate, viewer, budget),
+      lookup(
+        { id: installationId, github_installation_id: candidate.github_installation_id },
+        candidate,
+        viewer,
+        budget,
+      ),
     );
     await probes.run();
     if (probes.admin) {

@@ -8,6 +8,8 @@ import type { Database } from '../adapters/db/schema.ts';
 export interface RepoAdminCandidate {
   /** The GitHub installation id the lookup's token belongs to; the tenant key of the repository is the id asked for. */
   readonly github_installation_id: number;
+  /** The numeric GitHub id of the repository: what the role cache keeps the answer under (E11-S04), never the name. */
+  readonly github_repo_id: number;
   readonly full_name: string;
   readonly removed_at: Date | null;
 }
@@ -26,7 +28,12 @@ export async function listRepoAdminCandidates(
   const rows = await db
     .selectFrom('repositories')
     .innerJoin('installations', 'installations.id', 'repositories.installation_id')
-    .select(['installations.github_installation_id', 'repositories.full_name', 'repositories.removed_at'])
+    .select([
+      'installations.github_installation_id',
+      'repositories.github_repo_id',
+      'repositories.full_name',
+      'repositories.removed_at',
+    ])
     .where('repositories.installation_id', '=', installationId)
     .where('repositories.removed_at', 'is', null)
     .where((eb) =>

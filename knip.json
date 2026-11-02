@@ -19,7 +19,9 @@
     "src/server/services/probe-budget.ts!",
     "src/server/services/repo-admin.ts!",
     "src/server/services/repo-admin-discovery.ts!",
-    "src/server/services/revoke-user-sessions.ts!"
+    "src/server/services/revoke-user-sessions.ts!",
+    "src/server/services/role-lookup-budget.ts!",
+    "src/server/services/role-lookups.ts!"
   ],
   "project": [
     "scripts/**/*.ts!",

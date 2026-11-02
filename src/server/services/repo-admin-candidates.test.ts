@@ -9,12 +9,12 @@ import { repoId, worldOfTwoTenants } from './store-fixture/test-support.ts';
 
 const REMOVED_AT = new Date('2026-06-01T12:00:00Z');
 
-test('only repositories with a repo-scoped document are listed, with the GitHub installation id and the stored name', async () => {
+test('only repositories with a repo-scoped document are listed, with the GitHub installation id, the GitHub repository id and the stored name', async () => {
   const { db, a } = await worldOfTwoTenants();
   await installationDocument(db, a.installation.id);
   await scopeDocuments(db, a.installation.id, namesOf(1, [2]));
   expect(await listRepoAdminCandidates(db, a.installation.id, 10)).toEqual([
-    { github_installation_id: 100, full_name: 'org-1/repo-2', removed_at: null },
+    { github_installation_id: 100, github_repo_id: repoId(1, 2), full_name: 'org-1/repo-2', removed_at: null },
   ]);
 });
 

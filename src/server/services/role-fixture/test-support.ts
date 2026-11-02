@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { parseGithubId } from '../../../shared/github-id.ts';
+import { type InstallationRowId, installationRowIdSchema } from '../../adapters/db/installation-row-id.ts';
 import type { OrgAdminInstallation, RoleViewer } from '../org-admin.ts';
 import type { RepoAdminInstallation, RepoAdminRepository } from '../repo-admin.ts';
+import { ORG_SCOPE, type RoleKey, type RoleScope } from '../role-key.ts';
 
 // The people and installations the role lookups of E11 are tested with: made-up ids, as the stored rows hold them.
 
@@ -41,3 +43,21 @@ export const storedRepository = (fullName: string, removedAt: Date | null = null
   full_name: fullName,
   removed_at: removedAt,
 });
+
+/** An `installations.id`, for the tests of the role cache: the tenant key, never a GitHub installation id. */
+export const tenantId = (n: number): InstallationRowId => installationRowIdSchema.parse(n);
+
+/** What the role cache keeps an answer under: tenant `installation`, the person with numeric id `viewer`, and the scope. */
+export function roleKey(installation: number, viewer: number = VIEWER_ID, scope: RoleScope = ORG_SCOPE): RoleKey {
+  return { installationId: tenantId(installation), viewerGithubId: parseGithubId(viewer), scope };
+}
+
+/** A promise a test settles by hand: the way to hold a lookup under way while something else happens. */
+export function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason: Error) => void;
+} {
+  const handles = Promise.withResolvers<T>();
+  return { promise: handles.promise, resolve: handles.resolve, reject: handles.reject };
+}

@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
 import type { z } from 'zod';
 import type { errorDetailsSchema, errorResponseSchema } from '../../../shared/errors.ts';
+import { upstreamFailure } from './upstream-failure.ts';
 
 type ErrorBody = z.infer<typeof errorResponseSchema>;
 type ErrorDetails = z.infer<typeof errorDetailsSchema>;
@@ -80,11 +81,21 @@ function respond(request: FastifyRequest, reply: FastifyReply, status: number, e
  * The error handler: a fixed status text and the request id, never a stack, an internal message or a validation
  * detail. Server errors are logged with the error (see serializeError in logger.ts); client errors are logged without
  * it, with the code of an {@link AppError}. Request bodies are never logged. Also the tail of {@link frameworkErrorHandlers}.
+ * A failure to learn what a person may do (GitHub down or limiting, E11-S04) becomes its `AppError` here, with the
+ * `retry-after` header, so every route that asks for a role answers the same way; see {@link upstreamFailure}.
  */
 export function rejectRequest(error: unknown, request: FastifyRequest, reply: FastifyReply): FastifyReply {
-  const status = statusOf(error);
-  const app = error instanceof AppError ? error : undefined;
-  if (status >= 500) {
+  const upstream = upstreamFailure(error);
+  const failure = upstream === undefined ? error : new AppError(upstream.status, upstream.code);
+  const status = statusOf(failure);
+  const app = failure instanceof AppError ? failure : undefined;
+  if (upstream?.retryAfterSeconds !== undefined) {
+    reply.header('retry-after', String(upstream.retryAfterSeconds));
+  }
+  if (upstream !== undefined) {
+    // GitHub failing is not a defect of ours: no stack, and a warning so that an outage is visible.
+    request.log.warn({ statusCode: status, code: upstream.code }, 'request rejected');
+  } else if (status >= 500) {
     request.log.error({ err: error }, 'unhandled error');
   } else {
     request.log.info({ statusCode: status, ...(app === undefined ? {} : { code: app.code }) }, 'request rejected');

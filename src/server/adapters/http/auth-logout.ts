@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { logoutRequestSchema } from '../../../shared/auth.ts';
+import type { RoleCache } from '../../services/role-cache.ts';
 import type { SessionStore } from '../db/sessions.ts';
 import { requireAuth } from './auth-request.ts';
 import { AppError } from './errors.ts';
@@ -10,6 +11,8 @@ import { clearSessionCookie } from './session-cookie.ts';
 
 interface LogoutRoutesOptions {
   readonly store: SessionStore;
+  /** The cache of what GitHub said the caller may do (E11-S04): logout makes the next request ask again. */
+  readonly roles: Pick<RoleCache, 'invalidateViewer'>;
 }
 
 /**
@@ -19,7 +22,8 @@ interface LogoutRoutesOptions {
  * Fastify runs before those checks: a request from another site learns nothing of how its body was read. The user comes
  * from `request.auth` and never from the body (the schema is strict, so a `userId` in it is a 400): another person's
  * sessions cannot be named. No GitHub token is
- * stored (E10-S05), so there is nothing to revoke and nothing to call. Logout changes no tenant data, hence
+ * stored (E10-S05), so there is nothing to revoke and nothing to call. The roles cached for the caller (E11-S04) are
+ * forgotten, in both forms of logout, so the caller's next request asks GitHub again. Logout changes no tenant data, hence
  * `auditExempt: 'session'` (E04-S09). The log line carries the flag and, for everywhere, the count, never an id or a login.
  */
 export const logoutRoutes: FastifyPluginCallbackZod<LogoutRoutesOptions> = (app, options, done) => {
@@ -40,6 +44,7 @@ export const logoutRoutes: FastifyPluginCallbackZod<LogoutRoutesOptions> = (app,
         await options.store.remove(sessionId);
         request.log.info({ everywhere }, 'auth.logout');
       }
+      options.roles.invalidateViewer(user.githubId);
       clearSessionCookie(reply);
       return reply.code(204).send();
     },

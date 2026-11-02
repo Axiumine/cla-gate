@@ -16,6 +16,7 @@ import { createLogger } from './adapters/http/logger.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
+import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
 import { requireRouteAccess } from './adapters/http/route-access.ts';
 import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
@@ -27,6 +28,7 @@ import type { AppConfig } from './config/env.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer } from './services/ports/jobs.ts';
+import { RoleCache } from './services/role-cache.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
 
@@ -47,6 +49,8 @@ export interface AppOptions {
   readonly enqueuer?: JobEnqueuer;
   /** Milliseconds after which the webhook route answers `503` `webhook_timeout` (E06-S07). Defaults to 8 seconds, inside GitHub's 10. */
   readonly webhookDeadlineMs?: number;
+  /** The cache of the roles GitHub reported (E11-S04), also read from `app.roleCache`. Defaults to an empty one on `clock`. */
+  readonly roleCache?: RoleCache;
 }
 
 /**
@@ -56,7 +60,12 @@ export interface AppOptions {
  * The webhook scope registered later inherits these hooks and opts out of them on its route (`csrf: 'exempt'`,
  * `rateLimit: false`).
  */
-async function registerLoginChecks(app: FastifyInstance, options: AppOptions, clock: Clock): Promise<void> {
+async function registerLoginChecks(
+  app: FastifyInstance,
+  options: AppOptions,
+  clock: Clock,
+  roleCache: RoleCache,
+): Promise<void> {
   const { config, db } = options;
   // Before the rate limit, so that its 429 for a path no route answers carries the header too.
   app.addHook('onRequest', noStoreForAuth);
@@ -70,6 +79,7 @@ async function registerLoginChecks(app: FastifyInstance, options: AppOptions, cl
       db,
       settings: loginSettings,
       clock,
+      roleCache,
       fetch: options.fetch,
       githubTimeoutMs: options.githubTimeoutMs,
     });
@@ -106,7 +116,9 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     done();
   });
   const clock = options.clock ?? systemClock;
-  await registerLoginChecks(app, options, clock);
+  const roleCache = options.roleCache ?? new RoleCache({ clock });
+  registerRoleCache(app, roleCache);
+  await registerLoginChecks(app, options, clock, roleCache);
   await app.register(healthRoutes, {
     db,
     readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
