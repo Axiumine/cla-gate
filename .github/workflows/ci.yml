@@ -23,12 +23,17 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Nightly run on the default branch (E20-S02): every job runs, and the trivy job also scans the dev dependencies.
+  schedule:
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read
 
+# The event name is part of the group so that a queued nightly run is never replaced by a newer push to main (GitHub keeps
+# one pending run per group and cancels the rest).
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -365,3 +370,103 @@ jobs:
           "$PIPX_BIN_DIR/semgrep" --version
       - name: Semgrep (security scan)
         run: yarn semgrep
+
+  # Vulnerability, secret and misconfiguration scan (E20-S02). Not a required check: it joins `static` and `coverage` only
+  # after it has been stable (E20-S11). Trivy comes from aquasecurity/setup-trivy at the exact version pinned in mise.toml
+  # (a test keeps the two equal and fails on a compromised release); trivy-action is not used. The binary and Trivy's cache
+  # live in the runner's temp directory (setup-trivy wants a literal path, hence the expression, which the runner resolves
+  # before the step runs), never in the shared runner user's home directory. The cache is keyed by calendar day: the
+  # vulnerability database is refreshed at most once a day and a restored older one is updated by Trivy itself.
+  # `yarn trivy` is the one source of the command (the pre-push hook runs it too). Only on the nightly schedule the job also
+  # runs `yarn trivy:dev`, so a vulnerability in a dev-only dependency fails the nightly run and not pull requests. The
+  # action's own install step checks out the Trivy repository with the workflow token (contents: read, expires with the
+  # job) and deletes that copy again. No image is built or scanned: Trivy only reads files.
+  trivy:
+    name: trivy
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    env:
+      TRIVY_NO_PROGRESS: "true"
+      TRIVY_SKIP_VERSION_CHECK: "true"
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. The Trivy install script
+      # downloads with curl, unpacks with tar and verifies the archive with sha256sum.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar sha256sum; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Install Trivy (pinned, in the runner temp directory)
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.1
+          path: ${{ runner.temp }}/trivy
+          cache: false
+      - name: Keep Trivy's cache in the runner temp directory
+        id: day
+        run: |
+          echo "TRIVY_CACHE_DIR=$RUNNER_TEMP/trivy-cache" >> "$GITHUB_ENV"
+          echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - name: Restore the Trivy cache (one per calendar day)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-${{ runner.os }}-${{ steps.day.outputs.day }}
+          restore-keys: trivy-${{ runner.os }}-
+      - name: Trivy (vulnerabilities, then secrets and misconfiguration)
+        run: yarn trivy
+      - name: Trivy (dev dependencies, nightly run only)
+        if: ${{ github.event_name == 'schedule' }}
+        run: yarn trivy:dev

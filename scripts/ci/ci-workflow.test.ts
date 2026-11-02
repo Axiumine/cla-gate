@@ -52,13 +52,14 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage, postgres and semgrep, and the required ones keep their exact names', () => {
-  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep']);
+test('the jobs are static, coverage, postgres, semgrep and trivy, and the required ones keep their exact names', () => {
+  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep', 'trivy']);
   expect([...jobs.entries()].map(([id, job]) => [id, job.name])).toEqual([
     ['static', 'static'],
     ['coverage', 'coverage'],
     ['postgres', 'postgres'],
     ['semgrep', 'semgrep'],
+    ['trivy', 'trivy'],
   ]);
 });
 

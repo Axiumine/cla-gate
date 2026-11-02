@@ -123,3 +123,29 @@ test('the semgrep preflight lists everything that is missing, and still checks t
   );
   expect(run(preflight('semgrep'), { stubs, freeMib: 100 }).out).toContain('only 100 MiB free in the workspace');
 });
+
+test('the trivy preflight passes with git, curl, tar and sha256sum, and needs no Docker', () => {
+  const { code, out } = run(preflight('trivy'), { stubs: { sha256sum: 0 } });
+  expect(code).toBe(0);
+  expect(out).toMatch(/^runner: Linux \w+, user \w+\n/);
+  expect(out).not.toContain('docker');
+});
+
+test.each([['git'], ['curl'], ['tar'], ['sha256sum']])(
+  'the trivy preflight fails fast and says so when %s is missing',
+  (tool) => {
+    const { code, out } = run(preflight('trivy'), { stubs: { sha256sum: 0 }, without: [tool] });
+    expect(code).toBe(1);
+    expect(out).toContain(`::error title=Runner preflight::missing on this runner: ${tool} (docs/ci-runners.md`);
+  },
+);
+
+test('the trivy preflight lists everything that is missing, and still checks the disk space', () => {
+  expect(run(preflight('trivy'), {}).out).toContain('missing on this runner: sha256sum (');
+  expect(run(preflight('trivy'), { stubs: { sha256sum: 0 }, without: ['git', 'tar'] }).out).toContain(
+    'missing on this runner: git tar (',
+  );
+  expect(run(preflight('trivy'), { stubs: { sha256sum: 0 }, freeMib: 100 }).out).toContain(
+    'only 100 MiB free in the workspace',
+  );
+});
