@@ -7,6 +7,7 @@ import {
   evaluationEligibility,
   INELIGIBLE_REASONS,
   type InstallationState,
+  installationEligibility,
   type RepositoryState,
 } from './eligibility.ts';
 
@@ -111,4 +112,17 @@ test('a missing timestamp or flag counts as raised, so an incomplete row fails c
   expect(evaluationEligibility(noTimestamps, facts([]).repository)).toEqual(no('installation_deleted'));
   expect(evaluationEligibility(facts([]).installation, noRemovedAt)).toEqual(no('repository_removed'));
   expect(evaluationEligibility(facts([]).installation, noEnabled)).toEqual(no('repository_disabled'));
+});
+
+test.each([
+  ['', ELIGIBLE],
+  ['disabled', ELIGIBLE],
+  ['removed disabled', ELIGIBLE],
+  ['suspended', no('installation_suspended')],
+  ['deleted suspended', no('installation_deleted')],
+  ['rejected deleted suspended', no('installation_rejected')],
+  ['rejected', no('installation_rejected')],
+])('the installation half alone, with [%s] raised, is %j', (raised, expected) => {
+  const { installation } = facts(FLAGS.filter((flag) => raised.split(' ').includes(flag)));
+  expect(installationEligibility(installation)).toEqual(expected);
 });

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import type { GithubId } from '../../shared/github-id.ts';
+import { parseAllowedAccountIds } from './allowed-accounts.ts';
 import { type GitHubPrivateKey, parseGitHubPrivateKey } from './github-key.ts';
 import { Secret } from './secret.ts';
 import { parseTrustProxy, type TrustProxy } from './trust-proxy.ts';
@@ -73,6 +75,18 @@ function toPrivateKey(value: string, ctx: z.core.$RefinementCtx<string>): GitHub
 /** A GitHub App private key (PEM, real or escaped newlines): see {@link parseGitHubPrivateKey}. */
 const privateKeyField = z.string().transform(toPrivateKey);
 
+/** @returns the ids; for text that is not a list of account ids it records an issue and returns `z.NEVER`. */
+function toAllowedAccountIds(value: string, ctx: z.core.$RefinementCtx<string>): readonly GithubId[] {
+  const ids = parseAllowedAccountIds(value);
+  if (ids === undefined) {
+    ctx.issues.push({ code: 'custom', message: 'invalid', input: value });
+    return z.NEVER;
+  }
+  return ids;
+}
+/** The numeric account ids the instance serves besides the App owner's: see {@link parseAllowedAccountIds}. */
+const allowedAccountIdsField = z.string().transform(toAllowedAccountIds);
+
 /**
  * The GitHub App settings. The App id and the key are optional here and required in production by
  * {@link githubProblems}; the previous key is the one kept during rotation (E05-S02). The webhook and client secrets
@@ -85,6 +99,7 @@ export const githubFields = {
     .optional(),
   GITHUB_APP_PRIVATE_KEY: privateKeyField.optional(),
   GITHUB_APP_PRIVATE_KEY_PREVIOUS: privateKeyField.optional(),
+  GITHUB_ALLOWED_ACCOUNT_IDS: allowedAccountIdsField.optional(),
   GITHUB_WEBHOOK_SECRET: secretField.optional(),
   GITHUB_CLIENT_ID: z.string().min(1).optional(),
   GITHUB_CLIENT_SECRET: secretField.optional(),

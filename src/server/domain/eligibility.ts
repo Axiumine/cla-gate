@@ -40,12 +40,22 @@ export type IneligibleReason = (typeof INELIGIBLE_REASONS)[number];
 
 export type Eligibility = { readonly eligible: true } | { readonly eligible: false; readonly reason: IneligibleReason };
 
+/** The reasons that belong to the installation itself: the first three of {@link INELIGIBLE_REASONS}. */
+export type InstallationIneligibleReason = Extract<
+  IneligibleReason,
+  'installation_rejected' | 'installation_deleted' | 'installation_suspended'
+>;
+
+export type InstallationEligibility =
+  | { readonly eligible: true }
+  | { readonly eligible: false; readonly reason: InstallationIneligibleReason };
+
 /**
- * The first reason, in the order of {@link INELIGIBLE_REASONS}, why `repository` of `installation` is not evaluated, or
- * eligible. Installation facts come before repository facts and rejection before everything else, so the reason names
- * the outermost thing that is wrong: a rejected installation is reported as rejected even when it was also uninstalled.
+ * The installation half of {@link evaluationEligibility}: whether the instance serves the installation at all, in the
+ * same order. The installation gate (E05-S07) asks this before any request to GitHub, so the gate and the evaluation
+ * stop an installation for the same reason.
  */
-export function evaluationEligibility(installation: InstallationState, repository: RepositoryState): Eligibility {
+export function installationEligibility(installation: InstallationState): InstallationEligibility {
   if (installation.admissionStatus !== 'admitted') {
     return { eligible: false, reason: 'installation_rejected' };
   }
@@ -54,6 +64,19 @@ export function evaluationEligibility(installation: InstallationState, repositor
   }
   if (installation.suspendedAt !== null) {
     return { eligible: false, reason: 'installation_suspended' };
+  }
+  return { eligible: true };
+}
+
+/**
+ * The first reason, in the order of {@link INELIGIBLE_REASONS}, why `repository` of `installation` is not evaluated, or
+ * eligible. Installation facts come before repository facts and rejection before everything else, so the reason names
+ * the outermost thing that is wrong: a rejected installation is reported as rejected even when it was also uninstalled.
+ */
+export function evaluationEligibility(installation: InstallationState, repository: RepositoryState): Eligibility {
+  const served = installationEligibility(installation);
+  if (!served.eligible) {
+    return served;
   }
   if (repository.removedAt !== null) {
     return { eligible: false, reason: 'repository_removed' };

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { z } from 'zod';
+import type { GithubId } from '../../shared/github-id.ts';
 import { databaseUrlField } from './env-fields.ts';
 import { envSchema, type ValidEnv } from './env-schema.ts';
 import type { GitHubPrivateKey } from './github-key.ts';
@@ -25,6 +26,11 @@ export interface AppConfig {
     readonly privateKey: GitHubPrivateKey | undefined;
     /** The key kept during a rotation; never equal to {@link privateKey}. */
     readonly previousPrivateKey: GitHubPrivateKey | undefined;
+    /**
+     * The numeric ids of the accounts the instance serves besides the App owner's (E05-S07); empty when unset. The
+     * admission policy adds the owner once the self-check has named it.
+     */
+    readonly allowedAccountIds: readonly GithubId[];
     readonly webhookSecret: Secret | undefined;
     readonly clientId: string | undefined;
     readonly clientSecret: Secret | undefined;
@@ -56,6 +62,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
       appId: env.GITHUB_APP_ID,
       privateKey: env.GITHUB_APP_PRIVATE_KEY,
       previousPrivateKey: env.GITHUB_APP_PRIVATE_KEY_PREVIOUS,
+      allowedAccountIds: env.GITHUB_ALLOWED_ACCOUNT_IDS ?? [],
       webhookSecret: env.GITHUB_WEBHOOK_SECRET,
       clientId: env.GITHUB_CLIENT_ID,
       clientSecret: env.GITHUB_CLIENT_SECRET,

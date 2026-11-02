@@ -3,6 +3,7 @@
 import type { Kysely } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
+import { listInstallationsForOperator, type OperatorInstallation } from './installation-operator.ts';
 import { findInstallationByGithubId, upsertInstallation } from './installation-queries.ts';
 import type { InstallationRow, InstallationUpsert } from './installation-state.ts';
 import { setRepositoryEnabled } from './repository-enabled.ts';
@@ -10,6 +11,7 @@ import { findActiveRepositoryByGithubId, markRepositoriesRemoved } from './repos
 import type { RepositoryChanges, RepositoryRow, RepositorySnapshot } from './repository-rows.ts';
 import { upsertRepositories } from './repository-upsert.ts';
 
+export type { OperatorInstallation } from './installation-operator.ts';
 export type { AdmissionDecision, InstallationRow, InstallationUpsert } from './installation-state.ts';
 export { RepositoryNotFoundError } from './repository-enabled.ts';
 export type { RepositoryChanges, RepositoryRow, RepositorySnapshot } from './repository-rows.ts';
@@ -31,6 +33,11 @@ export interface InstallationStore {
     removedAt: Date,
   ): Promise<GithubId[]>;
   findActiveRepositoryByGithubId(installationId: number, githubRepoId: GithubId): Promise<RepositoryRow | null>;
+  /**
+   * Every installation with its admission decision and repository counts, for the operator's view (E05-S07). The one
+   * read that spans tenants, by design: it returns counts and states, no repository, signature or person.
+   */
+  listInstallationsForOperator(): Promise<OperatorInstallation[]>;
   /** Turns enforcement on or off and audits the change; see {@link setRepositoryEnabled}. */
   setRepositoryEnabled(
     installationId: number,
@@ -53,6 +60,7 @@ export function createInstallationStore(db: Kysely<Database>): InstallationStore
       markRepositoriesRemoved(db, installationId, githubRepoIds, removedAt),
     findActiveRepositoryByGithubId: (installationId, githubRepoId) =>
       findActiveRepositoryByGithubId(db, installationId, githubRepoId),
+    listInstallationsForOperator: () => listInstallationsForOperator(db),
     setRepositoryEnabled: (installationId, githubRepoId, enabled, actorGithubId) =>
       setRepositoryEnabled(db, { installationId, githubRepoId, enabled, actorGithubId }),
   };

@@ -99,6 +99,8 @@ export interface BootGitHubOptions {
   readonly clock?: Clock | undefined;
   /** Defaults to the global `fetch`. */
   readonly fetch?: typeof fetch | undefined;
+  /** Which installations get a token (E05-S07): the boot passes a gate that is bound to the stored installations later. */
+  readonly gate: InstallationGate;
 }
 
 /**
@@ -116,6 +118,7 @@ export async function startGitHubOrLog(
       logger,
       clock: options.clock ?? systemClock,
       fetch: options.fetch ?? fetch,
+      gate: options.gate,
     });
     return { app };
   } catch (error) {

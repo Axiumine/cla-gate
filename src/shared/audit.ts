@@ -22,6 +22,8 @@ export const AUDIT_ACTIONS = [
   'repository.renamed',
   'repository.enabled',
   'repository.disabled',
+  // Added by E05-S07: the admission policy decided to serve an installation (the counterpart of installation.rejected).
+  'installation.admitted',
   // Instance-wide actions: SYSTEM_ACTIONS and INSTANCE_ACTIONS must be subsets of this list.
   'data_export.created',
   'network_metadata.purged',
@@ -35,6 +37,7 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
  */
 export const SYSTEM_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>([
   'installation.rejected',
+  'installation.admitted',
   'installation.deleted',
   'installation.suspended',
   'installation.unsuspended',

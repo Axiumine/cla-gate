@@ -3,11 +3,12 @@
 import process from 'node:process';
 import type { Kysely } from 'kysely';
 import type { DestinationStream, Logger } from 'pino';
-import { createPgDatabase } from './adapters/db/pg.ts';
 import type { Database } from './adapters/db/schema.ts';
-import { type GitHubApp, startGitHubOrLog } from './adapters/github/start.ts';
+import type { GitHubApp } from './adapters/github/start.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
+import type { InstallationWiring } from './boot-installations.ts';
+import { startGitHubAndDatabase } from './boot-services.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
 import { logGithubApp } from './config/github-app.ts';
 import type { Clock } from './services/ports/clock.ts';
@@ -30,7 +31,7 @@ export interface BootOptions {
   readonly fetch?: typeof fetch;
 }
 
-export interface RunningServer {
+export interface RunningServer extends InstallationWiring {
   /** For example `http://127.0.0.1:3000`. */
   readonly address: string;
   /**
@@ -44,10 +45,6 @@ export interface RunningServer {
 
 function writeStderr(line: string): void {
   process.stderr.write(`${line}\n`);
-}
-
-function createPgDb(config: AppConfig, logger: Logger): Kysely<Database> {
-  return createPgDatabase({ connectionString: config.databaseUrl.reveal(), onError: logger.error.bind(logger) });
 }
 
 /**
@@ -65,17 +62,23 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
   }
   const logger = createLogger(config, options.logDestination);
   logGithubApp(logger, config.github);
-  const github = await startGitHubOrLog({ config, logger, clock: options.clock, fetch: options.fetch });
-  if (github === undefined) {
+  const started = await startGitHubAndDatabase({
+    config,
+    logger,
+    clock: options.clock,
+    fetch: options.fetch,
+    createDb: options.createDb,
+  });
+  if (started === undefined) {
     options.signals.exitCode = 1;
     return undefined;
   }
-  const db = await (options.createDb ?? createPgDb)(config, logger);
+  const { db, github, ...wiring } = started;
   const app = await buildApp({ config, db, logger });
   try {
     const address = await app.listen({ host: config.host, port: config.port });
     const timeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
-    return { address, close: closeOnSignals(app, logger, options.signals, timeoutMs), github: github.app };
+    return { address, close: closeOnSignals(app, logger, options.signals, timeoutMs), github, ...wiring };
   } catch (error) {
     logger.fatal({ err: error }, 'failed to start');
     await app.close();

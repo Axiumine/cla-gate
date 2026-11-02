@@ -13,6 +13,7 @@ import type {
   GitHubOrgMembership,
   GitHubRepository,
 } from '../../../services/ports/github.ts';
+import type { InstallationGate } from '../../../services/ports/installation-gate.ts';
 import { FakeClock, FakeGate } from '../../../services/test-support.ts';
 import { captureLogs, testConfig } from '../../../test-support.ts';
 import { createLogger } from '../../http/logger.ts';
@@ -216,14 +217,13 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
   };
 }
 
-/**
- * Starts MSW with the routes, the real adapter wiring (`startGitHubApp`: signer, identity check, token provider, Octokit
- * client) and a gate the test can close for an installation. `signer` signs the App's JWTs; the mocked GitHub accepts it.
- */
-export async function httpWorld(signer: TestGitHubKey): Promise<HttpWorld> {
+/** The routes, the real adapter wiring and the client, behind `gate`. Requests are counted from after the self-check. */
+async function startWorld(
+  signer: TestGitHubKey,
+  gate: InstallationGate,
+): Promise<{ client: GitHubClient; state: State }> {
   const state: State = { entries: new Map(), memberships: new Map(), requests: [] };
   const clock = new FakeClock(START);
-  const gate = new FakeGate();
   serve(state, signer, clock);
   const app = await startGitHubApp({
     config: testConfig({ GITHUB_APP_ID: APP_ID, GITHUB_APP_PRIVATE_KEY: signer.pem }),
@@ -235,5 +235,25 @@ export async function httpWorld(signer: TestGitHubKey): Promise<HttpWorld> {
   // The start-up self-check (GET /app) is the App's own; what a test counts begins after it.
   state.requests.length = 0;
   const { client } = z.object({ client: z.custom<GitHubClient>() }).parse(app);
+  return { client, state };
+}
+
+/**
+ * Starts MSW with the routes, the real adapter wiring (`startGitHubApp`: signer, identity check, token provider, Octokit
+ * client) and a gate the test can close for an installation. `signer` signs the App's JWTs; the mocked GitHub accepts it.
+ */
+export async function httpWorld(signer: TestGitHubKey): Promise<HttpWorld> {
+  const gate = new FakeGate();
+  const { client, state } = await startWorld(signer, gate);
   return { client, requests: state.requests, ...scripting(state, gate) };
+}
+
+/** The world behind a gate of the test's own, for example the stored gate of E05-S07: the installations are scripted, the gate is not. */
+export async function gatedHttpWorld(
+  signer: TestGitHubKey,
+  gate: InstallationGate,
+): Promise<Pick<HttpWorld, 'addInstallation' | 'client' | 'requests'>> {
+  const { client, state } = await startWorld(signer, gate);
+  const { addInstallation } = scripting(state, new FakeGate());
+  return { client, requests: state.requests, addInstallation };
 }
