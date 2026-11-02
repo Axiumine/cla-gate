@@ -8,7 +8,6 @@
     "scripts/dev/*.ts",
     "src/server/main.ts!",
     "src/server/migrate.ts!",
-    "src/server/adapters/db/sessions.ts!",
     "src/server/domain/evaluation/index.ts!",
     "src/shared/pr-evaluation-details.ts!",
     "tests/leaks/scenarios/*.ts",

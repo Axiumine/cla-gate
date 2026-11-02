@@ -14,15 +14,7 @@ import { touchSession } from './sessions-touch.ts';
 // table (a backup, a SQL injection that reads) cannot be turned into a login. Time comes in as a parameter, never from
 // the database clock, so a test moves it by hand. No GitHub user token is stored anywhere (E10-S05).
 
-export {
-  type CreatedSession,
-  type LiveSession,
-  MAX_SESSIONS_PER_USER,
-  type NewSession,
-  PURGE_BATCH,
-  type SessionStore,
-  type SessionUser,
-} from './sessions-model.ts';
+export type { CreatedSession, SessionStore, SessionUser } from './sessions-model.ts';
 
 /**
  * The session store over `db`, which may be a transaction: the login callback creates its session in the same
