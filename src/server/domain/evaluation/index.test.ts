@@ -11,6 +11,7 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'ALLOWLIST_KINDS',
     'ALLOWLIST_SCOPES',
     'assessCoverage',
+    'assessUnlinked',
     'classifyAccount',
     'extractActors',
     'FAILURE_CODES',
@@ -18,6 +19,7 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'GITHUB_WEB_FLOW_ID',
     'matchAllowlist',
     'ROLES',
+    'storedUnlinked',
   ]);
 });
 

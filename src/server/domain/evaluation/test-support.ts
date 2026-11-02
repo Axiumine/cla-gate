@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { ActorExtraction, ExtractedActor } from './actor-types.ts';
+import type { ActorExtraction, ExtractedActor, UnlinkedFinding, UnlinkedRole } from './actor-types.ts';
 import type {
   Account,
   AccountType,
@@ -9,6 +9,7 @@ import type {
   AllowlistScope,
   CommitFacts,
   EvaluationInput,
+  RawIdentity,
   Role,
   SignatureFact,
 } from './types.ts';
@@ -86,6 +87,15 @@ export function evaluationInput(overrides: Partial<EvaluationInput> = {}): Evalu
     overrides: new Map(),
     ...overrides,
   };
+}
+
+/** An unlinked finding as extraction would hand it over, with a made-up display identity unless the test names one. */
+export function unlinkedFinding(
+  commitSha: string,
+  role: UnlinkedRole,
+  raw: RawIdentity = { name: 'Unlinked Person', email: 'unlinked@example.org' },
+): UnlinkedFinding {
+  return { sha: commitSha, role, raw };
 }
 
 /** What most extraction tests compare: the id, roles and commits of every actor, in output order. */

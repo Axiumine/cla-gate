@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { compareText } from './order.ts';
+import { compareShaThenRole, compareText } from './order.ts';
 
 test.each([
   ['equal strings', 'abc', 'abc', 0],
@@ -20,4 +20,14 @@ test('sorting with compareText is stable across runs and independent of the inpu
   const shas = ['0f', '0a', 'ff', '00', '0A'];
   expect([...shas].sort(compareText)).toEqual(['00', '0A', '0a', '0f', 'ff']);
   expect([...shas].reverse().sort(compareText)).toEqual(['00', '0A', '0a', '0f', 'ff']);
+});
+
+test.each([
+  ['a lower SHA first, whatever the roles', { sha: 'aa', role: 'committer' }, { sha: 'ab', role: 'author' }, -1],
+  ['a higher SHA second, whatever the roles', { sha: 'ab', role: 'author' }, { sha: 'aa', role: 'committer' }, 1],
+  ['the same SHA: author before committer', { sha: 'aa', role: 'author' }, { sha: 'aa', role: 'committer' }, -1],
+  ['the same SHA: committer after author', { sha: 'aa', role: 'committer' }, { sha: 'aa', role: 'author' }, 1],
+  ['the same SHA and role are equal', { sha: 'aa', role: 'author' }, { sha: 'aa', role: 'author' }, 0],
+])('compareShaThenRole orders %s', (_name, a, b, expected) => {
+  expect(compareShaThenRole(a, b)).toBe(expected);
 });

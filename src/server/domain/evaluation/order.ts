@@ -11,3 +11,14 @@ export function compareText(a: string, b: string): number {
   }
   return a > b ? 1 : 0;
 }
+
+/**
+ * Orders anything that points at one role of one commit (an unlinked finding, E08-S02, and what E08-S05 makes of it) by
+ * SHA, then by role. Both are plain codes, so the order is the same on every machine.
+ */
+export function compareShaThenRole(
+  a: { readonly sha: string; readonly role: string },
+  b: { readonly sha: string; readonly role: string },
+): number {
+  return compareText(a.sha, b.sha) || compareText(a.role, b.role);
+}

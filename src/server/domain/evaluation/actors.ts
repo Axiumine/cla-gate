@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ActorExtraction, UnlinkedFinding, UnlinkedRole } from './actor-types.ts';
 import { GITHUB_WEB_FLOW_ID } from './github-identities.ts';
-import { compareText } from './order.ts';
+import { compareShaThenRole } from './order.ts';
 import { recordSighting, type Sighting, sightingsToActors } from './sightings.ts';
 import type { Account, CommitFacts, EvaluationInput, RawIdentity } from './types.ts';
 
@@ -43,10 +43,6 @@ function readCommit(
   }
 }
 
-function compareFindings(a: UnlinkedFinding, b: UnlinkedFinding): number {
-  return compareText(a.sha, b.sha) || compareText(a.role, b.role);
-}
-
 /**
  * Collects the actors of a pull request. The opener is always one, whatever the commits say, so a contributor cannot
  * ride on someone else's commit identities. A commit with more than one parent is skipped entirely; a root commit and a
@@ -68,7 +64,7 @@ export function extractActors(input: EvaluationInput): ActorExtraction {
   }
   return {
     actors: sightingsToActors(sightings),
-    unlinked: [...findings.values()].sort(compareFindings),
+    unlinked: [...findings.values()].sort(compareShaThenRole),
     mergeCommitsSkipped: merges.size,
   };
 }
