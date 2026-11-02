@@ -27,6 +27,8 @@ test('an insert is refused by the table check exactly when the function says no'
   ).resolves.toBeDefined();
   await expect(insert({ email: 'alice@example.com' })).rejects.toMatchObject(CHECK);
   await expect(insert({ rows: ['alice@example.com'] })).rejects.toMatchObject(CHECK);
+  await expect(insert({ kind: '203.0.113.7' })).rejects.toMatchObject(CHECK);
+  await expect(insert({ state: '2001:db8::1' })).rejects.toMatchObject(CHECK);
   expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(1);
 });
 

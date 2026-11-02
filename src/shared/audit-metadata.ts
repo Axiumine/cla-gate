@@ -15,12 +15,28 @@ const MAX_LIST = 100;
 /** Enum-like codes and hex digests: lower case letters, digits and `_ . : -`, 1 to 64 characters. No spaces, no `@`. */
 const CODE = /^[a-z0-9_.:-]+$/;
 
+/**
+ * Network metadata is not recorded, so a code may not look like an address: four dotted numbers of one to three digits
+ * with an optional port (IPv4), or only hex digits, dots and colons with at least two colons (IPv6, mapped IPv4
+ * included). Same rules as `audit_metadata_is_clean` in migration 002; the shared case table keeps both layers in step.
+ */
+const IPV4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+const IPV4_WITH_PORT = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}$/;
+const IPV6_CHARACTERS = /^[\da-f:.]+$/;
+const looksLikeAddress = (code: string): boolean =>
+  IPV4.test(code) || IPV4_WITH_PORT.test(code) || (IPV6_CHARACTERS.test(code) && code.split(':').length > 2);
+
 const value = z.union([
   z.int(),
   z.boolean(),
   z.null(),
   z.array(z.int()).max(MAX_LIST),
-  z.string().min(1).max(64).regex(CODE),
+  z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(CODE)
+    .refine((code) => !looksLikeAddress(code), { message: 'audit metadata may not hold an IP address' }),
 ]);
 
 /** What one metadata key may hold. */

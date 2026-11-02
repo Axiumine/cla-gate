@@ -11,7 +11,12 @@
 -- avatar_url) or free text (reason, message, title, text) cannot get in by being unthought of. Values are:
 --   * integers (no fractions), booleans and null;
 --   * lists of at most 100 integers;
---   * codes of 1 to 64 characters from [a-z0-9_.:-]: enum-like names and hex digests, never a sentence or an address.
+--   * codes of 1 to 64 characters from [a-z0-9_.:-]: enum-like names and hex digests, never a sentence, and never
+--     shaped like an IP address. Migration 001 refused such a value by refusing every digit-first, dotted or colon
+--     string; the wider character class here must not let network metadata (IP, user agent) in, so a string is also
+--     refused when it is four dotted numbers of 1 to 3 digits with an optional port (IPv4), or made only of hex digits,
+--     dots and colons with at least two colons (IPv6, a mapped IPv4 address included). src/shared/audit-metadata.ts
+--     holds the same two patterns and the shared case table in src/shared/test-support.ts pins both layers.
 -- The size cap of 2,048 bytes is checked by the writer (src/server/services/audit.ts), not here.
 --
 -- The 12 keys of migration 001 stay; the 19 after them are new. The check constraint on audit_log calls the function,
@@ -38,6 +43,9 @@ language sql immutable parallel safe as $$
                  when 'boolean' then true
                  when 'null' then true
                  when 'string' then (entry.value #>> '{}') ~ '^[a-z0-9_.:-]{1,64}$'
+                   and (entry.value #>> '{}') !~ '^[0-9]{1,3}([.][0-9]{1,3}){3}(:[0-9]{1,5})?$'
+                   and not ((entry.value #>> '{}') ~ '^[0-9a-f:.]+$'
+                            and length(entry.value #>> '{}') - length(replace(entry.value #>> '{}', ':', '')) >= 2)
                  when 'array' then jsonb_array_length(entry.value) <= 100 and not exists (
                    select 1 from jsonb_array_elements(entry.value) as element (item)
                    where jsonb_typeof(element.item) <> 'number' or (element.item #>> '{}') !~ '^-?[0-9]+$'

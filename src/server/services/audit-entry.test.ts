@@ -96,6 +96,18 @@ test.each([
   ['an address as a metadata value', { metadata: { reason_code: HOSTILE } }, 'metadata.reason_code', HOSTILE],
   ['a list of addresses', { metadata: { rows: [HOSTILE] } }, 'metadata.rows', HOSTILE],
   [
+    'an IPv4 address as a metadata value',
+    { metadata: { kind: '203.0.113.7' } },
+    'metadata.kind (audit metadata may not hold an IP address)',
+    '203.0.113.7',
+  ],
+  [
+    'an IPv6 address as a metadata value',
+    { metadata: { state: '2001:db8::1' } },
+    'metadata.state (audit metadata may not hold an IP address)',
+    '2001:db8',
+  ],
+  [
     'metadata over 2,048 bytes',
     { metadata: OVERSIZE },
     'metadata (audit metadata is longer than 2048 bytes)',
