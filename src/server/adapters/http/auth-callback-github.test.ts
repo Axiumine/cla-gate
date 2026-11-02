@@ -177,6 +177,9 @@ test.each([
   ]);
 });
 
+/** A verified primary address entry, as `GET /user/emails` lists it. */
+const mail = (email: string) => ({ email, primary: true, verified: true });
+
 /** Every way `GET /user/emails` can fail. */
 const EMAIL_FAILURES: [string, Setup, string][] = [
   ['a 401', emails(status(401)), 'exchange_failed'],
@@ -195,6 +198,9 @@ const EMAIL_FAILURES: [string, Setup, string][] = [
     'bad_request',
   ],
   ['a flag that is text', emails(json([{ email: 'a@example.org', primary: 'yes', verified: true }])), 'bad_request'],
+  ['an address with a NUL character', emails(json([mail('a\u0000b@example.org')])), 'bad_request'],
+  ['an address with a lone high surrogate', emails(json([mail('a\ud800b@example.org')])), 'bad_request'],
+  ['an address with a lone low surrogate', emails(json([mail('a\udc00b@example.org')])), 'bad_request'],
 ];
 
 test.each(EMAIL_FAILURES)(

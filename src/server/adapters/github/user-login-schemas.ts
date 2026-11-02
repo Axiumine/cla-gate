@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
 import { githubIdSchema } from '../../../shared/github-id.ts';
+import { emailAddressSchema } from '../../../shared/verified-email.ts';
 import { avatarOrNull, cutName, LOGIN_PATTERN } from '../../domain/github-profile.ts';
 
 // What the login reads from GitHub (E10-S05), parsed before anything leaves the adapter. A body that fails these is
@@ -54,5 +55,5 @@ export const userSchema = z
 
 /** `GET /user/emails`: every address with its flags; the verified ones are kept by the caller (`verifiedOnly`). */
 export const emailsSchema = z.array(
-  z.looseObject({ email: z.string().min(1).max(320), primary: z.boolean(), verified: z.boolean() }),
+  z.looseObject({ email: emailAddressSchema, primary: z.boolean(), verified: z.boolean() }),
 );
