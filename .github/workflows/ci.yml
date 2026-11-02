@@ -5,9 +5,11 @@
 # `static` and `coverage` are the exact job names that branch protection requires on main (CONTRIBUTING.md,
 # "Repository protection"): renaming a job breaks the rule.
 #
-# Runners: every job runs on the maintainer's persistent, shared, self-hosted runners, spelled as the literal list
+# Runners: every job but one runs on the maintainer's persistent, shared, self-hosted runners, spelled as the literal list
 # [self-hosted, Linux, X64] and never as an expression (a runs-on expression is not a security boundary: on
 # pull_request the workflow file comes from the PR). The only protection of that shared host is the fork approval gate.
+# The exception is `qodana` (E20-S08): the one job that holds a secret (QODANA_TOKEN), which the runner policy keeps off the
+# shared runners, so it runs on the literal ubuntu-24.04 (GitHub-hosted, a fresh virtual machine per run).
 # docs/ci-runners.md is the policy, and `yarn ci:runners` (the static job runs it) enforces it on this directory.
 #
 # Hygiene on a shared host: timeout-minutes on every job, contents: read, no secrets, persist-credentials: false, a
@@ -206,6 +208,15 @@ jobs:
       # CI=1 (set by the script) makes Vitest refuse to write new snapshots; thresholds are 100%.
       - name: Tests with 100% coverage
         run: yarn coverage
+      # E20-S08: the qodana job reads the lcov report (paths relative to the repository root) as its coverage input. One day
+      # is enough: the job needs this one, runs in the same workflow run, and the report is rebuilt on every run.
+      - name: Upload the lcov report for Qodana
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 1
+          if-no-files-found: error
 
   # Not a required check (branch protection requires only `static` and `coverage`): it repeats the unit tests against
   # a real PostgreSQL 18 server instead of PGlite, so a difference between the two shows up here. No `services:` block:
@@ -859,3 +870,102 @@ jobs:
           path: reports/leaks/
           retention-days: 7
           if-no-files-found: ignore
+
+  # E20-S08: Qodana (JetBrains, qodana-js), an optional maintainer-side check that is never a required check. It needs a
+  # paid licence and the secret QODANA_TOKEN. This is the one job on a GitHub-hosted runner: the secret must not reach the
+  # shared self-hosted runners (docs/ci-runners.md, "Where each job runs and why"), and a fresh ubuntu-24.04 machine holds it
+  # for one run only. The first step decides whether the job can do anything. A pull request from a fork gets no secrets, and
+  # so does a run before the maintainer has created the secret: then every later step is skipped, a notice says why and the
+  # job ends green, so a contributor is never blocked by it. With a token, the Qodana action fails the step when the quality
+  # gate fails (exit code 255), and so the job.
+  # The action runs with pr-mode off (the whole project), no pull request comment, no result upload, no pushed fixes and no
+  # annotations: it needs nothing beyond contents: read, and the report lives in Qodana Cloud. The coverage report of the
+  # `coverage` job is downloaded into .qodana/code-coverage, one of the places where the qodana-js linter looks for an
+  # lcov report (the Qodana documentation, "Code coverage"; .qodana/ is git-ignored). The linter is pinned by tag in
+  # qodana.yaml and by digest here (`--linter`); refresh the digest with the tag: a test keeps the two in step.
+  qodana:
+    name: qodana
+    needs: coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check whether Qodana can run (a token, and not a fork pull request)
+        id: gate
+        shell: bash
+        env:
+          HAS_TOKEN: ${{ secrets.QODANA_TOKEN != '' }}
+          FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          set -eu
+          if [ "$FORK_PR" = "true" ]; then
+            echo "::notice title=Qodana skipped::this pull request comes from a fork and GitHub gives it no secrets, so Qodana cannot sign in; it is a maintainer-side check and never blocks a contributor"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_TOKEN" != "true" ]; then
+            echo "::notice title=Qodana skipped::the secret QODANA_TOKEN is not set (no licence yet, or a run that gets no secrets), so Qodana did not run; this is not a failure"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check out the repository
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      # The dependencies give the TypeScript inspections something to resolve imports against. No install script runs.
+      - name: Install dependencies
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        run: yarn install --immutable --mode=skip-build
+      - name: Download the lcov report of the coverage job
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-lcov
+          path: .qodana/code-coverage
+      # Qodana matches a coverage file to a source file by the path in the report, relative to the project root.
+      - name: Check the lcov report (present, and paths relative to the repository)
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        shell: bash
+        run: |
+          set -eu
+          report=.qodana/code-coverage/lcov.info
+          if [ ! -s "$report" ]; then
+            echo "::error title=Qodana coverage::$report is missing or empty: the coverage-lcov artifact is not what the coverage job uploads"
+            exit 1
+          fi
+          if ! grep -q '^SF:' "$report"; then
+            echo "::error title=Qodana coverage::$report lists no source file (no SF: line)"
+            exit 1
+          fi
+          if grep -q '^SF:/' "$report"; then
+            echo "::error title=Qodana coverage::$report has absolute paths: Qodana needs paths relative to the repository root (src/..., not /home/...)"
+            exit 1
+          fi
+          echo "coverage report: $(grep -c '^SF:' "$report") source files"
+      - name: Qodana scan
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: JetBrains/qodana-action@3e8d76ff0e0241618abd808682f426afe84bab3f # v2026.2.2
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+        with:
+          args: --linter jetbrains/qodana-js:2026.2@sha256:aadf928b1e8e846069f74edbf00aca614336708402b795f8c539fa06e766a096
+          pr-mode: false
+          post-pr-comment: false
+          upload-result: false
+          push-fixes: none
+          use-annotations: false

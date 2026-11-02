@@ -6,7 +6,7 @@ import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { exists, expression, findOnPath, readText, writeExecutable } from '../ci/lib/test-support.ts';
 import { tempDir } from '../code-caps/test-support.ts';
-import { ciJob, repoText } from '../semgrep-rules/test-support.ts';
+import { ciJob, ciTextOnSharedRunners, repoText } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from '../trivy-gate/test-support.ts';
 
 // E20-S04 and E20-S05: the `mutation` job of .github/workflows/ci.yml with its two scopes (server and shared code, then the
@@ -59,7 +59,8 @@ test('the job asks for no more than contents: read, holds no secret and cannot b
   expect(job.if).toBeUndefined();
   expect(job.steps.filter((each) => each['continue-on-error'] !== undefined)).toEqual([]);
   expect(ciText).toMatch(/^permissions:\n {2}contents: read\n/m);
-  expect(ciText).not.toMatch(/\$\{\{\s*secrets\./);
+  // The qodana job (E20-S08) holds a secret and runs on a GitHub-hosted machine: it is not part of this check.
+  expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
 });
 
 test('the steps are the standard Node and Yarn setup, the two caches, the two runs and the upload, in that order', () => {

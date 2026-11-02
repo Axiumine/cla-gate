@@ -48,6 +48,19 @@ export function repoText(file: string): string {
   return readText(path.join(ROOT, file));
 }
 
+/** `workflow` without its `qodana` job: the text from the job's key to the next job's key, or to the end of the file. */
+export function withoutQodanaJob(workflow: string): string {
+  return workflow.replace(/\n {2}qodana:\n[\s\S]*?(?=\n {2}[\w-]+:\n|$)/, '');
+}
+
+/**
+ * The text of ci.yml without the `qodana` job (E20-S08). That job is the one job that may use a secret: it runs on a
+ * GitHub-hosted machine. What is left runs on the shared self-hosted runners, where no secret may appear.
+ */
+export function ciTextOnSharedRunners(): string {
+  return withoutQodanaJob(repoText('.github/workflows/ci.yml'));
+}
+
 /** The lines of a configuration file that are not comments or blank. */
 export function activeLines(text: string): string[] {
   return text
@@ -70,6 +83,7 @@ export const SCRIPTS = new Map(
 
 const stepSchema = z.object({
   name: z.string(),
+  id: z.string().optional(),
   uses: z.string().optional(),
   run: z.string().optional(),
   if: z.string().optional(),
@@ -81,7 +95,8 @@ const jobSchema = z.object({
   name: z.string(),
   needs: z.unknown().optional(),
   if: z.unknown().optional(),
-  'runs-on': z.array(z.string()),
+  // The shared self-hosted list, or the one literal ubuntu-24.04 of the qodana job (E20-S08).
+  'runs-on': z.union([z.string(), z.array(z.string())]),
   'timeout-minutes': z.number(),
   permissions: z.unknown().optional(),
   env: z.unknown().optional(),

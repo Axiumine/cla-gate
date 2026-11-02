@@ -21,7 +21,8 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}', 'scripts/**/*.ts'],
       exclude: ['**/*.test.{ts,tsx}', '**/*.d.ts', '**/global-setup.ts', 'e2e/**', 'tests/leaks/**'],
       thresholds: { 100: true },
-      reporter: ['text'],
+      // lcov feeds Qodana (E20-S08): the coverage job uploads coverage/lcov.info as the artifact coverage-lcov.
+      reporter: ['text', 'lcov'],
     },
   },
 });

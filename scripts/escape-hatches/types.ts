@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 
 /** The escape hatches this gate watches (E20-S16). ESLint, Biome and TypeScript directives have rules of their own. */
-export type Hatch = 'any' | 'as assertion' | 'v8 ignore' | 'type-coverage ignore';
+export type Hatch = 'any' | 'as assertion' | 'v8 ignore' | 'type-coverage ignore' | 'noinspection';
 
 /** One escape hatch without its justification: where it is and which element is missing. */
 export interface Finding {

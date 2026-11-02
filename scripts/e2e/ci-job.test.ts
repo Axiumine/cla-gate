@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { exists, expression, findOnPath, readText, writeExecutable } from '../ci/lib/test-support.ts';
 import { tempDir } from '../code-caps/test-support.ts';
 import { compareNames } from '../code-caps/types.ts';
-import { ciJob, repoText } from '../semgrep-rules/test-support.ts';
+import { ciJob, ciTextOnSharedRunners, repoText } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from '../trivy-gate/test-support.ts';
 
 // E20-S06: the `e2e` job of .github/workflows/ci.yml. Its place in the runner policy (docs/ci-runners.md) and the order of its
@@ -54,7 +54,8 @@ test('the job has no container, no services, no permissions of its own and no co
 
 test('the only job variable is the pinned image, and nothing in the workflow reads a secret', () => {
   expect(Object.keys(z.record(z.string(), z.unknown()).parse(job.env))).toEqual(['E2E_IMAGE']);
-  expect(ciText).not.toMatch(/\$\{\{\s*secrets\./);
+  // The qodana job (E20-S08) holds a secret and runs on a GitHub-hosted machine: it is not part of this check.
+  expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
 });
 
 test('the steps are the standard setup, the build, both containers, the tests, the stability check, the upload and the cleanup', () => {

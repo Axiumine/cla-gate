@@ -6,8 +6,8 @@ import { hasPreserve, hasReason, hasReasonAfterPreserve } from './reason.ts';
 import { type Finding, type Hatch, PRESERVE, REASON } from './types.ts';
 
 // E20-S16: finds the escape hatches that no linter checks for a written justification: an
-// explicit `any`, an `as` assertion other than `as const`, a coverage-ignore comment and a type-coverage ignore
-// comment. ESLint (ban-ts-comment and eslint-comments) and Biome cover the other directives.
+// explicit `any`, an `as` assertion other than `as const`, a coverage-ignore comment, a type-coverage ignore comment and
+// a Qodana `//noinspection <Name>` comment (E20-S08). ESLint (ban-ts-comment and eslint-comments) and Biome cover the other directives.
 
 interface Construct {
   readonly hatch: Hatch;
@@ -16,6 +16,12 @@ interface Construct {
 
 const COVERAGE_IGNORE = /^(?:(?:v8|c8) ignore|node:coverage (?:ignore|disable))(?![\w-])/;
 const TYPE_COVERAGE_IGNORE = /type-coverage:ignore-(?:next-)?line/;
+const NOINSPECTION = /^noinspection(?![\w-])/;
+/** Directives that only need a reason in the same comment, after ` -- `. */
+const REASON_DIRECTIVES: readonly (readonly [RegExp, Hatch])[] = [
+  [TYPE_COVERAGE_IGNORE, 'type-coverage ignore'],
+  [NOINSPECTION, 'noinspection'],
+];
 
 function isConstType(type: ts.TypeNode): boolean {
   return ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName) && type.typeName.text === 'const';
@@ -61,10 +67,9 @@ function directiveFindings(file: string, comment: SourceComment): Finding[] {
   const coverage = coverageIgnoreMissing(comment.body).map(
     (missing): Finding => ({ file, line: comment.line, hatch: 'v8 ignore', missing }),
   );
-  const typeCoverage = TYPE_COVERAGE_IGNORE.test(comment.body) && !hasReason(comment.body);
-  const reasonless: Finding[] = typeCoverage
-    ? [{ file, line: comment.line, hatch: 'type-coverage ignore', missing: `${REASON} in the same comment` }]
-    : [];
+  const reasonless = REASON_DIRECTIVES.filter(
+    ([pattern]) => pattern.test(comment.body) && !hasReason(comment.body),
+  ).map(([, hatch]): Finding => ({ file, line: comment.line, hatch, missing: `${REASON} in the same comment` }));
   return [...coverage, ...reasonless];
 }
 

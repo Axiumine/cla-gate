@@ -17,6 +17,8 @@ playwright-report/
 test-results/
 .stryker-tmp/
 .vitest/
+# Qodana input (the coverage-lcov artifact is downloaded into .qodana/code-coverage) and local results (E20-S08)
+.qodana/
 *.tsbuildinfo
 
 # offline Semgrep rules: the Semgrep Rules License forbids redistribution

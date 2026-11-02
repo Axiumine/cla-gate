@@ -22,6 +22,7 @@
     "!scripts/dev/**!",
     "!scripts/e2e/**!",
     "!scripts/leaks/**!",
+    "!scripts/qodana-gate/**!",
     "!scripts/semgrep-rules/**!",
     "!scripts/trivy-gate/**!",
     "src/**/*.ts!",

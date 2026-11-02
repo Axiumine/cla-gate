@@ -153,9 +153,33 @@ test('a reason in another comment does not justify a type-coverage ignore commen
   expect(findings(lines)).toEqual([[2, 'type-coverage ignore', '"-- <reason>" in the same comment']]);
 });
 
+test.each([
+  ['no reason', '//noinspection JSUnusedLocalSymbols'],
+  ['a spaced marker and no reason', '// noinspection JSUnusedLocalSymbols'],
+  ['a short reason', '//noinspection JSUnusedLocalSymbols -- nope'],
+  ['a block comment and no reason', '/* noinspection JSUnusedLocalSymbols */'],
+  ['two inspections and no reason', '//noinspection JSUnusedLocalSymbols,UnusedCatchParameter'],
+])('a Qodana noinspection comment with %s', (_what, text) => {
+  expect(findings([text, 'export const a = 1;'])).toEqual([[1, 'noinspection', '"-- <reason>" in the same comment']]);
+});
+
+test.each([
+  ['a reason', '//noinspection JSUnusedLocalSymbols -- read by the template engine at run time'],
+  ['two inspections and a reason', '//noinspection JSUnusedLocalSymbols,UnusedCatchParameter -- generated names'],
+  ['a comment that only mentions the word', '// the noinspection comments of Qodana are listed in qodana.yaml'],
+  ['a word that merely starts like the marker', '// noinspections are reviewed one by one'],
+])('allowed: %s', (_what, text) => {
+  expect(findings([text, 'export const a = 1;'])).toEqual([]);
+});
+
+test('a reason in another comment does not justify a noinspection comment', () => {
+  const lines = ['// x -- some other reason here', '//noinspection JSUnusedLocalSymbols', 'export const a = 1;'];
+  expect(findings(lines)).toEqual([[2, 'noinspection', '"-- <reason>" in the same comment']]);
+});
+
 test('directive text inside strings and templates is never a finding', () => {
   const lines = [
-    "export const a = '/* v8 ignore next */ // type-coverage:ignore-line';",
+    "export const a = '/* v8 ignore next */ // type-coverage:ignore-line //noinspection Foo';",
     'export const b = `\n// v8 ignore next\n`;',
   ];
   expect(findings(lines)).toEqual([]);

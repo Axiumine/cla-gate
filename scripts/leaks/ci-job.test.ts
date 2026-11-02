@@ -8,14 +8,13 @@ import { z } from 'zod';
 import { expression, findOnPath, readText, writeExecutable } from '../ci/lib/test-support.ts';
 import { tempDir } from '../code-caps/test-support.ts';
 import { compareNames } from '../code-caps/types.ts';
-import { ciJob, repoText } from '../semgrep-rules/test-support.ts';
+import { ciJob, ciTextOnSharedRunners } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from '../trivy-gate/test-support.ts';
 
 // E20-S07: the `leaks` job of .github/workflows/ci.yml. Its place in the runner policy (docs/ci-runners.md), the events it
 // runs for and the order of its steps are pinned here; the two steps with shell logic run for real in bash against stubs.
 
 const job = ciJob('leaks');
-const ciText = repoText('.github/workflows/ci.yml');
 const INSTALL = 'Install Chromium (the one browser, in the runner temp directory)';
 const CHECK = 'Check that Chromium starts';
 const CONTROL = 'Positive control (the wrapper must fail on a leak, pass on a clean page and report an error)';
@@ -77,7 +76,8 @@ test('the job has no container, no services, no permissions of its own, no envir
   ]);
   expect(job.steps.filter((each) => each['continue-on-error'] !== undefined)).toEqual([]);
   expect(JSON.stringify(job)).not.toMatch(/docker|secrets\./);
-  expect(ciText).not.toMatch(/\$\{\{\s*secrets\./);
+  // The qodana job (E20-S08) holds a secret and runs on a GitHub-hosted machine: it is not part of this check.
+  expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
 });
 
 test('the steps are the standard setup, one browser, the control, the scenarios and the upload', () => {

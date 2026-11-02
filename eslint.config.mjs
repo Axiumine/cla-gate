@@ -49,6 +49,7 @@ export default defineConfig([
     '**/reports/',
     '**/.vitest/',
     '**/.stryker-tmp/',
+    '**/.qodana/',
     '**/playwright-report/',
     '**/test-results/',
     '.yarn/',
