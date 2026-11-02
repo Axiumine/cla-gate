@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ExtractedActor } from './actor-types.ts';
-import { matchAllowlist } from './allowlist.ts';
+import { type AllowlistIndex, indexAllowlist, matchIndexedAllowlist } from './allowlist.ts';
 import { type AccountClass, classifyAccount } from './classify.ts';
 import type { ActorFix, CoverageFacts, CoverageResult, CoveredActor } from './coverage-types.ts';
 import { compareText } from './order.ts';
 import { outcomeOf, sortedUniqueCodes } from './outcome.ts';
-import { findCoveringSignature } from './signatures.ts';
-import type { Account, CoveringBasis, FailureCode, Policy } from './types.ts';
+import { indexCoveringSignatures, type SignatureIndex } from './signatures.ts';
+import type { Account, CoveringBasis, FailureCode } from './types.ts';
 
 // E08-S04: is every actor covered, and by what. An actor is covered by a signature or by an allowlist entry, nothing
 // else. Both are looked up by numeric id; the account type decides which of the two can apply.
@@ -19,18 +19,25 @@ import type { Account, CoveringBasis, FailureCode, Policy } from './types.ts';
  */
 const CAN_CONSENT: readonly AccountClass[] = ['human', 'unknown'];
 
+/** The facts, indexed once per evaluation, so the cost of an actor does not grow with the number of signatures. */
+interface Lookups {
+  readonly signatures: SignatureIndex;
+  readonly allowlist: AllowlistIndex;
+  readonly orgMembers: CoverageFacts['orgMembers'];
+}
+
 /**
  * The first basis that applies. A signature wins over an allowlist match: explicit consent is the stronger basis and it
  * survives the entry being removed later. Then comes the allowlist match of E08-S03.
  */
-function coveringBasis(account: Account, facts: CoverageFacts, policy: Policy): CoveringBasis | null {
+function coveringBasis(account: Account, lookups: Lookups): CoveringBasis | null {
   if (CAN_CONSENT.includes(classifyAccount(account))) {
-    const signature = findCoveringSignature(account.id, policy, facts.signatures);
-    if (signature !== null) {
+    const signature = lookups.signatures.get(account.id);
+    if (signature !== undefined) {
       return signature;
     }
   }
-  const entry = matchAllowlist(account, facts.allowlist, facts.orgMembers);
+  const entry = matchIndexedAllowlist(account, lookups.allowlist, lookups.orgMembers);
   return entry === null ? null : { kind: 'allowlist', entryId: entry.id, entryKind: entry.kind, scope: entry.scope };
 }
 
@@ -82,7 +89,12 @@ export function assessCoverage(facts: CoverageFacts, actors: readonly ExtractedA
       fixes: [],
     };
   }
-  const assessed = actors.map((actor) => withBasis(actor, coveringBasis(actor.account, facts, policy)));
+  const lookups: Lookups = {
+    signatures: indexCoveringSignatures(policy, facts.signatures),
+    allowlist: indexAllowlist(facts.allowlist),
+    orgMembers: facts.orgMembers,
+  };
+  const assessed = actors.map((actor) => withBasis(actor, coveringBasis(actor.account, lookups)));
   const shortfalls = assessed.filter((actor) => !actor.covered).map((actor) => shortfallOf(actor.account));
   const failureCodes = sortedUniqueCodes(shortfalls.map((shortfall) => shortfall.failureCode));
   return {

@@ -29,6 +29,7 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'matchAllowlist',
     'MAX_EVALUATED_COMMITS',
     'MAX_PULL_COMMITS',
+    'MAX_TRAILER_ONLY_ACTORS',
     'MAX_TRAILERS_PER_COMMIT',
     'MAX_WALK_PAGES',
     'parseCoAuthors',

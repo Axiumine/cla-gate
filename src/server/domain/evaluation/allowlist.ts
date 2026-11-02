@@ -69,6 +69,58 @@ function compareEntries(a: AllowlistEntry, b: AllowlistEntry): number {
 }
 
 /**
+ * The entries ready to be matched against many actors: `user` and `bot` entries by the account id they name, and the
+ * `org_members` entries (they name an organisation, not the actor) in a list of their own. Built once per evaluation.
+ */
+export interface AllowlistIndex {
+  readonly byAccount: ReadonlyMap<number, readonly AllowlistEntry[]>;
+  readonly organisations: readonly AllowlistEntry[];
+}
+
+export function indexAllowlist(entries: readonly AllowlistEntry[]): AllowlistIndex {
+  const byAccount = new Map<number, AllowlistEntry[]>();
+  const organisations: AllowlistEntry[] = [];
+  for (const entry of entries) {
+    if (entry.kind === 'org_members') {
+      organisations.push(entry);
+    } else {
+      const named = byAccount.get(entry.githubId) ?? [];
+      named.push(entry);
+      byAccount.set(entry.githubId, named);
+    }
+  }
+  return { byAccount, organisations };
+}
+
+function bestOf(
+  best: AllowlistEntry | null,
+  candidates: readonly AllowlistEntry[],
+  actor: AllowlistSubject,
+  orgMembers: OrgMembers,
+): AllowlistEntry | null {
+  let winner = best;
+  for (const entry of candidates) {
+    if (entryApplies(entry, actor, orgMembers) && (winner === null || compareEntries(entry, winner) < 0)) {
+      winner = entry;
+    }
+  }
+  return winner;
+}
+
+/**
+ * `matchAllowlist` for an allowlist that was indexed once: the cost of one actor is the entries that name its id plus the
+ * `org_members` entries, not the whole list.
+ */
+export function matchIndexedAllowlist(
+  actor: AllowlistSubject,
+  index: AllowlistIndex,
+  orgMembers: OrgMembers,
+): AllowlistEntry | null {
+  const named = bestOf(null, index.byAccount.get(actor.id) ?? [], actor, orgMembers);
+  return bestOf(named, index.organisations, actor, orgMembers);
+}
+
+/**
  * The entry that covers `actor`, or `null`. When several apply the pick is deterministic: repository scope before
  * installation scope, then kind order `user`, `bot`, `org_members`, then the lowest entry id. An entry whose kind does
  * not fit the account type never matches, whatever its id says, and an organisation absent from `orgMembers` has no
@@ -79,11 +131,5 @@ export function matchAllowlist(
   entries: readonly AllowlistEntry[],
   orgMembers: OrgMembers,
 ): AllowlistEntry | null {
-  let best: AllowlistEntry | null = null;
-  for (const entry of entries) {
-    if (entryApplies(entry, actor, orgMembers) && (best === null || compareEntries(entry, best) < 0)) {
-      best = entry;
-    }
-  }
-  return best;
+  return matchIndexedAllowlist(actor, indexAllowlist(entries), orgMembers);
 }

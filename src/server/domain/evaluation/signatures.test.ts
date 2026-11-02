@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { findCoveringSignature } from './signatures.ts';
+import { indexCoveringSignatures } from './signatures.ts';
 import { shuffled, signatureFact } from './test-support.ts';
 import type { Policy, SignatureBasis, SignatureFact } from './types.ts';
 
@@ -15,6 +15,13 @@ interface Row {
   readonly facts: readonly SignatureFact[];
   readonly expected: number | null;
 }
+
+/** The basis of one user under a policy, through the index that coverage uses, or `null` for none. */
+const findCoveringSignature = (
+  githubId: number,
+  policy: Policy,
+  signatures: readonly SignatureFact[],
+): SignatureBasis | null => indexCoveringSignatures(policy, signatures).get(githubId) ?? null;
 
 const v2: Policy = { documentId: 1, activeMajor: 2 };
 const MAX = Number.MAX_SAFE_INTEGER;
