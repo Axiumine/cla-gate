@@ -3,6 +3,7 @@
 import type { Kysely } from 'kysely';
 import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
+import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import type { InstallationRow } from './installation-state.ts';
 import type { RepositoryRow } from './repository-rows.ts';
 
@@ -24,9 +25,10 @@ export interface TenantRows {
  */
 export async function findTenantRows(
   db: Kysely<Database>,
-  installationId: InstallationRowId,
+  scope: TenantScope,
   repositoryId: number | null,
 ): Promise<TenantRows | null> {
+  const { installationId } = scope;
   const installation = await db
     .selectFrom('installations')
     .selectAll()
@@ -54,10 +56,10 @@ export async function findTenantRows(
  */
 export async function findAdmittedTenantRows(
   db: Kysely<Database>,
-  installationId: InstallationRowId,
+  scope: TenantScope,
   repositoryId: number | null,
 ): Promise<TenantRows | null> {
-  const rows = await findTenantRows(db, installationId, repositoryId);
+  const rows = await findTenantRows(db, scope, repositoryId);
   return rows?.installation.admission_status === 'admitted' ? rows : null;
 }
 

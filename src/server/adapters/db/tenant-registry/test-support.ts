@@ -245,7 +245,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       takesIds: false,
       activeOnly: true,
       run: async (db, scope) => {
-        const candidates = await listRepoAdminCandidates(db, scope.installationId, 10);
+        const candidates = await listRepoAdminCandidates(db, scope, 10);
         return ownersOfGithubIds(
           db,
           candidates.map((candidate) => candidate.github_repo_id),
@@ -354,14 +354,13 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
     findTenantRows: scoped({
       takesIds: true,
       activeOnly: true,
-      run: async (db, scope, ids) =>
-        ownersOfTenantRows(await findTenantRows(db, scope.installationId, ids.plain.repositoryId)),
+      run: async (db, scope, ids) => ownersOfTenantRows(await findTenantRows(db, scope, ids.plain.repositoryId)),
     }),
     findAdmittedTenantRows: scoped({
       takesIds: true,
       activeOnly: true,
       run: async (db, scope, ids) =>
-        ownersOfTenantRows(await findAdmittedTenantRows(db, scope.installationId, ids.plain.repositoryId)),
+        ownersOfTenantRows(await findAdmittedTenantRows(db, scope, ids.plain.repositoryId)),
     }),
     installationOfRepository: {
       kind: 'by_design',

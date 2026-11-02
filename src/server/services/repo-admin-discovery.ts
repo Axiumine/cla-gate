@@ -60,7 +60,7 @@ export function createRepoAdminDiscovery({ db, lookup }: RepoAdminDiscoveryDeps)
     if (allowed === 0) {
       return { role: 'none', truncated: true };
     }
-    const listed = await listRepoAdminCandidates(db, installationId, allowed + 1);
+    const listed = await listRepoAdminCandidates(db, { installationId }, allowed + 1);
     const candidates = listed.slice(0, allowed);
     const probes = new Probes(candidates, (candidate) =>
       lookup(

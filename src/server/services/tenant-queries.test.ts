@@ -34,55 +34,57 @@ async function world() {
 
 test('an installation is read as stored, with no repository when none is asked for', async () => {
   const { db, a } = await world();
-  const rows = await findTenantRows(db, a.installation.id, null);
+  const rows = await findTenantRows(db, { installationId: a.installation.id }, null);
   expect(rows).toEqual({ installation: a.installation, repository: null });
 });
 
 test('an installation that is not stored is null', async () => {
   const { db } = await world();
-  expect(await findTenantRows(db, rowId(987_654), null)).toBeNull();
+  expect(await findTenantRows(db, { installationId: rowId(987_654) }, null)).toBeNull();
 });
 
 test('a repository is read with its installation, and the installation of the repository is its own', async () => {
   const { db, a, a1 } = await world();
-  const rows = await findTenantRows(db, a.installation.id, a1);
+  const rows = await findTenantRows(db, { installationId: a.installation.id }, a1);
   expect(rows?.installation.id).toBe(a.installation.id);
   expect(rows?.repository).toMatchObject({ id: a1, installation_id: a.installation.id, full_name: 'org-1/repo-1' });
 });
 
 test("a repository of another installation is null: it is read with the installation id, so one tenant never reaches another's row", async () => {
   const { db, a, b, b1 } = await world();
-  expect(await findTenantRows(db, a.installation.id, b1)).toBeNull();
-  expect(await findTenantRows(db, b.installation.id, b1)).not.toBeNull();
+  expect(await findTenantRows(db, { installationId: a.installation.id }, b1)).toBeNull();
+  expect(await findTenantRows(db, { installationId: b.installation.id }, b1)).not.toBeNull();
 });
 
 test('a repository that is unknown or removed is null', async () => {
   const { db, a, a1, a2, store } = await world();
-  expect(await findTenantRows(db, a.installation.id, a1 + 100_000)).toBeNull();
+  expect(await findTenantRows(db, { installationId: a.installation.id }, a1 + 100_000)).toBeNull();
   await store.markRepositoriesRemoved(a.installation.id, [repoId(1, 2)], new Date());
-  expect(await findTenantRows(db, a.installation.id, a2)).toBeNull();
-  expect(await findTenantRows(db, a.installation.id, a1)).not.toBeNull();
+  expect(await findTenantRows(db, { installationId: a.installation.id }, a2)).toBeNull();
+  expect(await findTenantRows(db, { installationId: a.installation.id }, a1)).not.toBeNull();
 });
 
 test('every state of an installation is read, whatever the admission policy said', async () => {
   const { db, rejected, r1 } = await world();
-  expect((await findTenantRows(db, rejected.id, r1))?.installation.admission_status).toBe('rejected');
+  expect((await findTenantRows(db, { installationId: rejected.id }, r1))?.installation.admission_status).toBe(
+    'rejected',
+  );
 });
 
 test('an admitted tenant is read, and a rejected one is null like an unknown one', async () => {
   const { db, a, rejected, a1, r1 } = await world();
-  expect((await findAdmittedTenantRows(db, a.installation.id, a1))?.repository?.id).toBe(a1);
-  expect(await findAdmittedTenantRows(db, rejected.id, null)).toBeNull();
-  expect(await findAdmittedTenantRows(db, rejected.id, r1)).toBeNull();
-  expect(await findAdmittedTenantRows(db, rowId(987_654), null)).toBeNull();
+  expect((await findAdmittedTenantRows(db, { installationId: a.installation.id }, a1))?.repository?.id).toBe(a1);
+  expect(await findAdmittedTenantRows(db, { installationId: rejected.id }, null)).toBeNull();
+  expect(await findAdmittedTenantRows(db, { installationId: rejected.id }, r1)).toBeNull();
+  expect(await findAdmittedTenantRows(db, { installationId: rowId(987_654) }, null)).toBeNull();
 });
 
 test("a suspended or deleted tenant is still an admitted one: what it means for access is the guard's to decide", async () => {
   const { db, store, a, b } = await world();
   await store.upsertInstallation(installationOf(1, { suspendedAt: new Date() }));
   await store.upsertInstallation(installationOf(2, { deletedAt: new Date() }));
-  expect(await findAdmittedTenantRows(db, a.installation.id, null)).not.toBeNull();
-  expect(await findAdmittedTenantRows(db, b.installation.id, null)).not.toBeNull();
+  expect(await findAdmittedTenantRows(db, { installationId: a.installation.id }, null)).not.toBeNull();
+  expect(await findAdmittedTenantRows(db, { installationId: b.installation.id }, null)).not.toBeNull();
 });
 
 test('the installation of a repository is found from the repository alone, and not for one that is unknown or removed', async () => {

@@ -40,7 +40,7 @@ function notFound(): AppError {
 
 /** The stored tenant, or the `404` for one that is not there (or whose repository is not, or is removed, or is another installation's). */
 async function readTenant(db: Kysely<Database>, target: TenantTarget): Promise<TenantRows> {
-  const rows = await findTenantRows(db, target.installationId, target.repositoryId);
+  const rows = await findTenantRows(db, { installationId: target.installationId }, target.repositoryId);
   if (rows === null) {
     throw notFound();
   }

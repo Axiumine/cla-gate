@@ -66,14 +66,16 @@ test('the unique violation of the database is the refusal of writeChanged, and n
 
 test('the rows of a tenant read are owned by the installation and the repository', async () => {
   const { db, t1, t2 } = await world();
-  const rows = await findTenantRows(db, t1.installationId, t1.plain.repositoryId);
+  const rows = await findTenantRows(db, { installationId: t1.installationId }, t1.plain.repositoryId);
   expect(ownersOfTenantRows(rows)).toEqual([t1.installationId, t1.installationId]);
-  expect(ownersOfTenantRows(await findTenantRows(db, t1.installationId, t2.plain.repositoryId))).toEqual([]);
+  expect(
+    ownersOfTenantRows(await findTenantRows(db, { installationId: t1.installationId }, t2.plain.repositoryId)),
+  ).toEqual([]);
 });
 
 test('a read that answers an installation with no repository is refused: the registry always asks for one', async () => {
   const { db, t1 } = await world();
-  const installationOnly = await findTenantRows(db, t1.installationId, null);
+  const installationOnly = await findTenantRows(db, { installationId: t1.installationId }, null);
   expect(() => ownersOfTenantRows(installationOnly)).toThrow('the registry asks for a repository');
 });
 

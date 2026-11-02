@@ -50,7 +50,7 @@ function paramsOf<T extends z.ZodType>(schema: T, request: FastifyRequest): z.in
 export function byInstallationParam(db: Kysely<Database>): TenantResolver {
   return async (request) => {
     const { installationId } = paramsOf(installationParams, request);
-    const rows = await findAdmittedTenantRows(db, installationId, null);
+    const rows = await findAdmittedTenantRows(db, { installationId }, null);
     return rows === null ? null : { installationId, repositoryId: null, requirement: 'org_admin' };
   };
 }
@@ -78,7 +78,7 @@ export function byRepositoryParam(db: Kysely<Database>): TenantResolver {
     if (installationId === null) {
       return null;
     }
-    const rows = await findAdmittedTenantRows(db, installationId, params.repositoryId);
+    const rows = await findAdmittedTenantRows(db, { installationId }, params.repositoryId);
     return rows === null ? null : { installationId, repositoryId: params.repositoryId, requirement: 'repo_admin' };
   };
 }
@@ -106,7 +106,7 @@ async function documentTarget(
     placement.kind === 'repository'
       ? { installationId, repositoryId: placement.repositoryId, requirement: 'repo_admin' }
       : { installationId, repositoryId: null, requirement: 'org_admin' };
-  return (await findAdmittedTenantRows(db, installationId, target.repositoryId)) === null ? null : target;
+  return (await findAdmittedTenantRows(db, { installationId }, target.repositoryId)) === null ? null : target;
 }
 
 /**
