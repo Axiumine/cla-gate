@@ -37,6 +37,10 @@ async function insertUser(db: Kysely<Database>, githubId: number): Promise<numbe
   return user.id;
 }
 
+/** The GitHub ids of the two people of a {@link SessionsWorld}; `alice` and `bob` are their internal `users.id`. */
+export const ALICE_GITHUB_ID = 1001;
+export const BOB_GITHUB_ID = 2002;
+
 export interface SessionsWorld {
   readonly db: Kysely<Database>;
   readonly store: SessionStore;
@@ -49,8 +53,8 @@ async function worldOver(db: Kysely<Database>): Promise<SessionsWorld> {
   return {
     db,
     store: createSessionStore(db, LIMITS),
-    alice: await insertUser(db, 1001),
-    bob: await insertUser(db, 2002),
+    alice: await insertUser(db, ALICE_GITHUB_ID),
+    bob: await insertUser(db, BOB_GITHUB_ID),
   };
 }
 

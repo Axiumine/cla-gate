@@ -68,6 +68,11 @@ export interface SessionStore {
   remove(rowId: number): Promise<void>;
   /** Deletes every session of the user with this `users.id` and returns the count; logout everywhere (E10-S06). */
   removeAllOfUser(userId: number): Promise<number>;
+  /**
+   * Deletes every session of the person with this numeric GitHub id and returns the count; the `users` row stays and
+   * nothing else is touched. Used when the person revokes the App authorization (E10-S07).
+   */
+  removeAllOfGithubId(githubId: GithubId): Promise<number>;
 }
 
 /** The id and the CSRF secret are 32 random bytes, 43 characters in base64url. */
