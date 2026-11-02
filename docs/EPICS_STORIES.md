@@ -47,7 +47,7 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 | E01 | Repository governance and licensing | BC-08 | 🔴 Must have | ✅ Done | 6 | [E01.md](epics/E01.md) |
 | E02 | Quality-gate toolchain and CI | BC-08 | 🔴 Must have | ✅ Done | 8 | [E02.md](epics/E02.md) |
 | E03 | Structure-cap ratchet tool | BC-08 | 🟠 Should have | ✅ Done | 7 | [E03.md](epics/E03.md) |
-| E04 | Server foundation | BC-01 | 🔴 Must have | ⏳ In progress | 9 | [E04.md](epics/E04.md) |
+| E04 | Server foundation | BC-01 | 🔴 Must have | ✅ Done | 9 | [E04.md](epics/E04.md) |
 | E05 | GitHub App core | BC-05 | 🔴 Must have | ⬜ Todo | 9 | [E05.md](epics/E05.md) |
 | E06 | Webhook intake | BC-05 | 🔴 Must have | ⬜ Todo | 7 | [E06.md](epics/E06.md) |
 | E07 | Job queue, concurrency and reconciliation | BC-04 | 🔴 Must have | ⬜ Todo | 10 | [E07.md](epics/E07.md) |
@@ -72,9 +72,9 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 
 | Status | Stories | Epics |
 |---|---|---|
-| ✅ Done | 47 | 4 |
-| ⏳ In progress | 1 | 2 |
-| ⬜ Todo | 150 | 17 |
+| ✅ Done | 48 | 5 |
+| ⏳ In progress | 1 | 1 |
+| ⬜ Todo | 149 | 17 |
 | Total | 198 | 23 |
 
 ## Dependency and sequencing
