@@ -4,8 +4,8 @@ import type { Transaction } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import { missingPermissions } from '../domain/permissions.ts';
 import { appendAudit } from './audit.ts';
-import type { InstallationRow } from './installation-state.ts';
-import { accountTypeCode, type SyncContext } from './installation-sync-model.ts';
+import { accountTypeCode, type InstallationRow } from './installation-state.ts';
+import type { SyncContext } from './installation-sync-model.ts';
 import type { GitHubInstallation } from './ports/github.ts';
 
 // What a sync notes about an installation GitHub has, besides the account snapshot and the admission decision (E05-S08).

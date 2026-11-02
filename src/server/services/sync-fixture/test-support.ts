@@ -34,7 +34,7 @@ export function remoteInstallation(
   accountId: number,
   overrides: Partial<Omit<GitHubInstallation, 'id' | 'account'>> & {
     login?: string;
-    type?: 'Organization' | 'User';
+    type?: 'Organization' | 'User' | 'Other';
   } = {},
 ): GitHubInstallation {
   return {

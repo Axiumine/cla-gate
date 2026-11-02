@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../shared/github-id.ts';
-import { decideAdmission } from '../domain/admission.ts';
+import { decideAccountAdmission } from '../domain/admission.ts';
 import { type InstallationIneligibleReason, installationEligibility } from '../domain/eligibility.ts';
 import type { AdmissionPolicies } from './admission-policies.ts';
 import type { InstallationRow } from './installation-state.ts';
@@ -29,7 +29,10 @@ async function admissionNow(
   if (row.admission_status !== 'admitted') {
     return row.admission_status;
   }
-  return decideAdmission(row.account_id, await policies.current()).admitted ? 'admitted' : 'rejected';
+  const policy = await policies.current();
+  return decideAccountAdmission({ id: row.account_id, type: row.account_type }, policy).admitted
+    ? 'admitted'
+    : 'rejected';
 }
 
 /**

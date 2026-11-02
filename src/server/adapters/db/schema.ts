@@ -39,7 +39,8 @@ interface InstallationsTable {
   github_installation_id: number;
   account_id: number;
   account_login: string;
-  account_type: 'Organization' | 'User';
+  /** `Other` is an account that is neither: an enterprise. It is stored, rejected and never served (migration 004). */
+  account_type: 'Organization' | 'User' | 'Other';
   suspended_at: Date | null;
   /** The default is `rejected`: a row without a decision is never evaluated (migration 003, E05-S06). */
   admission_status: Generated<'admitted' | 'rejected'>;

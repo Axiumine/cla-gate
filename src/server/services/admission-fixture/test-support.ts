@@ -26,7 +26,7 @@ export const START = '2026-11-02T10:00:00.000Z';
 export function githubInstallation(
   githubId: number,
   accountId: number,
-  overrides: { type?: 'Organization' | 'User'; login?: string; suspendedAt?: Date | null } = {},
+  overrides: { type?: 'Organization' | 'User' | 'Other'; login?: string; suspendedAt?: Date | null } = {},
 ): GitHubInstallation {
   return {
     id: id(githubId),

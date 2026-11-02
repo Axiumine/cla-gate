@@ -5,11 +5,11 @@ import type { Logger } from 'pino';
 import { lockInstallation } from '../adapters/db/advisory-lock.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
-import { type AdmissionVerdict, decideAdmission } from '../domain/admission.ts';
+import { type AdmissionVerdict, decideAccountAdmission } from '../domain/admission.ts';
 import type { AdmissionPolicies } from './admission-policies.ts';
 import { appendAudit } from './audit.ts';
 import { findInstallationByGithubId, upsertInstallation } from './installation-queries.ts';
-import type { AdmissionDecision, InstallationRow } from './installation-state.ts';
+import { type AdmissionDecision, accountTypeCode, type InstallationRow } from './installation-state.ts';
 import type { Clock } from './ports/clock.ts';
 import type { GitHubInstallation } from './ports/github.ts';
 
@@ -52,10 +52,6 @@ export interface InstallationAdmissionOptions {
   readonly logger: Logger;
 }
 
-/** The type as the audit metadata spells it: a code, so lower case. */
-const accountTypeCode = (installation: GitHubInstallation): 'organization' | 'user' =>
-  installation.account.type === 'User' ? 'user' : 'organization';
-
 function decisionFor(verdict: AdmissionVerdict, stored: InstallationRow | null, decidedAt: Date): AdmissionDecision {
   if (verdict.admitted) {
     return { status: 'admitted', reason: null, decidedAt };
@@ -88,7 +84,7 @@ export function createInstallationAdmission(options: InstallationAdmissionOption
   return {
     async admit(installation, within = options.db) {
       const policy = await policies.current();
-      const verdict = decideAdmission(installation.account.id, policy);
+      const verdict = decideAccountAdmission(installation.account, policy);
       const outcome = await withTransaction(within, async (trx) => {
         await lockInstallation(trx, installation.id);
         const stored = await findInstallationByGithubId(trx, installation.id);
@@ -104,7 +100,7 @@ export function createInstallationAdmission(options: InstallationAdmissionOption
           subject: { type: 'installation', id: installation.id },
           metadata: {
             account_id: installation.account.id,
-            account_type: accountTypeCode(installation),
+            account_type: accountTypeCode(installation.account.type),
             ...(decision.reason === null ? {} : { reason_code: decision.reason }),
           },
         });
@@ -115,7 +111,7 @@ export function createInstallationAdmission(options: InstallationAdmissionOption
           {
             githubInstallationId: installation.id,
             accountId: installation.account.id,
-            accountType: accountTypeCode(installation),
+            accountType: accountTypeCode(installation.account.type),
             reasonCode: outcome.installation.admission_reason,
           },
           'installation.rejected',

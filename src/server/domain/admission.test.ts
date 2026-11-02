@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
-import { createAdmissionPolicy, decideAdmission, effectiveAccountIds } from './admission.ts';
+import { createAdmissionPolicy, decideAccountAdmission, decideAdmission, effectiveAccountIds } from './admission.ts';
 
 const id = parseGithubId;
 const OWNER = id(9001);
@@ -56,4 +56,23 @@ test('the owner listed again in the configuration is one entry, and the effectiv
 test('a refusal carries the reason code and nothing else', () => {
   expect(Object.keys(decideAdmission(43, policy))).toEqual(['admitted', 'reason']);
   expect(Object.keys(decideAdmission(42, policy))).toEqual(['admitted']);
+});
+
+test.each([
+  ['a listed user', 42, 'User', { admitted: true }],
+  ['a listed organisation', 77, 'Organization', { admitted: true }],
+  ['the owner organisation', 9001, 'Organization', { admitted: true }],
+  ['an unlisted organisation', 43, 'Organization', REFUSED],
+  ['a listed id of another kind of account (an enterprise)', 42, 'Other', REFUSED],
+  ['the owner id of another kind of account', 9001, 'Other', REFUSED],
+  ['a listed id of an account whose type GitHub spelled in another way', 42, 'Enterprise', REFUSED],
+  ['a listed id with a type in lower case', 42, 'user', REFUSED],
+  ['a listed id with no type', 42, '', REFUSED],
+])('an account decision for %s is as expected', (_label, accountId, type, verdict) => {
+  expect(decideAccountAdmission({ id: accountId, type }, policy)).toEqual(verdict);
+});
+
+test('a user or organisation with an id that is not a listed number is refused like decideAdmission refuses it', () => {
+  expect(decideAccountAdmission({ id: '42', type: 'User' }, policy)).toEqual(REFUSED);
+  expect(decideAccountAdmission({ id: null, type: 'Organization' }, policy)).toEqual(REFUSED);
 });

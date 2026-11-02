@@ -38,8 +38,21 @@ export const installationTokenSchema = z.object({
 
 export type InstallationTokenResponse = z.infer<typeof installationTokenSchema>;
 
-/** An account an installation belongs to; a type other than `User` and `Organization` (an enterprise) fails here. */
-const accountSchema = z.object({ id: githubIdSchema, login: z.string().min(1), type: accountTypeSchema });
+/** A user or an organisation: the accounts the platform can serve. */
+const knownAccountSchema = z.object({ id: githubIdSchema, login: z.string().min(1), type: accountTypeSchema });
+
+/**
+ * Any other account an installation belongs to (an enterprise has a `slug` and no `login`, and no `type` of ours): only
+ * the numeric id is needed. It is read as `Other` so that one such installation is recorded as rejected and never
+ * served, instead of failing the whole list of installations for every tenant. A user or organisation whose `login` is
+ * missing is read this way too, and so refused: failing closed. The name is a display snapshot, never an identity.
+ */
+const otherAccountSchema = z
+  .object({ id: githubIdSchema, login: z.string().min(1).optional(), slug: z.string().min(1).optional() })
+  .transform(({ id, login, slug }) => ({ id, login: login ?? slug ?? `account-${id}`, type: 'Other' as const }));
+
+/** An account an installation belongs to; the first schema that fits wins, so only a known account is read as one. */
+const accountSchema = z.union([knownAccountSchema, otherAccountSchema]);
 
 /** A GitHub timestamp as a `Date`: `2026-11-02T10:00:00Z`, or with an offset. */
 const timestampSchema = z.iso.datetime({ offset: true }).transform((text) => new Date(text));

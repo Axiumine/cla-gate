@@ -164,17 +164,6 @@ const membershipWith = (overrides: Record<string, unknown>, paths: string[]): Ba
 
 const BAD: [name: string, bad: Bad][] = [
   [
-    'an installation of an account type that is neither User nor Organization',
-    installationWith(
-      installationJson(11, { account: { id: 1, login: 'big-co', type: 'Enterprise', ...SECRET_FIELD } }),
-      ['account.type'],
-    ),
-  ],
-  [
-    'an installation on a Bot account',
-    installationWith(installationJson(11, { account: { id: 1, login: 'dependabot', type: 'Bot' } }), ['account.type']),
-  ],
-  [
     'an installation with no suspended_at',
     installationWith({ ...installationJson(11), suspended_at: undefined, ...SECRET_FIELD }, ['suspended_at']),
   ],

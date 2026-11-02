@@ -15,7 +15,7 @@ export interface OperatorInstallation {
   readonly accountId: GithubId;
   /** A display snapshot, refreshed by every sync; the id is the identity. */
   readonly accountLogin: string;
-  readonly accountType: 'Organization' | 'User';
+  readonly accountType: 'Organization' | 'User' | 'Other';
   readonly admissionStatus: 'admitted' | 'rejected';
   /** Why a rejected installation is rejected; null for an admitted one and for one nobody has decided on yet. */
   readonly admissionReason: 'account_not_allowed' | 'policy_changed' | null;

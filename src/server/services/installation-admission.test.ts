@@ -179,3 +179,26 @@ test('a policy that cannot be built fails the call closed: the error reaches the
   expect(await db.selectFrom('installations').select('id').execute()).toEqual([]);
   expect(await auditRows(db)).toEqual([]);
 });
+
+test('an account of another kind (an enterprise) is rejected even when its id is on the list, and gets no repositories', async () => {
+  const { admissionFor, db, store, logs } = await admissionWorld();
+  const outcome = await admissionFor([5002, OWNER]).admit(githubInstallation(14, 5002, { type: 'Other' }));
+  expect(outcome).toMatchObject({ admitted: false, changed: true });
+  expect(await store.findInstallationByGithubId(id(14))).toMatchObject({
+    account_type: 'Other',
+    admission_status: 'rejected',
+    admission_reason: 'account_not_allowed',
+  });
+  expect((await auditRows(db)).map((row) => [row.action, row.metadata])).toEqual([
+    ['installation.rejected', { account_id: 5002, account_type: 'other', reason_code: 'account_not_allowed' }],
+  ]);
+  expect(warnings(logs.lines())).toMatchObject([{ msg: 'installation.rejected', accountType: 'other' }]);
+  expect(await db.selectFrom('repositories').select('id').execute()).toEqual([]);
+});
+
+test('an owner account of another kind is rejected too: the owner is served only as a user or an organisation', async () => {
+  const { admissionFor } = await admissionWorld();
+  expect(await admissionFor([]).admit(githubInstallation(15, OWNER, { type: 'Other' }))).toMatchObject({
+    admitted: false,
+  });
+});

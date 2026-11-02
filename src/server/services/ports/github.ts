@@ -16,8 +16,14 @@ import type { GithubId } from '../../../shared/github-id.ts';
 // what the schema says GitHubResponseError, and an installation the instance does not serve
 // InstallationNotAdmittedError (installation-level methods only, before any request).
 
-/** The account types an App can be installed on or owned by. */
+/** The account types an App can be owned by. */
 type GitHubAccountType = 'User' | 'Organization';
+
+/**
+ * The account types an installation can belong to: a user, an organisation or `Other`, which is any account GitHub
+ * describes in another way (an enterprise). `Other` is read, recorded as rejected and never served.
+ */
+export type GitHubInstallationAccountType = GitHubAccountType | 'Other';
 
 /** The App the JWT belongs to (`GET /app`). */
 export interface GitHubAppInfo {
@@ -36,7 +42,7 @@ export interface GitHubInstallation {
   readonly account: {
     readonly id: GithubId;
     readonly login: string;
-    readonly type: GitHubAccountType;
+    readonly type: GitHubInstallationAccountType;
   };
   /** When GitHub suspended the installation; null while it is active. */
   readonly suspendedAt: Date | null;

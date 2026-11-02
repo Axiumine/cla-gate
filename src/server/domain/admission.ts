@@ -41,3 +41,18 @@ export function decideAdmission(accountId: unknown, policy: AdmissionPolicy): Ad
     ? { admitted: true }
     : { admitted: false, reason: 'account_not_allowed' };
 }
+
+/**
+ * Whether the instance serves an account: {@link decideAdmission} for a user or an organisation, never for any other kind
+ * of account (`Other`, an enterprise). Account ids of different kinds are no promise about each other, so a list of ids
+ * cannot make an `Other` account served by accident. The type is a string on purpose, like the id is `unknown`: it
+ * comes from a GitHub payload or a database row.
+ */
+export function decideAccountAdmission(
+  account: { readonly id: unknown; readonly type: string },
+  policy: AdmissionPolicy,
+): AdmissionVerdict {
+  return account.type === 'User' || account.type === 'Organization'
+    ? decideAdmission(account.id, policy)
+    : { admitted: false, reason: 'account_not_allowed' };
+}

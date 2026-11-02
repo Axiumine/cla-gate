@@ -157,6 +157,16 @@ test('an installation the policy no longer serves and that was also uninstalled 
   await rejects(gate.assertAdmitted(id(300)), 'rejected');
 });
 
+test('a stored admitted row of an account of another kind is refused as rejected even when its id is served', async () => {
+  const { store } = await worldOfTwoTenants();
+  await store.upsertInstallation(installationOf(3, { accountType: 'Other' }));
+  const gate = createStoredGate(
+    (githubInstallationId) => store.findInstallationByGithubId(githubInstallationId),
+    SERVING_TENANTS,
+  );
+  await rejects(gate.assertAdmitted(id(300)), 'rejected');
+});
+
 test('a policy that cannot be built yet (the App owner is unknown) refuses with that failure', async () => {
   const { store } = await worldOfTwoTenants();
   const gate = createStoredGate((githubInstallationId) => store.findInstallationByGithubId(githubInstallationId), {

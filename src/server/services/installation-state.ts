@@ -12,7 +12,7 @@ interface InstallationSnapshot {
   readonly githubInstallationId: GithubId;
   readonly accountId: GithubId;
   readonly accountLogin: string;
-  readonly accountType: 'Organization' | 'User';
+  readonly accountType: InstallationRow['account_type'];
   readonly suspendedAt: Date | null;
 }
 
@@ -53,4 +53,16 @@ export function stateColumns(input: InstallationUpsert): StateColumns {
     ...(input.deletedAt === undefined ? {} : { deleted_at: input.deletedAt }),
     ...(input.lastSyncedAt === undefined ? {} : { last_synced_at: input.lastSyncedAt }),
   };
+}
+
+/** The account type as the audit metadata spells it: a code, so lower case. */
+export function accountTypeCode(type: InstallationRow['account_type']): 'organization' | 'user' | 'other' {
+  switch (type) {
+    case 'Organization':
+      return 'organization';
+    case 'User':
+      return 'user';
+    case 'Other':
+      return 'other';
+  }
 }

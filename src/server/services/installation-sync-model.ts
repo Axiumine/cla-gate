@@ -54,7 +54,3 @@ export interface SyncContext {
   readonly clock: Clock;
   readonly logger: Logger;
 }
-
-/** The account type as the audit metadata spells it: a code, so lower case. */
-export const accountTypeCode = (type: 'Organization' | 'User'): 'organization' | 'user' =>
-  type === 'User' ? 'user' : 'organization';

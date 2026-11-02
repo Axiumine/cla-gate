@@ -4,8 +4,8 @@ import type { Transaction } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import { appendAudit } from './audit.ts';
 import { markInstallationDeleted } from './installation-queries.ts';
-import type { InstallationRow } from './installation-state.ts';
-import { accountTypeCode, type SyncContext, type SyncOutcome, untouched } from './installation-sync-model.ts';
+import { accountTypeCode, type InstallationRow } from './installation-state.ts';
+import { type SyncContext, type SyncOutcome, untouched } from './installation-sync-model.ts';
 import { listActiveRepositoryIds, markRepositoriesRemoved } from './repository-queries.ts';
 
 // The uninstall step of a sync (E05-S08), run inside the installation step's transaction under the advisory lock.

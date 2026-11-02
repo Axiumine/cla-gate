@@ -48,6 +48,36 @@ test('every installation GitHub lists is synced, one after the other', async () 
   });
 });
 
+test('an installation of an enterprise between two good ones is recorded as rejected and does not stop the others', async () => {
+  const { fake, sync, db } = await syncWorld([5000]);
+  fake.addInstallation(remoteInstallation(11, OWNER), remoteRepositories(100, 2));
+  fake.addInstallation(remoteInstallation(12, 5000, { type: 'Other' }), remoteRepositories(200, 1));
+  fake.addInstallation(remoteInstallation(13, 5000), remoteRepositories(300, 1));
+  expect(await sync.reconcileInstallations()).toEqual({ synced: 3, failed: 0 });
+  expect(
+    (await installationRows(db)).map((row) => [
+      row.github_installation_id,
+      row.account_type,
+      row.admission_status,
+      row.admission_reason,
+    ]),
+  ).toEqual([
+    [11, 'Organization', 'admitted', null],
+    [12, 'Other', 'rejected', 'account_not_allowed'],
+    [13, 'Organization', 'admitted', null],
+  ]);
+  expect((await repositoryRows(db)).map((row) => row.github_repo_id)).toEqual([100, 101, 300]);
+  expect(fake.calls.filter((call) => call.method === 'listInstallationRepositories')).toHaveLength(2);
+  expect(await auditActions(db)).toEqual([
+    'installation.admitted',
+    'repository.added',
+    'repository.added',
+    'installation.rejected',
+    'installation.admitted',
+    'repository.added',
+  ]);
+});
+
 test('a second reconciliation over unchanged state writes nothing', async () => {
   const { fake, sync, db, clock } = await syncWorld();
   fake.addInstallation(remoteInstallation(11, OWNER), remoteRepositories(100, 2));
