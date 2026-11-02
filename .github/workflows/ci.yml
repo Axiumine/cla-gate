@@ -109,6 +109,8 @@ jobs:
         run: yarn typecheck
       - name: ESLint
         run: yarn lint:eslint
+      - name: Escape hatches (justification gate)
+        run: yarn lint:hatches
       - name: Type coverage (per tsconfig project)
         run: yarn type-coverage
       - name: Knip (default and production modes)

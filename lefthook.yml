@@ -48,6 +48,9 @@ pre-push:
         jobs:
           - name: eslint
             run: yarn lint:eslint
+          # Escape hatches without a written reason (explicit any, as, coverage and type-coverage ignores): E20-S16.
+          - name: escape-hatches
+            run: yarn lint:hatches
           - name: type-coverage
             run: yarn type-coverage
           - name: knip

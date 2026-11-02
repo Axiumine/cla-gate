@@ -71,10 +71,7 @@ function assertDecodable(files: readonly string[]): void {
   }
 }
 
-/**
- * Every repo source file outside the excluded directories, as sorted posix paths.
- * @internal Exported for the unit tests.
- */
+/** Every repo source file outside the excluded directories, as sorted posix paths (also read by the escape-hatch gate). */
 export function sourceFiles(root: string): string[] {
   const files = gitFiles(root) ?? walkFiles(root);
   assertDecodable(files);

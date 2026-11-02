@@ -13,6 +13,7 @@
   "project": [
     "scripts/**/*.ts!",
     "!scripts/code-caps/test-support.ts!",
+    "!scripts/escape-hatches/eslint-config.ts!",
     "!scripts/ci/**!",
     "!scripts/dev/**!",
     "src/**/*.ts!",
