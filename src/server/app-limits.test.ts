@@ -3,7 +3,7 @@
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { errorResponseSchema } from '../shared/errors.ts';
-import { testApp } from './test-support.ts';
+import { PUBLIC_ROUTE, testApp } from './test-support.ts';
 
 test('the HTTP server sets every timeout and limit explicitly, so no client can hold a connection open forever', async () => {
   const { app } = await testApp();
@@ -25,7 +25,7 @@ test('the HTTP server sets every timeout and limit explicitly, so no client can 
 
 test('a body over the limit is refused with the standard error body', async () => {
   const { app } = await testApp();
-  app.post('/echo', { schema: { body: z.object({ text: z.string() }) } }, (request) => request.body);
+  app.post('/echo', { ...PUBLIC_ROUTE, schema: { body: z.object({ text: z.string() }) } }, (request) => request.body);
   const big = JSON.stringify({ text: 'a'.repeat(1_048_576) });
   const response = await app.inject({
     method: 'POST',

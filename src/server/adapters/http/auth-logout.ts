@@ -25,7 +25,7 @@ interface LogoutRoutesOptions {
 export const logoutRoutes: FastifyPluginCallbackZod<LogoutRoutesOptions> = (app, options, done) => {
   app.post(
     '/api/auth/logout',
-    { config: { auditExempt: 'session', rateLimit: routeRateLimit(RATE_LIMITS.logout) } },
+    { config: { access: 'authenticated', auditExempt: 'session', rateLimit: routeRateLimit(RATE_LIMITS.logout) } },
     async (request, reply) => {
       const { sessionId, user } = requireAuth(request);
       const body = logoutRequestSchema.safeParse(request.body);

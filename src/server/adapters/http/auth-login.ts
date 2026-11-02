@@ -33,7 +33,7 @@ export const loginRoutes: FastifyPluginCallbackZod<LoginRoutesOptions> = (app, o
     '/api/auth/login',
     {
       schema: { querystring: loginQuery },
-      config: { rateLimit: routeRateLimit(RATE_LIMITS.login) },
+      config: { access: 'public', rateLimit: routeRateLimit(RATE_LIMITS.login) },
       exposeHeadRoute: false,
     },
     (request, reply) => {

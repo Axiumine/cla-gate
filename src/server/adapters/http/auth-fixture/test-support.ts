@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Kysely } from 'kysely';
 import { AUTH_ENV, TEST_SESSION_SECRET } from '../../../config/auth-fixture/test-support.ts';
 import { FakeClock } from '../../../services/test-support.ts';
-import { type LogCapture, type TestAppOptions, testApp, testConfig } from '../../../test-support.ts';
+import { type LogCapture, PUBLIC_ROUTE, type TestAppOptions, testApp, testConfig } from '../../../test-support.ts';
 import { loadMigrationFiles } from '../../db/migration-files.ts';
 import { migrate } from '../../db/migrator.ts';
 import { openPgliteDatabase } from '../../db/pglite.ts';
@@ -63,23 +63,33 @@ export function expectedToken(secret: string, csrfSecret: string): string {
 }
 
 /**
- * The routes that show what a route sees of the caller. None is under `/api`, so none needs an audit declaration.
+ * The routes that show what a route sees of the caller, all `public`: the ones that need a caller ask for it themselves.
+ * None that changes data is under `/api`, so none needs an audit declaration.
  * `/probe/mutate` answers every state-changing method and `/probe/safe` the methods the CSRF check never covers.
  */
 function addProbeRoutes(app: FastifyInstance, absoluteSeconds: number): void {
-  app.get('/probe/auth', (request) => ({ auth: request.auth, presented: request.sessionCookiePresented }));
-  app.get('/probe/protected', (request) => ({ githubId: requireAuth(request).user.githubId }));
-  app.get('/probe/set-cookie', (_request, reply) => {
+  app.get('/probe/auth', PUBLIC_ROUTE, (request) => ({
+    auth: request.auth,
+    presented: request.sessionCookiePresented,
+  }));
+  app.get('/probe/protected', PUBLIC_ROUTE, (request) => ({ githubId: requireAuth(request).user.githubId }));
+  app.get('/probe/set-cookie', PUBLIC_ROUTE, (_request, reply) => {
     setSessionCookie(reply, 'A'.repeat(43), absoluteSeconds);
     return 'ok';
   });
   app.route({
     method: ['POST', 'PUT', 'PATCH', 'DELETE'],
     url: '/probe/mutate',
+    ...PUBLIC_ROUTE,
     handler: (request) => ({ method: request.method, body: request.body ?? null }),
   });
-  app.route({ method: ['GET', 'OPTIONS'], url: '/probe/safe', handler: (request) => ({ method: request.method }) });
-  app.get('/api/auth/probe-boom', () => {
+  app.route({
+    method: ['GET', 'OPTIONS'],
+    url: '/probe/safe',
+    ...PUBLIC_ROUTE,
+    handler: (request) => ({ method: request.method }),
+  });
+  app.get('/api/auth/probe-boom', PUBLIC_ROUTE, () => {
     throw new Error('boom');
   });
 }

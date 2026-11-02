@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { AUDIT_ACTIONS } from '../../../shared/audit.ts';
-import { testApp } from '../../test-support.ts';
+import { PUBLIC_ROUTE, testApp } from '../../test-support.ts';
 import { AUDIT_EXEMPT_REASONS, auditProblem, UnauditedRouteError } from './audit-routes.ts';
 import { authWorld } from './auth-fixture/test-support.ts';
 
@@ -114,10 +114,10 @@ test('a plugin that registers an unaudited route under a prefix fails to load, n
 
 test('a route that declares config.audit or config.auditExempt registers and answers', async () => {
   const { app, login } = await authWorld();
-  app.post('/api/audited', { config: { audit: 'repository.enabled' } }, () => 'audited');
-  app.delete('/api/exempt', { config: { auditExempt: 'session' } }, () => 'exempt');
-  app.post('/outside', () => 'outside');
-  app.get('/api/read', () => 'read');
+  app.post('/api/audited', { config: { access: 'public', audit: 'repository.enabled' } }, () => 'audited');
+  app.delete('/api/exempt', { config: { access: 'public', auditExempt: 'session' } }, () => 'exempt');
+  app.post('/outside', PUBLIC_ROUTE, () => 'outside');
+  app.get('/api/read', PUBLIC_ROUTE, () => 'read');
   const { headers } = await login(1001);
   const answers = await Promise.all([
     app.inject({ method: 'POST', url: '/api/audited', headers }),
@@ -144,7 +144,7 @@ test.each(['/ap*', '/a*', '/api*', '/a:id/x', '/ap:id/x'])(
 
 test('a route with a static first segment that cannot be api registers without a declaration', async () => {
   const { app, login } = await authWorld();
-  app.post('/apix*', () => 'apix');
+  app.post('/apix*', PUBLIC_ROUTE, () => 'apix');
   const { headers } = await login(1001);
   expect((await app.inject({ method: 'POST', url: '/apix/y', headers })).body).toBe('apix');
 });

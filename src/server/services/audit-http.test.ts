@@ -25,7 +25,7 @@ async function appWithMutations() {
     });
     return { done: true };
   };
-  const config = { audit: 'repository.enabled' } as const;
+  const config = { access: 'authenticated', audit: 'repository.enabled' } as const;
   running.app.post('/api/good', { config }, mutate(tenantEntry(tenant.installationId)));
   const bad = unchecked({ ...tenantEntry(tenant.installationId), metadata: { email: HOSTILE } });
   running.app.post('/api/bad', { config }, mutate(bad));

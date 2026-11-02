@@ -3,7 +3,7 @@
 import { PassThrough } from 'node:stream';
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
-import { captureLogs, freePort, sendRaw, testApp, testConfig } from '../../test-support.ts';
+import { captureLogs, freePort, PUBLIC_ROUTE, sendRaw, testApp, testConfig } from '../../test-support.ts';
 import { frameworkErrorHandlers } from './framework-errors.ts';
 import { createLogger } from './logger.ts';
 
@@ -33,7 +33,7 @@ test.each([
   ],
 ])('%s gets the standard error body, a request id and the security headers', async (_case, url, expected) => {
   const { app, logs } = await testApp();
-  app.get('/long/:id', () => 'ok');
+  app.get('/long/:id', PUBLIC_ROUTE, () => 'ok');
   const normal = await app.inject('/healthz');
   const response = await app.inject({ url, headers: { 'x-request-id': 'trace-abc-123' } });
   expect(response.statusCode).toBe(expected.status);

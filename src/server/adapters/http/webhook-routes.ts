@@ -101,7 +101,7 @@ export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async 
   app.post(
     WEBHOOK_PATH,
     {
-      config: { rawBody: true, auditExempt: 'webhook', csrf: 'exempt', rateLimit: false },
+      config: { access: 'webhook', rawBody: true, auditExempt: 'webhook', csrf: 'exempt', rateLimit: false },
       bodyLimit: WEBHOOK_BODY_LIMIT,
       preValidation: signatureHook(options, throttle),
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response

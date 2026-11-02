@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { EventEmitter, once } from 'node:events';
 import net from 'node:net';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import type { Kysely } from 'kysely';
 import type { DestinationStream } from 'pino';
 import { onTestFinished } from 'vitest';
@@ -102,6 +102,13 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
   });
   return { app, logs, db };
 }
+
+/**
+ * The options of a route that a test adds to the app: `public`, so it needs no session (E11-S01 refuses to start an app
+ * with a route that declares no access). Spread it to add more options: `{ ...PUBLIC_ROUTE, schema }`; a route that
+ * needs other config declares `config: { access: 'public', ... }` itself.
+ */
+export const PUBLIC_ROUTE = { config: { access: 'public' } } satisfies RouteShorthandOptions;
 
 /** A TCP server that accepts connections and never answers: what a database behind a black-holing firewall looks like. */
 export async function silentPostgres(): Promise<{ url: string; close: () => Promise<void> }> {

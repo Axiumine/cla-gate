@@ -3,11 +3,13 @@
 import { expect, test } from 'vitest';
 import { authWorld } from './adapters/http/auth-fixture/test-support.ts';
 import { testRsaKey } from './config/test-support.ts';
-import { testApp } from './test-support.ts';
+import { PUBLIC_ROUTE, testApp } from './test-support.ts';
 
 test('request logs hold the method, path and status, and never the client address, headers, bodies, cookies or query strings', async () => {
   const { app, logs, login } = await authWorld();
-  app.post('/session', (_request, reply) => reply.header('set-cookie', 'sid=sekrit-set-cookie').send({ ok: true }));
+  app.post('/session', PUBLIC_ROUTE, (_request, reply) =>
+    reply.header('set-cookie', 'sid=sekrit-set-cookie').send({ ok: true }),
+  );
   const alice = await login(1001);
   await app.inject({
     method: 'POST',

@@ -16,6 +16,8 @@ import { createLogger } from './adapters/http/logger.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
+import { requireRouteAccess } from './adapters/http/route-access.ts';
+import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
@@ -49,7 +51,8 @@ export interface AppOptions {
 
 /**
  * What every route registered after it runs through, and the login routes (E10): the `no-store` header of `/api/auth`, the
- * rate limit, the Origin, session and CSRF guards and, when the login is configured, the session lookup and `/api/auth`.
+ * rate limit, the Origin, session and CSRF guards, the guard of the route access declarations (E11-S01) and, when the login
+ * is configured, the session lookup and `/api/auth`.
  * The webhook scope registered later inherits these hooks and opts out of them on its route (`csrf: 'exempt'`,
  * `rateLimit: false`).
  */
@@ -60,6 +63,8 @@ async function registerLoginChecks(app: FastifyInstance, options: AppOptions, cl
   await registerRateLimit(app, { trustProxy: config.trustProxy, clock });
   const loginSettings = authSettings(config);
   registerRequestGuards(app, { publicBaseUrl: config.publicBaseUrl, sessionSecret: loginSettings?.sessionSecret });
+  // After the request guards, so the `Origin` and CSRF checks answer first; before the routes, which inherit the hook.
+  guardRouteAccess(app);
   if (loginSettings !== undefined) {
     await registerAuth(app, {
       db,
@@ -93,6 +98,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   app.setSerializerCompiler(serializerCompiler);
   registerErrorHandlers(app);
   requireAuditedRoutes(app);
+  requireRouteAccess(app);
 
   await app.register(helmet, securityHeaders(config));
   app.addHook('onRequest', (request, reply, done) => {

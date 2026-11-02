@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 
+import type { FastifyContextConfig } from 'fastify';
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { type Kysely, sql } from 'kysely';
 import type { z } from 'zod';
@@ -35,8 +36,8 @@ async function databaseAnswers(db: Kysely<Database>, timeoutMs: number): Promise
   }
 }
 
-/** What both probes declare: they never read the session, so the session hook (E10-S02) leaves them alone, whatever cookie a browser sends. */
-const PROBE: { readonly session: 'none' } = { session: 'none' };
+/** What both probes declare: public, and they never read the session, so the session hook (E10-S02) leaves them alone, whatever cookie a browser sends. */
+const PROBE = { access: 'public', session: 'none' } satisfies FastifyContextConfig;
 
 /**
  * `GET /healthz` is liveness: the process serves requests, no dependency is touched. `GET /readyz` is readiness: the

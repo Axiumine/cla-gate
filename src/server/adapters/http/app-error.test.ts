@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
-import { testApp } from '../../test-support.ts';
+import { PUBLIC_ROUTE, testApp } from '../../test-support.ts';
 import { AppError, errorBody } from './errors.ts';
 
 const DETAILS = { limit: 5, fields: ['name', 'email'], nested: { ok: false, none: null } };
@@ -10,19 +10,19 @@ const DETAILS = { limit: 5, fields: ['name', 'email'], nested: { ok: false, none
 async function withRoutes() {
   const test_ = await testApp();
   const { app } = test_;
-  app.get('/plain', () => {
+  app.get('/plain', PUBLIC_ROUTE, () => {
     throw new AppError(409, 'thing_exists');
   });
-  app.get('/with-details', () => {
+  app.get('/with-details', PUBLIC_ROUTE, () => {
     throw new AppError(422, 'thing_invalid', DETAILS);
   });
-  app.get('/empty-details', () => {
+  app.get('/empty-details', PUBLIC_ROUTE, () => {
     throw new AppError(400, 'thing_empty', {});
   });
-  app.get('/unavailable', () => {
+  app.get('/unavailable', PUBLIC_ROUTE, () => {
     throw new AppError(503, 'thing_unavailable', { retryAfterSeconds: 30 });
   });
-  app.get('/unknown-code-text', () => {
+  app.get('/unknown-code-text', PUBLIC_ROUTE, () => {
     throw new AppError(499, 'client_gone');
   });
   return test_;
@@ -120,7 +120,7 @@ test('a server AppError keeps its status, is logged as an error, and sends its c
 
 test('an error that is not an AppError behaves as before: no code of ours, no details', async () => {
   const { app } = await testApp();
-  app.get('/boom', () => {
+  app.get('/boom', PUBLIC_ROUTE, () => {
     throw Object.assign(new Error('internal'), { statusCode: 409, code: 'not_for_clients', details: { a: 1 } });
   });
   const response = await app.inject('/boom');
@@ -137,7 +137,7 @@ test('an AppError thrown while a request is being read still gets its own body',
   app.addHook('onRequest', () => {
     throw new AppError(429, 'slow_down', { retryAfterSeconds: 1 });
   });
-  app.get('/never', () => 'unreachable');
+  app.get('/never', PUBLIC_ROUTE, () => 'unreachable');
   const response = await app.inject('/never');
   expect(response.statusCode).toBe(429);
   expect(response.json<{ error: { code: string } }>().error.code).toBe('slow_down');

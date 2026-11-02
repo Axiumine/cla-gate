@@ -132,6 +132,7 @@ test('a route can key its budget on something else than the address, through con
     '/by-user',
     {
       config: {
+        access: 'public',
         rateLimit: { ...routeRateLimit(2), keyGenerator: (request) => String(request.headers['x-user'] ?? '') },
       },
       exposeHeadRoute: false,
