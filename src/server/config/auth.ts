@@ -4,6 +4,19 @@ import type { Logger } from 'pino';
 import type { AppConfig } from './env.ts';
 import type { Secret } from './secret.ts';
 
+/** Where GitHub sends the browser back to after the authorization page (E10-S04). */
+const CALLBACK_PATH = '/api/auth/callback';
+
+/**
+ * The OAuth callback URL (E10-S04): `PUBLIC_BASE_URL` plus {@link CALLBACK_PATH}. The login start sends it as
+ * `redirect_uri`, the token exchange (E10-S05) repeats it, and it is the "Callback URL" of the GitHub App, so the setup
+ * kit (E19) and docs/github-app.md call this function instead of spelling the address again.
+ * @internal Exported for the unit tests and for the setup kit (E19); Knip ignores `@internal` exports in production mode until that story imports it.
+ */
+export function callbackUrl(config: Pick<AppConfig, 'publicBaseUrl'>): string {
+  return `${config.publicBaseUrl}${CALLBACK_PATH}`;
+}
+
 /** Everything the login routes need (E10-S01): present only when all three secrets are configured. */
 export interface AuthSettings {
   readonly sessionSecret: Secret;
@@ -11,6 +24,8 @@ export interface AuthSettings {
   readonly clientId: string;
   readonly clientSecret: Secret;
   readonly session: AppConfig['session'];
+  /** {@link callbackUrl} of this instance. */
+  readonly callbackUrl: string;
 }
 
 /**
@@ -25,7 +40,7 @@ export function authSettings(config: AppConfig): AuthSettings | undefined {
   if (sessionSecret === undefined || clientId === undefined || clientSecret === undefined) {
     return undefined;
   }
-  return { sessionSecret, clientId, clientSecret, session };
+  return { sessionSecret, clientId, clientSecret, session, callbackUrl: callbackUrl(config) };
 }
 
 /**

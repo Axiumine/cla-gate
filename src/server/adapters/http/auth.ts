@@ -7,6 +7,7 @@ import type { AuthSettings } from '../../config/auth.ts';
 import type { Clock } from '../../services/ports/clock.ts';
 import type { Database } from '../db/schema.ts';
 import { createSessionStore, type SessionStore } from '../db/sessions.ts';
+import { loginRoutes } from './auth-login.ts';
 import { authRoutes } from './auth-routes.ts';
 import { readSessionCookie } from './session-cookie.ts';
 
@@ -72,4 +73,5 @@ export async function registerAuth(app: FastifyInstance, options: AuthOptions): 
   app.addHook('onRequest', noStoreForAuth);
   app.addHook('onRequest', (request) => authenticate(request, store, options.clock));
   await app.register(authRoutes, { sessionSecret: options.settings.sessionSecret });
+  await app.register(loginRoutes, { clientId: options.settings.clientId, callbackUrl: options.settings.callbackUrl });
 }

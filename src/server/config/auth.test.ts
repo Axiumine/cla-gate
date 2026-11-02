@@ -3,7 +3,7 @@
 import { expect, test } from 'vitest';
 import { createLogger } from '../adapters/http/logger.ts';
 import { captureLogs } from '../test-support.ts';
-import { authSettings, logAuth } from './auth.ts';
+import { authSettings, callbackUrl, logAuth } from './auth.ts';
 import { AUTH_ENV, TEST_CLIENT_ID, TEST_CLIENT_SECRET, TEST_SESSION_SECRET } from './auth-fixture/test-support.ts';
 import { loadConfig } from './env.ts';
 
@@ -63,4 +63,26 @@ test.each([
   expect(lines[0]).toMatchObject({ level: 40, msg: 'auth.not_configured', missing });
   expect(text).not.toContain(TEST_SESSION_SECRET);
   expect(text).not.toContain(TEST_CLIENT_SECRET);
+});
+
+test.each([
+  ['the default, built from the port', {}, 'http://localhost:3000/api/auth/callback'],
+  [
+    'a public https origin',
+    { PUBLIC_BASE_URL: 'https://app.example.com' },
+    'https://app.example.com/api/auth/callback',
+  ],
+  [
+    'an origin given with a trailing slash',
+    { PUBLIC_BASE_URL: 'https://app.example.com/' },
+    'https://app.example.com/api/auth/callback',
+  ],
+  [
+    'an origin with a port',
+    { PUBLIC_BASE_URL: 'https://app.example.com:8443' },
+    'https://app.example.com:8443/api/auth/callback',
+  ],
+])('the callback URL for %s is PUBLIC_BASE_URL and /api/auth/callback, once', (_label, env, expected) => {
+  expect(callbackUrl(config(env))).toBe(expected);
+  expect(authSettings(config({ ...AUTH_ENV, ...env }))?.callbackUrl).toBe(expected);
 });
