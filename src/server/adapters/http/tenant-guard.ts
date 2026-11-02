@@ -4,7 +4,11 @@ import type { FastifyRequest } from 'fastify';
 import type { Kysely } from 'kysely';
 import { tenantState } from '../../domain/tenant-state.ts';
 import type { InstallationRow } from '../../services/installation-state.ts';
-import { InstallationNotAdmittedError } from '../../services/ports/github-errors.ts';
+import {
+  InstallationGoneError,
+  InstallationNotAdmittedError,
+  InstallationSuspendedError,
+} from '../../services/ports/github-errors.ts';
 import type { AuthorizeTenant, TenantAnswer } from '../../services/tenant-authorization.ts';
 import { findTenantRows, type TenantRows } from '../../services/tenant-queries.ts';
 import type { Database } from '../db/schema.ts';
@@ -79,8 +83,25 @@ interface Call {
 }
 
 /**
+ * The tenant that is not there, for an installation that GitHub stopped serving between the read of the row and the lookup:
+ * the gate refused it (`InstallationNotAdmittedError`), or GitHub refused its token (`InstallationSuspendedError`,
+ * `InstallationGoneError`) before a webhook or sync brought the stored row up to date. The second kind is logged as a stale
+ * row, with the numeric GitHub id and no stack, because it says the webhook was missed or is late. Every other error is
+ * returned as it is.
+ */
+function staleTenant(error: unknown, request: FastifyRequest): unknown {
+  if (error instanceof InstallationSuspendedError || error instanceof InstallationGoneError) {
+    const reason = error instanceof InstallationSuspendedError ? 'suspended' : 'gone';
+    request.log.warn({ githubInstallationId: error.githubInstallationId, reason }, 'installation_state_stale');
+    return notFound();
+  }
+  return error instanceof InstallationNotAdmittedError ? notFound() : error;
+}
+
+/**
  * What the role lookups say, with an installation that GitHub stopped serving between the read of the row and the lookup
- * (its token is refused) told as the tenant that is not there. Every other failure is thrown for the HTTP edge to map.
+ * told as the tenant that is not there (the answer for an unknown id, so a caller cannot tell the two apart). Every other
+ * failure is thrown for the HTTP edge to map.
  */
 async function answerFor(authorize: AuthorizeTenant, call: Call): Promise<TenantAnswer> {
   const { user } = requireAuth(call.request);
@@ -94,7 +115,7 @@ async function answerFor(authorize: AuthorizeTenant, call: Call): Promise<Tenant
       active: call.inactive === null,
     });
   } catch (error) {
-    throw error instanceof InstallationNotAdmittedError ? notFound() : error;
+    throw staleTenant(error, call.request);
   }
 }
 

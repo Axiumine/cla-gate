@@ -5,10 +5,16 @@ import { z } from 'zod';
 import { scopeDocuments } from '../../services/discovery-fixture/test-support.ts';
 import { id } from '../../services/github-contract/test-support.ts';
 import { createInstallationStore } from '../../services/installation-store.ts';
-import { GitHubRateLimitedError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
+import {
+  GitHubRateLimitedError,
+  GitHubUnavailableError,
+  InstallationGoneError,
+  InstallationNotAdmittedError,
+  InstallationSuspendedError,
+} from '../../services/ports/github-errors.ts';
 import { listed } from '../../services/store-fixture/test-support.ts';
 import { requireTenant, tenantAccess } from './tenant-access.ts';
-import { guardWorld, PEOPLE } from './tenant-guard-fixture/test-support.ts';
+import { guardWorld, PEOPLE, shapeOf } from './tenant-guard-fixture/test-support.ts';
 import { byInstallationParam } from './tenant-resolvers.ts';
 
 // When GitHub cannot say what a person may do, the guard does not guess (E11-S05): the call fails with the status of
@@ -41,6 +47,42 @@ test('a rate limit of GitHub is 503 github_rate_limited with its wait as retry-a
   expect(answer.json()).toMatchObject({ error: { code: 'github_rate_limited' } });
   expect(world.reached).toEqual([]);
 });
+
+test.each([
+  ['suspended', new InstallationSuspendedError(id(100))],
+  ['uninstalled', new InstallationGoneError(id(100))],
+  ['not served', new InstallationNotAdmittedError('suspended')],
+])(
+  'an installation that GitHub says is %s while the stored row is still active is the 404 of the tenant that is not there',
+  async (_state, refusal) => {
+    const world = await guardWorld();
+    world.fake.failNext('getOrgMembership', refusal);
+    const unknown = await world.ask('GET', '/t/installations/987654', 'admin1');
+    const answer = await world.ask('GET', `/t/installations/${world.tenants.t1}`, 'admin1');
+    expect(answer.statusCode).toBe(404);
+    expect(shapeOf(answer)).toEqual(shapeOf(unknown));
+    expect(world.reached).toEqual([]);
+    // Not an error of the server: no error-level line and no stack, and the warning names the numeric GitHub id only.
+    expect(world.logs.lines().filter((each) => Number(each['level']) >= 50)).toEqual([]);
+  },
+);
+
+test.each([
+  ['suspended', new InstallationSuspendedError(id(100))],
+  ['gone', new InstallationGoneError(id(100))],
+])(
+  'a tenant that GitHub says is %s is logged as a stale row, a warning with its GitHub id and nothing else',
+  async (reason, refusal) => {
+    const world = await guardWorld();
+    world.fake.failNext('getRepositoryPermission', refusal);
+    const answer = await world.ask('GET', `/t/repositories/${world.repositories.t1r1}`, 'repoAdmin1');
+    expect(answer.statusCode).toBe(404);
+    const warned = world.logs.lines().filter((each) => each['msg'] === 'installation_state_stale');
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toMatchObject({ level: 40, githubInstallationId: 100, reason });
+    expect(JSON.stringify(warned[0])).not.toMatch(/login-|org-1|stack/);
+  },
+);
 
 test('a probe that fails on the denial path is 502, not the 404 of "no role": the outage is not an answer', async () => {
   const world = await guardWorld();
