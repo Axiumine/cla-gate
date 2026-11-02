@@ -51,7 +51,7 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 | E05 | GitHub App core | BC-05 | 🔴 Must have | ⬜ Todo | 9 | [E05.md](epics/E05.md) |
 | E06 | Webhook intake | BC-05 | 🔴 Must have | ⬜ Todo | 7 | [E06.md](epics/E06.md) |
 | E07 | Job queue, concurrency and reconciliation | BC-04 | 🔴 Must have | ⬜ Todo | 10 | [E07.md](epics/E07.md) |
-| E08 | PR evaluation engine | BC-04 | 🔴 Must have | ⬜ Todo | 8 | [E08.md](epics/E08.md) |
+| E08 | PR evaluation engine | BC-04 | 🔴 Must have | ✅ Done | 8 | [E08.md](epics/E08.md) |
 | E09 | Check Run and PR comment reporting | BC-04 | 🔴 Must have | ⬜ Todo | 9 | [E09.md](epics/E09.md) |
 | E10 | Authentication and sessions | BC-02 | 🔴 Must have | ⬜ Todo | 8 | [E10.md](epics/E10.md) |
 | E11 | Authorization and tenant isolation | BC-02 | 🔴 Must have | ⬜ Todo | 8 | [E11.md](epics/E11.md) |
@@ -72,9 +72,9 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 
 | Status | Stories | Epics |
 |---|---|---|
-| ✅ Done | 39 | 3 |
+| ✅ Done | 47 | 4 |
 | ⏳ In progress | 1 | 2 |
-| ⬜ Todo | 158 | 18 |
+| ⬜ Todo | 150 | 17 |
 | Total | 198 | 23 |
 
 ## Dependency and sequencing
