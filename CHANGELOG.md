@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Epic E23 (Self-hosted CI runners) in the work queue, and a link to the CI runner policy at the end of the acceptance criteria of every story that writes CI jobs, containers, ports or test databases.
 - This changelog.
 - `CONTRIBUTING.md`: the pull request flow, the commit policy, the repository protection settings and the dependency licence rules, with the rule that every pull request adds a line under `[Unreleased]` in this changelog.
+- PR evaluation engine (`src/server/domain/evaluation`, E08): a pure, deterministic function that decides whether a pull request is covered by the active CLA from plain facts, recording the covering basis of every actor (signature or allowlist), unlinked commit identities with audited per-commit overrides, `Co-authored-by` trailers resolved from the GitHub noreply form, paging rules for pull requests of up to 2,000 commits (fail closed above), and a stored-details value (`pr_evaluations.details`) bounded at 256 KiB with numeric ids and codes only.
 
 ### Changed
 

@@ -39,12 +39,47 @@ const dynamicInto = (directory: string, message: string) => ({
  * Everything the pure domain layer may import: its own files (no `..` anywhere), src/shared, and zod. Any other
  * specifier matches this "not allowed" expression: Node built-ins (`node:fs`, `node:dns/promises`, `node:sqlite`), I/O
  * libraries, and every other layer (`../app.ts`, `../boot.ts`, `../config`, `../adapters`, `../services`). An allow-list
- * cannot be sidestepped by an I/O module nobody thought of.
+ * cannot be sidestepped by an I/O module nobody thought of. `extra` adds bare package names (a regex fragment that
+ * starts with `|`); only the domain tests use it, for the test runner.
  */
-const outsideDomain = String.raw`^(?!(?:\./(?!.*\.\.)|(?:\.\./)+shared/(?!.*\.\.)|zod(?:/|$)))`;
+const outsideDomainExcept = (extra: string): string =>
+  String.raw`^(?!(?:\./(?!.*\.\.)|(?:\.\./)+shared/(?!.*\.\.)|zod(?:/|$)${extra}))`;
+
+const outsideDomain = outsideDomainExcept('');
+const outsideDomainTest = outsideDomainExcept('|vitest$');
 
 /** Globals that reach the outside world, or the global object they hang from, without an import. */
 const impureGlobals = ['fetch', 'process', 'require', 'WebSocket', 'XMLHttpRequest', 'EventSource'];
+
+/** Clocks and randomness: the same facts must always give the same answer (E08-S01). Tests inject a seeded generator. */
+const nondeterministicGlobals = ['Date', 'Temporal', 'performance', 'crypto'];
+
+/** The rules of src/server/domain; a test file differs only in the one extra package it may import. */
+const domainRules = (importPattern: string): Linter.RulesRecord => ({
+  ...restrictImports({
+    regex: importPattern,
+    message: 'src/server/domain is pure: it imports only its own files, src/shared and zod.',
+  }),
+  ...restrictedSyntax(
+    { selector: 'ImportExpression', message: 'src/server/domain is pure: no dynamic import().' },
+    {
+      selector: 'MemberExpression[object.name=/^(?:globalThis|global|self|window)$/]',
+      message: 'src/server/domain is pure: it does not reach the outside world through the global object.',
+    },
+  ),
+  'no-restricted-globals': [
+    'error',
+    ...impureGlobals.map((name) => ({ name, message: 'src/server/domain is pure: no I/O and no process state.' })),
+    ...nondeterministicGlobals.map((name) => ({
+      name,
+      message: 'src/server/domain is pure: no clock and no randomness, the same facts give the same answer.',
+    })),
+  ],
+  'no-restricted-properties': [
+    'error',
+    { object: 'Math', property: 'random', message: 'src/server/domain is pure: no randomness.' },
+  ],
+});
 
 export const layerConfigs: Linter.Config[] = [
   {
@@ -71,22 +106,11 @@ export const layerConfigs: Linter.Config[] = [
   {
     // Decision logic only. Must come after src/server/**.
     files: ['src/server/domain/**'],
-    rules: {
-      ...restrictImports({
-        regex: outsideDomain,
-        message: 'src/server/domain is pure: it imports only its own files, src/shared and zod.',
-      }),
-      ...restrictedSyntax(
-        { selector: 'ImportExpression', message: 'src/server/domain is pure: no dynamic import().' },
-        {
-          selector: 'MemberExpression[object.name=/^(?:globalThis|global|self|window)$/]',
-          message: 'src/server/domain is pure: it does not reach the outside world through the global object.',
-        },
-      ),
-      'no-restricted-globals': [
-        'error',
-        ...impureGlobals.map((name) => ({ name, message: 'src/server/domain is pure: no I/O and no process state.' })),
-      ],
-    },
+    rules: domainRules(outsideDomain),
+  },
+  {
+    // The tests next to the domain code may also import the test runner, and nothing else beyond the domain rules.
+    files: ['src/server/domain/**/*.test.ts'],
+    rules: domainRules(outsideDomainTest),
   },
 ];

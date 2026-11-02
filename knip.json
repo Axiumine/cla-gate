@@ -1,6 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["scripts/*.ts!", "scripts/ci/*.ts", "scripts/dev/*.ts", "src/server/main.ts!", "src/server/migrate.ts!"],
+  "entry": [
+    "scripts/*.ts!",
+    "scripts/ci/*.ts",
+    "scripts/dev/*.ts",
+    "src/server/main.ts!",
+    "src/server/migrate.ts!",
+    "src/server/domain/evaluation/index.ts!",
+    "src/shared/pr-evaluation-details.ts!"
+  ],
   "project": [
     "scripts/**/*.ts!",
     "!scripts/code-caps/test-support.ts!",

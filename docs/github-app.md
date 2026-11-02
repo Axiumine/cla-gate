@@ -28,4 +28,4 @@ Gotchas worth remembering: the required check must have reported within 7 days t
 - Checks must be reported on the latest head SHA. "Re-run all checks" sends `check_suite.rerequested`, a single re-run sends `check_run.rerequested`: handle both (Checks: write covers them).
 - Supporting PR comments needs only Pull requests: write; `issue_comment` events need Issues: read.
 - The App supports multiple private keys: deploy the new key before deleting the old one.
-- Verify the noreply email form (`ID+login@users.noreply.github.com`) and the `web-flow` committer identity before using them to map emails.
+- The noreply email form (`ID+login@users.noreply.github.com` for accounts created after 2017-07-18, legacy `login@users.noreply.github.com` for older ones, which names no id and is never resolved) was checked against GitHub's documentation on 2026-11-02, and the `web-flow` committer is account id 19864447 (`GET /users/web-flow`, same day); the evaluation engine relies on both (E08-S02, E08-S06).

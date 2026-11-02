@@ -14,8 +14,12 @@ Items marked (planned) do not exist yet.
 │   │                            PGlite dialect and test helpers (test only, outside the build)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (also for failures that never
 │   │                            reach a route), HTTP limits, health routes
-│   └── domain/, services/       (planned) pure decision logic; orchestration
-├── src/shared/                  zod schemas shared by server and web (health, error body)
+│   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
+│   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
+│   │                            its public surface
+│   └── services/                (planned) orchestration
+├── src/shared/                  zod schemas shared by server and web (health, error body, the PR evaluation codes,
+│                                parts and stored-details schema `pr-evaluation-*.ts`)
 ├── src/web/                     (planned) React SPA
 ├── migrations/                  forward-only SQL, never edited after merge (001_initial.sql)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
