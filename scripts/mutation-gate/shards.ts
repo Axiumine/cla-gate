@@ -73,6 +73,11 @@ export const SCRIPTS_SHARD = 'scripts';
 /** Every shard of the gate in the order `yarn mutate` runs them, the scripts scope last. */
 export const SHARD_NAMES: readonly string[] = [...SERVER_SHARDS.map((shard) => shard.name), SCRIPTS_SHARD];
 
+/** The incremental file of a shard (the name of a server shard or `scripts`), relative to the repository root; the CI cache path. */
+export function incrementalFileOf(shard: string): string {
+  return `reports/stryker-incremental-${shard}.json`;
+}
+
 /** The server shard with this name, or an error that lists the valid ones (the scripts scope is not a server shard). */
 export function serverShard(name: string): Shard {
   const found = SERVER_SHARDS.find((shard) => shard.name === name);

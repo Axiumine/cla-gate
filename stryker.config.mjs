@@ -24,7 +24,13 @@
 // `--logLevel debug` is never used: it crashes with Vitest 5 (Stryker issue 6272).
 
 import process from 'node:process';
-import { MUTATE_EXCLUSIONS, serverShard, UNSHARDED_SERVER_GLOBS } from './scripts/mutation-gate/shards.ts';
+import {
+  incrementalFileOf,
+  MUTATE_EXCLUSIONS,
+  SCRIPTS_SHARD,
+  serverShard,
+  UNSHARDED_SERVER_GLOBS,
+} from './scripts/mutation-gate/shards.ts';
 
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 const SERVER_SCOPE = {
@@ -52,7 +58,7 @@ const SCRIPTS_SCOPE = {
     '!scripts/code-caps/*.test.ts',
     '!scripts/code-caps/test-support.ts',
   ],
-  incrementalFile: 'reports/stryker-incremental-scripts.json',
+  incrementalFile: incrementalFileOf(SCRIPTS_SHARD),
   // Under reports/mutation/<shard>/ so that each shard's artifact holds its own reports and no run overwrites another's.
   htmlReporter: { fileName: 'reports/mutation/scripts/index.html' },
   jsonReporter: { fileName: 'reports/mutation/scripts/mutation.json' },
@@ -66,7 +72,7 @@ const SCRIPTS_SCOPE = {
 function shardOptions(shard) {
   return {
     mutate: [...shard.mutate, ...MUTATE_EXCLUSIONS],
-    incrementalFile: `reports/stryker-incremental-${shard.name}.json`,
+    incrementalFile: incrementalFileOf(shard.name),
     htmlReporter: { fileName: `reports/mutation/${shard.name}/index.html` },
     jsonReporter: { fileName: `reports/mutation/${shard.name}/mutation.json` },
   };

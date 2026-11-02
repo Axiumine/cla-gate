@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import {
+  incrementalFileOf,
   MUTATE_EXCLUSIONS,
   SCRIPTS_SHARD,
   SERVER_SHARDS,
@@ -107,4 +108,10 @@ test('the shard lookup returns the shard by name and throws for anything else, l
       `STRYKER_SHARD must be unset or one of ${SERVER_SHARDS.map((shard) => shard.name).join(', ')}, not ${JSON.stringify(wrong)}`,
     );
   }
+});
+
+test('the incremental file of a shard is named after it under reports/, and no two shards share one', () => {
+  expect(incrementalFileOf('shared')).toBe('reports/stryker-incremental-shared.json');
+  expect(incrementalFileOf(SCRIPTS_SHARD)).toBe('reports/stryker-incremental-scripts.json');
+  expect(new Set(SHARD_NAMES.map(incrementalFileOf)).size).toBe(SHARD_NAMES.length);
 });

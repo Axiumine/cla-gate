@@ -63,7 +63,8 @@ permissions:
   contents: read
 
 # The event name is part of the group so that a queued nightly run is never replaced by a newer push to main (GitHub keeps
-# one pending run per group and cancels the rest).
+# one pending run per group and cancels the rest). The `mutation` job holds the group of a push to main for hours, and the
+# groups of different events overlap: see the comment on that job.
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -542,11 +543,22 @@ jobs:
   # check: it joins `static` and `coverage` only after it has been stable (E20-S13). It waits for `static`, because
   # mutating code that does not even pass the static checks is wasted time.
   #
-  # The shards are shared-runner time that other repositories use too, so at most two run at once (`max-parallel: 2`), the
-  # job does not run on pull requests (below), and one failed shard does not cancel the others (`fail-fast: false`): each
-  # has its own score and its own cache. A manual run can pick one shard (`shard` input, a `choice` that GitHub validates
-  # against its options; a test keeps the options, the list below and shards.ts equal); the matrix value only ever reaches
-  # the job through an environment variable, never a command line.
+  # The shards are shared-runner time that other repositories use too, so one workflow run starts at most two of them at
+  # once (`max-parallel: 2`), the job does not run on pull requests (below), and one failed shard does not cancel the others
+  # (`fail-fast: false`): each has its own score and its own cache. A manual run can pick one shard (`shard` input, a `choice`
+  # that GitHub validates against its options; a test keeps the options, the list below and shards.ts equal); the matrix
+  # value only ever reaches the job through an environment variable, never a command line.
+  #
+  # What `max-parallel` does not do, accepted on 2026-11-02: it limits one workflow run, not the repository. The concurrency
+  # group of the workflow is `ci-<event>-<ref>`, so a push to main, a tag push, the nightly run and a manual run are
+  # different groups and can overlap, each with its own two shards; two overlapping runs ask for four runners while the
+  # organisation has three, and the jobs of other repositories and the `static` and `coverage` of this one wait behind
+  # them. Stopping the older run would throw away hours of work, and one group for all events would cancel shards, so the
+  # overlap is accepted and not prevented. The same group has a second consequence: a push to main holds its group while
+  # its shards run (hours), so the next push to main waits as the pending run and a third push replaces that pending run,
+  # which can cancel a post-merge run of main (`static`, `coverage`, ...) before it starts. Every pull request ran its own
+  # checks before the merge, and a cancelled run can be re-run from the Actions tab. Both are listed in docs/ci-runners.md
+  # (Known unknowns and risks) and in the Open line of E20-S04.
   #
   # Every shard has its own incremental file, restored from a cache whose key starts with the shard name and a hash of
   # everything that makes an old result untrustworthy (the lockfile, Node, the Stryker config, the Vitest configs, the tsconfig
@@ -642,6 +654,13 @@ jobs:
           path: reports/stryker-incremental-${{ matrix.shard }}.json
           key: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-
+      # Stryker rethrows every error but "no such file" when it reads the incremental file, so a file that is cut short stops
+      # the run before its first mutant, every time. The check deletes such a file (scripts/mutation-gate/incremental-file.ts);
+      # the shard starts cold instead of failing at start-up.
+      - name: Check the restored Stryker incremental file
+        env:
+          STRYKER_SHARD: ${{ matrix.shard }}
+        run: yarn mutate:check-incremental
       # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command;
       # the shard reaches the runner the same way (STRYKER_SHARD), and `yarn mutate:shard` checks it against the shard list.
       - name: Mutation tests
@@ -656,6 +675,14 @@ jobs:
           else
             yarn mutate:shard
           fi
+      # A run that is stopped twice (Stryker exits at once on a second signal) can leave half a file, and the save below would
+      # store it under the newest key, the one every later run restores. A file that cannot be read is deleted here, so nothing
+      # is saved and the next run restores the previous cache.
+      - name: Check the Stryker incremental file before the save
+        if: ${{ always() }}
+        env:
+          STRYKER_SHARD: ${{ matrix.shard }}
+        run: yarn mutate:check-incremental
       # Also after a failed, stopped or timed-out run: the results of the mutants that did finish are what the next run
       # continues from. A save that finds no file, or a key that exists, only warns.
       - name: Save the Stryker incremental file

@@ -16,7 +16,9 @@ import { SHARD_NAMES } from './shards.ts';
 
 const job = ciJob('mutation');
 const RESTORE = 'Restore the Stryker incremental file';
+const CHECK_RESTORED = 'Check the restored Stryker incremental file';
 const RUN = 'Mutation tests';
+const CHECK_BEFORE_SAVE = 'Check the Stryker incremental file before the save';
 const SAVE = 'Save the Stryker incremental file';
 const UPLOAD = 'Upload the mutation report';
 const ciText = repoText('.github/workflows/ci.yml');
@@ -47,6 +49,7 @@ const workflow = z
       }),
       schedule: z.array(z.object({ cron: z.string() })),
     }),
+    concurrency: z.object({ group: z.string(), 'cancel-in-progress': z.string() }),
     jobs: z.object({
       mutation: z.object({
         strategy: z
@@ -87,6 +90,28 @@ test('the matrix runs every shard, one failed shard does not stop the others, an
   expect(ciText).toMatch(/max-parallel: 2\n/);
 });
 
+test('max-parallel limits one workflow run, not the repository, and the documents say so and name the two consequences of the concurrency group', () => {
+  // The group is per event and ref (and a pull request is the only run that cancels): a push to main, a tag, the nightly run
+  // and a manual run are different groups, each with its own matrix of two shards at a time, and a push to main holds its
+  // group for as long as its shards run.
+  expect(workflow.concurrency.group).toBe(`ci-${expression('github.event_name')}-${expression('github.ref')}`);
+  expect(workflow.concurrency['cancel-in-progress']).toBe(expression("github.event_name == 'pull_request'"));
+  const runners = readText('docs/ci-runners.md');
+  const row = runners.split('\n').find((line) => line.startsWith('| `mutation`')) ?? '';
+  expect(row).toContain('one workflow run holds at most two of the three shared runners');
+  expect(row).toContain('the limit is per run');
+  expect(runners).not.toMatch(/never holds more than two/);
+  expect(ciText).not.toMatch(/never holds more than two/);
+  expect(ciText).toContain('it limits one workflow run, not the repository');
+  const risk =
+    runners.split('\n').find((line) => line.startsWith('- **The mutation matrix and the shared runners')) ?? '';
+  expect(risk).toContain('different groups and can overlap');
+  expect(risk).toContain('two overlapping runs ask for four runners while the organisation has three');
+  expect(risk).toContain('the next push waits as the pending run and a third push replaces that pending run');
+  expect(risk).toContain('can be cancelled before it starts');
+  expect(ciText).toContain('the next push to main waits as the pending run and a third push replaces that pending run');
+});
+
 test('the matrix is every shard of shards.ts, or the one shard a manual run picked, and the picked value is never spliced into a command', () => {
   const list = JSON.stringify(SHARD_NAMES);
   expect(strategy.matrix.shard).toBe(
@@ -125,7 +150,7 @@ test('the job asks for no more than contents: read, holds no secret, stays off p
   expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
 });
 
-test('the steps are the standard Node and Yarn setup, the restore, the run, the save and the upload, in that order', () => {
+test('the steps are the standard Node and Yarn setup, the restore and its check, the run, the check and the save, and the upload, in that order', () => {
   expect(job.steps.map((each) => each.name)).toEqual([
     'Preflight (runner capabilities)',
     'Keep tool state in the runner temp directory',
@@ -135,7 +160,9 @@ test('the steps are the standard Node and Yarn setup, the restore, the run, the 
     'Restore the Yarn cache',
     'Install dependencies',
     RESTORE,
+    CHECK_RESTORED,
     RUN,
+    CHECK_BEFORE_SAVE,
     SAVE,
     UPLOAD,
   ]);
@@ -209,8 +236,30 @@ test('the incremental file is saved after the run, whatever happened to it, unde
   expect(save.if).toBe(expression('always()'));
   expect(save.with).toEqual({ path: restore.with?.['path'], key: restore.with?.['key'] });
   const names = job.steps.map((each) => each.name);
-  expect(names.indexOf(SAVE)).toBe(names.indexOf(RUN) + 1);
+  expect(names.indexOf(SAVE)).toBe(names.indexOf(CHECK_BEFORE_SAVE) + 1);
+  expect(names.indexOf(CHECK_BEFORE_SAVE)).toBe(names.indexOf(RUN) + 1);
   expect(names.indexOf(RESTORE)).toBeLessThan(names.indexOf(RUN));
+});
+
+test('a file Stryker cannot read is deleted after the restore and again before the save, so that the cache never keeps a broken file', () => {
+  // Stryker rethrows every read error but "no such file", so a cut-short file stops each later run at start-up, and the save
+  // step would store the restored file again under the newest cache name. scripts/mutation-gate/incremental-file.ts has the check.
+  const names = job.steps.map((each) => each.name);
+  expect(names.indexOf(CHECK_RESTORED)).toBe(names.indexOf(RESTORE) + 1);
+  expect(names.indexOf(CHECK_RESTORED)).toBe(names.indexOf(RUN) - 1);
+  for (const checking of [step(CHECK_RESTORED), step(CHECK_BEFORE_SAVE)]) {
+    expect(checking.run).toBe('yarn mutate:check-incremental');
+    expect(checking.env).toEqual({ STRYKER_SHARD: SHARD });
+    expect(checking.uses).toBeUndefined();
+  }
+  // After the restore it runs when the job is healthy; before the save it also runs after a failed, stopped or timed-out run.
+  expect(step(CHECK_RESTORED).if).toBeUndefined();
+  expect(step(CHECK_BEFORE_SAVE).if).toBe(expression('always()'));
+});
+
+test('yarn mutate:check-incremental runs the check script', () => {
+  const manifest = z.object({ scripts: z.record(z.string(), z.string()) }).parse(JSON.parse(readText('package.json')));
+  expect(manifest.scripts['mutate:check-incremental']).toBe('node scripts/mutation-gate/check-incremental.ts');
 });
 
 test('the cache actions are pinned by full commit SHA with their version in the comment, restore and save at the same release', () => {
@@ -250,7 +299,7 @@ test('the shard reaches the run as STRYKER_SHARD, and the run is stopped by a bu
   expect(Number(env['MUTATE_BUDGET_MINUTES'])).toBeGreaterThanOrEqual(30);
 });
 
-test('the matrix value appears in no command: only as a name, a path, a cache key and the STRYKER_SHARD variable', () => {
+test('the matrix value appears in no command: only as a name, a path, a cache key and the STRYKER_SHARD variable of the run and of the two checks', () => {
   expect(job.steps.filter((each) => (each.run ?? '').includes('matrix'))).toEqual([]);
   const lines = ciText
     .split('\n')
@@ -258,7 +307,19 @@ test('the matrix value appears in no command: only as a name, a path, a cache ke
     .map((line) => line.trim().split(':')[0]);
   const byName = (a: string | undefined, b: string | undefined) => String(a).localeCompare(String(b));
   expect(lines.toSorted(byName)).toEqual(
-    ['STRYKER_SHARD', 'key', 'key', 'name', 'name', 'path', 'path', 'path', 'restore-keys'].toSorted(byName),
+    [
+      'STRYKER_SHARD',
+      'STRYKER_SHARD',
+      'STRYKER_SHARD',
+      'key',
+      'key',
+      'name',
+      'name',
+      'path',
+      'path',
+      'path',
+      'restore-keys',
+    ].toSorted(byName),
   );
 });
 
