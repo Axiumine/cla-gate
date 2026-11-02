@@ -60,13 +60,16 @@ test('every case of the application holds for the operator', async () => {
   expect(world.app.routeAccess.some((entry) => entry.access === 'operator')).toBe(true);
 });
 
-const LEAKY_OPERATOR_PATH = '/canary/leaky/operator/installations/:installationId';
+// The start-up check refuses an operator route that names a tenant parameter (route-access.ts), so the leaky route here calls
+// its parameter something else: the check is by name, and this is the route that gets past it. The matrix finds it by what it
+// answers.
+const LEAKY_OPERATOR_PATH = '/canary/leaky/operator/installations/:account';
 
 const LEAKY_OPERATOR_CASE: CrossTenantCase = {
   endpointClass: 'installation_read',
   request: (target) => ({
     method: 'GET',
-    url: LEAKY_OPERATOR_PATH.replace(':installationId', String(target.installationId)),
+    url: LEAKY_OPERATOR_PATH.replace(':account', String(target.installationId)),
   }),
 };
 
@@ -74,7 +77,7 @@ test('the check fails, naming the route, on a route that hands tenant data to th
   const world = await operatorWorld();
   world.app.get(LEAKY_OPERATOR_PATH, { config: { access: 'operator' } }, () => ({ tenant: 'data' }));
   await expect(assertOperatorCase(world, `GET ${LEAKY_OPERATOR_PATH}`, LEAKY_OPERATOR_CASE)).rejects.toThrow(
-    /GET \/canary\/leaky\/operator\/installations\/:installationId \(the operator\)/,
+    /GET \/canary\/leaky\/operator\/installations\/:account \(the operator\)/,
   );
 });
 

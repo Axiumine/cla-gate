@@ -74,7 +74,11 @@ export const WEBHOOK_ROUTES: readonly string[] = [`POST ${WEBHOOK_PATH}`];
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** The path parameters that name a tenant resource: a route with one of them is a tenant route, never `authenticated`. `:githubRepoId` is not one (the resolver of E11-S05 reads it). */
+/**
+ * The path parameters that name a tenant resource: a route with one of them is a tenant route, never `authenticated`,
+ * `operator` (who sees the list of installations and nothing inside one, E11-S08) or `public`. `:githubRepoId` is not one
+ * (the resolver of E11-S05 reads it).
+ */
 const TENANT_PARAMETER = /:(installationId|repositoryId|documentId|signatureId|entryId)(?!\w)/i;
 
 function isTenantDeclaration(access: unknown): boolean {
@@ -94,6 +98,9 @@ function malformedProblem(name: string, access: unknown): string {
     : `route ${name} declares a config.access that is not one of ${ACCESS_KINDS.join(', ')}`;
 }
 
+/** The kinds of route that have no tenant: a tenant parameter in the path of one of them is a tenant route that forgot its guard. */
+const TENANTLESS_KINDS: readonly string[] = ['authenticated', 'operator', 'public'];
+
 /** What is wrong with a declaration that is well formed, for the one route `method url`. */
 function kindProblem(method: string, url: string, access: RouteAccess): string | undefined {
   const name = `${method} ${url}`;
@@ -102,11 +109,11 @@ function kindProblem(method: string, url: string, access: RouteAccess): string |
       ? undefined
       : `route ${name} declares config.access 'webhook' but is not in WEBHOOK_ROUTES`;
   }
-  if (access === 'authenticated') {
+  if (typeof access === 'string' && TENANTLESS_KINDS.includes(access)) {
     const parameter = TENANT_PARAMETER.exec(url)?.[0];
     return parameter === undefined
       ? undefined
-      : `route ${name} is authenticated but its path has the tenant parameter ${parameter}; declare it as a tenant route`;
+      : `route ${name} is ${access} but its path has the tenant parameter ${parameter}; declare it as a tenant route`;
   }
   return typeof access === 'object' && access.mode === 'read' && MUTATING_METHODS.has(method)
     ? `route ${name} is a tenant route that changes data, so its mode must be 'write'`
@@ -116,8 +123,8 @@ function kindProblem(method: string, url: string, access: RouteAccess): string |
 /**
  * What is wrong with the access declaration of one route, or `undefined` when nothing is. `access` is `unknown` on purpose:
  * a value that slipped past the types (`'admin'`, a tenant route with no mode) is caught here. A route may be
- * `webhook` only when it is on {@link WEBHOOK_ROUTES}, may not be `authenticated` when its path has a tenant parameter,
- * and a `tenant` route that changes data must be `write`.
+ * `webhook` only when it is on {@link WEBHOOK_ROUTES}, may not be `authenticated`, `operator` or `public` when its path
+ * has a tenant parameter, and a `tenant` route that changes data must be `write`.
  * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
  */
 export function accessProblem(method: string, url: string, access: unknown): string | undefined {

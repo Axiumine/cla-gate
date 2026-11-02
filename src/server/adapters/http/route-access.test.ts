@@ -36,7 +36,6 @@ test.each([
     'GET /api/x/:installationIdentifier',
     'authenticated',
   ],
-  ['a public route with a tenant parameter, which the public list pins anyway', 'GET /api/x/:installationId', 'public'],
 ])('%s is fine', (_name, route, access) => {
   expect(problemOf(route, access)).toBeUndefined();
 });
@@ -111,7 +110,7 @@ test.each([
   );
 });
 
-test.each([
+const TENANT_PARAMETER_ROUTES = [
   ['installationId', 'GET /api/installations/:installationId/signatures'],
   ['repositoryId', 'GET /api/repositories/:repositoryId'],
   ['documentId', 'POST /api/documents/:documentId/versions'],
@@ -122,13 +121,38 @@ test.each([
   ['installationId with a pattern', 'GET /api/installations/:installationId(^\\d+$)/x'],
   ['installationId next to another parameter', 'GET /api/x/:installationId-:other'],
   ['repositoryId in the middle of a path', 'GET /api/x/:other/:repositoryId/y'],
-])('an authenticated route with the tenant parameter :%s is refused', (name, route) => {
+] as const;
+
+test.each(TENANT_PARAMETER_ROUTES)('an authenticated route with the tenant parameter :%s is refused', (name, route) => {
   const parameter = `:${name.split(' ')[0]}`;
-  const message = problemOf(route, 'authenticated');
-  expect(message).toBe(
+  expect(problemOf(route, 'authenticated')).toBe(
     `route ${route} is authenticated but its path has the tenant parameter ${parameter}; declare it as a tenant route`,
   );
 });
+
+// An operator sees the list of installations and nothing inside one (E11-S08), and a public route has no viewer at all: a
+// tenant parameter on either is a tenant route that forgot its guard, so it does not start.
+test.each(TENANT_PARAMETER_ROUTES)('an operator route with the tenant parameter :%s is refused', (name, route) => {
+  const parameter = `:${name.split(' ')[0]}`;
+  expect(problemOf(route, 'operator')).toBe(
+    `route ${route} is operator but its path has the tenant parameter ${parameter}; declare it as a tenant route`,
+  );
+});
+
+test.each(TENANT_PARAMETER_ROUTES)('a public route with the tenant parameter :%s is refused', (name, route) => {
+  const parameter = `:${name.split(' ')[0]}`;
+  expect(problemOf(route, 'public')).toBe(
+    `route ${route} is public but its path has the tenant parameter ${parameter}; declare it as a tenant route`,
+  );
+});
+
+test.each(['public', 'operator'] as const)(
+  'a %s route whose parameter only starts like a tenant one is fine',
+  (kind) => {
+    expect(problemOf('GET /api/x/:installationIdentifier', kind)).toBeUndefined();
+    expect(problemOf('GET /api/x/:githubRepoId', kind)).toBeUndefined();
+  },
+);
 
 test('the same paths are fine as tenant routes: that is where the tenant parameters belong', () => {
   expect(problemOf('GET /api/installations/:installationId/signatures', READ)).toBeUndefined();
