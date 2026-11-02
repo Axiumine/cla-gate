@@ -5,7 +5,7 @@ import { parseGithubId } from '../../shared/github-id.ts';
 import { createLogger } from '../adapters/http/logger.ts';
 import { JOB_TYPES } from '../domain/job-envelope.ts';
 import { HandlerMissingError, HandlerRegisteredError, HandlerRegistry } from './job-registry.ts';
-import { completing, IDS, queuedJob, recording } from './job-run-fixture/test-support.ts';
+import { completing, FakePendingJobs, IDS, queuedJob, recording } from './job-run-fixture/test-support.ts';
 
 // The handler registry (E07-S03): one handler per job type, registered by whoever owns the job.
 
@@ -14,6 +14,7 @@ const context = {
   attempt: 0,
   signal: queuedJob(null).signal,
   logger: createLogger({ logLevel: 'silent' }),
+  pending: new FakePendingJobs(),
 };
 const SYNC = { type: 'sync-installation', githubInstallationId: parseGithubId(IDS.installation) } as const;
 

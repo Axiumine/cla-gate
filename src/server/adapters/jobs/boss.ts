@@ -65,11 +65,21 @@ export interface Boss {
   getBamStatus(): Promise<readonly { readonly status: string; readonly count: number }[]>;
   /** The id of the job, or `null` when nothing was inserted (the id exists, or a throttle window or a queue policy refused it). */
   send(name: string, data: object, options: SendOptions): Promise<string | null>;
+  /**
+   * The jobs of the queue that match every option given: the `id`, or the `data` the job's payload contains (a JSON
+   * containment, so `{ prNumber: 7 }` matches a payload with more fields), and with `queued` only the jobs that wait, which
+   * are `created` and `retry` and not `active` (E07-S06). Oldest first, 1,000 at most.
+   */
   findJobs(
     name: string,
-    options: { readonly id: string; readonly db: Db },
-  ): Promise<readonly { readonly state: string }[]>;
+    options: { readonly id?: string; readonly data?: object; readonly queued?: boolean; readonly db?: Db },
+  ): Promise<readonly { readonly id: string; readonly state: string }[]>;
   deleteJob(name: string, id: string, options: { readonly db: Db }): Promise<unknown>;
+  /**
+   * Cancels the jobs of the queue under these ids, which have not finished: pg-boss moves any job below `completed` to
+   * `cancelled`, a running one included, so the caller selects what it cancels (E07-S06).
+   */
+  cancel(name: string, ids: string[]): Promise<unknown>;
 }
 
 /** The size of pg-boss's own connection pool: it is separate from the application's, so the workers never starve a request. */

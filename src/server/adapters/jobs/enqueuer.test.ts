@@ -34,6 +34,8 @@ const EVALUATION: Job = {
   deliveryId: GUID,
 };
 
+/** The id pg-boss gives the row that is found: the adapter reads its state and does not look at the id. */
+const JOB_ID_OF_THE_ROW = jobIdFor(GUID);
 const KEY: EnqueueOptions = { idempotencyKey: GUID };
 /** The connection of the transaction: its identity is not what the tests look at, that it is passed is. */
 const SOME_CONNECTION: unknown = expect.anything();
@@ -124,7 +126,7 @@ test.each([['created'], ['retry'], ['active']])(
   async (state) => {
     const boss = fakeBoss();
     boss.send.mockResolvedValueOnce(null);
-    boss.findJobs.mockResolvedValueOnce([{ state }]);
+    boss.findJobs.mockResolvedValueOnce([{ id: JOB_ID_OF_THE_ROW, state }]);
     const outcome = await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, KEY));
     expect(outcome).toBe('already_queued');
     expect(boss.findJobs).toHaveBeenCalledExactlyOnceWith('sync-installation', {
@@ -149,7 +151,7 @@ test.each([['completed'], ['failed'], ['cancelled']])(
   async (state) => {
     const boss = fakeBoss();
     boss.send.mockResolvedValueOnce(null).mockResolvedValueOnce('new-job');
-    boss.findJobs.mockResolvedValueOnce([{ state }]);
+    boss.findJobs.mockResolvedValueOnce([{ id: JOB_ID_OF_THE_ROW, state }]);
     const outcome = await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, KEY));
     expect(outcome).toBe('queued');
     expect(boss.deleteJob).toHaveBeenCalledExactlyOnceWith('sync-installation', jobIdFor(GUID), {
@@ -163,7 +165,7 @@ test.each([['completed'], ['failed'], ['cancelled']])(
 test('a finished job removed and the new send dropped by a window: deduplicated', async () => {
   const boss = fakeBoss();
   boss.send.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-  boss.findJobs.mockResolvedValueOnce([{ state: 'failed' }]);
+  boss.findJobs.mockResolvedValueOnce([{ id: JOB_ID_OF_THE_ROW, state: 'failed' }]);
   expect(await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, KEY))).toBe('deduplicated');
   expect(boss.deleteJob).toHaveBeenCalledOnce();
 });

@@ -7,6 +7,7 @@ import { DELIVERY_ID, IDS, JOBS } from '../../domain/test-support.ts';
 import { captureLogs } from '../../test-support.ts';
 import { HandlerRegistry, type JobHandler } from '../job-registry.ts';
 import type { JobRunDeps, QueuedJob } from '../job-run.ts';
+import type { PendingJobs, PendingWorkTarget } from '../ports/jobs.ts';
 import { FakeClock } from '../test-support.ts';
 
 // What the tests of the job wrapper and of the handlers share (E07-S03): a registry, a captured log, a clock that moves by
@@ -16,6 +17,21 @@ export { DELIVERY_ID, IDS, JOBS };
 
 const START = '2026-11-02T10:00:00Z';
 
+/** The queue as a handler sees it, in memory: what it was asked to cancel, in order, and how many jobs it says it cancelled (E07-S06). */
+export class FakePendingJobs implements PendingJobs {
+  readonly targets: PendingWorkTarget[] = [];
+  /** What `cancelForPullRequest` resolves with; a test sets it. */
+  cancelled = 0;
+  /** What it does when it is asked, besides noting the target: nothing, unless a test says so. */
+  behaviour: ((target: PendingWorkTarget) => Promise<void>) | undefined;
+
+  async cancelForPullRequest(target: PendingWorkTarget): Promise<number> {
+    this.targets.push(target);
+    await this.behaviour?.(target);
+    return this.cancelled;
+  }
+}
+
 export interface RunWorld {
   readonly deps: JobRunDeps;
   readonly registry: HandlerRegistry;
@@ -23,6 +39,7 @@ export interface RunWorld {
   readonly logs: ReturnType<typeof captureLogs>;
   /** The delivery ids `markDeliveryProcessed` was called with, in order. */
   readonly marked: string[];
+  readonly pending: FakePendingJobs;
 }
 
 /** A wrapper world whose registry has the handlers given; `markDeliveryProcessed` records into `marked` unless replaced. */
@@ -35,9 +52,11 @@ export function runWorld(
   const logs = captureLogs();
   const clock = new FakeClock(START);
   const marked: string[] = [];
+  const pending = new FakePendingJobs();
   const deps: JobRunDeps = {
     registry,
     clock,
+    pending,
     logger: createLogger({ logLevel: 'info' }, logs.destination),
     markDeliveryProcessed:
       mark ??
@@ -46,7 +65,7 @@ export function runWorld(
         return Promise.resolve();
       }),
   };
-  return { deps, registry, clock, logs, marked };
+  return { deps, registry, clock, logs, marked, pending };
 }
 
 /** A job as the queue hands it over: attempt 0 and a signal that has not aborted, unless overridden. */

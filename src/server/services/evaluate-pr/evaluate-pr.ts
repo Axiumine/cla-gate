@@ -6,7 +6,7 @@ import type { JobOutcome } from '../job-registry.ts';
 import { isInstallationUnavailable } from '../ports/installation-unavailable.ts';
 import { evaluateOpen, evaluationKey } from './evaluate-open.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
-import { type EvaluationKey, findEvaluation } from './evaluation-rows.ts';
+import { type EvaluationKey, findEvaluation, type StoredResult } from './evaluation-rows.ts';
 import { loadTenant, resolveRepository } from './evaluation-tenant.ts';
 
 // The `evaluate-pr` job (E07-S04): the protocol around the pure engine. The job names a pull request by numeric ids and is
@@ -25,9 +25,11 @@ const skipped = (logger: Logger, reason: string): JobOutcome => {
   return { outcome: `skipped:${reason}` };
 };
 
-/** A final result: the verdict is written and the run is over. */
-const isFinal = (result: 'in_progress' | 'success' | 'failure'): boolean =>
-  result === 'success' || result === 'failure';
+/**
+ * A final result: the verdict is written and the run is over. A `cancelled` row is not final: the pull request was closed
+ * before the evaluation finished (E07-S06), and when it is reopened it is evaluated like any other.
+ */
+const isFinal = (result: StoredResult): boolean => result === 'success' || result === 'failure';
 
 /**
  * The idempotency rule: a delivery of `pull_request` for a head SHA that already has a final result and a Check Run is

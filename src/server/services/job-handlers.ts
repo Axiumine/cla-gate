@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../shared/github-id.ts';
 import type { JobType } from '../domain/job-envelope.ts';
+import { closePr } from './close-pr/close-pr.ts';
 import { evaluatePr } from './evaluate-pr/evaluate-pr.ts';
 import type { EvaluatePrPorts } from './evaluate-pr/evaluate-pr-ports.ts';
 import type { SyncOutcome } from './installation-sync-model.ts';
@@ -36,9 +37,10 @@ export interface HandlerDeps {
     | ((githubInstallationId: GithubId, signal: AbortSignal) => Promise<SyncOutcome>)
     | undefined;
   /**
-   * What the `evaluate-pr` job runs on, for one job (E07-S04): its GitHub client is bound to the `signal` of the job, so a
-   * job that is being shut down does not hold the process on a request. Undefined when the application has no GitHub App
-   * or no reporter (the reporter is E09): the handler then fails every job and keeps its delivery for a redelivery.
+   * What the `evaluate-pr` job runs on, for one job (E07-S04), and the `close-pr` job as well (E07-S06, which uses the part
+   * of it that is not the engine): its GitHub client is bound to the `signal` of the job, so a job that is being shut down
+   * does not hold the process on a request. Undefined when the application has no GitHub App or no reporter (the reporter
+   * is E09): the handlers then fail every job and keep its delivery for a redelivery.
    */
   readonly evaluatePr: ((signal: AbortSignal) => EvaluatePrPorts) | undefined;
 }
@@ -62,6 +64,11 @@ function evaluatePrHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): JobHa
   return (job, { signal, attempt, logger }) => evaluatePr(ports(signal), job, { attempt, logger });
 }
 
+/** `close-pr`: the numbers of the payload are keys only, the state of the pull request is read now (E07-S06). */
+function closePrHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): JobHandler<'close-pr'> {
+  return (job, { signal, logger, pending }) => closePr(ports(signal), job, { logger, pending });
+}
+
 /**
  * Binds the handlers of the delivery-driven jobs (`evaluate-pr`, `evaluate-head-sha`, `close-pr`, `recheck-comment`,
  * `sync-installation`) and of the two the scheduler starts (`sweep`, `sweep-installation`). The ones whose story is not
@@ -82,7 +89,12 @@ export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): 
       : evaluatePrHandler(deps.evaluatePr),
   );
   registry.register('evaluate-head-sha', unavailable('evaluate-head-sha', 'its handler is built by E07-S07'));
-  registry.register('close-pr', unavailable('close-pr', 'its handler is built by E07-S06'));
+  registry.register(
+    'close-pr',
+    deps.evaluatePr === undefined
+      ? unavailable('close-pr', 'no GitHub App or no evaluation reporter (E09) is configured')
+      : closePrHandler(deps.evaluatePr),
+  );
   registry.register('recheck-comment', unavailable('recheck-comment', 'its handler is built by E07-S07'));
   registry.register('sweep', unavailable('sweep', 'its handler is built by E07-S08'));
   registry.register('sweep-installation', unavailable('sweep-installation', 'its handler is built by E07-S08'));

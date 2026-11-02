@@ -225,3 +225,30 @@ test('a signal that aborted before the stop began (the job expired) is not count
   workers.beginStop();
   expect(workers.outcome()).toBe('drained');
 });
+
+test('a handler is given the queue it runs on: what it cancels through its context is cancelled on the pg-boss the workers were started on', async () => {
+  const { workers, boss } = world((registry) => {
+    registry.register('close-pr', async (job, { pending }) => {
+      const cancelled = await pending.cancelForPullRequest({
+        githubInstallationId: job.githubInstallationId,
+        githubRepoId: job.githubRepoId,
+        prNumber: job.prNumber,
+        headShas: [],
+      });
+      return { outcome: `cancelled ${cancelled}` };
+    });
+  });
+  boss.findJobs.mockResolvedValueOnce([{ id: 'queued-1', state: 'created' }]);
+  await workers.start(boss);
+  const [result] = await workerOf(boss, 'close-pr').handler([job(JOBS.closePr)]);
+  expect(result).toMatchObject({ status: 'completed', output: { outcome: 'cancelled 1' } });
+  expect(boss.findJobs).toHaveBeenCalledWith('evaluate-pr', {
+    data: {
+      githubInstallationId: JOBS.closePr.githubInstallationId,
+      githubRepoId: JOBS.closePr.githubRepoId,
+      prNumber: JOBS.closePr.prNumber,
+    },
+    queued: true,
+  });
+  expect(boss.cancel).toHaveBeenCalledExactlyOnceWith('evaluate-pr', ['queued-1']);
+});

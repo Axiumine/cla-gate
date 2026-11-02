@@ -26,6 +26,9 @@ import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts'
 /** Why a failure is reported (E07-S05): the code of `EvaluationReporter.failed`. */
 type ReportFailureCode = Parameters<EvaluationReporter['failed']>[1];
 
+/** What a cancellation is about (E07-S06): the target of `EvaluationReporter.cancelled`. */
+type CancelTarget = Parameters<EvaluationReporter['cancelled']>[0];
+
 // The world of the tests of the `evaluate-pr` job (E07-S04): a migrated database with one tenant, a FakeGitHub that serves
 // its installation, repository, pull request and commits, a FakeReporter, an evaluator that is a stub unless a test brings the
 // real one, and a timeline in which the calls to GitHub, the statements on the database and the steps of the job fall in
@@ -87,6 +90,7 @@ export interface ReporterHooks {
   started?: ((target: ReportTarget) => Promise<void>) | undefined;
   publish?: ((target: ReportTarget, evaluation: Evaluation) => Promise<void>) | undefined;
   failed?: ((target: ReportTarget, code: ReportFailureCode) => Promise<void>) | undefined;
+  cancelled?: ((target: CancelTarget) => Promise<void>) | undefined;
 }
 
 /** The reporter in memory: every report it was given, in order, and an optional behaviour for each method (E07-S04). */
@@ -95,6 +99,8 @@ export class FakeReporter implements EvaluationReporter {
   readonly published: { readonly target: ReportTarget; readonly evaluation: Evaluation }[] = [];
   /** The failures reported (E07-S05), in order. */
   readonly failures: { readonly target: ReportTarget; readonly code: ReportFailureCode }[] = [];
+  /** The pull requests reported as closed (E07-S06), in order. */
+  readonly cancellations: CancelTarget[] = [];
   readonly hooks: ReporterHooks = {};
   readonly #timeline: string[];
 
@@ -118,6 +124,12 @@ export class FakeReporter implements EvaluationReporter {
     this.#timeline.push('reporter.failed');
     this.failures.push({ target, code });
     await this.hooks.failed?.(target, code);
+  }
+
+  async cancelled(target: CancelTarget): Promise<void> {
+    this.#timeline.push('reporter.cancelled');
+    this.cancellations.push(target);
+    await this.hooks.cancelled?.(target);
   }
 }
 

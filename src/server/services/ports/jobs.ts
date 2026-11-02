@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Transaction } from 'kysely';
+import type { GithubId } from '../../../shared/github-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import type { Job } from '../../domain/jobs.ts';
 
@@ -38,6 +39,32 @@ export interface JobEnqueuer {
    * `'deduplicated'` when nothing was sent because of `options`; rejects when the send failed, and the caller rolls back.
    */
   enqueue(tx: Transaction<Database>, job: Job, options: EnqueueOptions): Promise<EnqueueOutcome>;
+}
+
+/**
+ * The pull request whose queued work is dropped (E07-S06). The ids are the ones of the jobs' envelopes: the installation
+ * is part of the match, so a repository id that belongs to another installation never selects its jobs.
+ */
+export interface PendingWorkTarget {
+  readonly githubInstallationId: GithubId;
+  readonly githubRepoId: GithubId;
+  readonly prNumber: number;
+  /**
+   * The head SHAs the pull request has had. An `evaluate-head-sha` job names a head SHA and no pull request, so the jobs of
+   * a pull request are the ones that name one of its head SHAs.
+   */
+  readonly headShas: readonly string[];
+}
+
+/** What the handler of a closed pull request needs of the queue (E07-S06): to drop the jobs that wait for it. */
+export interface PendingJobs {
+  /**
+   * Cancels the `evaluate-pr` and `recheck-comment` jobs of the pull request and the `evaluate-head-sha` jobs of its head
+   * SHAs that are waiting, which are the queued ones and the ones waiting to be retried. A job that is running is not
+   * touched: it ends itself when it finds the pull request closed. Safe to call again: a second call finds nothing.
+   * @returns how many jobs were cancelled.
+   */
+  cancelForPullRequest(target: PendingWorkTarget): Promise<number>;
 }
 
 /**

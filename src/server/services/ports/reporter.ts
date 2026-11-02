@@ -7,7 +7,7 @@ import type { JobEnvelope } from '../../domain/job-envelope.ts';
 // What the evaluation job (E07-S04) needs of the code that writes the Check Run and the pull request comment. The reporter
 // is E09: this file is the port the job calls, `FakeReporter` (`services/evaluate-pr/test-support.ts`) the double the job is
 // tested with, and E09-S05 the implementation the composition root binds. A later story adds its method here with its row
-// in the fake (`cancelled` for E07-S06).
+// in the fake (`failed` came with E07-S05, `cancelled` with E07-S06).
 
 /** Why an `evaluate-pr` job runs: the closed set of its envelope. */
 type EvaluationTrigger = Extract<JobEnvelope, { type: 'evaluate-pr' }>['trigger'];
@@ -28,6 +28,12 @@ export interface ReportTarget {
   readonly evaluationId: number;
 }
 
+/**
+ * The pull request and head SHA a cancellation is about (E07-S06): a {@link ReportTarget} without the trigger, which says why
+ * an evaluation ran and which a pull request that was closed has none of.
+ */
+type CancelTarget = Omit<ReportTarget, 'trigger'>;
+
 /** Why an evaluation could not complete: the closed set E09 renders (`evaluation_failed`: the retries of the job are spent). */
 type ReportFailureCode = 'evaluation_failed';
 
@@ -47,4 +53,12 @@ export interface EvaluationReporter {
    * `pr_evaluations` column; the job sets the row. Called again when the dead-letter handler is retried, so it must be idempotent.
    */
   failed(target: ReportTarget, code: ReportFailureCode): Promise<void>;
+
+  /**
+   * The pull request of `target` was closed (merged or not) while its evaluation was in progress (E07-S06): the Check Run of
+   * its head SHA ends with the conclusion `cancelled`, so no check hangs on a closed pull request. A run that is completed
+   * already is left as it is. Writes no comment and no `pr_evaluations` column; the job sets the row. Called again when the
+   * job is retried, so it must be idempotent.
+   */
+  cancelled(target: CancelTarget): Promise<void>;
 }

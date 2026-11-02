@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
 import { type EnvelopeOf, JOB_TYPES, type JobType } from '../domain/job-envelope.ts';
+import type { PendingJobs } from './ports/jobs.ts';
 
 // The handler registry (E07-S03): which function runs a job of which type. The workers ask it; an epic that owns a job
 // registers its handler through `register` from its own composition code, so adding a handler edits no file of the
@@ -26,6 +27,8 @@ export interface JobContext {
   readonly signal: AbortSignal;
   /** A logger that already carries the job id, type and numeric ids. */
   readonly logger: Logger;
+  /** What a handler may ask of the queue it runs on: to drop the jobs that wait for a closed pull request (E07-S06). */
+  readonly pending: PendingJobs;
 }
 
 /**

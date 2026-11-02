@@ -3,6 +3,7 @@
 import { expect, test, vi } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
 import { JOB_TYPES } from '../domain/job-envelope.ts';
+import { CLOSE_JOB, closeWorld, seedEvaluation } from './close-pr/test-support.ts';
 import { evaluateWorld, JOB } from './evaluate-pr/test-support.ts';
 import type { SyncOutcome } from './installation-sync-model.ts';
 import { type HandlerDeps, HandlerUnavailableError, registerHandlers } from './job-handlers.ts';
@@ -169,9 +170,44 @@ test('an evaluate-pr job whose payload is not an envelope is dead-lettered befor
   expect(evaluatePorts).not.toHaveBeenCalled();
 });
 
+test('without an evaluation reporter a close-pr job fails and keeps its delivery, like an evaluate-pr job', async () => {
+  const { deps, marked } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: undefined });
+  });
+  await expect(runJob('close-pr', queuedJob(JOBS.closePr), deps)).rejects.toThrow(
+    new HandlerUnavailableError('close-pr', 'no GitHub App or no evaluation reporter (E09) is configured'),
+  );
+  expect(marked).toEqual([]);
+});
+
+test('close-pr prunes with the ports it is given for the signal of the job and the queue the job runs on, completes with the outcome and marks its delivery', async () => {
+  const world = await closeWorld();
+  await seedEvaluation(world, { result: 'in_progress' });
+  const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>(() => world.ports);
+  const { deps, marked, pending } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+  });
+  const signal = new AbortController().signal;
+  const verdict = await runJob('close-pr', queuedJob({ ...CLOSE_JOB, deliveryId: DELIVERY_ID }, { signal }), deps);
+  expect(verdict).toEqual({ status: 'completed', output: { outcome: 'closed' } });
+  expect(evaluatePorts).toHaveBeenCalledExactlyOnceWith(signal);
+  expect(pending.targets.map((target) => target.prNumber)).toEqual([CLOSE_JOB.prNumber]);
+  expect((await world.rows()).map((row) => row.result)).toEqual(['cancelled']);
+  expect(marked).toEqual([DELIVERY_ID]);
+});
+
+test('a close-pr job whose payload is not an envelope is dead-lettered before the ports are asked for anything', async () => {
+  const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>();
+  const { deps } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+  });
+  const verdict = await runJob('close-pr', queuedJob({ type: 'close-pr', prNumber: 'seven' }), deps);
+  expect(verdict.status).toBe('deadletter');
+  expect(evaluatePorts).not.toHaveBeenCalled();
+});
+
 const NOT_BUILT = [
   ['evaluate-head-sha', JOBS.evaluateHeadSha, 'E07-S07'],
-  ['close-pr', JOBS.closePr, 'E07-S06'],
   ['recheck-comment', JOBS.recheckComment, 'E07-S07'],
   ['sweep', { type: 'sweep' }, 'E07-S08'],
   ['sweep-installation', { type: 'sweep-installation', githubInstallationId: IDS.installation }, 'E07-S08'],

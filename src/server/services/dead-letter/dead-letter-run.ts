@@ -6,6 +6,7 @@ import { JOB_TYPES, jobEnvelopeSchema, logFieldsOf } from '../../domain/job-enve
 import { RETRY_LIMIT } from '../../domain/job-retry.ts';
 import type { HandlerRegistry, JobOutcome } from '../job-registry.ts';
 import { issuesOf, type QueuedJob } from '../job-run.ts';
+import type { PendingJobs } from '../ports/jobs.ts';
 
 // The wrapper around the dead-letter handlers (E07-S05), the counterpart of `runJob` for the `job-dead-letter` queue: it
 // reads the `type` every envelope carries, which is how one handler tells what died, logs the job at error, and runs the
@@ -16,6 +17,8 @@ import { issuesOf, type QueuedJob } from '../job-run.ts';
 export interface DeadLetterRun {
   readonly registry: HandlerRegistry;
   readonly logger: Logger;
+  /** The queue the job runs on (E07-S06): no dead-letter handler uses it, it is part of what every handler is given. */
+  readonly pending: PendingJobs;
 }
 
 /** The `type` a payload names, when it is one of the closed set: what is safe to log of data that did not pass the envelope. */
@@ -51,6 +54,7 @@ export async function runDeadLetter(job: QueuedJob, run: DeadLetterRun): Promise
       attempt: job.retryCount,
       signal: job.signal,
       logger,
+      pending: run.pending,
     });
     job.signal.throwIfAborted();
     logger.error({ outcome: result.outcome }, 'job.dead_lettered');

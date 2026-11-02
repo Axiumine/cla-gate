@@ -20,10 +20,13 @@ export interface EvaluationKey {
   readonly headSha: string;
 }
 
+/** The result a row holds: the two verdicts of the engine and the two states of the lifecycle (`cancelled` is E07-S06's). */
+export type StoredResult = Database['pr_evaluations']['result'];
+
 /** What the job needs to know of a stored evaluation. */
 export interface StoredEvaluation {
   readonly id: number;
-  readonly result: 'in_progress' | 'success' | 'failure';
+  readonly result: StoredResult;
   readonly checkRunId: number | null;
 }
 

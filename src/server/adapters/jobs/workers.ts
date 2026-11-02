@@ -6,6 +6,7 @@ import { runDeadLetter } from '../../services/dead-letter/dead-letter-run.ts';
 import { type JobRunDeps, type JobVerdict, runJob } from '../../services/job-run.ts';
 import type { StopOutcome } from '../../services/ports/jobs.ts';
 import type { Boss, WorkerJob, WorkerOptions, WorkerResult } from './boss.ts';
+import { PgBossPendingJobs } from './pending.ts';
 import { DEAD_LETTER_QUEUE } from './queues.ts';
 
 // The workers of the job queue (E07-S03): one pg-boss worker pool per job type that has a handler, each job run through
@@ -13,8 +14,8 @@ import { DEAD_LETTER_QUEUE } from './queues.ts';
 // A queue whose type has no handler gets no worker and keeps its jobs. `localConcurrency` is how many jobs of one queue run at once in this process; the
 // serialisation of one pull request's evaluations is the queue's own policy (E07-S02), not the workers'.
 
-/** How the workers are started. */
-export interface WorkersOptions extends JobRunDeps {
+/** How the workers are started. The queue the jobs run on (`pending`) is the one the workers are started on, so it is not an option. */
+export interface WorkersOptions extends Omit<JobRunDeps, 'pending'> {
   /** How many jobs of one queue run at once (`WORKER_CONCURRENCY`, 1 to 32). */
   readonly concurrency: number;
   /** Seconds between two looks at an empty queue. Defaults to pg-boss's own, 2; a test shortens it. */
@@ -54,7 +55,11 @@ export class Workers {
       await boss.work(type, options, (jobs) => this.#settle(jobs, (job) => this.#run(boss, type, job)));
     }
     if (deadLetter !== undefined) {
-      const run = { registry: deadLetterRegistry(deadLetter, this.#options.clock), logger: this.#options.logger };
+      const run = {
+        registry: deadLetterRegistry(deadLetter, this.#options.clock),
+        logger: this.#options.logger,
+        pending: new PgBossPendingJobs(boss),
+      };
       await boss.work(DEAD_LETTER_QUEUE, options, (jobs) =>
         this.#settle(jobs, async (job) => ({
           status: 'completed',
@@ -83,7 +88,7 @@ export class Workers {
    * so a run that sends the copy and dies before it settles the job sends nothing twice.
    */
   async #run(boss: Boss, type: JobType, job: WorkerJob): Promise<JobVerdict> {
-    const verdict = await runJob(type, job, this.#options);
+    const verdict = await runJob(type, job, { ...this.#options, pending: new PgBossPendingJobs(boss) });
     if (verdict.status === 'completed') {
       return verdict;
     }

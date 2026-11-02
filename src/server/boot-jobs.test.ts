@@ -8,10 +8,19 @@ import type { InstallationWiring } from './boot-installations.ts';
 import { jobWorkers } from './boot-jobs.ts';
 import { deliveryIdSchema } from './domain/delivery-id.ts';
 import { JOB_TYPES } from './domain/job-envelope.ts';
+import { CLOSE_JOB, HEAD, seedEvaluation } from './services/close-pr/test-support.ts';
 import { deadLetterRegistry } from './services/dead-letter/dead-letter-registry.ts';
-import { evaluateWorld, JOB } from './services/evaluate-pr/test-support.ts';
+import {
+  evaluateWorld,
+  FULL_NAME,
+  JOB,
+  PR_NUMBER,
+  INSTALLATION as TENANT_INSTALLATION,
+} from './services/evaluate-pr/test-support.ts';
+import { pullRequest } from './services/github-pull-contract/test-support.ts';
 import type { InstallationSync } from './services/installation-sync.ts';
 import { HandlerUnavailableError } from './services/job-handlers.ts';
+import { FakePendingJobs } from './services/job-run-fixture/test-support.ts';
 import { createJobsTable, deliveryRows, fakeEnqueuer } from './services/jobs-fixture/test-support.ts';
 import { FakeClock } from './services/test-support.ts';
 import { createWebhookDeliveries } from './services/webhook-deliveries.ts';
@@ -23,7 +32,12 @@ import { testConfig } from './test-support.ts';
 const DELIVERY = deliveryIdSchema.parse('5b8f2c1e-3d4a-4f6b-9a7c-0e1d2f3a4b5c');
 const INSTALLATION = parseGithubId(31_001);
 const SYNCED = { status: 'synced', changed: true, repositories: { added: 0, renamed: 0, removed: 0 } } as const;
-const CONTEXT = { jobId: 'job-1', attempt: 0, logger: createLogger({ logLevel: 'silent' }) };
+const CONTEXT = {
+  jobId: 'job-1',
+  attempt: 0,
+  logger: createLogger({ logLevel: 'silent' }),
+  pending: new FakePendingJobs(),
+};
 
 async function wiring(syncFor: InstallationWiring['syncFor'], env: Record<string, string> = {}) {
   const { db } = await migratedTestDatabase();
@@ -129,6 +143,35 @@ test('with GitHub and a reporter the handler of evaluate-pr evaluates the pull r
   expect(outcome).toEqual({ outcome: 'evaluated' });
   expect(world.reporter.published.map((report) => report.evaluation.outcome)).toEqual(['failure']);
   expect((await world.rows()).map((row) => row.result)).toEqual(['failure']);
+});
+
+test('without an evaluation reporter the handler of close-pr fails its jobs', async () => {
+  const { workers } = await wiring(undefined);
+  await expect(
+    workers.registry.run('close-pr', CLOSE_JOB, { ...CONTEXT, signal: new AbortController().signal }),
+  ).rejects.toBeInstanceOf(HandlerUnavailableError);
+});
+
+test('with GitHub and a reporter the handler of close-pr cancels the evaluation in progress of the closed pull request and reports it', async () => {
+  const { world, workers } = await evaluating();
+  world.fake.addPullRequest(TENANT_INSTALLATION, FULL_NAME, pullRequest(PR_NUMBER, { state: 'closed' }));
+  await seedEvaluation(world, { result: 'in_progress' });
+  const outcome = await workers.registry.run('close-pr', CLOSE_JOB, {
+    ...CONTEXT,
+    signal: new AbortController().signal,
+  });
+  expect(outcome).toEqual({ outcome: 'closed' });
+  expect(world.reporter.cancellations.map((target) => target.headSha)).toEqual([HEAD]);
+  expect((await world.rows()).map((row) => row.result)).toEqual(['cancelled']);
+});
+
+test('the GitHub client of a close is bound to the signal of the job: an aborted job asks GitHub for nothing', async () => {
+  const { world, workers } = await evaluating();
+  const reason = new Error('the worker is shutting down');
+  await expect(
+    workers.registry.run('close-pr', CLOSE_JOB, { ...CONTEXT, signal: AbortSignal.abort(reason) }),
+  ).rejects.toBe(reason);
+  expect(world.calls()).toEqual([]);
 });
 
 test('the GitHub client of an evaluation is bound to the signal of the job: an aborted job asks GitHub for nothing', async () => {

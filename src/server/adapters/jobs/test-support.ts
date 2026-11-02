@@ -46,6 +46,7 @@ export function fakeBoss(): FakeBoss {
     send: vi.fn<Boss['send']>(() => Promise.resolve('job-id')),
     findJobs: vi.fn<Boss['findJobs']>(() => Promise.resolve([])),
     deleteJob: vi.fn<Boss['deleteJob']>(() => Promise.resolve(undefined)),
+    cancel: vi.fn<Boss['cancel']>(() => Promise.resolve(undefined)),
     emitError: (error) => {
       for (const listener of listeners) {
         listener(error);
