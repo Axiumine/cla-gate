@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
+import type { FailureThrottle } from '../../services/failure-throttle.ts';
 import type { Clock } from '../../services/ports/clock.ts';
-import { AppError } from './errors.ts';
 import { matchWebhookSignature, type WebhookSecrets } from './webhook-signature.ts';
+import { signatureFailure } from './webhook-throttle.ts';
 
 // The signature check of the webhook route (E06-S01) as a `preValidation` hook, apart from the route so that the route
 // stays about the order of the checks.
@@ -26,9 +27,11 @@ export function rawBodyOf(request: FastifyRequest): Buffer {
 
 /**
  * The `preValidation` hook that checks the signature, with the state of the rotation warning (when it was last logged).
- * A callback hook, not an async one: it awaits nothing, and a sync hook without `done` would never finish.
+ * Every failure is counted against the client address by `throttle` (E06-S07), which is what turns the `401` of an
+ * address that keeps failing into a `429`. A callback hook, not an async one: it awaits nothing, and a sync hook without
+ * `done` would never finish.
  */
-export function signatureHook(options: SignatureHookOptions) {
+export function signatureHook(options: SignatureHookOptions, throttle: FailureThrottle) {
   let previousWarnedAt: number | undefined;
 
   /** One WARN a minute at most, so the operator can tell when no delivery is signed with the old secret any more. */
@@ -41,10 +44,10 @@ export function signatureHook(options: SignatureHookOptions) {
   }
 
   /** The failure every refused signature gets, identical whatever the cause; `undefined` when the delivery is signed. */
-  function refusal(request: FastifyRequest): AppError | undefined {
+  function refusal(request: FastifyRequest, reply: FastifyReply): Error | undefined {
     const match = matchWebhookSignature(rawBodyOf(request), request.headers['x-hub-signature-256'], options.secrets);
     if (match === 'none') {
-      return new AppError(401, 'webhook_signature_invalid');
+      return signatureFailure(throttle, request, reply);
     }
     if (match === 'previous') {
       warnPreviousSecretUsed(request);
@@ -52,7 +55,7 @@ export function signatureHook(options: SignatureHookOptions) {
     return undefined;
   }
 
-  return (request: FastifyRequest, _reply: FastifyReply, done: HookHandlerDoneFunction): void => {
-    done(refusal(request));
+  return (request: FastifyRequest, reply: FastifyReply, done: HookHandlerDoneFunction): void => {
+    done(refusal(request, reply));
   };
 }

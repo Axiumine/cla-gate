@@ -20,6 +20,7 @@ import {
   watchTimingSafeEqual,
   webhookTestApp,
 } from './test-support.ts';
+import { WEBHOOK_DEADLINE_MS } from './webhook-deadline.ts';
 import { webhookRoutes } from './webhook-routes.ts';
 
 const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_WEBHOOK_SECRET_PREVIOUS: SECRET_PREVIOUS };
@@ -255,6 +256,7 @@ test('the route sits outside /api, so the audit guard does not apply, and it dec
     appId: undefined,
     db,
     enqueuer: notWiredEnqueuer,
+    deadlineMs: WEBHOOK_DEADLINE_MS,
   });
   expect(declared).toHaveLength(1);
   expect(declared[0]).toMatchObject({

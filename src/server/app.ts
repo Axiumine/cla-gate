@@ -14,6 +14,7 @@ import { createLogger } from './adapters/http/logger.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { securityHeaders } from './adapters/http/security.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
+import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
 import { webhookRoutes } from './adapters/http/webhook-routes.ts';
 import type { AppConfig } from './config/env.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
@@ -33,6 +34,8 @@ export interface AppOptions {
   readonly clock?: Clock;
   /** Where the webhook route sends the job of a delivery (E06-S06). Defaults to one that fails every send until the queue is wired (E07-S01). */
   readonly enqueuer?: JobEnqueuer;
+  /** Milliseconds after which the webhook route answers `503` `webhook_timeout` (E06-S07). Defaults to 8 seconds, inside GitHub's 10. */
+  readonly webhookDeadlineMs?: number;
 }
 
 /**
@@ -74,6 +77,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     appId: config.github.appId,
     db,
     enqueuer: options.enqueuer ?? notWiredEnqueuer,
+    deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
 
   app.addHook('onClose', async () => {

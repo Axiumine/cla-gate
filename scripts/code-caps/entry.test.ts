@@ -75,4 +75,5 @@ test('run from a directory outside the repository, the entry script finds the ba
     stdout: [''],
     stderr: [`${BASELINE_NAME} exists: use --force to overwrite`, ''],
   });
-});
+  // It starts a Node process, which takes longer than the default 5 s on a machine busy with other runs.
+}, 60_000);

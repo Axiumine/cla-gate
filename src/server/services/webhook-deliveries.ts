@@ -23,9 +23,10 @@ export interface WebhookDeliveries {
    * and locks its row, and answers `duplicate` when a job already finished it; then sends `job` under the delivery id
    * as the idempotency key, so at most one live job exists per delivery. A send that is `deduplicated` leaves nobody to
    * finish the delivery, so it is marked processed in the same transaction. A failed statement or send rolls everything
-   * back and is thrown: there is never a row without its job.
+   * back and is thrown: there is never a row without its job. With a `signal` (E06-S07), once it has aborted no further
+   * statement or send starts and the transaction is rolled back, as soon as the one in flight has returned.
    */
-  record(subject: DeliverySubject, job: Job): Promise<DeliveryOutcome>;
+  record(subject: DeliverySubject, job: Job, signal?: AbortSignal): Promise<DeliveryOutcome>;
   /** `markDeliveryProcessed` on this database, for the job layer (E07-S03) to call when the delivery's job completes. */
   markDeliveryProcessed(deliveryId: string): Promise<void>;
 }
@@ -35,28 +36,42 @@ export interface WebhookDeliveriesOptions {
   readonly enqueuer: JobEnqueuer;
 }
 
+/**
+ * One step of the recording. A step does not start once `signal` has aborted, and when it aborted during the step the
+ * result is dropped: the error leaves the transaction, which rolls back. Nothing is issued on the connection after the
+ * deadline, so a late statement can never run outside the transaction it belonged to.
+ */
+async function step<T>(signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
+  signal?.throwIfAborted();
+  const result = await run();
+  signal?.throwIfAborted();
+  return result;
+}
+
 async function recordInTransaction(
   trx: Transaction<Database>,
-  enqueuer: JobEnqueuer,
   subject: DeliverySubject,
   job: Job,
+  context: { readonly enqueuer: JobEnqueuer; readonly signal: AbortSignal | undefined },
 ): Promise<DeliveryOutcome> {
-  const isNew = await insertDelivery(trx, subject);
-  if (!isNew && (await isProcessed(trx, subject.deliveryId))) {
+  const { enqueuer, signal } = context;
+  const isNew = await step(signal, () => insertDelivery(trx, subject));
+  if (!isNew && (await step(signal, () => isProcessed(trx, subject.deliveryId)))) {
     return 'duplicate';
   }
-  const sent = await enqueuer.enqueue(trx, job, { idempotencyKey: subject.deliveryId });
+  const sent = await step(signal, () => enqueuer.enqueue(trx, job, { idempotencyKey: subject.deliveryId }));
   if (sent === 'queued') {
     return 'accepted';
   }
-  await markDeliveryProcessed(trx, subject.deliveryId);
+  await step(signal, () => markDeliveryProcessed(trx, subject.deliveryId));
   return isNew ? 'accepted' : 'duplicate';
 }
 
 export function createWebhookDeliveries(options: WebhookDeliveriesOptions): WebhookDeliveries {
   const { db, enqueuer } = options;
   return {
-    record: (subject, job) => db.transaction().execute((trx) => recordInTransaction(trx, enqueuer, subject, job)),
+    record: (subject, job, signal) =>
+      db.transaction().execute((trx) => recordInTransaction(trx, subject, job, { enqueuer, signal })),
     markDeliveryProcessed: (deliveryId) => markDeliveryProcessed(db, deliveryId),
   };
 }

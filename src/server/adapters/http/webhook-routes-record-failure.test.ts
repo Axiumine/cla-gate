@@ -88,7 +88,9 @@ test('the failure is logged once with its cause, and neither the response nor th
   expect(failed[0]).toMatchObject({ level: 50, err: { message: 'the queue is down' } });
   for (const text of [response.body, JSON.stringify(written)]) {
     expect(text).not.toContain(CANARY);
-    expect(text).not.toContain(String(FIXTURE_IDS.installation));
+    // The installation id is on the `webhook.received` line by design (E06-S07); the other ids of the payload are not logged.
+    expect(text).not.toContain(String(FIXTURE_IDS.repository));
+    expect(text).not.toContain(String(FIXTURE_IDS.author));
     expect(text).not.toContain(SECRET_CURRENT);
   }
 });
