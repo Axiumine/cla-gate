@@ -12,11 +12,13 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'ALLOWLIST_KINDS',
     'ALLOWLIST_SCOPES',
     'assessCoverage',
+    'assessListing',
     'assessUnlinked',
     'classifyAccount',
     'collectRepoWalk',
     'COMMIT_LIMIT_CODE',
     'COMMITS_PER_PAGE',
+    'evaluatePullRequest',
     'extractActors',
     'FAILURE_CODES',
     'FIX_CODES',
@@ -33,6 +35,7 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'planCommitListing',
     'ROLES',
     'storedUnlinked',
+    'toStoredDetails',
     'verifyListing',
   ]);
 });

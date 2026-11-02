@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ActorExtraction, ExtractedActor, UnlinkedFinding, UnlinkedRole } from './actor-types.ts';
+import { evaluatePullRequest } from './evaluate.ts';
+import { GITHUB_WEB_FLOW_ID } from './github-identities.ts';
 import { collectRepoWalk, type RepoWalkResult, type WalkCommit } from './repo-walk.ts';
+import { toStoredDetails } from './stored-details.ts';
 import type {
   Account,
   AccountType,
@@ -106,19 +109,24 @@ export function actorRows(
   return extraction.actors.map((actor) => ({ id: actor.account.id, roles: actor.roles, shas: actor.shas }));
 }
 
-/**
- * A copy of `items` in an order fixed by `seed`: every item gets a key from a small seeded generator and the copy is
- * sorted by key, so a test can shuffle its input and still be the same on every run.
- */
-export function shuffled<T>(items: readonly T[], seed: number): T[] {
+/** A small seeded generator (mulberry32): numbers in [0, 1) that are the same on every run for the same seed. */
+export function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
-  const next = (): number => {
+  return () => {
     state = (state + 0x6d2b79f5) >>> 0;
     let t = state;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * A copy of `items` in an order fixed by `seed`: every item gets a key from a small seeded generator and the copy is
+ * sorted by key, so a test can shuffle its input and still be the same on every run.
+ */
+export function shuffled<T>(items: readonly T[], seed: number): T[] {
+  const next = seededRandom(seed);
   return items
     .map((item) => ({ item, key: next() }))
     .sort((a, b) => a.key - b.key)
@@ -181,4 +189,113 @@ export function driveWalk(
     result = ask(pagesFetched);
   }
   return { result, pagesFetched };
+}
+
+/** Author of commit `i` of the 50-commit fixture: people 2 to 10, every 10th a bot (900 to 902), every 11th unlinked. */
+function fixtureAuthor(i: number): Account | null {
+  if (i % 11 === 0) {
+    return null;
+  }
+  return i % 10 === 0 ? account(900 + (i % 3), 'Bot') : account(2 + (i % 9));
+}
+
+/** Committer of commit `i`: unlinked every 13th, `web-flow` every 5th, a third party (20 to 22) every 7th, else the author. */
+function fixtureCommitter(i: number, author: Account | null): Account | null {
+  if (i % 13 === 0) {
+    return null;
+  }
+  if (i % 5 === 0) {
+    return account(GITHUB_WEB_FLOW_ID);
+  }
+  return i % 7 === 0 ? account(20 + (i % 3)) : author;
+}
+
+/** Every 6th commit names co-author 30 to 33 by a noreply trailer, every 8th an address that cannot be resolved. */
+function fixtureMessage(i: number): string {
+  if (i % 6 === 0) {
+    return messageEndingWith(coAuthoredBy(noreplyEmail(30 + ((i / 6) % 4), 'pair')));
+  }
+  return i % 8 === 0 ? messageEndingWith(coAuthoredBy('pair@example.org')) : `change ${i}`;
+}
+
+function fixtureCommit(i: number): CommitFacts {
+  const author = fixtureAuthor(i);
+  return commitFacts(100 + i, {
+    author,
+    committer: fixtureCommitter(i, author),
+    parents: i % 17 === 0 ? [sha(98 + i), sha(97 + i)] : [sha(99 + i)],
+    message: fixtureMessage(i),
+  });
+}
+
+/**
+ * A pull request of 50 commits by 40-odd shapes of identity: signed, unsigned, allowlisted, org members, bots, unlinked,
+ * `web-flow`, merges, trailers and one commit listed twice, against a policy of document 1 at major 1. Signatures include
+ * two for user 2 (the lowest id is the basis), an old major, a revoked one and one with a bot's id; the allowlist has the
+ * same id under two scopes and two kinds. It fails, and it is the input that the order-independence tests shuffle.
+ */
+export function fiftyCommitInput(): EvaluationInput {
+  return evaluationInput({
+    commits: [...Array.from({ length: 50 }, (_unused, index) => fixtureCommit(index + 1)), fixtureCommit(7)],
+    signatures: [
+      ...[2, 3, 4, 5, 1, 30, 31].map((githubId, index) => signatureFact(8 + index, githubId)),
+      signatureFact(40, 2),
+      signatureFact(41, 9, { major: 0 }),
+      signatureFact(42, 10, { revoked: true }),
+      signatureFact(43, 901),
+    ],
+    allowlist: [
+      allowlistEntry(1, 'user', 7),
+      allowlistEntry(2, 'user', 7, 'installation'),
+      allowlistEntry(3, 'org_members', 500, 'installation'),
+      allowlistEntry(4, 'bot', 900),
+      allowlistEntry(5, 'bot', 901, 'installation'),
+      allowlistEntry(6, 'user', 901),
+    ],
+    orgMembers: membership([500, [8, 20]]),
+    overrides: new Map([
+      [sha(111), 77],
+      [sha(122).toUpperCase(), 78],
+      [sha(9999), 79],
+    ]),
+  });
+}
+
+/** A SHA without its leading zeros (`sha(2)` reads `2`), so a golden line stays short. Any other value is printed as is. */
+function plain(value: string | number | null): string {
+  return typeof value === 'string' ? value.replace(/^0+/, '') : String(value);
+}
+
+function overrideLine(overrideId: number | null): string {
+  return overrideId === null ? 'open' : `override ${overrideId}`;
+}
+
+type StoredDetails = ReturnType<typeof toStoredDetails>;
+
+function basisLine(basis: StoredDetails['actors'][number]['basis']): string {
+  if (basis === null) {
+    return 'uncovered';
+  }
+  return basis.kind === 'signature'
+    ? `covered by signature ${basis.signatureId} (version ${basis.versionId}, major ${basis.major})`
+    : `covered by allowlist entry ${basis.entryId} (${basis.entryKind}, ${basis.scope})`;
+}
+
+/**
+ * What a golden scenario snapshots, one line per fact: the header, every actor with its basis, every unlinked finding,
+ * every advisory and every fix. It is the stored details plus the fixes, so the whole verdict is in it, and nothing else
+ * is: the display-only raw identities are no part of the verdict. A change to any rule shows up as a reviewable diff.
+ */
+export function verdictLines(input: EvaluationInput): string[] {
+  const evaluation = evaluatePullRequest(input);
+  const details = toStoredDetails(evaluation);
+  return [
+    `${details.outcome}: ${details.failureCodes.join(', ') || 'no failure code'}`,
+    `document ${plain(details.documentId)}, major ${plain(details.activeMajor)}, listing ${details.listing}`,
+    `${details.commitCount} commits, ${details.mergeCommitsSkipped} merge commits skipped`,
+    ...details.actors.map((actor) => `actor ${actor.githubId} ${actor.roles.join('+')}: ${basisLine(actor.basis)}`),
+    ...details.unlinked.map((found) => `unlinked ${plain(found.sha)} ${found.role}: ${overrideLine(found.overrideId)}`),
+    ...details.advisories.map((advisory) => `advisory ${advisory.code} ${plain(advisory.sha)}`),
+    ...evaluation.fixes.map((fix) => `fix ${Object.values(fix).map(plain).join(' ')}`),
+  ];
 }
