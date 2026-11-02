@@ -10,9 +10,10 @@ import { SCRIPTS_SHARD, SHARD_NAMES } from './shards.ts';
 import { mutated } from './test-support.ts';
 
 // E20-S04: docs/quality-gates.md (Testing) has the shard table with the mutant counts and the measured times. A shard added
-// to shards.ts without a row, a row left behind for a shard that no longer exists, and a Files cell that is not the number
-// of files the shard's globs select on disk fail here. The mutant counts and the times are measurements (Stryker prints the
-// counts before its initial test run), so nothing here can check them; they are checked by a person who changes the shards.
+// to shards.ts without a row and a row left behind for a shard that no longer exists fail here. The mutant counts and the
+// times are measurements (Stryker prints the counts before its initial test run), so nothing here can check them; they are
+// checked by a person who changes the shards. The table has no file count on purpose: a count of files on disk would change
+// with every pull request that adds a source file, and every such pull request would have to edit this table.
 
 // The config is plain JavaScript outside this project, so a literal import would have no types.
 // eslint-disable-next-line no-unsanitized/method -- the specifier is built from this repository's own root directory and a fixed file name
@@ -54,21 +55,13 @@ test('the shard table has exactly one row for every shard, in the order yarn mut
 
 test('every row of the shard table gives a mutant count', () => {
   for (const row of rows ?? []) {
-    // The cells are: empty (before the first bar), shard, mutates, files, mutants, cold run, empty.
+    // The cells are: empty (before the first bar), shard, mutates, mutants, cold run, local score, empty.
     const cells = row.split('|').map((cell) => cell.trim());
-    expect(cells[4], row).toMatch(/^[1-9]\d{2}$/);
+    expect(cells[3], row).toMatch(/^[1-9]\d{2}$/);
   }
 });
 
-test('the Files cell of every row is the number of files the shard selects on disk', () => {
-  for (const row of rows ?? []) {
-    const cells = row.split('|').map((cell) => cell.trim());
-    const shard = /^`([^`]+)`$/.exec(cells[1] ?? '')?.[1] ?? '';
-    expect(Number(cells[3]), `${shard}: ${row}`).toBe(filesOf(shard).length);
-  }
-});
-
-test('the shards select files, so a Files cell of zero cannot pass', () => {
+test('every shard selects at least one file on disk', () => {
   for (const shard of SHARD_NAMES) {
     expect(filesOf(shard).length, shard).toBeGreaterThan(0);
   }
