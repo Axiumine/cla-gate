@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import type { Transaction } from 'kysely';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
+import type { Database } from '../adapters/db/schema.ts';
+import { markInstallationSynced } from './installation-queries.ts';
+import type { SyncContext, SyncOutcome } from './installation-sync-model.ts';
+import type { GitHubRepository } from './ports/github.ts';
+import { auditRepositoryChanges } from './repository-audit.ts';
+import { listActiveRepositoryIds, markRepositoriesRemoved } from './repository-queries.ts';
+import { releaseTransferred } from './repository-transfer.ts';
+import { upsertRepositories } from './repository-upsert.ts';
+
+// The writes of the repository half of a sync (E05-S08), inside the caller's transaction.
+
+/**
+ * Stores the listed repositories (new ones with `enabled = false`, known ones with a fresh `full_name`, removed ones
+ * brought back), then marks the active ones that are no longer listed as removed. A listed repository that is still
+ * active under another installation of this server has been transferred here: that tenant's row is released first, in
+ * the same transaction (E05-S09), so this tenant's row can take its place. If the write fails, the release is undone too.
+ */
+export async function reconcile(
+  ctx: SyncContext,
+  trx: Transaction<Database>,
+  installationId: InstallationRowId,
+  listed: readonly GitHubRepository[],
+): Promise<SyncOutcome> {
+  const snapshots = listed.map((repository) => ({ githubRepoId: repository.id, fullName: repository.fullName }));
+  const now = ctx.clock.now();
+  const listedIds = new Set(snapshots.map((snapshot) => snapshot.githubRepoId));
+  await releaseTransferred(trx, installationId, [...listedIds], now);
+  const { added, renamed } = await upsertRepositories(trx, installationId, snapshots);
+  const missing = (await listActiveRepositoryIds(trx, installationId)).filter(
+    (githubRepoId) => !listedIds.has(githubRepoId),
+  );
+  const removed = await markRepositoriesRemoved(trx, installationId, missing, now);
+  await auditRepositoryChanges(trx, installationId, { added, renamed, removed });
+  const changed = added.length + renamed.length + removed.length > 0;
+  if (changed) {
+    await markInstallationSynced(trx, installationId, now);
+  }
+  return {
+    status: 'synced',
+    changed,
+    repositories: { added: added.length, renamed: renamed.length, removed: removed.length },
+  };
+}

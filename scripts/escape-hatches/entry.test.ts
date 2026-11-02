@@ -53,11 +53,19 @@ test('the entry script exits 1 on an unjustified escape hatch', async () => {
   expect(stderr.mock.calls.join('')).toContain('a.ts:1: any: missing "-- <reason>"');
 });
 
-test('this repository has no unjustified escape hatch', async () => {
-  const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
-  const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
-  await runEntry([]);
-  expect(stderr.mock.calls.join('')).toBe('');
-  expect(stdout.mock.calls.join('')).toMatch(/^escape hatches ok \(\d+ source file\(s\)\)\n$/);
-  expect(process.exitCode).toBe(0);
-});
+// The scan reads and lints every source file of the repository, which takes longer under the coverage run and grows with
+// the repository; the default five seconds is not a limit that means anything for it.
+const REPOSITORY_SCAN_TIMEOUT_MS = 60_000;
+
+test(
+  'this repository has no unjustified escape hatch',
+  async () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    await runEntry([]);
+    expect(stderr.mock.calls.join('')).toBe('');
+    expect(stdout.mock.calls.join('')).toMatch(/^escape hatches ok \(\d+ source file\(s\)\)\n$/);
+    expect(process.exitCode).toBe(0);
+  },
+  REPOSITORY_SCAN_TIMEOUT_MS,
+);

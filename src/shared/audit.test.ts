@@ -36,6 +36,18 @@ test('the tuple starts with the nine actions E05 writes, in order', () => {
   ]);
 });
 
+test('the tenth action is installation.admitted, added by E05-S07 next to installation.rejected', () => {
+  expect(AUDIT_ACTIONS[9]).toBe('installation.admitted');
+  expect(SYSTEM_ACTIONS.has('installation.admitted')).toBe(true);
+  expect(INSTANCE_ACTIONS.has('installation.admitted')).toBe(false);
+});
+
+test('the eleventh action is installation.updated, added by E05-S08 for a refreshed account snapshot', () => {
+  expect(AUDIT_ACTIONS[10]).toBe('installation.updated');
+  expect(SYSTEM_ACTIONS.has('installation.updated')).toBe(true);
+  expect(INSTANCE_ACTIONS.has('installation.updated')).toBe(false);
+});
+
 test('no action and no metadata key is listed twice', () => {
   expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
   expect(new Set(AUDIT_METADATA_KEYS).size).toBe(AUDIT_METADATA_KEYS.length);
@@ -44,6 +56,8 @@ test('no action and no metadata key is listed twice', () => {
 test('system actions are those performed by webhooks and schedules, and are all audit actions', () => {
   expect([...SYSTEM_ACTIONS]).toEqual([
     'installation.rejected',
+    'installation.admitted',
+    'installation.updated',
     'installation.deleted',
     'installation.suspended',
     'installation.unsuspended',

@@ -5,8 +5,11 @@ import process from 'node:process';
 import type { LogFn } from 'pino';
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
+import { mockApp } from './adapters/github/test-support.ts';
 import { type BootOptions, boot, type RunningServer } from './boot.ts';
-import { FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { publicKeyFingerprint } from './config/github-key.ts';
+import { testRsaKey } from './config/test-support.ts';
+import { captureLogs, FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 const BASE_ENV = { DATABASE_URL: UNREACHABLE_DATABASE_URL, HOST: '127.0.0.1', LOG_LEVEL: 'silent' };
 
@@ -169,4 +172,47 @@ test('by default it connects with node-postgres, so an unreachable database mean
   });
   expect(await status(server, '/healthz')).toBe(200);
   expect(await status(server, '/readyz')).toBe(503);
+});
+
+/** Boots on PGlite with `LOG_LEVEL=info`, collecting the log lines. */
+async function startLogging(extra: Record<string, string>) {
+  const logs = captureLogs();
+  const db = await openPgliteDatabase();
+  const server = await boot({
+    env: { ...(await freshEnv()), LOG_LEVEL: 'info', ...extra },
+    signals: new FakeProcess(),
+    createDb: () => db,
+    logDestination: logs.destination,
+    // These tests are about the log at start-up; the reconciliation has its own (boot-reconcile.test.ts).
+    reconcileOnStart: false,
+  });
+  onTestFinished(async () => {
+    await server?.close();
+  });
+  return { server, logs };
+}
+
+test('without GitHub credentials the server still starts, serves health and says the GitHub App is not configured', async () => {
+  const { server, logs } = await startLogging({});
+  expect(await status(server, '/healthz')).toBe(200);
+  expect(await status(server, '/readyz')).toBe(200);
+  expect(logs.lines().find((line) => line['msg'] === 'github.app_not_configured')).toMatchObject({
+    level: 30,
+    missing: ['GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'],
+  });
+  expect(server?.github).toBeUndefined();
+});
+
+test('with GitHub credentials it logs the App id and the key fingerprint at start-up, and never the key', async () => {
+  const key = testRsaKey();
+  mockApp([key.publicKey]);
+  const { server, logs } = await startLogging({ GITHUB_APP_ID: '4242', GITHUB_APP_PRIVATE_KEY: key.pkcs1 });
+  expect(await status(server, '/healthz')).toBe(200);
+  expect(server?.github?.identity.current()).toMatchObject({ appId: 4242, slug: 'cla-gate-test' });
+  expect(logs.lines().find((line) => line['msg'] === 'github.app_configured')).toMatchObject({
+    appId: '4242',
+    keyFingerprints: [publicKeyFingerprint(key.publicKey)],
+  });
+  expect(logs.text()).not.toContain('PRIVATE KEY');
+  expect(logs.text()).not.toContain(key.pkcs1.split('\n')[1] ?? 'missing');
 });

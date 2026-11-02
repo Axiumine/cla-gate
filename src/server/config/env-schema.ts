@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   databaseUrlField,
   githubFields,
+  githubProblems,
   originField,
   portField,
   sessionSecretField,
@@ -31,6 +32,9 @@ export const envSchema = z
     if (env.NODE_ENV === 'production' && !env.PUBLIC_BASE_URL?.startsWith('https://')) {
       // Stryker disable next-line StringLiteral: only the variable name of an issue is ever reported, never its message
       ctx.addIssue({ code: 'custom', path: ['PUBLIC_BASE_URL'], message: 'https origin required in production' });
+    }
+    for (const name of githubProblems(env)) {
+      ctx.addIssue({ code: 'custom', path: [name], message: 'invalid GitHub App setting' });
     }
   });
 

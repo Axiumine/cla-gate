@@ -40,13 +40,19 @@ export async function serverPort(env: Env, pickPort: () => Promise<number>): Pro
 }
 
 /** Variables the application reads that hold a secret or identify a GitHub App: always replaced, never inherited. */
-const THROWAWAY_SECRETS: readonly string[] = [
-  'SESSION_SECRET',
+const THROWAWAY_SECRETS: readonly string[] = ['SESSION_SECRET', 'GITHUB_WEBHOOK_SECRET', 'GITHUB_CLIENT_SECRET'];
+const PLACEHOLDERS: Readonly<Record<string, string>> = { GITHUB_CLIENT_ID: 'e2e-client-id' };
+/**
+ * Set to the empty string, which the configuration reads as "not set": the application then starts without a GitHub App
+ * and makes no request to GitHub (a made-up App id or key would fail the identity check at start-up), and nothing is
+ * inherited from the developer's shell.
+ */
+const BLANKED: readonly string[] = [
+  'GITHUB_APP_ID',
   'GITHUB_APP_PRIVATE_KEY',
-  'GITHUB_WEBHOOK_SECRET',
-  'GITHUB_CLIENT_SECRET',
+  'GITHUB_APP_PRIVATE_KEY_PREVIOUS',
+  'GITHUB_ALLOWED_ACCOUNT_IDS',
 ];
-const PLACEHOLDERS: Readonly<Record<string, string>> = { GITHUB_APP_ID: '1', GITHUB_CLIENT_ID: 'e2e-client-id' };
 const SECRET_BYTES = 32;
 
 export interface AppEnvironmentOptions {
@@ -70,6 +76,7 @@ export function appEnvironment(options: AppEnvironmentOptions): Record<string, s
     PUBLIC_BASE_URL: `http://${LOOPBACK}:${options.port}`,
     DATABASE_URL: variable(options.env, 'DATABASE_URL'),
     ...PLACEHOLDERS,
+    ...Object.fromEntries(BLANKED.map((name) => [name, ''])),
     ...Object.fromEntries(secrets),
   };
 }

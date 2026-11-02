@@ -4,8 +4,12 @@ import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
 import { ConfigError, loadConfig, loadMigrateConfig } from './env.ts';
 import { MASK, Secret } from './secret.ts';
+import { testRsaKey } from './test-support.ts';
 
+const KEY = testRsaKey();
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
+/** Production with the GitHub App settings it requires (E05-S01), so a row is about one variable only. */
+const PRODUCTION = { NODE_ENV: 'production', GITHUB_APP_ID: '12345', GITHUB_APP_PRIVATE_KEY: KEY.pkcs8 };
 
 function capture(env: Record<string, string | undefined>): ConfigError {
   try {
@@ -29,7 +33,7 @@ test('a minimal environment yields the documented defaults', () => {
     publicBaseUrl: 'http://localhost:3000',
     trustProxy: false,
     sessionSecret: undefined,
-    github: { appId: undefined, privateKey: undefined, webhookSecret: undefined },
+    github: { appId: undefined, privateKey: undefined, previousPrivateKey: undefined, webhookSecret: undefined },
   });
   expect(config.databaseUrl.reveal()).toBe(DB);
 });
@@ -49,7 +53,7 @@ test('every variable is read and secrets become Secret values', () => {
     TRUST_PROXY: '2',
     SESSION_SECRET: 's'.repeat(32),
     GITHUB_APP_ID: '12345',
-    GITHUB_APP_PRIVATE_KEY: 'pem-bytes',
+    GITHUB_APP_PRIVATE_KEY: KEY.pkcs8,
     GITHUB_WEBHOOK_SECRET: 'whsec',
     GITHUB_CLIENT_ID: 'Iv1.abc',
     GITHUB_CLIENT_SECRET: 'client-secret',
@@ -64,7 +68,7 @@ test('every variable is read and secrets become Secret values', () => {
     github: { appId: '12345', clientId: 'Iv1.abc' },
   });
   expect(config.sessionSecret).toBeInstanceOf(Secret);
-  expect(config.github.privateKey?.reveal()).toBe('pem-bytes');
+  expect(config.github.privateKey?.pem.reveal()).toBe(KEY.pkcs8.trim());
   expect(config.github.webhookSecret?.reveal()).toBe('whsec');
   expect(config.github.clientSecret?.reveal()).toBe('client-secret');
 });
@@ -91,11 +95,11 @@ test('an empty variable counts as unset', () => {
 });
 
 test('secrets in the loaded config cannot be printed', () => {
-  const config = loadConfig({ DATABASE_URL: DB, SESSION_SECRET: 'x'.repeat(40), GITHUB_APP_PRIVATE_KEY: 'pem-bytes' });
+  const config = loadConfig({ DATABASE_URL: DB, SESSION_SECRET: 'x'.repeat(40), GITHUB_WEBHOOK_SECRET: 'whsec-bytes' });
   for (const printed of [JSON.stringify(config), inspect(config, { depth: 6 }), String(config.databaseUrl)]) {
     expect(printed).not.toContain('s3cr3t-pw');
     expect(printed).not.toContain('xxxx');
-    expect(printed).not.toContain('pem-bytes');
+    expect(printed).not.toContain('whsec-bytes');
   }
   expect(JSON.stringify(config)).toContain(MASK);
 });
@@ -125,8 +129,8 @@ test.each([
   ['a PORT in exponent notation', { PORT: '1e3' }, ['PORT']],
   ['a PORT in hexadecimal', { PORT: '0x50' }, ['PORT']],
   ['a PORT of six digits', { PORT: '000080' }, ['PORT']],
-  ['production over http', { NODE_ENV: 'production', PUBLIC_BASE_URL: 'http://cla.example.org' }, ['PUBLIC_BASE_URL']],
-  ['production without PUBLIC_BASE_URL', { NODE_ENV: 'production' }, ['PUBLIC_BASE_URL']],
+  ['production over http', { ...PRODUCTION, PUBLIC_BASE_URL: 'http://cla.example.org' }, ['PUBLIC_BASE_URL']],
+  ['production without PUBLIC_BASE_URL', { ...PRODUCTION, PUBLIC_BASE_URL: undefined }, ['PUBLIC_BASE_URL']],
 ])('%s is reported by name', (_label, extra, names) => {
   expect(capture({ DATABASE_URL: DB, ...extra }).variables).toEqual(names);
 });

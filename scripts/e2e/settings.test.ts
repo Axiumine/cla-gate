@@ -112,12 +112,12 @@ test('every secret is random per call, 32 bytes long, and different from the oth
   };
   const first = appEnvironment({ ...OPTIONS, randomHex });
   const second = appEnvironment({ ...OPTIONS, randomHex });
-  const secrets = ['SESSION_SECRET', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_WEBHOOK_SECRET', 'GITHUB_CLIENT_SECRET'];
+  const secrets = ['SESSION_SECRET', 'GITHUB_WEBHOOK_SECRET', 'GITHUB_CLIENT_SECRET'];
   const values = secrets.flatMap((name) => [
     new Map(Object.entries(first)).get(name),
     new Map(Object.entries(second)).get(name),
   ]);
-  expect(new Set(values).size).toBe(8);
+  expect(new Set(values).size).toBe(6);
   for (const value of values) {
     expect(value).toMatch(/^[0-9a-f]{64}$/);
   }
@@ -128,9 +128,21 @@ test('a real secret in the environment of the developer never reaches the applic
     SESSION_SECRET: 'real-session',
     GITHUB_CLIENT_SECRET: 'real-client',
     GITHUB_APP_PRIVATE_KEY: 'real-key',
+    GITHUB_APP_ID: '4242',
+    GITHUB_ALLOWED_ACCOUNT_IDS: '777',
   };
   const env = appEnvironment({ env: { ...OPTIONS.env, ...real }, port: 41_234, randomHex: counting });
   expect(Object.values(env).join('\n')).not.toMatch(/real-/);
+});
+
+test('the GitHub App variables are blank, so the application starts without an App and none is inherited', () => {
+  const env = appEnvironment({ ...OPTIONS, randomHex: counting });
+  expect(env).toMatchObject({
+    GITHUB_APP_ID: '',
+    GITHUB_APP_PRIVATE_KEY: '',
+    GITHUB_APP_PRIVATE_KEY_PREVIOUS: '',
+    GITHUB_ALLOWED_ACCOUNT_IDS: '',
+  });
 });
 
 test('every GitHub App variable and the session secret of the server configuration is set, so none is inherited', () => {

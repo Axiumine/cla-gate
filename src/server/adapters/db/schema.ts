@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ColumnType, Generated } from 'kysely';
+import type { InstallationRowId } from './installation-row-id.ts';
 
 // Hand-written to match migrations/*.sql; schema.test.ts compares the column names with the live schema, so a
 // drift in either direction fails a test. GitHub ids and identity keys are bigint in Postgres and `number` here: the
@@ -35,23 +36,32 @@ interface SessionsTable {
 }
 
 interface InstallationsTable {
-  id: Generated<number>;
+  id: Generated<InstallationRowId>;
   github_installation_id: number;
   account_id: number;
   account_login: string;
-  account_type: 'Organization' | 'User';
+  /** `Other` is an account that is neither: an enterprise. It is stored, rejected and never served (migration 004). */
+  account_type: 'Organization' | 'User' | 'Other';
   suspended_at: Date | null;
+  /** The default is `rejected`: a row without a decision is never evaluated (migration 003, E05-S06). */
+  admission_status: Generated<'admitted' | 'rejected'>;
+  admission_reason: 'account_not_allowed' | 'policy_changed' | null;
+  admission_decided_at: Date | null;
+  deleted_at: Date | null;
+  last_synced_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
 
 interface RepositoriesTable {
   id: Generated<number>;
-  installation_id: number;
+  installation_id: InstallationRowId;
   github_repo_id: number;
   full_name: string;
   enabled: Generated<boolean>;
   cla_document_id: number | null;
+  /** Set when GitHub no longer lists the repository for the installation; the row itself stays (E05-S06). */
+  removed_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -159,7 +169,7 @@ interface AuditLogTable {
   metadata: JsonObject<true>;
 }
 
-/** Every table created by migrations/001_initial.sql except schema_migrations, which only the runner touches. */
+/** Every table created by the migrations except schema_migrations, which only the runner touches. */
 export interface Database {
   users: UsersTable;
   sessions: SessionsTable;
