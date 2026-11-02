@@ -6,7 +6,7 @@ import { expect, onTestFinished, test, vi } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { appBody, decodeJwt, mockApp, START } from './adapters/github/test-support.ts';
 import { type BootOptions, boot } from './boot.ts';
-import { testGitHubKey } from './config/test-support.ts';
+import { TEST_WEBHOOK_SECRET, testGitHubKey } from './config/test-support.ts';
 import { FakeClock } from './services/test-support.ts';
 import { captureLogs, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
@@ -17,7 +17,11 @@ class FakeProcess extends EventEmitter {
   exitCode: number | string | null | undefined;
 }
 
-const PRODUCTION = { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.test' };
+const PRODUCTION = {
+  NODE_ENV: 'production',
+  PUBLIC_BASE_URL: 'https://cla.example.test',
+  GITHUB_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
+};
 
 /** Boots on PGlite and a free port. `env` brings the signing key; the App id is 4242, like the one in `appBody`. */
 async function start(env: Record<string, string>, extra: Partial<BootOptions> = {}) {

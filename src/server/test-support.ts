@@ -13,6 +13,8 @@ import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
+import type { Clock } from './services/ports/clock.ts';
+import type { JobEnqueuer } from './services/ports/jobs.ts';
 
 const LogLine = z.record(z.string(), z.unknown());
 
@@ -67,6 +69,12 @@ export interface TestAppOptions {
   /** Defaults to a fresh PGlite. */
   readonly db?: Kysely<Database>;
   readonly readinessTimeoutMs?: number;
+  /** Defaults to the wall clock. */
+  readonly clock?: Clock;
+  /** Where the webhook route sends a job (E06-S06). Defaults to the app's own, which fails every send. */
+  readonly enqueuer?: JobEnqueuer;
+  /** Where the webhook route answers `503` `webhook_timeout` (E06-S07). Defaults to the app's own, 8 seconds. */
+  readonly webhookDeadlineMs?: number;
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */
@@ -79,6 +87,9 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
     db,
     logger: createLogger(config, logs.destination),
     ...(options.readinessTimeoutMs === undefined ? {} : { readinessTimeoutMs: options.readinessTimeoutMs }),
+    ...(options.clock === undefined ? {} : { clock: options.clock }),
+    ...(options.enqueuer === undefined ? {} : { enqueuer: options.enqueuer }),
+    ...(options.webhookDeadlineMs === undefined ? {} : { webhookDeadlineMs: options.webhookDeadlineMs }),
   });
   onTestFinished(async () => {
     await app.close();

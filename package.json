@@ -54,6 +54,7 @@
   "dependencies": {
     "@fastify/helmet": "^13.2.0",
     "fastify": "^5.12.7",
+    "fastify-raw-body": "^6.0.3",
     "fastify-type-provider-zod": "^7.0.0",
     "kysely": "^0.29.7",
     "octokit": "^5.0.5",

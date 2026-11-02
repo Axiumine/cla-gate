@@ -1,15 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
-import {
-  databaseUrlField,
-  githubFields,
-  githubProblems,
-  originField,
-  portField,
-  sessionSecretField,
-  trustProxyField,
-} from './env-fields.ts';
+import { databaseUrlField, originField, portField, sessionSecretField, trustProxyField } from './env-fields.ts';
+import { githubFields, githubProblems } from './env-github.ts';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 const DEFAULT_PORT = 3000;

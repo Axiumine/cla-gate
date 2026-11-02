@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { generateRequestId } from './request-id.ts';
+import { generateRequestId, mintRequestId } from './request-id.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -23,4 +23,10 @@ test.each([
   const id = generateRequestId({ headers });
   expect(id).toMatch(UUID);
   expect(generateRequestId({ headers })).not.toBe(id);
+});
+
+test('an id is minted by mintRequestId whatever the request carries: a UUID, a new one each time', () => {
+  const id = mintRequestId();
+  expect(id).toMatch(UUID);
+  expect(mintRequestId()).not.toBe(id);
 });

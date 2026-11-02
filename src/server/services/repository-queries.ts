@@ -98,3 +98,24 @@ export async function listActiveRepositoryIds(
     .execute();
   return rows.map((row) => parseGithubId(row.github_repo_id));
 }
+
+/**
+ * Whether the repository GitHub knows by `githubRepoId` is stored as active under an installation other than
+ * `installationId` (a transfer whose state has not caught up, E06-S05). The statement excludes the caller's own tenant and
+ * returns existence only, never a row: the one place two tenants meet is the partial unique index, and nothing of the
+ * other tenant is read.
+ */
+export async function isActiveRepositoryOfAnotherInstallation(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  githubRepoId: GithubId,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom('repositories')
+    .select('id')
+    .where('github_repo_id', '=', githubRepoId)
+    .where('installation_id', '<>', installationId)
+    .where('removed_at', 'is', null)
+    .executeTakeFirst();
+  return row !== undefined;
+}

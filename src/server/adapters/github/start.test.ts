@@ -5,7 +5,7 @@ import { delay, HttpResponse } from 'msw';
 import { expect, test, vi } from 'vitest';
 import { ConfigError } from '../../config/env.ts';
 import { Secret } from '../../config/secret.ts';
-import { type TestGitHubKey, testGitHubKey } from '../../config/test-support.ts';
+import { TEST_WEBHOOK_SECRET, type TestGitHubKey, testGitHubKey } from '../../config/test-support.ts';
 import { GitHubAuthError, GitHubResponseError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
 import { FakeClock } from '../../services/test-support.ts';
 import { captureLogs, testConfig } from '../../test-support.ts';
@@ -13,7 +13,11 @@ import { createLogger } from '../http/logger.ts';
 import { startGitHubApp } from './start.ts';
 import { APP_ID, appBody, jwtSignedBy, mockApp, START } from './test-support.ts';
 
-const PRODUCTION = { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.test' };
+const PRODUCTION = {
+  NODE_ENV: 'production',
+  PUBLIC_BASE_URL: 'https://cla.example.test',
+  GITHUB_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
+};
 
 function start(env: Record<string, string>, timeoutMs?: number) {
   const logs = captureLogs();
