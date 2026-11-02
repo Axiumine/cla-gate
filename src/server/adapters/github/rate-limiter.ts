@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
 import type { Clock } from '../../services/ports/clock.ts';
-import { GitHubRateLimitedError } from '../../services/ports/github-errors.ts';
+import { GitHubRateLimitedError, type RateLimitScope } from '../../services/ports/github-errors.ts';
 import { type Kind, kindOf, type Lane, type LaneScope, Lanes, WRITE } from './lane.ts';
 import { pause } from './pause.ts';
 import { Semaphore } from './semaphore.ts';
@@ -20,6 +20,12 @@ import { isWorthWaiting, MAX_WAIT_SECONDS } from './wait-policy.ts';
 
 /** Requests in flight at once over all lanes. GitHub allows 100 concurrent requests; half of it is left to others. */
 const OVERALL_IN_FLIGHT = 50;
+
+/** The request a turn is for: the lane it counts in and its route template. */
+interface Request {
+  readonly scope: LaneScope;
+  readonly route: string;
+}
 
 export interface RateLimiterOptions {
   readonly clock: Clock;
@@ -57,7 +63,8 @@ export class RateLimiter {
    * `scope`, and again after a short limit. `attempt` throws {@link GitHubRateLimitedError} when GitHub answers with
    * a limit; any other failure is not the limiter's and goes on unchanged.
    * @throws GitHubRateLimitedError for a limit of more than 60 s, for a lane that is blocked for more than 60 s, and for
-   * the third limit in a row.
+   * the third limit in a row. Every sleep that waits out a limit is one WARN, `github.rate_limited`, whether the request
+   * met the limit itself or arrived while the lane was blocked.
    */
   async run<T>(scope: LaneScope, route: string, attempt: () => Promise<T>): Promise<T> {
     const lane = this.#lanes.of(scope, this.#nowMs());
@@ -65,9 +72,11 @@ export class RateLimiter {
     try {
       for (let repeats = 0; ; repeats += 1) {
         try {
-          return await this.#turn(lane, kindOf(route), attempt);
+          return await this.#turn(lane, { scope, route }, attempt);
         } catch (error) {
-          this.#waitOrThrow({ scope, route, repeats }, error);
+          if (!isWorthWaiting(error, repeats)) {
+            throw error;
+          }
         }
       }
     } finally {
@@ -75,15 +84,12 @@ export class RateLimiter {
     }
   }
 
-  /** Returns when `error` is a limit worth waiting out (it is logged); throws it, or any other failure, when not. */
-  #waitOrThrow(request: { scope: LaneScope; route: string; repeats: number }, error: unknown): void {
-    if (!isWorthWaiting(error, request.repeats)) {
-      throw error;
-    }
+  /** The one WARN line of a wait: the limit's scope, how long, the route and the installation (null: the App's lane). */
+  #warn(request: Request, limit: RateLimitScope, waitSeconds: number): void {
     this.#logger.warn(
       {
-        scope: error.scope,
-        waitSeconds: error.retryAfterSeconds,
+        scope: limit,
+        waitSeconds,
         route: request.route,
         installationId: request.scope === 'app' ? null : request.scope,
       },
@@ -96,14 +102,15 @@ export class RateLimiter {
   }
 
   /** One go at a request: the write gate, then everything else. A write is alone in its lane. */
-  #turn<T>(lane: Lane, kind: Kind, attempt: () => Promise<T>): Promise<T> {
+  #turn<T>(lane: Lane, request: Request, attempt: () => Promise<T>): Promise<T> {
+    const kind = kindOf(request.route);
     return kind === WRITE
-      ? lane.writes.run(() => this.#admitted(lane, kind, attempt))
-      : this.#admitted(lane, kind, attempt);
+      ? lane.writes.run(() => this.#admitted(lane, request, kind, attempt))
+      : this.#admitted(lane, request, kind, attempt);
   }
 
-  async #admitted<T>(lane: Lane, kind: Kind, attempt: () => Promise<T>): Promise<T> {
-    await this.#untilUnblocked(lane);
+  async #admitted<T>(lane: Lane, request: Request, kind: Kind, attempt: () => Promise<T>): Promise<T> {
+    await this.#untilUnblocked(lane, request);
     await this.#pace(lane, kind);
     return lane.inFlight.run(() =>
       this.#overall.run(() => {
@@ -130,8 +137,11 @@ export class RateLimiter {
     }
   }
 
-  /** Sleeps out the rest of a limit of 60 s or less; a longer one is raised without waiting. */
-  async #untilUnblocked(lane: Lane): Promise<void> {
+  /**
+   * Sleeps out the rest of a limit of 60 s or less, and says so with a WARN like the request that met the limit does; a
+   * longer one is raised without waiting.
+   */
+  async #untilUnblocked(lane: Lane, request: Request): Promise<void> {
     const remainingMs = lane.blockedUntilMs - this.#nowMs();
     if (remainingMs <= 0) {
       return;
@@ -140,6 +150,7 @@ export class RateLimiter {
     if (seconds > MAX_WAIT_SECONDS) {
       throw new GitHubRateLimitedError(seconds, lane.blockedScope);
     }
+    this.#warn(request, lane.blockedScope, seconds);
     await this.#sleep(remainingMs);
   }
 

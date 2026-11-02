@@ -153,12 +153,19 @@ test('a shorter limit that comes in later does not shorten a longer one that is 
 
 test('a request of a limited lane that arrives during the wait sleeps the rest of it too', async () => {
   const release = gate();
-  const { limiter, waits } = limiterFixture(() => release.promise);
+  const { limiter, waits, logs } = limiterFixture(() => release.promise);
   const first = limiter.run(A, READ, scripted(limited(10), 'first').attempt);
   await settle();
   const second = limiter.run(A, READ, scripted('second').attempt);
   await settle();
   expect(waits).toEqual([10_000, 10_000]);
+  const warnings = logs.lines().filter((entry) => entry['msg'] === 'github.rate_limited');
+  expect(
+    warnings.map((entry) => [entry['scope'], entry['waitSeconds'], entry['route'], entry['installationId']]),
+  ).toEqual([
+    ['secondary', 10, READ, 11],
+    ['secondary', 10, READ, 11],
+  ]);
   release.open();
   expect(await Promise.all([first, second])).toEqual(['first', 'second']);
 });
