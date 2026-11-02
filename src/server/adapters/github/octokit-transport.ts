@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { Octokit } from 'octokit';
 import type { Logger } from 'pino';
+import { pause } from './pause.ts';
 
 // How the Octokit adapter talks to api.github.com (E05-S04): one place for the timeout, the redirect refusal and the
 // retry rule, wired into the `fetch` Octokit is given, plus the plugin settings that keep Octokit's own retry and
@@ -30,11 +31,6 @@ export interface TransportOptions {
 
 /** What one attempt produced: an answer, or the reason there was none. */
 type Attempt = { readonly response: Response } | { readonly failure: unknown };
-
-const pause = (milliseconds: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
 
 async function attempt(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit): Promise<Attempt> {
   try {
@@ -112,16 +108,16 @@ const silent = (): void => undefined;
 /**
  * The Octokit instance of the adapter. It is the `octokit` package with its plugins: the retry plugin stays registered
  * but is set to no retries, because its schedule (1 s, 4 s, 9 s, writes included) is not the rule of
- * {@link guardedFetch}, and the throttling plugin stays registered with handlers that never wait for a rate limit,
- * because the story that owns rate limits (E05-S05) decides what a rate limit costs. The plugin's own limits on
- * concurrent requests and on writes (10 reads at once, one write per second) stay as they are. Octokit's log is
- * silent: a URL can carry an organisation name.
+ * {@link guardedFetch}, and the throttling plugin is switched off, because it keeps one set of limits per Octokit
+ * instance (10 requests at once and one write a second for all installations together) and the platform's limits are
+ * per installation (E05-S05: `rate-limiter.ts` owns concurrency, write spacing, the point bucket and the waits for
+ * `retry-after` and `x-ratelimit-reset`). Octokit's log is silent: a URL can carry an organisation name.
  */
 export function createOctokit(options: TransportOptions): Octokit {
   return new Octokit({
     request: { fetch: guardedFetch(options) },
     retry: { retries: 0 },
-    throttle: { onRateLimit: () => false, onSecondaryRateLimit: () => false },
+    throttle: { enabled: false },
     log: { debug: silent, info: silent, warn: silent, error: silent },
   });
 }

@@ -57,7 +57,7 @@ test.each([
   expect(waits).toEqual(expected);
 });
 
-test.each([[400], [401], [403], [404], [410], [422], [429], [500], [501]])(
+test.each([[400], [401], [403], [404], [410], [422], [500], [501]])(
   'a %s is a verdict, not an outage: it is sent once and never repeated',
   async (status) => {
     const { client, calls, waits } = clientFixture({ 'GET /app/installations': sequence(status, 200) });

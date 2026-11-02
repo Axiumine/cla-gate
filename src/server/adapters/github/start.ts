@@ -11,6 +11,7 @@ import { AppIdentityCheck } from './app-identity.ts';
 import { InstallationTokens } from './installation-tokens.ts';
 import { OctokitGitHubClient } from './octokit-client.ts';
 import { createOctokit } from './octokit-transport.ts';
+import { RateLimiter } from './rate-limiter.ts';
 
 /** How long a request to GitHub waits for the answer: start-up and the first use do not hang on a black hole. */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -86,7 +87,8 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
     gate: options.gate,
   });
   const octokit = createOctokit({ fetch: options.fetch, timeoutMs, logger });
-  const client = new OctokitGitHubClient({ octokit, withJwt, tokens: installationTokens });
+  const limiter = new RateLimiter({ clock: options.clock, logger });
+  const client = new OctokitGitHubClient({ octokit, withJwt, tokens: installationTokens, limiter });
   return { identity, withJwt, installationTokens, client };
 }
 

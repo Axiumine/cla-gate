@@ -2,13 +2,15 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Octokit } from 'octokit';
 import type { z } from 'zod';
+import type { Clock } from '../../services/ports/clock.ts';
 import { GitHubForbiddenError, GitHubNotFoundError } from '../../services/ports/github-errors.ts';
 import { schemaFailure } from './github-http.ts';
 import { failureOf } from './octokit-errors.ts';
 import type { Page } from './pagination.ts';
 
 // What every request of the Octokit adapter shares (E05-S04): one request with its failure turned into the port's
-// error, one answer read through its schema, and the two ways a missing thing is an answer instead of an error.
+// error, one answer read through its schema, and the two ways a missing thing is an answer instead of an error. Every
+// request goes through a {@link Channel}, which is where the rate limits of E05-S05 apply.
 
 /** Items per page of a paged route, the most GitHub gives. */
 const PER_PAGE = 100;
@@ -16,16 +18,26 @@ const PER_PAGE = 100;
 /** The headers of one request: the shared ones and the credential. */
 export type RequestHeaders = Readonly<Record<string, string>>;
 
-/** One request, its failure turned into the port's error for `route`. */
-export async function send(
-  route: string,
-  request: () => Promise<{ data: unknown; headers: { link?: string | number } }>,
-): Promise<Page> {
+/** One request of Octokit, as far as the adapter reads its answer. */
+export type RawRequest = () => Promise<{ data: unknown; headers: { link?: string | number } }>;
+
+/**
+ * What a request is sent through: the Octokit instance, and the lane of the installation (or of the App) it counts in.
+ * `send` runs the request in that lane and turns its failure into the port's error for `route`; a rate limit of 60 s or
+ * less is waited out and the request repeated (`rate-limiter.ts`).
+ */
+export interface Channel {
+  readonly octokit: Octokit;
+  send(route: string, request: RawRequest): Promise<Page>;
+}
+
+/** One attempt, its failure turned into the port's error for `route`. */
+export async function sendOnce(route: string, request: RawRequest, clock: Clock): Promise<Page> {
   try {
     const { data, headers } = await request();
     return { data, link: typeof headers.link === 'string' ? headers.link : undefined };
   } catch (error) {
-    throw failureOf(error, route);
+    throw failureOf(error, route, clock.now().getTime());
   }
 }
 
@@ -40,12 +52,13 @@ export function parseOne<T>(route: string, schema: z.ZodType<T>, data: unknown):
 
 /** The page of a paged `GET` route: the first, or the URL a `Link` named. */
 export function pager(
-  octokit: Octokit,
+  channel: Channel,
   route: 'GET /app/installations' | 'GET /installation/repositories',
   headers: RequestHeaders,
 ) {
+  const { octokit } = channel;
   return (url: string | undefined): Promise<Page> =>
-    send(route, () =>
+    channel.send(route, () =>
       url === undefined
         ? octokit.request(route, { per_page: PER_PAGE, headers })
         : octokit.request({ method: 'GET', url, headers }),
@@ -66,12 +79,13 @@ async function nullWhen(run: () => Promise<Page>, absent: (error: unknown) => bo
 
 /** The answer to `request` read through `schema`, or null for a 404. */
 export async function readOrNull<T>(
+  channel: Channel,
   route: string,
-  request: () => Promise<{ data: unknown; headers: { link?: string | number } }>,
+  request: RawRequest,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
   const found = await nullWhen(
-    () => send(route, request),
+    () => channel.send(route, request),
     (error) => error instanceof GitHubNotFoundError,
   );
   return found === null ? null : parseOne(route, schema, found.data);
@@ -82,12 +96,13 @@ export async function readOrNull<T>(
  * cannot see look the same from here. A rate limit is not a refusal (see `failureOf`) and still throws.
  */
 export async function readOrNullWhenForbidden<T>(
+  channel: Channel,
   route: string,
-  request: () => Promise<{ data: unknown; headers: { link?: string | number } }>,
+  request: RawRequest,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
   const absent = (error: unknown): boolean =>
     error instanceof GitHubNotFoundError || error instanceof GitHubForbiddenError;
-  const found = await nullWhen(() => send(route, request), absent);
+  const found = await nullWhen(() => channel.send(route, request), absent);
   return found === null ? null : parseOne(route, schema, found.data);
 }

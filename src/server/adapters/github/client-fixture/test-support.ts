@@ -5,15 +5,19 @@ import { setupServer } from 'msw/node';
 import { onTestFinished } from 'vitest';
 import type { GithubId } from '../../../../shared/github-id.ts';
 import { Secret } from '../../../config/secret.ts';
+import { FakeClock } from '../../../services/test-support.ts';
 import { captureLogs, type LogCapture } from '../../../test-support.ts';
 import { createLogger } from '../../http/logger.ts';
 import { GITHUB_API_ORIGIN } from '../github-http.ts';
 import { OctokitGitHubClient } from '../octokit-client.ts';
 import { createOctokit } from '../octokit-transport.ts';
+import { RateLimiter } from '../rate-limiter.ts';
+import { START } from '../test-support.ts';
 
-// The Octokit adapter alone, for the tests that look at what it sends and how it reads failures (E05-S04): MSW serves the
-// routes a test names, the credentials are stand-ins (the signer and the token provider have their own tests), and the
-// waits between repeated attempts are recorded instead of slept.
+// The Octokit adapter alone, for the tests that look at what it sends and how it reads failures (E05-S04, E05-S05): MSW
+// serves the routes a test names, the credentials are stand-ins (the signer and the token provider have their own tests),
+// and the waits (between repeated attempts, for a rate limit) are recorded instead of slept: each one moves the fixture's
+// clock forward by the time it stood for, so a limit that "lasts 2 s" is over when the wait returns.
 
 /** What a mocked route was called with. */
 export interface RouteCall {
@@ -69,6 +73,8 @@ export interface ClientFixtureOptions {
   /** In [0, 1): the jitter's share of 250 ms. Defaults to 0, so a wait is exactly 1000 or 2000. */
   readonly random?: () => number;
   readonly timeoutMs?: number;
+  /** Replaces the wait: it gets the milliseconds, and the clock is moved forward when it returns. Defaults to returning at once. */
+  readonly sleep?: (milliseconds: number) => Promise<void>;
   /** Replaces the token provider's `get`. */
   readonly get?: (githubInstallationId: GithubId, issued: number) => Promise<{ readonly token: Secret }>;
 }
@@ -76,8 +82,10 @@ export interface ClientFixtureOptions {
 export interface ClientFixture {
   readonly client: OctokitGitHubClient;
   readonly calls: RouteCall[];
-  /** Every wait the adapter asked for between attempts, in milliseconds. */
+  /** Every wait the adapter asked for (between attempts, for a rate limit), in milliseconds. */
   readonly waits: number[];
+  /** The time of the adapter: it starts at {@link START} and moves by the waits. */
+  readonly clock: FakeClock;
   /** The installation ids the token provider was asked to drop. */
   readonly invalidated: GithubId[];
   readonly logs: LogCapture;
@@ -92,18 +100,22 @@ export function clientFixture(routes: Routes, options: ClientFixtureOptions = {}
   const current = (githubInstallationId: GithubId): number => issued.get(githubInstallationId) ?? 1;
   const logs = captureLogs();
   const logger = createLogger({ logLevel: 'info' }, logs.destination);
+  const clock = new FakeClock(START);
+  const sleep = async (milliseconds: number): Promise<void> => {
+    waits.push(milliseconds);
+    await options.sleep?.(milliseconds);
+    clock.advance(milliseconds);
+  };
   const octokit = createOctokit({
     fetch,
     timeoutMs: options.timeoutMs ?? 5000,
     logger,
-    sleep: (milliseconds) => {
-      waits.push(milliseconds);
-      return Promise.resolve();
-    },
+    sleep,
     random: options.random ?? (() => 0),
   });
   const client = new OctokitGitHubClient({
     octokit,
+    limiter: new RateLimiter({ clock, logger, sleep }),
     withJwt: (send) => send(MADE_UP_JWT),
     tokens: {
       get: (githubInstallationId) => {
@@ -119,7 +131,7 @@ export function clientFixture(routes: Routes, options: ClientFixtureOptions = {}
       },
     },
   });
-  return { client, calls, waits, invalidated, logs };
+  return { client, calls, waits, clock, invalidated, logs };
 }
 
 /** An installation as GitHub spells it, with fields the platform does not use. */

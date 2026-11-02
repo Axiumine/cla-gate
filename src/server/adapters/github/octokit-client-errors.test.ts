@@ -6,6 +6,7 @@ import {
   GitHubAuthError,
   GitHubForbiddenError,
   GitHubNotFoundError,
+  GitHubRateLimitedError,
   GitHubResponseError,
   GitHubUnavailableError,
 } from '../../services/ports/github-errors.ts';
@@ -59,11 +60,6 @@ const FAILURES: [name: string, failure: Failure][] = [
   ['401', { status: 401, headers: {}, message: LEAK, expected: GitHubAuthError, names: false }],
   ['404', { status: 404, headers: {}, message: LEAK, expected: GitHubNotFoundError, names: true }],
   ['a 403 that is a refusal', refusal(`Resource not accessible by integration ${LEAK}`)],
-  ['a 403 with the primary limit used up', outage(403, { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1' })],
-  ['a 403 with retry-after', outage(403, { 'retry-after': '30' })],
-  ['a 403 worded as a secondary limit', outage(403, {}, `You have exceeded a secondary rate limit. ${LEAK}`)],
-  ['a 403 worded as the primary limit', outage(403, {}, `API rate limit exceeded for installation ID 5. ${LEAK}`)],
-  ['429', outage(429, { 'retry-after': '2' })],
   ['500', outage(500)],
   ['501', outage(501)],
   ['410', outage(410)],
@@ -123,10 +119,14 @@ test.each([
   ['the primary limit used up', { 'x-ratelimit-remaining': '0' }, 'forbidden'],
   ['retry-after', { 'retry-after': '60' }, 'forbidden'],
   ['a secondary limit', {}, 'You have exceeded a secondary rate limit'],
-])('getRepositoryById does not take a 403 for %s as a removal: it fails', async (_name, headers, message) => {
-  const { client } = clientFixture({ 'GET /repositories/:id': () => json({ message }, 403, headers) });
-  await expect(client.getRepositoryById(id(11), id(101))).rejects.toBeInstanceOf(GitHubUnavailableError);
-});
+])(
+  'getRepositoryById does not take a 403 for %s as a removal: it waits, then fails as a rate limit',
+  async (_name, headers, message) => {
+    const { client, calls } = clientFixture({ 'GET /repositories/:id': () => json({ message }, 403, headers) });
+    await expect(client.getRepositoryById(id(11), id(101))).rejects.toBeInstanceOf(GitHubRateLimitedError);
+    expect(calls).toHaveLength(3);
+  },
+);
 
 test('getOrgMembership resolves null on 404 and fails on a 403 (Members: read missing)', async () => {
   const missing = clientFixture({ 'GET /orgs/:org/memberships/:username': () => json({ message: 'Not Found' }, 404) });

@@ -11,9 +11,10 @@ import type { GithubId } from '../../../shared/github-id.ts';
 // platform uses, in the types below.
 //
 // What a method throws is in `./github-errors.ts`: 401 is GitHubAuthError, 404 GitHubNotFoundError (unless the method
-// resolves null for it), another 403 GitHubForbiddenError, a 5xx, a rate limit or a network failure
-// GitHubUnavailableError, an answer that is not what the schema says GitHubResponseError, and an installation the
-// instance does not serve InstallationNotAdmittedError (installation-level methods only, before any request).
+// resolves null for it), another 403 GitHubForbiddenError, a 5xx or a network failure GitHubUnavailableError, a rate
+// limit that is too long to wait out (or that came back after two waits) GitHubRateLimitedError, an answer that is not
+// what the schema says GitHubResponseError, and an installation the instance does not serve
+// InstallationNotAdmittedError (installation-level methods only, before any request).
 
 /** The account types an App can be installed on or owned by. */
 type GitHubAccountType = 'User' | 'Organization';

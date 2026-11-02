@@ -104,3 +104,28 @@ export class GitHubForbiddenError extends Error {
     this.route = route;
   }
 }
+
+// What the rate limits add (E05-S05). The adapter waits out a short limit itself; this is what is left for the caller.
+
+/**
+ * Which of GitHub's limits answered: `primary` is the hourly budget of the credential (`x-ratelimit-remaining: 0`),
+ * `secondary` is every other limit (bursts, concurrency, content creation), with or without `retry-after`.
+ */
+export type RateLimitScope = 'primary' | 'secondary';
+
+/**
+ * GitHub is limiting the installation (or the App) and the wait is too long to sit through, or short waits were
+ * already spent: the adapter waited twice and the third answer was a limit again. `retryAfterSeconds` is how long
+ * GitHub asked to wait, at least 1. No sleeping happened for it, so the job layer (E07-S03) decides when to retry.
+ */
+export class GitHubRateLimitedError extends Error {
+  override readonly name = 'GitHubRateLimitedError';
+  readonly retryAfterSeconds: number;
+  readonly scope: RateLimitScope;
+
+  constructor(retryAfterSeconds: number, scope: RateLimitScope) {
+    super(`GitHub rate limit (${scope}): retry after ${retryAfterSeconds} s`);
+    this.retryAfterSeconds = retryAfterSeconds;
+    this.scope = scope;
+  }
+}
