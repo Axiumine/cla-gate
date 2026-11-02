@@ -119,7 +119,7 @@ async function loginAs(
 /** The real app over a migrated PGlite. `env` adds to the login settings (the lifetimes, for instance). */
 export async function authWorld(
   env: Readonly<Record<string, string>> = {},
-  github: Pick<TestAppOptions, 'githubTimeoutMs'> = {},
+  github: Pick<TestAppOptions, 'githubTimeoutMs' | 'fetch'> = {},
 ): Promise<AuthWorld> {
   const base = await openPgliteDatabase();
   await migrate(base, await loadMigrationFiles(MIGRATIONS_DIRECTORY));

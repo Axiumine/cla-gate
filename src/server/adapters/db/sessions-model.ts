@@ -66,6 +66,8 @@ export interface SessionStore {
   verifiedEmails(rowId: number): Promise<readonly VerifiedEmail[]>;
   /** Deletes the session with this `sessions.id`; the login callback ends the session it was presented with (E10-S05). */
   remove(rowId: number): Promise<void>;
+  /** Deletes every session of the user with this `users.id` and returns the count; logout everywhere (E10-S06). */
+  removeAllOfUser(userId: number): Promise<number>;
 }
 
 /** The id and the CSRF secret are 32 random bytes, 43 characters in base64url. */

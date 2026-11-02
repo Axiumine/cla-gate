@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { loginFailedPath, loginFailureReasonSchema, sessionResponseSchema } from './auth.ts';
+import { loginFailedPath, loginFailureReasonSchema, logoutRequestSchema, sessionResponseSchema } from './auth.ts';
 
 const BODY = {
   user: { githubId: 1001, login: 'alice', name: 'Alice', avatarUrl: null },
@@ -38,4 +38,26 @@ test.each([
 
 test.each(['', 'unknown', 'STATE_MISMATCH', 'state_mismatch ', 7])('%j is not a login failure reason', (reason) => {
   expect(loginFailureReasonSchema.safeParse(reason).success).toBe(false);
+});
+
+test.each([
+  ['an absent body', undefined, undefined],
+  ['an empty object', {}, {}],
+  ['everywhere false', { everywhere: false }, { everywhere: false }],
+  ['everywhere true', { everywhere: true }, { everywhere: true }],
+])('a logout body of %s is accepted', (_label, body, parsed) => {
+  expect(logoutRequestSchema.parse(body)).toEqual(parsed);
+});
+
+test.each([
+  ['an unknown key', { userId: 2 }],
+  ['an unknown key beside a known one', { everywhere: true, githubId: 2002 }],
+  ['a string for the flag', { everywhere: 'true' }],
+  ['a number for the flag', { everywhere: 1 }],
+  ['null for the flag', { everywhere: null }],
+  ['null as the body', null],
+  ['an array as the body', [true]],
+  ['a string as the body', 'everywhere'],
+])('a logout body of %s is rejected', (_label, body) => {
+  expect(logoutRequestSchema.safeParse(body).success).toBe(false);
 });

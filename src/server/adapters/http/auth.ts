@@ -12,10 +12,11 @@ import { LOGIN_TIMEOUT_MS } from '../github/user-login-transport.ts';
 import { callbackRoutes } from './auth-callback.ts';
 import { authenticate, noStoreForAuth } from './auth-hooks.ts';
 import { loginRoutes } from './auth-login.ts';
+import { logoutRoutes } from './auth-logout.ts';
 import { authRoutes } from './auth-routes.ts';
 
-// The login wiring (E10-S02, E10-S05): the cookie plugin, the hooks of auth-hooks.ts and the routes. The shape of
-// `request.auth` and `requireAuth` are in auth-request.ts, the routes in auth-routes.ts, auth-login.ts and auth-callback.ts,
+// The login wiring (E10-S02, E10-S05, E10-S06): the cookie plugin, the hooks of auth-hooks.ts and the routes. The shape of
+// `request.auth` and `requireAuth` are in auth-request.ts, the routes in auth-routes.ts, auth-login.ts, auth-callback.ts and auth-logout.ts,
 // and the slot itself is declared with the request guards (E10-S03).
 
 export interface AuthOptions {
@@ -53,4 +54,5 @@ export async function registerAuth(app: FastifyInstance, options: AuthOptions): 
     fetch: options.fetch,
   });
   await app.register(callbackRoutes, { db: options.db, github, limits: settings.session, clock: options.clock });
+  await app.register(logoutRoutes, { store });
 }
