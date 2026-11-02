@@ -203,7 +203,7 @@ const FORBIDDEN_METADATA = [
   ['a sentence inside an allowed key', { reason_code: 'Alice Smith asked' }],
   ['a code that is too long', { reason_code: `a${'b'.repeat(64)}` }],
   ['an object inside an allowed key', { count: { n: 1 } }],
-  ['an array inside an allowed key', { count: [1] }],
+  ['an array of text inside an allowed key', { count: ['a@b.c'] }],
 ] as const;
 
 test.each(FORBIDDEN_METADATA)('audit metadata refuses %s', async (_case, metadata) => {
