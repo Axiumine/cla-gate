@@ -6,6 +6,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import type { Kysely } from 'kysely';
 import type { Database } from './adapters/db/schema.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
+import { registerAuth } from './adapters/http/auth.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
@@ -14,7 +15,9 @@ import { createLogger } from './adapters/http/logger.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { securityHeaders } from './adapters/http/security.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
+import { authSettings } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
+import { type Clock, systemClock } from './services/ports/clock.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
 
@@ -25,6 +28,8 @@ export interface AppOptions {
   /** Defaults to the pino logger from {@link createLogger}. */
   readonly logger?: FastifyBaseLogger;
   readonly readinessTimeoutMs?: number;
+  /** Where the session lifetimes take "now" from (E10-S02). Defaults to the wall clock. */
+  readonly clock?: Clock | undefined;
 }
 
 /**
@@ -55,6 +60,10 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     reply.header(REQUEST_ID_HEADER, request.id);
     done();
   });
+  const loginSettings = authSettings(config);
+  if (loginSettings !== undefined) {
+    await registerAuth(app, { db, settings: loginSettings, clock: options.clock ?? systemClock });
+  }
   await app.register(healthRoutes, {
     db,
     readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,

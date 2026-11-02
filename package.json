@@ -52,6 +52,7 @@
     "gate": "lefthook run pre-push --all-files"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.5",
     "@fastify/helmet": "^13.2.0",
     "fastify": "^5.12.7",
     "fastify-type-provider-zod": "^7.0.0",

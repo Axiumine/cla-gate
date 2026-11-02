@@ -4,10 +4,7 @@ import type { Logger } from 'pino';
 import type { AppConfig } from './env.ts';
 import type { Secret } from './secret.ts';
 
-/**
- * Everything the login routes need (E10-S01): present only when all three secrets are configured.
- * @internal Exported for the unit tests and for the login routes (E10-S02); Knip ignores `@internal` exports in production mode until a route imports it.
- */
+/** Everything the login routes need (E10-S01): present only when all three secrets are configured. */
 export interface AuthSettings {
   readonly sessionSecret: Secret;
   /** The GitHub App's client id (not a secret: it is in the authorize URL). */
@@ -21,7 +18,6 @@ export interface AuthSettings {
  * auth routes are registered only when this answers, the pattern the GitHub adapter uses for the App credentials
  * (E05-S01), so a development or test server without them still starts. Production cannot reach the undefined case:
  * `loadConfig` refuses it.
- * @internal Exported for the unit tests and for the login routes (E10-S02); Knip ignores `@internal` exports in production mode until a route imports it.
  */
 export function authSettings(config: AppConfig): AuthSettings | undefined {
   const { sessionSecret, session } = config;
