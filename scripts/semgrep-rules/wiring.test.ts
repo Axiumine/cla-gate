@@ -61,7 +61,10 @@ test('.semgrepignore ignores no test file: co-located *.test.ts files are scanne
 });
 
 test('.gitignore keeps rules/ out of the repository: the Semgrep Rules License v1.0 restricts redistribution', () => {
-  expect(repoText('.gitignore').split('\n')).toContain('rules/');
+  const lines = repoText('.gitignore').split('\n');
+  expect(lines).toContain('/rules/');
+  // Anchored to the root: a source directory that is merely called rules (src/server/domain/rules/) must stay trackable.
+  expect(lines).not.toContain('rules/');
 });
 
 test('no workflow uploads SARIF, and none uploads or caches rules/ outside the repository', () => {

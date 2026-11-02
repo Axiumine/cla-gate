@@ -22,7 +22,7 @@ test-results/
 *.tsbuildinfo
 
 # offline Semgrep rules: the Semgrep Rules License forbids redistribution
-rules/
+/rules/
 
 # local state (the development database port chosen by `yarn db:up`)
 .local/
