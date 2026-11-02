@@ -31,8 +31,9 @@ export async function recordSuspension(
   return true;
 }
 
-const sameInstant = (a: Date | null, b: Date | null): boolean =>
-  a === null || b === null ? a === b : a.getTime() === b.getTime();
+/** A suspension that stays but carries another time: it was lifted and set again between two syncs. */
+const suspensionMoved = (stored: Date | null, remote: Date | null): boolean =>
+  stored !== null && remote !== null && stored.getTime() !== remote.getTime();
 
 /**
  * The snapshot of a stored installation changed in a way no other audit row of the sync tells: the account, its login or
@@ -44,9 +45,7 @@ export function snapshotRefreshed(stored: InstallationRow, remote: GitHubInstall
     stored.account_id !== remote.account.id ||
     stored.account_login !== remote.account.login ||
     stored.account_type !== remote.account.type ||
-    (stored.suspended_at !== null &&
-      remote.suspendedAt !== null &&
-      !sameInstant(stored.suspended_at, remote.suspendedAt))
+    suspensionMoved(stored.suspended_at, remote.suspendedAt)
   );
 }
 
