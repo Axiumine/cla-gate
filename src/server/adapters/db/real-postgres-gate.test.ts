@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import {
   DATABASE_KIND,
   engineOf,
   type Gate,
+  type GateHost,
   NEEDS_REAL_POSTGRES,
   NEEDS_ROLE_TESTS,
   realPostgres,
@@ -83,6 +84,79 @@ test('a run gate runs the body once and does not skip', async () => {
   });
   expect(calls).toEqual(['body']);
 });
+
+type Wrapper = typeof realPostgresOnly;
+type Registered = Parameters<GateHost['register']>[1];
+
+/**
+ * Wraps a body with `wrapper` on a host that only records the registered test, runs the recorded test the way Vitest
+ * would (a skip is a thrown signal) with the two flags set in the real environment, and says what happened to the body.
+ */
+async function outcomeOf(
+  wrapper: Wrapper,
+  kind: GateHost['kind'],
+  flags: { readonly require?: string; readonly roles?: string },
+): Promise<{ names: string[]; result: string }> {
+  const names: string[] = [];
+  const recorded: Registered[] = [];
+  const host: GateHost = {
+    kind,
+    register: (name, registered) => {
+      names.push(name);
+      recorded.push(registered);
+    },
+  };
+  const calls: string[] = [];
+  wrapper(
+    'the wrapped test',
+    () => {
+      calls.push('body');
+      return Promise.resolve();
+    },
+    host,
+  );
+  vi.stubEnv('REQUIRE_REAL_POSTGRES', flags.require);
+  vi.stubEnv('CLA_ROLE_TESTS', flags.roles);
+  try {
+    await Promise.all(recorded.map((registered) => registered({ skip: skipByThrowing })));
+    return { names, result: calls.length === 1 ? 'ran' : 'did not run' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { names, result: `${error instanceof SkipSignal ? 'skipped' : 'failed'}: ${message}` };
+  } finally {
+    vi.unstubAllEnvs();
+  }
+}
+
+test.each([
+  ['PGlite without flags', 'pglite', {}, 'skipped: needs real Postgres'],
+  ['PGlite with REQUIRE_REAL_POSTGRES=1', 'pglite', { require: '1' }, `failed: ${MISSING}`],
+  ['a real server without flags', 'postgres', {}, 'ran'],
+  ['a real server with REQUIRE_REAL_POSTGRES=1', 'postgres', { require: '1' }, 'ran'],
+  ['a real server with CLA_ROLE_TESTS unset or 0', 'postgres', { roles: '0' }, 'ran'],
+] as const)(
+  'the realPostgresOnly wrapper registers one test that, on %s, is %s',
+  async (_name, kind, flags, expected) => {
+    const { names, result } = await outcomeOf(realPostgresOnly, kind, flags);
+    expect(names).toEqual(['the wrapped test']);
+    expect(result).toBe(expected);
+  },
+);
+
+test.each([
+  ['PGlite without flags', 'pglite', {}, 'skipped: needs real Postgres'],
+  ['PGlite with both flags', 'pglite', { require: '1', roles: '1' }, `failed: ${MISSING}`],
+  ['a real server without flags', 'postgres', {}, 'skipped: needs CLA_ROLE_TESTS=1'],
+  ['a real server with REQUIRE_REAL_POSTGRES=1 only', 'postgres', { require: '1' }, 'skipped: needs CLA_ROLE_TESTS=1'],
+  ['a real server with CLA_ROLE_TESTS=1', 'postgres', { roles: '1' }, 'ran'],
+] as const)(
+  'the realPostgresRolesOnly wrapper registers one test that, on %s, is %s',
+  async (_name, kind, flags, expected) => {
+    const { names, result } = await outcomeOf(realPostgresRolesOnly, kind, flags);
+    expect(names).toEqual(['the wrapped test']);
+    expect(result).toBe(expected);
+  },
+);
 
 test('the reasons are the ones the CI job and the docs name', () => {
   expect([NEEDS_REAL_POSTGRES, NEEDS_ROLE_TESTS]).toEqual(['needs real Postgres', 'needs CLA_ROLE_TESTS=1']);

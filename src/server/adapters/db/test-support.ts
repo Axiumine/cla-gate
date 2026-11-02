@@ -269,6 +269,8 @@ export function asRuntimeRole<T>(db: Kysely<Database>, work: (trx: Kysely<Databa
 
 export const NEEDS_REAL_POSTGRES = 'needs real Postgres';
 export const NEEDS_ROLE_TESTS = 'needs CLA_ROLE_TESTS=1';
+const REQUIRED_BUT_PGLITE =
+  'REQUIRE_REAL_POSTGRES=1 but this run uses PGlite: set DATABASE_URL to a real Postgres server';
 
 /** The engine behind the database URL of a run, as `TestDatabase.kind` names it: no URL means PGlite. */
 export function engineOf(url: string | undefined): TestDatabase['kind'] {
@@ -295,10 +297,7 @@ export function realPostgresGate(kind: TestDatabase['kind'], env: Environment): 
     return { action: 'run' };
   }
   if (env['REQUIRE_REAL_POSTGRES'] === '1') {
-    return {
-      action: 'fail',
-      message: 'REQUIRE_REAL_POSTGRES=1 but this run uses PGlite: set DATABASE_URL to a real Postgres server',
-    };
+    return { action: 'fail', message: REQUIRED_BUT_PGLITE };
   }
   return { action: 'skip', note: NEEDS_REAL_POSTGRES };
 }
@@ -326,17 +325,28 @@ export async function runGated(gate: Gate, skip: (note: string) => never, body: 
   await body();
 }
 
-/** A test that needs a real Postgres server. Skipped with {@link NEEDS_REAL_POSTGRES} on PGlite, a failure under `REQUIRE_REAL_POSTGRES=1`. */
-export function realPostgresOnly(name: string, body: () => Promise<void>): void {
-  // eslint-disable-next-line sonarjs/assertions-in-tests -- the assertions are in `body`, which the caller writes
-  test(name, (context) => runGated(realPostgresGate(DATABASE_KIND, process.env), context.skip, body));
+type Registered = (context: { readonly skip: (note: string) => never }) => Promise<void>;
+
+/** How a gated test is registered and which engine the run uses; the tests of the wrappers hand in their own host. */
+export interface GateHost {
+  readonly register: (name: string, body: Registered) => void;
+  readonly kind: TestDatabase['kind'];
 }
 
-/** {@link realPostgresOnly} for tests that create or alter cluster-wide roles: also skipped with {@link NEEDS_ROLE_TESTS} unless `CLA_ROLE_TESTS=1`. */
-export function realPostgresRolesOnly(name: string, body: () => Promise<void>): void {
-  // eslint-disable-next-line sonarjs/assertions-in-tests -- the assertions are in `body`, which the caller writes
-  test(name, (context) => runGated(realPostgresRolesGate(DATABASE_KIND, process.env), context.skip, body));
+const VITEST_HOST: GateHost = { register: test, kind: DATABASE_KIND };
+
+/** Turns a gate into the registration function of a gated test: same name and body, plus an optional host. */
+function gated(gate: typeof realPostgresGate): (name: string, body: () => Promise<void>, host?: GateHost) => void {
+  return (name, body, { register, kind } = VITEST_HOST) => {
+    register(name, (context) => runGated(gate(kind, process.env), context.skip, body));
+  };
 }
+
+/** A test that needs a real Postgres server. Skipped with {@link NEEDS_REAL_POSTGRES} on PGlite, a failure under `REQUIRE_REAL_POSTGRES=1`. */
+export const realPostgresOnly = gated(realPostgresGate);
+
+/** {@link realPostgresOnly} for tests that create or alter cluster-wide roles: also skipped with {@link NEEDS_ROLE_TESTS} unless `CLA_ROLE_TESTS=1`. */
+export const realPostgresRolesOnly = gated(realPostgresRolesGate);
 
 // -------------------------------------------------------------------------------------- independent connections
 
