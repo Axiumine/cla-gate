@@ -5,13 +5,18 @@
 // with the MSW handler files, and nothing else of src/web is.
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterAll, afterEach, beforeAll } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
 import { server } from './server.ts';
+import { resetThemeEnvironment } from './theme.ts';
 
 // A request without a handler fails (MSW 3 calls the option onUnhandledFrame): the app reaches the network only as a test says.
 beforeAll(() => {
   server.listen({ onUnhandledFrame: 'error' });
 });
+
+// Every test starts on a first visit on a light system: jsdom has no matchMedia, and the theme leaves a mark on <html> and
+// in storage (E17-S05).
+beforeEach(resetThemeEnvironment);
 
 // Testing Library only cleans up by itself when Vitest globals are on; they are off here, so it is done explicitly.
 afterEach(() => {

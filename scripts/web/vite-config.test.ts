@@ -36,13 +36,23 @@ test('no asset is inlined as a data: URI, which the Content-Security-Policy forb
   expect(config('build').build?.assetsInlineLimit).toBe(0);
 });
 
-test('the plugins are the React plugin of Vite 8 and nothing else: no Babel plugin, no React Compiler', () => {
-  const names = (config('build').plugins ?? [])
+/** The name of every plugin of the config, flattened. */
+function pluginNames(): string[] {
+  return (config('build').plugins ?? [])
     .flat()
     .map((plugin) => (typeof plugin === 'object' && plugin !== null && 'name' in plugin ? plugin.name : ''));
+}
+
+test('the plugins are the React plugin of Vite 8, Tailwind CSS 4 and the theme script of E17-S05, and nothing else', () => {
+  const names = pluginNames();
   expect(names).toContain('vite:react-refresh');
-  expect(names.filter((name) => !name.startsWith('vite:react'))).toEqual([]);
-  expect(names.filter((name) => /compiler/i.test(name))).toEqual([]);
+  expect(names).toContain('cla:theme-init');
+  expect(names.filter((name) => name.startsWith('@tailwindcss/vite:'))).not.toEqual([]);
+  expect(names.filter((name) => !/^(?:vite:react|@tailwindcss\/vite:|cla:theme-init$)/.test(name))).toEqual([]);
+});
+
+test('no React Compiler plugin is among them: the compiler is off in v0', () => {
+  expect(pluginNames().filter((name) => /compiler/i.test(name))).toEqual([]);
 });
 
 test('the dev server listens on loopback only and never asks for a well-known port', () => {

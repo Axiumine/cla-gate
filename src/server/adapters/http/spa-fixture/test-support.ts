@@ -24,6 +24,8 @@ const FILES: Readonly<Record<string, string>> = {
   'assets/app-3f9a1c.css': 'body{margin:0}',
   'assets/nested/chunk-77aa.js': 'export {};',
   'robots.txt': 'User-agent: *',
+  // The blocking script of <head> that sets the theme (E17-S05): a root file, not a hashed asset.
+  'theme-init.js': "document.documentElement.setAttribute('data-theme','light');",
   'favicon.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>',
   '.hidden': 'dotfile-marker',
   '.git/config': 'dotdirectory-marker',

@@ -33,6 +33,7 @@ test.each([
   ['index.html', '/'],
   ['index.html by name', '/index.html'],
   ['robots.txt', '/robots.txt'],
+  ['the theme script of the page, which has no hash in its name', '/theme-init.js'],
   ['an icon at the root', '/favicon.svg'],
   ['a file in another folder', '/locales/en.json'],
 ])('%s is revalidated with an ETag on every use', async (_what, url) => {
@@ -41,6 +42,13 @@ test.each([
   expect(response.statusCode).toBe(200);
   expect(response.headers['cache-control']).toBe('no-cache');
   expect(response.headers.etag).toMatch(/^W?\/?"?.+"$/);
+});
+
+test('the theme script is served as JavaScript from the root, so the page can load it as a blocking script', async () => {
+  const { app } = await webApp();
+  const response = await app.inject('/theme-init.js');
+  expect(response.headers['content-type']).toBe('application/javascript; charset=utf-8');
+  expect(response.body).toContain('data-theme');
 });
 
 test('a request that sends the ETag back is answered 304 with no body, and still says no-cache', async () => {

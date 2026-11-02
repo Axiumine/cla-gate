@@ -42,8 +42,8 @@ function anonymous(): Response {
 
 /**
  * Renders `ui` the way the app runs: on `route`, inside the providers of the app (`AppProviders`: the query client with
- * `retry: false`, and the i18n provider of E17-S02), with the session endpoint answering as `session` says. The router and
- * theme providers join there as E17-S05 and E17-S08 land, so a test written now keeps working. The session is checked
+ * `retry: false`, the i18n provider of E17-S02 and the theme provider of E17-S05), with the session endpoint answering as
+ * `session` says. The router joins there as E17-S08 lands, so a test written now keeps working. The session is checked
  * against the shared contract, so a fixture that the server could never send fails the test that uses it. The result is
  * Testing Library's plus `user`, the user-event instance that acts on that render, and its `queryClient`.
  */

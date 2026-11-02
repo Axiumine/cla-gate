@@ -43,5 +43,8 @@ export const webProject: TestProjectInlineConfiguration = {
     environmentOptions: { jsdom: { url: 'http://localhost/' } },
     include: ['src/web/**/*.test.{ts,tsx}'],
     setupFiles: ['src/web/test-support/vitest.setup.ts'],
+    // Vitest turns every .css import into an empty module. The stylesheets are read as text (`?raw`) by the tests of the design
+    // tokens (E17-S05), which parse them, so that form alone is let through.
+    css: { include: [/\.css\?raw$/] },
   },
 };

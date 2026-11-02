@@ -17,6 +17,7 @@ test.each([
   ['a HEAD of a route of the app', { method: 'HEAD', url: '/signatures', headers: HTML }],
   ['a revalidation of the root', { url: '/', headers: { 'if-none-match': '*' } }],
   ['a hashed script', { url: SCRIPT_URL }],
+  ['the theme script of the page', { url: '/theme-init.js' }],
 ] as const)('%s carries the policy, nosniff and no referrer', async (_what, request) => {
   const { app } = await webApp();
   const { headers } = await app.inject(request);

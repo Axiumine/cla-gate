@@ -4,8 +4,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { type DefaultTreeAdapterMap, parse } from 'parse5';
+import { parse as parseCss } from 'postcss';
 import { build } from 'vite';
 import { afterAll, expect, test, vi } from 'vitest';
+import { themeAfterRunning } from './test-support.ts';
+import { bundleThemeInit } from './theme-init-build.ts';
 
 // E17-S03: the page the server sends has to run under a Content-Security-Policy without 'unsafe-inline' and with no
 // origin but our own (script-src, style-src and font-src fall back to default-src 'self'). This runs Vite's JavaScript
@@ -115,6 +118,8 @@ interface Built {
   readonly files: readonly string[];
   /** The text of every emitted stylesheet. */
   readonly styles: readonly string[];
+  /** The text of theme-init.js, the blocking script of <head> (E17-S05). */
+  readonly script: string;
 }
 
 /** A file of the build, from the directory made by mkdtemp. */
@@ -139,7 +144,8 @@ async function runBuild(): Promise<Built> {
   const styles = await Promise.all(
     files.filter((file) => file.endsWith('.css')).map((file) => readText(directory, file)),
   );
-  return { directory, html: await readText(directory, 'index.html'), files, styles };
+  const html = await readText(directory, 'index.html');
+  return { directory, html, files, styles, script: await readText(directory, 'theme-init.js') };
 }
 
 let started: Promise<Built> | undefined;
@@ -165,29 +171,35 @@ test(
 );
 
 test(
-  'index.html loads the app by one module script and one stylesheet, both hashed files under /assets/',
+  'index.html loads the blocking theme script first, then the app by one module script and one stylesheet, both hashed files under /assets/',
   async () => {
     const { html } = await theBuild();
     const loaders = elementsOf(parse(html)).filter((element) => ['script', 'link'].includes(element.tagName));
     expect(
       loaders.map((element) => [element.tagName, attributeOf(element, 'type') || attributeOf(element, 'rel')]),
     ).toEqual([
+      ['script', ''],
       ['script', 'module'],
       ['link', 'stylesheet'],
     ]);
-    for (const url of loadedUrls(loaders)) {
+    const [theme, ...hashed] = loadedUrls(loaders);
+    expect(theme).toBe('/theme-init.js');
+    for (const url of hashed) {
       expect(url).toMatch(/^\/assets\/[\w-]+-[\w-]{8}\.(js|css)$/);
     }
+    // vite-ignore only keeps Vite from warning about a classic script; it is not part of the page the server sends.
+    expect(elementsOf(parse(html)).flatMap(attributeNames)).not.toContain('vite-ignore');
   },
   BUILD_TIMEOUT_MS,
 );
 
 test(
-  'every file of the build but index.html is under assets/, whose names carry a hash, and nothing is a font or a data: asset',
+  'every file of the build but index.html and theme-init.js is under assets/, whose names carry a hash, and nothing is a font or a data: asset',
   async () => {
     const { files } = await theBuild();
     expect(files).toContain('index.html');
-    const others = files.filter((file) => file !== 'index.html');
+    expect(files).toContain('theme-init.js');
+    const others = files.filter((file) => file !== 'index.html' && file !== 'theme-init.js');
     expect(others.length).toBeGreaterThan(0);
     for (const file of others) {
       expect(file).toMatch(/^assets\/[\w-]+-[\w-]{8}\.(js|css)$/);
@@ -206,6 +218,67 @@ test(
     }
     expect(styles.join('\n')).toMatch(/font-family:\s*var\(--font-sans\)/);
     expect(styles.join('\n')).toMatch(/--font-sans:\s*system-ui/);
+  },
+  BUILD_TIMEOUT_MS,
+);
+
+// ------------------------------------------------------------------------------------------ the theme (E17-S05)
+
+test(
+  'theme-init.js is the bundled classic script, and run on a page it sets data-theme from the stored mode and the system',
+  async () => {
+    const { script } = await theBuild();
+    expect(script).toBe(await bundleThemeInit());
+    expect(themeAfterRunning(script, { stored: null, dark: true })).toBe('dark');
+    expect(themeAfterRunning(script, { stored: 'light', dark: true })).toBe('light');
+    expect(themeAfterRunning(script, { stored: 'dark', dark: false, throws: true })).toBe('light');
+  },
+  BUILD_TIMEOUT_MS,
+);
+
+/** The declarations of the first rule of the built stylesheet with this selector, as a name-to-value map. */
+function declarationsIn(css: string, selector: string): Map<string, string> {
+  const found = new Map<string, string>();
+  let first = true;
+  parseCss(css).walkRules((rule) => {
+    if (first && rule.selectors.includes(selector)) {
+      first = false;
+      rule.walkDecls((declaration) => {
+        found.set(declaration.prop, declaration.value);
+      });
+    }
+  });
+  return found;
+}
+
+test(
+  'the built stylesheet carries both themes and follows the active one with color-scheme, so native controls match',
+  async () => {
+    const css = (await theBuild()).styles.join('\n');
+    const light = declarationsIn(css, ':root');
+    const dark = declarationsIn(css, ':root[data-theme=dark]');
+    expect(light.get('--page')).toBeDefined();
+    expect(dark.get('--page')).toBeDefined();
+    expect(dark.get('--page')).not.toBe(light.get('--page'));
+    expect(light.get('color-scheme')).toBe('light dark');
+    expect(declarationsIn(css, ':root[data-theme=light]').get('color-scheme')).toBe('light');
+    expect(dark.get('color-scheme')).toBe('dark');
+  },
+  BUILD_TIMEOUT_MS,
+);
+
+test(
+  'the built stylesheet keeps the base rules: the focus ring, reduced motion and the borders of forced-colors mode',
+  async () => {
+    const css = (await theBuild()).styles.join('\n');
+    expect(Object.fromEntries(declarationsIn(css, ':focus-visible'))).toEqual({
+      outline: '2px solid var(--focus)',
+      'outline-offset': '2px',
+    });
+    expect(css).toMatch(/@media \(prefers-reduced-motion:reduce\)\{\*,:before,:after\{[^}]*transition:none/);
+    expect(css).toMatch(
+      /@media \(forced-colors:active\)\{:where\(button,input,select,textarea,[^}]*border:1px solid buttontext/,
+    );
   },
   BUILD_TIMEOUT_MS,
 );

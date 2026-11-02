@@ -1,0 +1,117 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (C) 2026 Giovanni Manzoni */
+
+/*
+ * The design tokens (E17-S05): colour, spacing, radius and type, as custom properties on :root. This is the only file of
+ * src/web that holds a colour literal (a test fails otherwise). The colour tokens are redefined for the dark theme under
+ * :root[data-theme="dark"], so a component names a role (--fg, --surface), never a colour, and follows the theme by
+ * itself. Every foreground/background pair among them is checked against WCAG 2.2 in both themes
+ * (src/web/theme/contrast.test.ts). app.css maps these names to Tailwind's @theme, which is why none of them uses a name
+ * of Tailwind's own namespaces (--color-*, --spacing, --text-*): a token named like its mapping would refer to itself.
+ *
+ * The font stacks are the system fonts and nothing else (E17-S03): no web font, no @font-face and no font host, so the
+ * Content-Security-Policy needs no font-src.
+ */
+:root {
+  /* Page and surfaces. */
+  --page: #f6f8fa;
+  --surface: #ffffff;
+  --surface-muted: #eaeef2;
+
+  /* Text, links and component boundaries. --line is a boundary (3:1), not a decoration. */
+  --fg: #1f2328;
+  --fg-muted: #59636e;
+  --link: #0550ae;
+  --line: #7d8590;
+
+  /* Actions. */
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --on-accent: #ffffff;
+  --danger: #cf222e;
+  --danger-hover: #a40e26;
+  --on-danger: #ffffff;
+
+  /* Status messages and badges: text on its own tinted background. */
+  --success-bg: #dafbe1;
+  --success-fg: #116329;
+  --warning-bg: #fff8c5;
+  --warning-fg: #7d4e00;
+  --danger-bg: #ffebe9;
+  --danger-fg: #a40e26;
+  --info-bg: #ddf4ff;
+  --info-fg: #0550ae;
+
+  /* The ring of :focus-visible. */
+  --focus: #0969da;
+
+  /* Spacing: a scale of the 0.25rem unit (--space-4 is 1rem). */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Radius, by what is rounded. */
+  --radius-control: 0.375rem;
+  --radius-surface: 0.5rem;
+  --radius-pill: 9999px;
+
+  /* Type. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --size-xs: 0.75rem;
+  --size-sm: 0.875rem;
+  --size-base: 1rem;
+  --size-lg: 1.125rem;
+  --size-xl: 1.25rem;
+  --size-2xl: 1.5rem;
+  --leading-normal: 1.5;
+  --leading-tight: 1.25;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Native controls and scrollbars follow the page: both schemes until the theme is known, then the active one. */
+  color-scheme: light dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --page: #0d1117;
+  --surface: #161b22;
+  --surface-muted: #21262d;
+
+  --fg: #e6edf3;
+  --fg-muted: #9198a1;
+  --link: #58a6ff;
+  --line: #7d8590;
+
+  --accent: #1f6feb;
+  --accent-hover: #1158c7;
+  --on-accent: #ffffff;
+  --danger: #da3633;
+  --danger-hover: #b62324;
+  --on-danger: #ffffff;
+
+  --success-bg: #0f2d1a;
+  --success-fg: #56d364;
+  --warning-bg: #3a2e08;
+  --warning-fg: #e3b341;
+  --danger-bg: #3d1114;
+  --danger-fg: #ff7b72;
+  --info-bg: #0c2d6b;
+  --info-fg: #79c0ff;
+
+  --focus: #58a6ff;
+
+  color-scheme: dark;
+}

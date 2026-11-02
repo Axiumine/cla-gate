@@ -2,13 +2,16 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import path from 'node:path';
 import process from 'node:process';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type ProxyOptions } from 'vite';
 import { LOOPBACK } from './scripts/ci/lib/ports.ts';
+import { themeInit } from './scripts/web/theme-init-build.ts';
 
 // The single-page app in src/web (E17-S01): `yarn build` writes dist/web, which the server serves from its own origin
 // (E17-S03), and `yarn dev` runs the Vite dev server in front of the Fastify dev server (scripts/dev/dev.ts).
-// No Babel and no React Compiler: @vitejs/plugin-react 6 transforms with Oxc, and the compiler is off in v0.
+// No Babel and no React Compiler: @vitejs/plugin-react 6 transforms with Oxc, and the compiler is off in v0. Tailwind CSS 4 is
+// the stylesheet pipeline (E17-S05), and themeInit bundles the blocking theme script that index.html loads.
 
 const ROOT = import.meta.dirname;
 
@@ -35,7 +38,7 @@ function apiProxy(env: Readonly<Record<string, string | undefined>>): Record<str
 
 export default defineConfig(({ command }) => ({
   root: path.join(ROOT, 'src/web'),
-  plugins: [react()],
+  plugins: [react(), tailwindcss(), themeInit()],
   build: {
     outDir: path.join(ROOT, 'dist/web'),
     // The output directory is outside the root (src/web), so Vite must be told it may empty it.
