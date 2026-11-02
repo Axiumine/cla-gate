@@ -5,6 +5,7 @@ import { asRuntimeRole, seedSignature, seedTenant } from '../../adapters/db/test
 import { createLogger } from '../../adapters/http/logger.ts';
 import { commitSha } from '../github-pull-contract/test-support.ts';
 import { createOrgMembership } from '../org-membership.ts';
+import { createOrgMembershipCache } from '../org-membership-cache.ts';
 import { evaluatePr } from './evaluate-pr.ts';
 import { allow, type EvaluateWorld, engineInput, enrol, evaluateWorld, JOB, lookups, ORG } from './test-support.ts';
 
@@ -102,7 +103,16 @@ test('the job runs as the runtime role: it reads what it needs and writes its ro
   const logger = createLogger({ logLevel: 'info' }, world.logs.destination);
   const outcome = await asRuntimeRole(world.raw, (trx) =>
     evaluatePr(
-      { ...world.ports, db: trx, orgMembership: createOrgMembership({ db: trx, github: world.fake, logger }) },
+      {
+        ...world.ports,
+        db: trx,
+        orgMembership: createOrgMembership({
+          db: trx,
+          github: world.fake,
+          logger,
+          cache: createOrgMembershipCache(world.ports.clock),
+        }),
+      },
       JOB,
       { attempt: 0, logger },
     ),

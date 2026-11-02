@@ -16,6 +16,18 @@ import { RateLimiter } from './rate-limiter.ts';
 /** How long a request to GitHub waits for the answer: start-up and the first use do not hang on a black hole. */
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * How long one attempt of a call of the client (the reads of the evaluation, the writes of the report) waits for the
+ * answer (E07-S10): a job is waiting for it, and the call is repeated twice after a timeout, so a slow answer is given up on early.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
+ */
+export const CLIENT_TIMEOUT_MS = 5000;
+
+/** The two timeouts of an App: for the self-check and the token requests, and for the calls of the client. A test's `timeoutMs` sets both. */
+function timeoutsOf(timeoutMs: number | undefined): { readonly app: number; readonly client: number } {
+  return { app: timeoutMs ?? REQUEST_TIMEOUT_MS, client: timeoutMs ?? CLIENT_TIMEOUT_MS };
+}
+
 /** The App's credentials and what GitHub said about it. The services of later stories take it from the boot. */
 export interface GitHubApp {
   /** The verified identity, once GitHub has answered the self-check. */
@@ -39,7 +51,7 @@ export interface GitHubStartOptions {
   readonly logger: Logger;
   readonly clock: Clock;
   readonly fetch: typeof fetch;
-  /** How long a request to GitHub waits; defaults to 10 s. */
+  /** How long a request to GitHub waits; defaults to 10 s for the self-check and the token requests and to 5 s for the calls of the client. */
   readonly timeoutMs?: number;
   /** Which installations get a token (E05-S03, E05-S07). Without one the token provider refuses every installation. */
   readonly gate?: InstallationGate;
@@ -62,10 +74,10 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
   }
   const keys: KeyList = previousPrivateKey === undefined ? [privateKey] : [privateKey, previousPrivateKey];
   const auth = new AppAuth({ appId, keys, clock: options.clock, logger });
-  const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const timeouts = timeoutsOf(options.timeoutMs);
   const limiter = new RateLimiter({ clock: options.clock, logger });
   // What the identity check and the token provider both need to send a request through the rate limiter.
-  const http = { fetch: options.fetch, timeoutMs, clock: options.clock, limiter, logger };
+  const http = { fetch: options.fetch, timeoutMs: timeouts.app, clock: options.clock, limiter, logger };
   const identity = new AppIdentityCheck({ auth, appId, ...http });
   try {
     await identity.verify();
@@ -83,7 +95,7 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
     return auth.withJwt(send);
   };
   const installationTokens = new InstallationTokens({ withJwt, gate: options.gate, ...http });
-  const octokit = createOctokit({ fetch: options.fetch, timeoutMs, logger });
+  const octokit = createOctokit({ fetch: options.fetch, timeoutMs: timeouts.client, logger });
   const client = new OctokitGitHubClient({ octokit, withJwt, tokens: installationTokens, limiter });
   return { identity, withJwt, installationTokens, client };
 }

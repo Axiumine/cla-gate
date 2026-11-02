@@ -11,6 +11,7 @@ import { createLogger } from '../../http/logger.ts';
 import { GITHUB_API_ORIGIN } from '../github-http.ts';
 import { OctokitGitHubClient } from '../octokit-client.ts';
 import { createOctokit } from '../octokit-transport.ts';
+import { guardPublicMembers } from '../public-members-guard/test-support.ts';
 import { RateLimiter } from '../rate-limiter.ts';
 import { START } from '../test-support.ts';
 
@@ -54,7 +55,7 @@ export function serveRoutes(routes: Routes): RouteCall[] {
       return answer(call);
     }),
   );
-  const server = setupServer(...handlers);
+  const server = setupServer(...handlers, guardPublicMembers().handler);
   server.listen({ onUnhandledFrame: 'error' });
   onTestFinished(() => {
     server.close();

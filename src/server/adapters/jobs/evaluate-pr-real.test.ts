@@ -18,6 +18,7 @@ import { account, commit, commitSha, pullRequest } from '../../services/github-p
 import { registerHandlers } from '../../services/job-handlers.ts';
 import { HandlerRegistry } from '../../services/job-registry.ts';
 import { createOrgMembership } from '../../services/org-membership.ts';
+import { createOrgMembershipCache } from '../../services/org-membership-cache.ts';
 import { systemClock } from '../../services/ports/clock.ts';
 import { createPgDatabase } from '../db/pg.ts';
 import type { Database } from '../db/schema.ts';
@@ -129,7 +130,12 @@ async function workersOver(db: Kysely<Database>, { fake, reporter, release }: Re
       db,
       github: fake,
       clock: systemClock,
-      orgMembership: createOrgMembership({ db, github: fake, logger: SILENT }),
+      orgMembership: createOrgMembership({
+        db,
+        github: fake,
+        logger: SILENT,
+        cache: createOrgMembershipCache(systemClock),
+      }),
       reporter,
       evaluate: evaluatePullRequest,
     }),

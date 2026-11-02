@@ -13,6 +13,7 @@ import { FakeReporter, githubWorld } from '../../services/evaluate-pr/test-suppo
 import { registerHandlers } from '../../services/job-handlers.ts';
 import { HandlerRegistry } from '../../services/job-registry.ts';
 import { createOrgMembership } from '../../services/org-membership.ts';
+import { createOrgMembershipCache } from '../../services/org-membership-cache.ts';
 import { systemClock } from '../../services/ports/clock.ts';
 import type { JobQueue } from '../../services/ports/jobs.ts';
 import {
@@ -359,7 +360,7 @@ function policyRegistry(db: Kysely<Database>, reporter: FakeReporter): HandlerRe
       db,
       github,
       clock: systemClock,
-      orgMembership: createOrgMembership({ db, github, logger }),
+      orgMembership: createOrgMembership({ db, github, logger, cache: createOrgMembershipCache(systemClock) }),
       reporter,
       evaluate: evaluatePullRequest,
     }),

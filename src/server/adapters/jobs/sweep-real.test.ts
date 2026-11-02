@@ -10,6 +10,7 @@ import { FakeReporter, githubWorld } from '../../services/evaluate-pr/test-suppo
 import { registerHandlers } from '../../services/job-handlers.ts';
 import { HandlerRegistry } from '../../services/job-registry.ts';
 import { createOrgMembership } from '../../services/org-membership.ts';
+import { createOrgMembershipCache } from '../../services/org-membership-cache.ts';
 import { systemClock } from '../../services/ports/clock.ts';
 import { captureLogs, testConfig } from '../../test-support.ts';
 import { createPgDatabase } from '../db/pg.ts';
@@ -220,7 +221,7 @@ function sweepingRegistry(db: Kysely<Database>, reporter: FakeReporter): Handler
       db,
       github,
       clock: systemClock,
-      orgMembership: createOrgMembership({ db, github, logger }),
+      orgMembership: createOrgMembership({ db, github, logger, cache: createOrgMembershipCache(systemClock) }),
       reporter,
       evaluate: evaluatePullRequest,
     }),

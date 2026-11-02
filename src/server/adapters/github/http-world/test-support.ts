@@ -24,6 +24,7 @@ import { FakeClock, FakeGate } from '../../../services/test-support.ts';
 import { captureLogs, testConfig } from '../../../test-support.ts';
 import { createLogger } from '../../http/logger.ts';
 import { GITHUB_API_ORIGIN } from '../github-http.ts';
+import { guardPublicMembers } from '../public-members-guard/test-support.ts';
 import { startGitHubApp } from '../start.ts';
 import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-support.ts';
 
@@ -371,6 +372,7 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
     ...installationRoutes(state),
     ...pullRoutes(state),
     ...commentRoutes(state),
+    guardPublicMembers().handler,
   );
   server.listen({ onUnhandledFrame: 'error' });
   onTestFinished(() => {

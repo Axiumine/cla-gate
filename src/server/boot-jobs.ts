@@ -10,6 +10,7 @@ import { evaluatePullRequest } from './domain/evaluation/index.ts';
 import { registerHandlers } from './services/job-handlers.ts';
 import { HandlerRegistry } from './services/job-registry.ts';
 import { createOrgMembership } from './services/org-membership.ts';
+import { createOrgMembershipCache } from './services/org-membership-cache.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { GitHubClient } from './services/ports/github.ts';
 import type { EvaluationReporter } from './services/ports/reporter.ts';
@@ -40,6 +41,9 @@ export interface JobWorkersOptions {
 export function jobWorkers(options: JobWorkersOptions): WorkerWiring {
   const { db, config, logger, syncFor, evaluation } = options;
   const clock = options.clock ?? systemClock;
+  // One memory of the membership lookup for the whole process: every run builds its own service (its GitHub client is bound
+  // to the signal of the run), and they all read and fill this one (E07-S10).
+  const membershipCache = createOrgMembershipCache(clock);
   const registry = new HandlerRegistry();
   registerHandlers(registry, {
     syncInstallation:
@@ -55,7 +59,7 @@ export function jobWorkers(options: JobWorkersOptions): WorkerWiring {
               db,
               github,
               clock,
-              orgMembership: createOrgMembership({ db, github, logger }),
+              orgMembership: createOrgMembership({ db, github, logger, cache: membershipCache }),
               reporter: evaluation.reporter,
               evaluate: evaluatePullRequest,
             };

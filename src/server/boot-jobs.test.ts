@@ -11,9 +11,13 @@ import { JOB_TYPES } from './domain/job-envelope.ts';
 import { CLOSE_JOB, HEAD, seedEvaluation } from './services/close-pr/test-support.ts';
 import { deadLetterRegistry } from './services/dead-letter/dead-letter-registry.ts';
 import {
+  allow,
+  enrol,
   evaluateWorld,
   FULL_NAME,
   JOB,
+  lookups,
+  ORG,
   PR_NUMBER,
   INSTALLATION as TENANT_INSTALLATION,
 } from './services/evaluate-pr/test-support.ts';
@@ -22,6 +26,7 @@ import type { InstallationSync } from './services/installation-sync.ts';
 import { HandlerUnavailableError } from './services/job-handlers.ts';
 import { FakePendingJobs } from './services/job-run-fixture/test-support.ts';
 import { createJobsTable, deliveryRows, droppingEnqueuer, fakeEnqueuer } from './services/jobs-fixture/test-support.ts';
+import { MEMBER_TTL_MS } from './services/org-membership-cache.ts';
 import { FakeClock } from './services/test-support.ts';
 import { createWebhookDeliveries } from './services/webhook-deliveries.ts';
 import { testConfig } from './test-support.ts';
@@ -127,7 +132,7 @@ test('without an evaluation reporter the handler of evaluate-pr fails its jobs',
   ).rejects.toBeInstanceOf(HandlerUnavailableError);
 });
 
-async function evaluating() {
+async function evaluating(clock = new FakeClock('2026-11-02T10:00:00Z')) {
   const world = await evaluateWorld();
   const workers = jobWorkers({
     db: world.raw,
@@ -135,7 +140,7 @@ async function evaluating() {
     logger: CONTEXT.logger,
     syncFor: undefined,
     evaluation: { github: world.fake, reporter: world.reporter },
-    clock: new FakeClock('2026-11-02T10:00:00Z'),
+    clock,
   });
   return { world, workers };
 }
@@ -146,6 +151,23 @@ test('with GitHub and a reporter the handler of evaluate-pr evaluates the pull r
   expect(outcome).toEqual({ outcome: 'evaluated' });
   expect(world.reporter.published.map((report) => report.evaluation.outcome)).toEqual(['failure']);
   expect((await world.rows()).map((row) => row.result)).toEqual(['failure']);
+});
+
+test('every evaluation of the process reads and fills one memory of the membership lookups, on the clock of the process (E07-S10)', async () => {
+  const clock = new FakeClock('2026-11-02T10:00:00Z');
+  const { world, workers } = await evaluating(clock);
+  await allow(world, { kind: 'org_members', githubId: ORG });
+  for (const person of [7, 1, 2]) {
+    enrol(world, person);
+  }
+  const evaluate = () => workers.registry.run('evaluate-pr', JOB, { ...CONTEXT, signal: new AbortController().signal });
+  await evaluate();
+  expect(lookups(world)).toBe(3);
+  await evaluate();
+  expect(lookups(world)).toBe(3);
+  clock.advance(MEMBER_TTL_MS);
+  await evaluate();
+  expect(lookups(world)).toBe(6);
 });
 
 test('without an evaluation reporter the handler of close-pr fails its jobs', async () => {

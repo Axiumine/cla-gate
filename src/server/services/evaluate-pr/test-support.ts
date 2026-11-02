@@ -18,6 +18,7 @@ import { captureLogs, type LogCapture } from '../../test-support.ts';
 import { account, commit, pullRequest } from '../github-pull-contract/test-support.ts';
 import type { JobOutcome } from '../job-registry.ts';
 import { createOrgMembership } from '../org-membership.ts';
+import { createOrgMembershipCache } from '../org-membership-cache.ts';
 import type { EvaluationReporter, ReportTarget } from '../ports/reporter.ts';
 import { FakeClock, FakeGate, FakeGitHub } from '../test-support.ts';
 import { evaluatePr } from './evaluate-pr.ts';
@@ -231,11 +232,12 @@ export async function evaluateWorld(
       ? evaluatePullRequest(input)
       : passing({ documentId: tenant.documentId, activeMajor: 1 });
   });
+  const clock = new FakeClock('2026-11-02T10:00:00Z');
   const ports: EvaluatePrPorts = {
     db,
     github: fake,
-    clock: new FakeClock('2026-11-02T10:00:00Z'),
-    orgMembership: createOrgMembership({ db, github: fake, logger }),
+    clock,
+    orgMembership: createOrgMembership({ db, github: fake, logger, cache: createOrgMembershipCache(clock) }),
     reporter,
     evaluate,
   };
