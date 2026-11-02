@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
 import { ConfigError } from '../../config/env.ts';
-import { fetchApp } from './app-api.ts';
+import type { Clock } from '../../services/ports/clock.ts';
+import { APP_ROUTE, fetchApp } from './app-api.ts';
 import type { AppAuth } from './app-auth.ts';
 import { type AppIdentity, toAppIdentity } from './app-identity-model.ts';
+import type { RateLimiter } from './rate-limiter.ts';
 
 export interface AppIdentityCheckOptions {
   readonly auth: AppAuth;
@@ -13,6 +15,9 @@ export interface AppIdentityCheckOptions {
   readonly logger: Logger;
   readonly fetch: typeof fetch;
   readonly timeoutMs: number;
+  readonly clock: Clock;
+  /** The rate limiter of the GitHub client (E05-S05): `GET /app` runs in the App's lane like every JWT request. */
+  readonly limiter: RateLimiter;
 }
 
 /**
@@ -51,8 +56,10 @@ export class AppIdentityCheck {
   }
 
   async #check(): Promise<AppIdentity> {
-    const { auth, appId, logger, fetch: request, timeoutMs } = this.#options;
-    const app = await auth.withJwt((jwt) => fetchApp(request, jwt, timeoutMs));
+    const { auth, appId, logger, fetch: request, timeoutMs, clock, limiter } = this.#options;
+    const app = await auth.withJwt((jwt) =>
+      limiter.run('app', APP_ROUTE, () => fetchApp(request, jwt, timeoutMs, clock)),
+    );
     // Compared as numbers: the id is digits only (E05-S01), and a GitHub id is a safe integer.
     if (app.id !== Number(appId)) {
       logger.error({ configuredAppId: appId, githubAppId: app.id }, 'github.app_id_mismatch');

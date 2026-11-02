@@ -4,8 +4,9 @@ import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
 import { testGitHubKey } from '../../config/test-support.ts';
 import { GitHubAuthError } from '../../services/ports/github-errors.ts';
+import { FakeClock } from '../../services/test-support.ts';
 import { fetchApp } from './app-api.ts';
-import { appFixture, jwtSignedBy, mockApp } from './test-support.ts';
+import { appFixture, jwtSignedBy, mockApp, START } from './test-support.ts';
 
 // Key rotation at the HTTP boundary (E05-S02): MSW plays GitHub, which accepts the public halves of the keys registered
 // on the App and answers 401 to a JWT signed by any other.
@@ -27,7 +28,7 @@ test('the current key refused and the previous accepted: retried once, promoted,
   expect(route.tokens.map((token) => jwtSignedBy(token, current.publicKey))).toEqual([true, false]);
   expect(route.tokens.map((token) => jwtSignedBy(token, previous.publicKey))).toEqual([false, true]);
 
-  await auth.withJwt((jwt) => fetchApp(fetch, jwt, 5000));
+  await auth.withJwt((jwt) => fetchApp(fetch, jwt, 5000, new FakeClock(START)));
   expect(route.tokens).toHaveLength(3);
   expect(jwtSignedBy(route.tokens[2] ?? '', previous.publicKey)).toBe(true);
   expect(logs.lines().filter((line) => line['msg'] === 'github.app_key_fallback')).toMatchObject([

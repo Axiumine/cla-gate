@@ -3,6 +3,7 @@
 import { type KeyObject, verify } from 'node:crypto';
 import { HttpResponse, http, passthrough } from 'msw';
 import { setupServer } from 'msw/node';
+import type { Logger } from 'pino';
 import { onTestFinished } from 'vitest';
 import { z } from 'zod';
 import type { TestGitHubKey } from '../../config/test-support.ts';
@@ -15,6 +16,7 @@ import { AppAuth, type KeyList } from './app-auth.ts';
 import { AppIdentityCheck } from './app-identity.ts';
 import { GITHUB_API_ORIGIN } from './github-http.ts';
 import { InstallationTokens } from './installation-tokens.ts';
+import { RateLimiter } from './rate-limiter.ts';
 
 // GitHub at the HTTP boundary, for tests (E05-S02): MSW answers what the code sends to api.github.com, so the real
 // `fetch` runs and only the network is replaced. Every request nobody handles is an error, not a call to the real API.
@@ -209,12 +211,32 @@ export const START = '2026-11-02T10:00:00.000Z';
 /** The App id of {@link appBody}. */
 export const APP_ID = '4242';
 
+/**
+ * A rate limiter on the fixture's clock whose waits are recorded and move the clock, not slept: a limit of 30 s costs a
+ * test no time. Its log goes where the fixture's does.
+ */
+function fixtureLimiter(clock: FakeClock, logger: Logger): { limiter: RateLimiter; waits: number[] } {
+  const waits: number[] = [];
+  const limiter = new RateLimiter({
+    clock,
+    logger,
+    sleep: (milliseconds) => {
+      waits.push(milliseconds);
+      clock.advance(milliseconds);
+      return Promise.resolve();
+    },
+  });
+  return { limiter, waits };
+}
+
 /** An App signer and identity check wired to a fake clock and a log capture, talking to whatever MSW serves. */
 export interface AppFixture {
   readonly auth: AppAuth;
   readonly check: AppIdentityCheck;
   readonly clock: FakeClock;
   readonly logs: LogCapture;
+  /** Every wait the rate limiter asked for, in milliseconds. */
+  readonly waits: number[];
 }
 
 /** Call {@link mockApp} first: the fixture takes the global `fetch` as it is then. */
@@ -223,8 +245,9 @@ export function appFixture(keys: KeyList, timeoutMs = 5000): AppFixture {
   const logs = captureLogs();
   const logger = createLogger({ logLevel: 'info' }, logs.destination);
   const auth = new AppAuth({ appId: APP_ID, keys, clock, logger });
-  const check = new AppIdentityCheck({ auth, appId: APP_ID, logger, fetch, timeoutMs });
-  return { auth, check, clock, logs };
+  const { limiter, waits } = fixtureLimiter(clock, logger);
+  const check = new AppIdentityCheck({ auth, appId: APP_ID, logger, fetch, timeoutMs, clock, limiter });
+  return { auth, check, clock, logs, waits };
 }
 
 /** The installation token provider wired to a fake clock, a log capture and a gate that admits everyone (E05-S03). */
@@ -234,6 +257,8 @@ export interface TokensFixture {
   readonly clock: FakeClock;
   readonly logs: LogCapture;
   readonly gate: FakeGate;
+  /** Every wait the rate limiter asked for, in milliseconds. */
+  readonly waits: number[];
 }
 
 /**
@@ -249,16 +274,18 @@ export function tokensFixture(
   const logger = createLogger({ logLevel: 'debug' }, logs.destination);
   const auth = new AppAuth({ appId: APP_ID, keys, clock, logger });
   const gate = new FakeGate();
+  const { limiter, waits } = fixtureLimiter(clock, logger);
   const tokens = new InstallationTokens({
     withJwt: (send) => auth.withJwt(send),
     clock,
     logger,
     fetch,
     timeoutMs: options.timeoutMs ?? 5000,
+    limiter,
     // undefined: the fixture's own gate, which admits everyone; null: no gate wired at all.
     gate: options.gate === undefined ? gate : (options.gate ?? undefined),
   });
-  return { tokens, auth, clock, logs, gate };
+  return { tokens, auth, clock, logs, gate, waits };
 }
 
 /** {@link TokensFixture} plus what the mocked token route received. */

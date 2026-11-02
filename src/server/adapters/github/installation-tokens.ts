@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../../shared/github-id.ts';
 import { closedGate, type InstallationGate } from '../../services/ports/installation-gate.ts';
-import { mintInstallationToken } from './installation-token-api.ts';
+import { MINT_ROUTE, mintInstallationToken } from './installation-token-api.ts';
 import { type InstallationToken, type InstallationTokensOptions, present } from './installation-token-model.ts';
 import { SingleFlight } from './single-flight.ts';
 import { type CachedToken, TokenCache, toCachedToken } from './token-cache.ts';
@@ -59,9 +59,14 @@ export class InstallationTokens {
   }
 
   async #mint(githubInstallationId: GithubId): Promise<CachedToken> {
-    const { withJwt, fetch: request, timeoutMs, logger } = this.#options;
+    const { withJwt, fetch: request, timeoutMs, logger, limiter, clock } = this.#options;
     try {
-      const minted = await withJwt((jwt) => mintInstallationToken(request, jwt, githubInstallationId, timeoutMs));
+      // The limiter runs inside withJwt, so the identity check of the App comes first and holds no place in a lane.
+      const minted = await withJwt((jwt) =>
+        limiter.run(githubInstallationId, MINT_ROUTE, () =>
+          mintInstallationToken(request, jwt, githubInstallationId, { timeoutMs, clock }),
+        ),
+      );
       const entry = toCachedToken(minted);
       this.#cache.store(githubInstallationId, entry, this.#nowMs());
       logger.info(

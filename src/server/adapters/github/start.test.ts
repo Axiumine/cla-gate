@@ -113,6 +113,26 @@ test.each([
   },
 );
 
+test('a rate limit too long to wait out is a warning in production too, and the first use is refused until it has run out', async () => {
+  const key = testGitHubKey();
+  const github = flakyGitHub(() =>
+    HttpResponse.json({ message: 'slow down' }, { status: 429, headers: { 'retry-after': '120' } }),
+  );
+  github.accepts.push(key.publicKey);
+  const { result, logs } = start({ ...PRODUCTION, ...credentials(key) });
+  const app = await result;
+  expect(app?.identity.current()).toBeUndefined();
+  expect(logs.lines()).toMatchObject([
+    { level: 40, msg: 'github.app_check_deferred', err: { type: 'GitHubRateLimitedError' } },
+  ]);
+  github.state.up = true;
+  await expect(app?.identity.verify()).rejects.toMatchObject({
+    name: 'GitHubRateLimitedError',
+    retryAfterSeconds: 120,
+  });
+  expect(github.tokens).toHaveLength(1);
+});
+
 test.each([
   ['a network failure', () => HttpResponse.error()],
   [

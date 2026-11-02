@@ -12,9 +12,18 @@ import {
   InstallationGoneError,
   InstallationSuspendedError,
 } from '../../services/ports/github-errors.ts';
+import { FakeClock } from '../../services/test-support.ts';
 import { mintInstallationToken } from './installation-token-api.ts';
 import { packageVersion } from './package-version.ts';
-import { decodeJwt, jwtSignedBy, type MintAnswer, mockGitHub, tokenBody, tokensFixture } from './test-support.ts';
+import {
+  decodeJwt,
+  jwtSignedBy,
+  type MintAnswer,
+  mockGitHub,
+  START,
+  tokenBody,
+  tokensFixture,
+} from './test-support.ts';
 
 const key = testGitHubKey();
 const INSTALLATION = parseGithubId(777);
@@ -24,7 +33,7 @@ const EXPIRES = new Date('2026-11-02T11:00:00.000Z');
 async function outcome(answer: MintAnswer, timeoutMs = 5000): Promise<unknown> {
   mockGitHub([key.publicKey], { mint: answer });
   const jwt = tokensFixture([key.key]).auth.createJwt();
-  return mintInstallationToken(fetch, jwt, INSTALLATION, timeoutMs).then(
+  return mintInstallationToken(fetch, jwt, INSTALLATION, { timeoutMs, clock: new FakeClock(START) }).then(
     (minted) => minted,
     (error: unknown) => error,
   );
@@ -35,7 +44,10 @@ const issued = () => HttpResponse.json(tokenBody('ghs_made-up-token', EXPIRES), 
 test('it posts to the installation, signed as the App, with no body, and keeps only the token and its expiry', async () => {
   const routes = mockGitHub([key.publicKey], { mint: issued });
   const jwt = tokensFixture([key.key]).auth.createJwt();
-  const minted = await mintInstallationToken(fetch, jwt, INSTALLATION, 5000);
+  const minted = await mintInstallationToken(fetch, jwt, INSTALLATION, {
+    timeoutMs: 5000,
+    clock: new FakeClock(START),
+  });
   expect(minted).toEqual({ token: 'ghs_made-up-token', expires_at: '2026-11-02T11:00:00Z' });
   expect(routes.mints).toHaveLength(1);
   const [call] = routes.mints;
@@ -48,7 +60,10 @@ test('it posts to the installation, signed as the App, with no body, and keeps o
 
 test('the request carries the GitHub headers and no content type, since it has no body', async () => {
   const routes = mockGitHub([key.publicKey], { mint: issued });
-  await mintInstallationToken(fetch, tokensFixture([key.key]).auth.createJwt(), INSTALLATION, 5000);
+  await mintInstallationToken(fetch, tokensFixture([key.key]).auth.createJwt(), INSTALLATION, {
+    timeoutMs: 5000,
+    clock: new FakeClock(START),
+  });
   const headers = routes.mints[0]?.headers;
   expect(headers?.get('x-github-api-version')).toBe('2022-11-28');
   expect(headers?.get('accept')).toBe('application/vnd.github+json');
@@ -111,7 +126,7 @@ test('a 403 whose body breaks off while it is read is an outage, with no trace o
     () => Promise.resolve(new Response(broken, { status: 403 })),
     'jwt',
     INSTALLATION,
-    1000,
+    { timeoutMs: 1000, clock: new FakeClock(START) },
   ).catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(GitHubUnavailableError);
   expect(failure).toHaveProperty('message', 'GitHub could not be reached (Error)');
@@ -121,7 +136,10 @@ test('a 401 is a GitHubAuthError', async () => {
   const other = testGitHubKey();
   mockGitHub([other.publicKey], { mint: issued });
   const jwt = tokensFixture([key.key]).auth.createJwt();
-  const failure = await mintInstallationToken(fetch, jwt, INSTALLATION, 5000).catch((error: unknown) => error);
+  const failure = await mintInstallationToken(fetch, jwt, INSTALLATION, {
+    timeoutMs: 5000,
+    clock: new FakeClock(START),
+  }).catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(GitHubAuthError);
 });
 

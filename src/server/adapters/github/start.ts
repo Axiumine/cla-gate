@@ -4,7 +4,7 @@ import type { Logger } from 'pino';
 import type { AppConfig } from '../../config/env.ts';
 import { type Clock, systemClock } from '../../services/ports/clock.ts';
 import type { GitHubClient } from '../../services/ports/github.ts';
-import { GitHubAuthError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
+import { GitHubAuthError, GitHubRateLimitedError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
 import type { InstallationGate } from '../../services/ports/installation-gate.ts';
 import { AppAuth, type KeyList } from './app-auth.ts';
 import { AppIdentityCheck } from './app-identity.ts';
@@ -47,8 +47,8 @@ export interface GitHubStartOptions {
 
 /**
  * Builds the App's signer and runs the start-up self-check (E05-S02): `GET /app` with a JWT. A 401 is fatal in
- * production and a WARN elsewhere; a network failure, a timeout or a 5xx is a WARN everywhere (the instance starts
- * and the check is repeated on the first GitHub use); a wrong App id, an answer without an owner and anything
+ * production and a WARN elsewhere; a network failure, a timeout, a 5xx or a rate limit is a WARN everywhere (the instance
+ * starts and the check is repeated on the first GitHub use); a wrong App id, an answer without an owner and anything
  * unforeseen are fatal.
  * @returns undefined when the App id or the key is not configured: the adapter is simply not built (E05-S01).
  * @throws ConfigError naming GITHUB_APP_ID, GitHubAuthError (production), GitHubResponseError.
@@ -63,11 +63,21 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
   const keys: KeyList = previousPrivateKey === undefined ? [privateKey] : [privateKey, previousPrivateKey];
   const auth = new AppAuth({ appId, keys, clock: options.clock, logger });
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
-  const identity = new AppIdentityCheck({ auth, appId, logger, fetch: options.fetch, timeoutMs });
+  const limiter = new RateLimiter({ clock: options.clock, logger });
+  const identity = new AppIdentityCheck({
+    auth,
+    appId,
+    logger,
+    fetch: options.fetch,
+    timeoutMs,
+    clock: options.clock,
+    limiter,
+  });
   try {
     await identity.verify();
   } catch (error) {
-    const outage = error instanceof GitHubUnavailableError;
+    // A limit too long to wait out is no verdict on the App either: the check is repeated by the first use.
+    const outage = error instanceof GitHubUnavailableError || error instanceof GitHubRateLimitedError;
     const refused = error instanceof GitHubAuthError && config.nodeEnv !== 'production';
     if (!outage && !refused) {
       throw error;
@@ -84,10 +94,10 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
     logger,
     fetch: options.fetch,
     timeoutMs,
+    limiter,
     gate: options.gate,
   });
   const octokit = createOctokit({ fetch: options.fetch, timeoutMs, logger });
-  const limiter = new RateLimiter({ clock: options.clock, logger });
   const client = new OctokitGitHubClient({ octokit, withJwt, tokens: installationTokens, limiter });
   return { identity, withJwt, installationTokens, client };
 }

@@ -4,9 +4,15 @@ import { inspect } from 'node:util';
 import { delay, HttpResponse } from 'msw';
 import { expect, test } from 'vitest';
 import { testGitHubKey } from '../../config/test-support.ts';
-import { GitHubAuthError, GitHubResponseError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
+import {
+  GitHubAuthError,
+  GitHubRateLimitedError,
+  GitHubResponseError,
+  GitHubUnavailableError,
+} from '../../services/ports/github-errors.ts';
+import { FakeClock } from '../../services/test-support.ts';
 import { fetchApp } from './app-api.ts';
-import { appFixture, mockApp } from './test-support.ts';
+import { appFixture, mockApp, START } from './test-support.ts';
 
 /** What `check.verify()` rejects with, for a GitHub that answers every request with `answer`. */
 async function failureOf(answer: () => Response | Promise<Response>, timeoutMs?: number): Promise<unknown> {
@@ -122,6 +128,7 @@ test('a body that breaks off while it is read is an outage, with no trace of wha
     () => Promise.resolve(new Response(broken, { status: 200 })),
     'jwt',
     1000,
+    new FakeClock(START),
   ).catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(GitHubUnavailableError);
   expect(failure).toHaveProperty('message', 'GitHub could not be reached (Error)');
@@ -141,7 +148,44 @@ test.each([
     'TypeError',
   ],
 ])('a request that fails with %s is an outage named by %s', async (_name, thrown, named) => {
-  const failure: unknown = await fetchApp(() => rejectWith(thrown), 'jwt', 1000).catch((error: unknown) => error);
+  const failure: unknown = await fetchApp(() => rejectWith(thrown), 'jwt', 1000, new FakeClock(START)).catch(
+    (error: unknown) => error,
+  );
   expect(failure).toBeInstanceOf(GitHubUnavailableError);
   expect(failure).toHaveProperty('message', `GitHub could not be reached (${named})`);
+});
+
+test.each([
+  ['a 429 with no header: the minute GitHub advises', { status: 429 }, 60, 'secondary'],
+  ['a 429 with retry-after', { status: 429, headers: { 'retry-after': '7' } }, 7, 'secondary'],
+  ['a 403 with retry-after', { status: 403, headers: { 'retry-after': '30' } }, 30, 'secondary'],
+  [
+    'a 403 whose budget is used up, reset in 20 s',
+    {
+      status: 403,
+      headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Date.parse(START) / 1000 + 20) },
+    },
+    20,
+    'primary',
+  ],
+])('%s is a rate limit: GitHubRateLimitedError with the wait and the scope', async (_name, answer, wait, scope) => {
+  const failure: unknown = await fetchApp(
+    () => Promise.resolve(new Response('{}', answer)),
+    'jwt',
+    1000,
+    new FakeClock(START),
+  ).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(GitHubRateLimitedError);
+  expect(failure).toMatchObject({ retryAfterSeconds: wait, scope });
+});
+
+test('a 403 that is not a limit is an outage-class failure, like any other status', async () => {
+  const failure: unknown = await fetchApp(
+    () => Promise.resolve(new Response('{}', { status: 403 })),
+    'jwt',
+    1000,
+    new FakeClock(START),
+  ).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(GitHubUnavailableError);
+  expect(failure).toHaveProperty('message', 'GitHub answered 403 to GET /app');
 });

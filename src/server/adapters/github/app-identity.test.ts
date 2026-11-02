@@ -4,7 +4,7 @@ import { delay, HttpResponse } from 'msw';
 import { expect, test } from 'vitest';
 import { ConfigError } from '../../config/env.ts';
 import { testGitHubKey } from '../../config/test-support.ts';
-import { GitHubResponseError } from '../../services/ports/github-errors.ts';
+import { GitHubRateLimitedError, GitHubResponseError } from '../../services/ports/github-errors.ts';
 import { packageVersion } from './package-version.ts';
 import { appBody, appFixture, decodeJwt, jwtSignedBy, mockApp } from './test-support.ts';
 
@@ -133,4 +133,40 @@ test('the token that reaches GitHub is signed by the key, not by any other', asy
   await appFixture([key.key]).check.verify();
   expect(route.tokens.map((token) => jwtSignedBy(token, key.publicKey))).toEqual([true]);
   expect(route.tokens.map((token) => jwtSignedBy(token, other.publicKey))).toEqual([false]);
+});
+
+// GET /app runs through the rate limiter, in the App's lane (E05-S05).
+
+test('a 429 on GET /app is waited out and the check repeated, with one WARN naming the App lane', async () => {
+  const key = testGitHubKey();
+  let answers = 0;
+  const route = mockApp([key.publicKey], () => {
+    answers += 1;
+    return answers === 1
+      ? HttpResponse.json({ message: 'slow down' }, { status: 429, headers: { 'retry-after': '3' } })
+      : HttpResponse.json(appBody());
+  });
+  const { check, waits, logs } = appFixture([key.key]);
+  expect((await check.verify()).appId).toBe(4242);
+  expect([route.tokens.length, waits]).toEqual([2, [3000]]);
+  expect(logs.lines().filter((line) => line['msg'] === 'github.rate_limited')).toMatchObject([
+    { level: 40, route: 'GET /app', installationId: null, waitSeconds: 3, scope: 'secondary' },
+  ]);
+});
+
+test('a limit of more than a minute on GET /app is raised as it is, is not kept, and shuts the lane for its length', async () => {
+  const key = testGitHubKey();
+  const route = mockApp([key.publicKey], () =>
+    HttpResponse.json({ message: 'slow down' }, { status: 403, headers: { 'retry-after': '90' } }),
+  );
+  const { check, clock } = appFixture([key.key]);
+  const failure = await check.verify().catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(GitHubRateLimitedError);
+  expect(failure).toMatchObject({ retryAfterSeconds: 90, scope: 'secondary' });
+  expect(check.current()).toBeUndefined();
+  await expect(check.verify()).rejects.toMatchObject({ retryAfterSeconds: 90 });
+  expect(route.tokens).toHaveLength(1);
+  clock.advance(90_000);
+  mockApp([key.publicKey]);
+  expect((await check.verify()).appId).toBe(4242);
 });
