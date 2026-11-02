@@ -2,7 +2,7 @@
 
 Contributor License Agreements for GitHub projects. Maintainers publish a CLA, contributors sign it once with their GitHub account, and every pull request gets an automatic `license/cla` check.
 
-> **Status: server foundation built, product not built.** Toolchain, configuration, health routes and the database schema are green; the GitHub App, webhooks, jobs, login, signing and web UI are not built yet ([details](docs/development.md#status)). Versions, flags and config keys verified 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
+> **Status: server foundation built, product not built.** Toolchain, configuration, health routes and the database schema are green; the job queue, signing and web UI are not built yet, while the GitHub App core, the webhook intake and the login are ([details](docs/development.md#status)). Versions, flags and config keys verified 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
 
 ## Why another CLA tool
 

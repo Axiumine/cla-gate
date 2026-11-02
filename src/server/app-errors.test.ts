@@ -4,6 +4,7 @@ import { STATUS_CODES } from 'node:http';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { errorResponseSchema } from '../shared/errors.ts';
+import { authWorld } from './adapters/http/auth-fixture/test-support.ts';
 import { testApp } from './test-support.ts';
 
 // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up message: the test proves that an exception message never reaches the response
@@ -115,9 +116,11 @@ test('a validation error that carries no status of its own is still a generic 40
   expect(response.body).not.toContain('validation details');
 });
 
-test('a valid body passes validation', async () => {
-  const { app } = await withRoutes();
-  const response = await app.inject({ method: 'POST', url: '/echo', payload: { name: 'Ada' } });
+test('a valid body passes validation, for a caller the state-changing guard lets through (E10-S03)', async () => {
+  const { app, login } = await authWorld();
+  app.post('/echo', { schema: { body: z.object({ name: z.string().min(1) }) } }, (request) => request.body);
+  const alice = await login(1001);
+  const response = await app.inject({ method: 'POST', url: '/echo', headers: alice.headers, payload: { name: 'Ada' } });
   expect(response.statusCode).toBe(200);
   expect(response.json()).toEqual({ name: 'Ada' });
 });

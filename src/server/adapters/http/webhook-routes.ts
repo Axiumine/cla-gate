@@ -56,7 +56,7 @@ function isBodyTooLarge(error: unknown): boolean {
  * `POST /webhooks/github`, the one route GitHub calls (E06-S01). It sits outside `/api`, so the route audit guard
  * (`requireAuditedRoutes`) does not apply: the route itself mutates nothing audited (the delivery it records is operational
  * state, not an audit row), and the lifecycle handlers it hands deliveries to record their own audit rows. It still declares `auditExempt: 'webhook'`, so it stays valid if the
- * path ever moves under `/api`. It has no session, cookie, CSRF or `Origin` dependency: the HMAC is the only credential.
+ * path ever moves under `/api`. It has no session, cookie, CSRF or `Origin` dependency: the HMAC is the only credential, so the route sets `csrf: 'exempt'` (E10-S03) and `rateLimit: false` (E10-S08), which also keeps the session lookup off it; both closed lists match its routed path, never `request.url`.
  * Any other method on the path is no route of this scope: Fastify answers it `404` with the standard error body before a
  * hook or a handler of the scope runs (E06-S07).
  *
@@ -101,7 +101,7 @@ export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async 
   app.post(
     WEBHOOK_PATH,
     {
-      config: { rawBody: true, auditExempt: 'webhook' },
+      config: { rawBody: true, auditExempt: 'webhook', csrf: 'exempt', rateLimit: false },
       bodyLimit: WEBHOOK_BODY_LIMIT,
       preValidation: signatureHook(options, throttle),
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response

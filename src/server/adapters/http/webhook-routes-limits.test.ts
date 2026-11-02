@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
+import { authWorld } from './auth-fixture/test-support.ts';
 import { HTTP_LIMITS, WEBHOOK_BODY_LIMIT } from './limits.ts';
 import { deliveryHeaders, postDelivery, SECRET_CURRENT, sign, webhookTestApp } from './test-support.ts';
 
@@ -69,16 +70,18 @@ test('an oversize body is not echoed: neither the response nor the log holds a f
 });
 
 test('another route keeps the 1 MiB limit of the application and its own error code', async () => {
-  const { app } = await webhookTestApp({ env: ENV });
-  app.post('/ordinary', () => 'ok');
-  const headers = { 'content-type': 'application/json' };
-  const within = await app.inject({ method: 'POST', url: '/ordinary', headers, payload: jsonOfSize(1_048_576) });
-  const over = await app.inject({ method: 'POST', url: '/ordinary', headers, payload: jsonOfSize(1_048_577) });
+  // A state-changing route is behind the login's guards (E10-S03), so the caller is a person who is logged in.
+  const { app, login } = await authWorld(ENV);
+  const alice = await login(1001);
+  const headers = { ...alice.headers, 'content-type': 'application/json' };
+  const post = (payload: Buffer) => app.inject({ method: 'POST', url: '/probe/mutate', headers, payload });
+  const within = await post(jsonOfSize(1_048_576));
+  const over = await post(jsonOfSize(1_048_577));
   expect(within.statusCode).toBe(200);
   expect(over.statusCode).toBe(413);
   expect(errorResponseSchema.parse(over.json()).error.code).toBe('payload_too_large');
   // The same 2 MiB that the webhook route takes is far over what that route takes.
   const two = jsonOfSize(2 * 1024 * 1024);
   expect((await postDelivery(app, two)).statusCode).toBe(200);
-  expect((await app.inject({ method: 'POST', url: '/ordinary', headers, payload: two })).statusCode).toBe(413);
+  expect((await post(two)).statusCode).toBe(413);
 });

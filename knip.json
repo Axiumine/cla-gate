@@ -13,7 +13,8 @@
     "tests/leaks/scenarios/*.ts",
     "tests/leaks/control/*.ts",
     "src/server/domain/eligibility.ts!",
-    "src/server/services/installation-store.ts!"
+    "src/server/services/installation-store.ts!",
+    "src/server/services/revoke-user-sessions.ts!"
   ],
   "project": [
     "scripts/**/*.ts!",

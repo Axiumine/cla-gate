@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { authProblems, sessionFields } from './auth-fields.ts';
 import { databaseUrlField, originField, portField, sessionSecretField, trustProxyField } from './env-fields.ts';
 import { githubFields, githubProblems } from './env-github.ts';
 
@@ -19,6 +20,7 @@ export const envSchema = z
     TRUST_PROXY: trustProxyField.default(false),
     SESSION_SECRET: sessionSecretField.optional(),
     ...githubFields,
+    ...sessionFields,
   })
   .superRefine((env, ctx) => {
     // Session cookies are `Secure` and `__Host-` prefixed, so a production deployment is HTTPS by definition.
@@ -28,6 +30,10 @@ export const envSchema = z
     }
     for (const name of githubProblems(env)) {
       ctx.addIssue({ code: 'custom', path: [name], message: 'invalid GitHub App setting' });
+    }
+    const invalid = new Set(ctx.issues.map((issue) => issue.path?.[0]));
+    for (const name of authProblems(env, invalid)) {
+      ctx.addIssue({ code: 'custom', path: [name], message: 'invalid login setting' });
     }
   });
 

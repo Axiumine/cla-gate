@@ -352,14 +352,15 @@ test.each([
   await expect(statement.execute(db)).rejects.toMatchObject(CHECK);
 });
 
-test('personal data columns exist only in signer_pii and the users snapshot (cla_documents.name is a document title)', async () => {
+test('personal data columns exist only in signer_pii, the users snapshot and the short-lived sessions.verified_emails (cla_documents.name is a document title)', async () => {
   const { db } = await migratedTestDatabase();
   const { rows } = await sql<{ table_name: string; column_name: string }>`
     select table_name, column_name from information_schema.columns
-    where table_schema = 'public' and table_name <> 'schema_migrations' and column_name in ('name', 'email', 'login', 'avatar_url')
+    where table_schema = 'public' and table_name <> 'schema_migrations' and column_name in ('name', 'email', 'login', 'avatar_url', 'verified_emails')
     order by table_name, column_name`.execute(db);
   expect(rows.map((row) => `${row.table_name}.${row.column_name}`)).toEqual([
     'cla_documents.name',
+    'sessions.verified_emails',
     'signer_pii.email',
     'signer_pii.login',
     'signer_pii.name',

@@ -35,6 +35,9 @@ async function databaseAnswers(db: Kysely<Database>, timeoutMs: number): Promise
   }
 }
 
+/** What both probes declare: they never read the session, so the session hook (E10-S02) leaves them alone, whatever cookie a browser sends. */
+const PROBE: { readonly session: 'none' } = { session: 'none' };
+
 /**
  * `GET /healthz` is liveness: the process serves requests, no dependency is touched. `GET /readyz` is readiness: the
  * database answered. Both bodies are fixed, so neither can leak anything.
@@ -43,7 +46,7 @@ export const healthRoutes: FastifyPluginCallbackZod<HealthRoutesOptions> = (app,
   app.get(
     '/healthz',
     // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
-    { schema: { response: { 200: healthResponseSchema } } },
+    { schema: { response: { 200: healthResponseSchema } }, config: PROBE },
     (): z.infer<typeof healthResponseSchema> => ({
       status: 'ok',
     }),
@@ -52,7 +55,7 @@ export const healthRoutes: FastifyPluginCallbackZod<HealthRoutesOptions> = (app,
   app.get(
     '/readyz',
     // Stryker disable next-line ObjectLiteral: the response schemas restate what the handler returns, so dropping them changes no response
-    { schema: { response: { 200: readyResponseSchema, 503: unavailableResponseSchema } } },
+    { schema: { response: { 200: readyResponseSchema, 503: unavailableResponseSchema } }, config: PROBE },
     async (request, reply): Promise<z.infer<typeof readyResponseSchema | typeof unavailableResponseSchema>> => {
       if (await databaseAnswers(options.db, options.readinessTimeoutMs)) {
         return { status: 'ready' };
