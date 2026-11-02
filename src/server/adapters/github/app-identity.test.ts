@@ -5,6 +5,7 @@ import { expect, test } from 'vitest';
 import { ConfigError } from '../../config/env.ts';
 import { testGitHubKey } from '../../config/test-support.ts';
 import { GitHubResponseError } from '../../services/ports/github-errors.ts';
+import { packageVersion } from './package-version.ts';
 import { appBody, appFixture, decodeJwt, jwtSignedBy, mockApp } from './test-support.ts';
 
 test('the identity of the App is verified and kept: owner id and type, slug and permissions', async () => {
@@ -53,7 +54,7 @@ test('the request is GET /app with a Bearer JWT, signed by the key, with the ver
   expect([headers?.get('accept'), headers?.get('x-github-api-version'), headers?.get('user-agent')]).toEqual([
     'application/vnd.github+json',
     '2022-11-28',
-    'cla-gate',
+    `cla-gate/${packageVersion()}`,
   ]);
 });
 

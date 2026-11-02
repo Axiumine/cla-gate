@@ -59,6 +59,14 @@ test.each([
   ['process through an import', "import process from 'node:process';", IMPORT],
   ['an I/O library', "import { Kysely } from 'kysely';", IMPORT],
   ['a scoped I/O library', "import helmet from '@fastify/helmet';", IMPORT],
+  ['Octokit (E05-S04)', "import { Octokit } from 'octokit';", IMPORT],
+  ['an Octokit package (E05-S04)', "import { RequestError } from '@octokit/request-error';", IMPORT],
+  ['the GitHub client port (E05-S04)', "import type { GitHubClient } from '../services/ports/github.ts';", IMPORT],
+  [
+    'the GitHub adapter (E05-S04)',
+    "import { OctokitGitHubClient } from '../adapters/github/octokit-client.ts';",
+    IMPORT,
+  ],
   ['the composition root', "import { buildApp } from '../app.ts';", IMPORT],
   ['the boot module', "import { boot } from '../boot.ts';", IMPORT],
   ['the configuration', "import { loadConfig } from '../config/env.ts';", IMPORT],
@@ -137,6 +145,16 @@ test.each([
     "import { x } from '../../../web/main.ts';",
   ],
   ['a re-export of src/server', SHARED, "export { x } from '../server/app.ts';"],
+  [
+    'the GitHub client port from src/shared (E05-S04)',
+    SHARED,
+    "import type { X } from '../server/services/ports/github.ts';",
+  ],
+  [
+    'the GitHub adapter from src/web (E05-S04)',
+    WEB,
+    "import { x } from '../server/adapters/github/octokit-client.ts';",
+  ],
 ])('static import of %s is refused (%s)', (_what, filename, code) => {
   expect(violations(filename, code)).toContain(IMPORT);
 });

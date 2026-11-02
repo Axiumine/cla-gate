@@ -2,15 +2,14 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ZodError } from 'zod';
 import { GitHubResponseError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
+import { apiHeaders } from './api-headers.ts';
 
 // The part of talking to api.github.com that every App-authenticated call shares (E05-S02, E05-S03): one place that
-// sets the headers, refuses redirects, applies the timeout and turns a broken connection into an outage. Until the
-// Octokit adapter of E05-S04 replaces the transport, `GET /app` and the token mint both go through here.
+// sets the headers, refuses redirects, applies the timeout and turns a broken connection into an outage. `GET /app` and
+// the token mint go through here; the read routes of E05-S04 go through the Octokit adapter (`octokit-client.ts`),
+// which sends the same headers (`api-headers.ts`) and reports failures the same way.
 
-/**
- * github.com only: GitHub Enterprise Server is out of scope (E05).
- * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
- */
+/** github.com only: GitHub Enterprise Server is out of scope (E05). */
 export const GITHUB_API_ORIGIN = 'https://api.github.com';
 
 /** What a failed attempt is called in a message: the system error code (`ECONNREFUSED`), else the error's class. */
@@ -23,7 +22,7 @@ function failureName(error: unknown): string {
 }
 
 /** The request never produced an answer (or the answer broke off): an outage, not a verdict. The cause is dropped. */
-function unreachable(error: unknown): GitHubUnavailableError {
+export function unreachable(error: unknown): GitHubUnavailableError {
   return new GitHubUnavailableError(`GitHub could not be reached (${failureName(error)})`);
 }
 
@@ -45,15 +44,11 @@ export async function sendAsApp(
   request: typeof fetch,
   { method, path, jwt, timeoutMs }: AppRequest,
 ): Promise<Response> {
+  const headers = { ...apiHeaders(), authorization: `Bearer ${jwt}` };
   try {
     return await request(`${GITHUB_API_ORIGIN}${path}`, {
       method,
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${jwt}`,
-        'User-Agent': 'cla-gate',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers,
       redirect: 'error',
       signal: AbortSignal.timeout(timeoutMs),
     });

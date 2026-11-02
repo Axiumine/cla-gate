@@ -13,6 +13,7 @@ import {
   InstallationSuspendedError,
 } from '../../services/ports/github-errors.ts';
 import { mintInstallationToken } from './installation-token-api.ts';
+import { packageVersion } from './package-version.ts';
 import { decodeJwt, jwtSignedBy, type MintAnswer, mockGitHub, tokenBody, tokensFixture } from './test-support.ts';
 
 const key = testGitHubKey();
@@ -51,7 +52,7 @@ test('the request carries the GitHub headers and no content type, since it has n
   const headers = routes.mints[0]?.headers;
   expect(headers?.get('x-github-api-version')).toBe('2022-11-28');
   expect(headers?.get('accept')).toBe('application/vnd.github+json');
-  expect(headers?.get('user-agent')).toBe('cla-gate');
+  expect(headers?.get('user-agent')).toBe(`cla-gate/${packageVersion()}`);
   expect(headers?.get('content-type')).toBeNull();
 });
 

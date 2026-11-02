@@ -77,3 +77,30 @@ export class InstallationNotAdmittedError extends Error {
     this.reason = reason;
   }
 }
+
+// What the GitHub client adds (E05-S04). Each says what GitHub answered to one route; the message names the route
+// template (`GET /repositories/{repository_id}`), never a URL, a header or a body.
+
+/** GitHub answered 404 to a request. The methods that treat "does not exist" as an answer resolve null instead. */
+export class GitHubNotFoundError extends Error {
+  override readonly name = 'GitHubNotFoundError';
+  /** The route template, for example `GET /installation/repositories`. */
+  readonly route: string;
+
+  constructor(route: string) {
+    super(`GitHub answered 404 to ${route}`);
+    this.route = route;
+  }
+}
+
+/** GitHub answered 403 to a request that is not a rate limit: the credentials do not allow it (permission, policy). */
+export class GitHubForbiddenError extends Error {
+  override readonly name = 'GitHubForbiddenError';
+  /** The route template, for example `GET /orgs/{org}/memberships/{username}`. */
+  readonly route: string;
+
+  constructor(route: string) {
+    super(`GitHub answered 403 to ${route}`);
+    this.route = route;
+  }
+}

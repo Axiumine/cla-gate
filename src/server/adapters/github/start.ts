@@ -3,11 +3,14 @@
 import type { Logger } from 'pino';
 import type { AppConfig } from '../../config/env.ts';
 import { type Clock, systemClock } from '../../services/ports/clock.ts';
+import type { GitHubClient } from '../../services/ports/github.ts';
 import { GitHubAuthError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
 import type { InstallationGate } from '../../services/ports/installation-gate.ts';
 import { AppAuth, type KeyList } from './app-auth.ts';
 import { AppIdentityCheck } from './app-identity.ts';
 import { InstallationTokens } from './installation-tokens.ts';
+import { OctokitGitHubClient } from './octokit-client.ts';
+import { createOctokit } from './octokit-transport.ts';
 
 /** How long a request to GitHub waits for the answer: start-up and the first use do not hang on a black hole. */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -25,6 +28,8 @@ export interface GitHubApp {
   withJwt<T>(send: (jwt: string) => Promise<T>): Promise<T>;
   /** The installation access tokens (E05-S03): they refuse every installation until a gate is wired. */
   readonly installationTokens: InstallationTokens;
+  /** The only door to GitHub for the services (E05-S04): the Octokit adapter of the GitHub client port. */
+  readonly client: GitHubClient;
 }
 
 /** @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode). */
@@ -80,7 +85,9 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
     timeoutMs,
     gate: options.gate,
   });
-  return { identity, withJwt, installationTokens };
+  const octokit = createOctokit({ fetch: options.fetch, timeoutMs, logger });
+  const client = new OctokitGitHubClient({ octokit, withJwt, tokens: installationTokens });
+  return { identity, withJwt, installationTokens, client };
 }
 
 export interface BootGitHubOptions {
