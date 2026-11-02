@@ -14,16 +14,16 @@ import { seedSignature, seedTenant, type Tenant } from '../test-support.ts';
 //
 //   tenant 1  organisation `org-1`, GitHub installation 5000, repositories `org-1/repo` and `org-1/scoped`
 //   tenant 2  organisation `org-2`, GitHub installation 10000, repositories `org-2/repo` and `org-2/scoped`
+// Each tenant's admin has an entry in the ledger of org admins (E11-S07), seen on 2026-05-01.
 // People (GitHub knows them by the numeric id; the login is `login-<id>`):
 //   admin1 admin of the organisation 1;  admin2 admin of 2;  repoAdmin1 admin of `org-1/scoped` only;
 //   member1 plain member of 1;  outsider knows nothing.
 
 /**
- * The tables a tenant owns, or reaches through a composite foreign key: every statement over one of them names the
- * tenant (E11-S06). `cla_versions` and `signer_pii` carry no installation column of their own, they belong to it through
- * their document and their signature. `installations`, the root, is not in the list.
+ * The tenant tables whose rows have one numeric id a response can name (`signatures.id`, and `signature_id` for
+ * `signer_pii`): the rows a route may show, and the ones the route matrix checks the owner of.
  */
-export const TENANT_TABLES = [
+export const ROW_TABLES = [
   'repositories',
   'cla_documents',
   'cla_versions',
@@ -34,6 +34,16 @@ export const TENANT_TABLES = [
   'pr_evaluations',
   'audit_log',
 ] as const;
+
+export type RowTable = (typeof ROW_TABLES)[number];
+
+/**
+ * The tables a tenant owns, or reaches through a composite foreign key: every statement over one of them names the
+ * tenant (E11-S06). `cla_versions` and `signer_pii` carry no installation column of their own, they belong to it through
+ * their document and their signature. `installations`, the root, is not in the list. The ledger of org admins (E11-S07)
+ * is keyed by the pair (installation, person), so no route names one of its rows.
+ */
+export const TENANT_TABLES = [...ROW_TABLES, 'installation_admin_seen'] as const;
 
 export type TenantTable = (typeof TENANT_TABLES)[number];
 
@@ -72,6 +82,8 @@ export interface TenantWorld extends Tenant {
   readonly scoped: StoredRepository & { readonly documentId: number };
   /** The tenant's one signer, who stands for the person in `people`, and their signature. */
   readonly signer: StoredPerson;
+  /** The person who administers the organisation: the one the ledger of org admins holds an entry for. */
+  readonly admin: StoredPerson;
   readonly signatureId: number;
 }
 
@@ -86,6 +98,9 @@ export interface TwoTenants {
 }
 
 const DECIDED_AT = new Date('2026-05-01T10:00:00Z');
+
+/** When the ledger last saw the admin of each tenant. */
+const ADMIN_SEEN_AT = DECIDED_AT;
 
 const person = (userId: number, githubId: number): StoredPerson => ({
   userId,
@@ -182,17 +197,32 @@ async function extendTenant(db: Kysely<Database>, tenant: Tenant, n: number, sig
   return { scoped: { repositoryId: repository.id, githubRepoId, fullName, documentId: document.id }, signature };
 }
 
-/** One tenant as `seedTenant` stores it and `extendTenant` completes it. */
-async function seedWorld(db: Kysely<Database>, n: number, signerGithubId: number): Promise<TenantWorld> {
+/**
+ * One tenant as `seedTenant` stores it and `extendTenant` completes it; the ledger holds `admin` as an admin of it, which is
+ * the signer when none is given (the signer of tenant 2 is its admin).
+ */
+async function seedWorld(
+  db: Kysely<Database>,
+  n: number,
+  signerGithubId: number,
+  admin?: StoredPerson,
+): Promise<TenantWorld> {
   const tenant = await seedTenant(db, n);
   const { scoped, signature } = await extendTenant(db, tenant, n, signerGithubId);
+  const signer = person(signature.userId, signerGithubId);
+  const stored = admin ?? signer;
+  await db
+    .insertInto('installation_admin_seen')
+    .values({ installation_id: tenant.installationId, user_github_id: stored.githubId, seen_at: ADMIN_SEEN_AT })
+    .execute();
   return {
     ...tenant,
     githubInstallationId: parseGithubId(n * 5000),
     accountLogin: `org-${n}`,
     plain: { repositoryId: tenant.repositoryId, githubRepoId: parseGithubId(n * 9000), fullName: `org-${n}/repo` },
     scoped,
-    signer: person(signature.userId, signerGithubId),
+    signer,
+    admin: stored,
     signatureId: signature.signatureId,
   };
 }
@@ -228,7 +258,7 @@ export async function twoTenants(db: Kysely<Database>, roles = new StubRoleLooku
   const repoAdmin1 = await insertPerson(db, TWO_TENANT_PEOPLE.repoAdmin1);
   const outsider = await insertPerson(db, TWO_TENANT_PEOPLE.outsider);
   // The two signers are people too: member1 signs in tenant 1 and admin2 in tenant 2, and `seedSignature` stores them.
-  const t1 = await seedWorld(db, 1, TWO_TENANT_PEOPLE.member1);
+  const t1 = await seedWorld(db, 1, TWO_TENANT_PEOPLE.member1, admin1);
   const t2 = await seedWorld(db, 2, TWO_TENANT_PEOPLE.admin2);
   const people = { admin1, admin2: t2.signer, repoAdmin1, member1: t1.signer, outsider };
   const roleTable = rolesOf(t1, t2, people);

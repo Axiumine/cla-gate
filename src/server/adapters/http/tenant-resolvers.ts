@@ -3,11 +3,16 @@
 import type { FastifyRequest } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
+import {
+  type DocumentPlacement,
+  findDocumentPlacement,
+  findSignaturePlacement,
+} from '../../services/document-placement.ts';
 import { findAdmittedTenantRows, installationOfRepository } from '../../services/tenant-queries.ts';
 import { type InstallationRowId, installationRowIdSchema } from '../db/installation-row-id.ts';
 import type { Database } from '../db/schema.ts';
 import { AppError } from './errors.ts';
-import type { TenantResolver } from './tenant-access.ts';
+import type { TenantResolver, TenantTarget } from './tenant-access.ts';
 
 // The resolvers every tenant route can use (E11-S05). A path names its tenant by `:installationId` and its repository by
 // `:repositoryId`; both are the surrogate keys of our own tables (`installations.id`, `repositories.id`), never GitHub's ids.
@@ -75,5 +80,57 @@ export function byRepositoryParam(db: Kysely<Database>): TenantResolver {
     }
     const rows = await findAdmittedTenantRows(db, installationId, params.repositoryId);
     return rows === null ? null : { installationId, repositoryId: params.repositoryId, requirement: 'repo_admin' };
+  };
+}
+
+const documentParams = z.object({ installationId: idText.pipe(installationRowIdSchema), documentId: idText });
+
+const signatureParams = z.object({ installationId: idText.pipe(installationRowIdSchema), signatureId: idText });
+
+/**
+ * The target of a call about a document, or about a signature of one (the role matrix of the security notes, E11-S07): a
+ * document that covers the installation needs an org admin; one of a repository that is part of it needs an admin of that
+ * repository (an org admin passes too); one of a repository that left the installation stays reachable for an org admin
+ * only, because the permission of a person on it cannot be checked, so the call names no repository. Null when the tenant
+ * has no such document or is not admitted, or when the repository it names is not readable (the guard reads it again).
+ */
+async function documentTarget(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  placement: DocumentPlacement | null,
+): Promise<TenantTarget | null> {
+  if (placement === null) {
+    return null;
+  }
+  const target: TenantTarget =
+    placement.kind === 'repository'
+      ? { installationId, repositoryId: placement.repositoryId, requirement: 'repo_admin' }
+      : { installationId, repositoryId: null, requirement: 'org_admin' };
+  return (await findAdmittedTenantRows(db, installationId, target.repositoryId)) === null ? null : target;
+}
+
+/**
+ * The resolver of a route about one document (`/…/:installationId/…/:documentId`): the requirement follows the scope of the
+ * document (see {@link documentTarget}). The document is read with the installation id of the path, so another tenant's
+ * document, an unknown one and one of a rejected tenant are null.
+ * @throws AppError 400 when `:installationId` or `:documentId` is not a positive integer in plain digits.
+ */
+export function byDocumentParam(db: Kysely<Database>): TenantResolver {
+  return async (request) => {
+    const { installationId, documentId } = paramsOf(documentParams, request);
+    return documentTarget(db, installationId, await findDocumentPlacement(db, { installationId }, documentId));
+  };
+}
+
+/**
+ * The resolver of a route about one signature (`/…/:installationId/…/:signatureId`): the requirement follows the scope of
+ * the signature's document, as for {@link byDocumentParam}. A signature made under another tenant's document (a transferred
+ * repository's, say) is not found under this installation.
+ * @throws AppError 400 when `:installationId` or `:signatureId` is not a positive integer in plain digits.
+ */
+export function bySignatureParam(db: Kysely<Database>): TenantResolver {
+  return async (request) => {
+    const { installationId, signatureId } = paramsOf(signatureParams, request);
+    return documentTarget(db, installationId, await findSignaturePlacement(db, { installationId }, signatureId));
   };
 }

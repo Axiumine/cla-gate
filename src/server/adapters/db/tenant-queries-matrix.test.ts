@@ -29,6 +29,11 @@ async function world() {
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {
   expect(scoped.map(([name]) => name)).toEqual([
     'adapters/db/tenant-scope.ts assertRepositoryInTenant',
+    'services/admin-ledger-queries.ts recordAdminSeen',
+    'services/admin-ledger-queries.ts forgetAdminSeen',
+    'services/admin-ledger-queries.ts wasAdminSeenSince',
+    'services/document-placement.ts findDocumentPlacement',
+    'services/document-placement.ts findSignaturePlacement',
     'services/repo-admin-candidates.ts listRepoAdminCandidates',
     'services/repository-enabled.ts setRepositoryEnabled',
     'services/repository-queries.ts markRepositoriesRemoved',

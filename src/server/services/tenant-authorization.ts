@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Decision, decide, type Requirement, type RoleFacts } from '../domain/authz.ts';
+import type { AdminLedger } from './admin-ledger.ts';
 import type { InstallationRow } from './installation-state.ts';
 import type { RoleViewer } from './org-admin.ts';
 import { PROBE_BUDGETS, ProbeBudget } from './probe-budget.ts';
@@ -19,6 +20,8 @@ export interface TenantAuthorizationDeps {
   readonly lookups: Readonly<Record<RoleLookupMode, RoleLookups>>;
   /** The role-in-installation rule (E11-S03), through the cached lookups; only the denial path runs it. */
   readonly discover: DiscoverRepoAdminRole;
+  /** The org admins a live lookup last saw (E11-S07): read for a suspended or deleted organisation, whose roles cannot be asked of GitHub. */
+  readonly ledger: Pick<AdminLedger, 'isAdmin'>;
 }
 
 /**
@@ -55,13 +58,29 @@ async function liveFacts(deps: TenantAuthorizationDeps, question: TenantQuestion
 }
 
 /**
- * The facts about a suspended or deleted tenant, with no GitHub call: GitHub refuses its installation tokens, so only what
- * the stored row says can be known. The owner of a user account is an org admin (their id is the account's); nobody else
- * can be verified.
+ * Whether the viewer is an org admin of a tenant GitHub no longer serves, with no call to GitHub and no use of the cache:
+ * the owner of a user account is known from the row (their id is the account's); an admin of an organisation is one the
+ * ledger of E11-S07 saw as one in the last 14 days; an account of another type is never served, so it has no admin.
  */
-function inactiveFacts({ installation, viewer }: TenantQuestion): RoleFacts {
-  const owner = installation.account_type === 'User' && installation.account_id === viewer.githubId;
-  return { orgAdmin: owner, repoAdmin: false, hasRoleInInstallation: owner };
+function wasOrgAdmin(deps: TenantAuthorizationDeps, { installation, viewer }: TenantQuestion): Promise<boolean> {
+  switch (installation.account_type) {
+    case 'User':
+      return Promise.resolve(installation.account_id === viewer.githubId);
+    case 'Organization':
+      return deps.ledger.isAdmin(installation.id, viewer.githubId);
+    case 'Other':
+      return Promise.resolve(false);
+  }
+}
+
+/**
+ * The facts about a suspended or deleted tenant: GitHub refuses its installation tokens, so no role can be asked and only
+ * an org admin can be known (live roles of an active tenant are `liveFacts`). A repository admin cannot be verified on a
+ * tenant that is not active, so the repository fact is always false: only an org admin passes a `repo_admin` requirement.
+ */
+async function inactiveFacts(deps: TenantAuthorizationDeps, question: TenantQuestion): Promise<RoleFacts> {
+  const orgAdmin = await wasOrgAdmin(deps, question);
+  return { orgAdmin, repoAdmin: false, hasRoleInInstallation: orgAdmin };
 }
 
 /** The decision with the role-in-installation rule applied to a `not_found`: a viewer who is admin somewhere here is forbidden, not unknown. */
@@ -84,14 +103,14 @@ async function decideWithDiscovery(
 /**
  * The authorisation of a call over `deps`. A live tenant gets its facts from the cached lookups (the org admin fact, the
  * repository one for a call that names a repository, and for a viewer who is neither, the discovery of a role on any
- * repository of the installation with a repo-scoped document), a suspended or deleted one from the stored row alone.
+ * repository of the installation with a repo-scoped document), a suspended or deleted one from the stored row and the ledger.
  * The role of an `allow` is `org_admin` for an org admin and `repo_admin` for anyone else who passed.
  * @throws what the lookups throw: `GitHubUnavailableError`, `GitHubRateLimitedError`, `RoleLookupThrottledError`,
  * `InstallationNotAdmittedError`.
  */
 export function createTenantAuthorization(deps: TenantAuthorizationDeps): AuthorizeTenant {
   return async (question) => {
-    const facts = question.active ? await liveFacts(deps, question) : inactiveFacts(question);
+    const facts = question.active ? await liveFacts(deps, question) : await inactiveFacts(deps, question);
     const decision = await decideWithDiscovery(deps, question, facts);
     return decision === 'allow' ? { decision, role: facts.orgAdmin ? 'org_admin' : 'repo_admin' } : { decision };
   };

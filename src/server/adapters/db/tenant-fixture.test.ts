@@ -36,6 +36,10 @@ const ROWS_OF: readonly (readonly [TenantTable, (installationId: number) => RawB
   ['allowlist_entries', (id) => sql`select id from allowlist_entries where installation_id = ${id}`],
   ['pr_evaluations', (id) => sql`select id from pr_evaluations where installation_id = ${id}`],
   ['audit_log', (id) => sql`select id from audit_log where installation_id = ${id}`],
+  [
+    'installation_admin_seen',
+    (id) => sql`select user_github_id from installation_admin_seen where installation_id = ${id}`,
+  ],
 ];
 
 test('the table of queries names every tenant table', () => {

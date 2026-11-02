@@ -27,16 +27,27 @@ async function setup() {
     clock: new FakeClock('2026-11-02T10:00:00.000Z'),
     log,
   });
-  const ask = (requirement: 'org_admin' | 'repo_admin' = 'org_admin') =>
+  const ask = (requirement: 'org_admin' | 'repo_admin' = 'org_admin', mode: 'read' | 'write' = 'read') =>
     authorize({
-      mode: 'read',
+      mode,
       requirement,
       installation: world.a.installation,
       repository: null,
       viewer: VIEWER,
       active: true,
     });
-  return { ...world, fake, cache, ask };
+  /** The same question once the installation is away: suspended, so GitHub refuses its tokens and no role can be asked. */
+  const askAway = (mode: 'read' | 'write' = 'read') =>
+    authorize({
+      mode,
+      requirement: 'org_admin',
+      installation: { ...world.a.installation, suspended_at: new Date('2026-11-01T00:00:00.000Z') },
+      repository: null,
+      viewer: VIEWER,
+      active: false,
+    });
+  const ledger = () => world.db.selectFrom('installation_admin_seen').select('user_github_id').execute();
+  return { ...world, fake, cache, ask, askAway, ledger };
 }
 
 test('an org admin of the stored installation is allowed, asked of GitHub by the numeric id of the installation', async () => {
@@ -101,4 +112,35 @@ test('with no GitHub App an organisation is never allowed, and the owner of a us
   );
   const owned = { ...world.a.installation, account_type: 'User', account_id: VIEWER_ID } as const;
   expect(await authorize({ ...question, installation: owned })).toEqual({ decision: 'allow', role: 'org_admin' });
+});
+
+test('an org admin a live lookup saw is remembered: once the installation is away they are allowed, with no call to GitHub', async () => {
+  const { ask, askAway, fake, ledger } = await setup();
+  fake.addMembership(id(100), 'org-1', 'alice', { state: 'active', role: 'admin', userId: id(VIEWER_ID) });
+  expect(await askAway()).toEqual({ decision: 'not_found' });
+  await ask();
+  expect(await ledger()).toEqual([{ user_github_id: VIEWER_ID }]);
+  const asked = fake.calls.length;
+  expect(await askAway()).toEqual({ decision: 'allow', role: 'org_admin' });
+  expect(fake.calls).toHaveLength(asked);
+});
+
+test('a live negative result forgets the admin: a write asks GitHub again, finds a member, and the entry goes', async () => {
+  const { ask, askAway, fake, ledger } = await setup();
+  fake.addMembership(id(100), 'org-1', 'alice', { state: 'active', role: 'admin', userId: id(VIEWER_ID) });
+  await ask();
+  expect(await ledger()).toHaveLength(1);
+  fake.addMembership(id(100), 'org-1', 'alice', { state: 'active', role: 'member', userId: id(VIEWER_ID) });
+  expect(await ask('org_admin', 'write')).toEqual({ decision: 'not_found' });
+  expect(await ledger()).toEqual([]);
+  expect(await askAway()).toEqual({ decision: 'not_found' });
+});
+
+test('a lookup that fails leaves the ledger as it was: no entry is added and none is removed', async () => {
+  const { ask, fake, ledger } = await setup();
+  fake.addMembership(id(100), 'org-1', 'alice', { state: 'active', role: 'admin', userId: id(VIEWER_ID) });
+  await ask();
+  fake.failNext('getOrgMembership', new GitHubUnavailableError('GitHub is down'));
+  await expect(ask('org_admin', 'write')).rejects.toBeInstanceOf(GitHubUnavailableError);
+  expect(await ledger()).toEqual([{ user_github_id: VIEWER_ID }]);
 });

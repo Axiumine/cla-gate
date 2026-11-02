@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { type Kysely, sql } from 'kysely';
+import { type Kysely, sql, type Updateable } from 'kysely';
 import { expect } from 'vitest';
 import { z } from 'zod';
+import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import { StubRoleLookup } from '../../../services/role-table-fixture/test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
@@ -199,6 +200,102 @@ async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCa
 export async function assertCrossTenantCase(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
   await assertDenials(world, route, c);
   await assertSuccess(world, route, c);
+}
+
+/** The states a tenant can be in besides active, which the matrix runs once more for (E11-S07). */
+export type InactiveState = 'rejected' | 'suspended' | 'deleted';
+
+const AWAY_AT = new Date('2026-10-01T00:00:00Z');
+
+/** The columns of an installation row that put it in `state`. */
+function columnsOf(state: InactiveState): Updateable<Database['installations']> {
+  switch (state) {
+    case 'rejected':
+      return { admission_status: 'rejected', admission_reason: 'policy_changed' };
+    case 'suspended':
+      return { suspended_at: AWAY_AT };
+    case 'deleted':
+      return { deleted_at: AWAY_AT };
+  }
+}
+
+/** Tenant 1 is put in `state`, or back to active when none is given. */
+async function setStateOfTenant1(world: MatrixWorld, state: InactiveState | null): Promise<void> {
+  const active = {
+    admission_status: 'admitted',
+    admission_reason: null,
+    suspended_at: null,
+    deleted_at: null,
+  } as const;
+  await world.db
+    .updateTable('installations')
+    .set(state === null ? active : { ...active, ...columnsOf(state) })
+    .where('id', '=', world.t1.installationId)
+    .execute();
+}
+
+/** The entry of `admin1` in the ledger is brought to now, as a live lookup that said yes a moment ago would: the fixture's entry is older than 14 days. */
+async function seeAdmin1Now(world: MatrixWorld): Promise<void> {
+  const now = world.clock.now();
+  await recordAdminSeen(world.db, { installationId: world.t1.installationId }, world.people.admin1.githubId, {
+    seenAt: now,
+    refreshAtOrBefore: now,
+  });
+}
+
+/** The code of the `409` a write gets while the tenant is in `state`. */
+function conflictCode(state: 'suspended' | 'deleted'): string {
+  return state === 'suspended' ? 'installation_suspended' : 'installation_deleted';
+}
+
+/** A tenant that is away is told nothing: everybody who is not the admin the ledger remembers gets the `404` of an unknown id. */
+async function assertAwayDenials(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
+  const plan = planOf(c.endpointClass, world.t1);
+  const deny = denialProbe(world, route);
+  const unknown = await deny('admin1', c.request(UNKNOWN_TARGET), 404);
+  for (const who of [...STRANGERS, 'repoAdmin1'] as const) {
+    expect(await deny(who, c.request(plan.ok), 404), `${route} as ${who} is not the answer for an unknown id`).toEqual(
+      unknown,
+    );
+  }
+  await deny(null, c.request(plan.ok), 401);
+  for (const target of plan.nested ? crossed(world) : []) {
+    for (const who of ADMINS) {
+      expect(
+        await deny(who, c.request(target), 404, ' with crossed ids'),
+        `${route} with crossed ids as ${who}`,
+      ).toEqual(unknown);
+    }
+  }
+}
+
+/**
+ * Runs one case of `CROSS_TENANT_CASES` once more with tenant 1 in `state` (E11-S07), then puts it back. A suspended or
+ * deleted tenant serves a `read` route its normal success to the admin the ledger remembers and refuses a `write` route with
+ * the `409` of its state, whatever repository the route is about; every other person gets the `404` of an unknown id, byte for
+ * byte, a repository admin included (their permission cannot be checked). A rejected tenant is invisible to everybody, the
+ * remembered admin too. No denied call changes a row of any tenant table.
+ */
+export async function assertInactiveCase(
+  world: MatrixWorld,
+  route: string,
+  c: CrossTenantCase,
+  state: InactiveState,
+): Promise<void> {
+  await seeAdmin1Now(world);
+  await setStateOfTenant1(world, state);
+  await assertAwayDenials(world, route, c);
+  const plan = planOf(c.endpointClass, world.t1);
+  if (state === 'rejected') {
+    await denialProbe(world, route)('admin1', c.request(plan.ok), 404, ' of a rejected tenant');
+  } else if (c.endpointClass.endsWith('_write')) {
+    const refused = await denialProbe(world, route)('admin1', c.request(plan.ok), 409, ` of a ${state} tenant`);
+    expect(refused.body, `${route} of a ${state} tenant`).toContain(`"code":"${conflictCode(state)}"`);
+  } else {
+    const served = await world.ask('admin1', c.request(plan.ok));
+    expect(served.statusCode, `${route} of a ${state} tenant as the admin the ledger remembers`).toBe(c.success ?? 200);
+  }
+  await setStateOfTenant1(world, null);
 }
 
 /** The query for the owner of a row of a tenant table: its installation, and the person it is about. `signer_pii` and `cla_versions` have no installation column of their own. */

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { TenantTable } from '../../db/tenant-fixture/test-support.ts';
+import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
 import { declaredAccess } from '../route-access.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
@@ -54,7 +54,7 @@ export interface CrossTenantCase {
 
 /** A row a response names, by table and `id` (`signature_id` for `signer_pii`). */
 export interface RowRef {
-  readonly table: TenantTable;
+  readonly table: RowTable;
   readonly id: number;
 }
 

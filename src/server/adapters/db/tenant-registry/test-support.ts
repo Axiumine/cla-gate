@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
 import { parseGithubId } from '../../../../shared/github-id.ts';
+import { forgetAdminSeen, recordAdminSeen, wasAdminSeenSince } from '../../../services/admin-ledger-queries.ts';
+import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
 import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
 import { RepositoryNotFoundError, setRepositoryEnabled } from '../../../services/repository-enabled.ts';
@@ -33,6 +35,8 @@ import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from 
 /** The files that run a statement over a tenant table, relative to `src/server`. */
 export const TENANT_MODULES = [
   'adapters/db/tenant-scope.ts',
+  'services/admin-ledger-queries.ts',
+  'services/document-placement.ts',
   'services/installation-operator.ts',
   'services/repo-admin-candidates.ts',
   'services/repository-enabled.ts',
@@ -58,7 +62,10 @@ type Refusal = (error: unknown) => boolean;
  */
 export interface ScopedQuery {
   readonly kind: 'scoped';
-  /** False for a function that takes the scope and nothing else (a list): there are no ids of another tenant to hand it. */
+  /**
+   * False for a function that takes the scope and nothing else (a list), or whose other arguments name a person, who
+   * belongs to no tenant: there are no ids of another tenant to hand it. The test with another tenant's ids is not run.
+   */
   readonly takesIds: boolean;
   /** True when it reads or changes the repositories that are not removed only: with every repository of the tenant removed it finds nothing. */
   readonly activeOnly: boolean;
@@ -121,6 +128,18 @@ export function ownersOfTenantRows(rows: TenantRows | null): number[] {
   return [rows.installation.id, rows.repository.installation_id];
 }
 
+/** The installation that owns each document with these row ids. */
+async function ownersOfDocuments(db: Kysely<Database>, documentIds: readonly number[]): Promise<number[]> {
+  const rows = await db.selectFrom('cla_documents').select('installation_id').where('id', 'in', documentIds).execute();
+  return rows.map((row) => row.installation_id);
+}
+
+/** The installation that owns each signature with these row ids. */
+async function ownersOfSignatures(db: Kysely<Database>, signatureIds: readonly number[]): Promise<number[]> {
+  const rows = await db.selectFrom('signatures').select('installation_id').where('id', 'in', signatureIds).execute();
+  return rows.map((row) => row.installation_id);
+}
+
 /** The GitHub ids of the repositories that are removed, in any tenant. */
 async function removedRepositories(db: Kysely<Database>): Promise<number[]> {
   const rows = await db
@@ -129,6 +148,16 @@ async function removedRepositories(db: Kysely<Database>): Promise<number[]> {
     .where('removed_at', 'is not', null)
     .execute();
   return rows.map((row) => row.github_repo_id);
+}
+
+/** The installations that hold an entry of the ledger of org admins for this person, found by reading the table. */
+async function ledgerOwnersOf(db: Kysely<Database>, person: number): Promise<number[]> {
+  const rows = await db
+    .selectFrom('installation_admin_seen')
+    .select('installation_id')
+    .where('user_github_id', '=', person)
+    .execute();
+  return rows.map((row) => row.installation_id);
 }
 
 const RENAMED = 'renamed/by-test';
@@ -148,6 +177,53 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       run: async (db, scope, ids) => {
         await assertRepositoryInTenant(db, scope, ids.plain.repositoryId);
         return ownersOfRepositories(db, [ids.plain.repositoryId]);
+      },
+    }),
+  },
+  'services/admin-ledger-queries.ts': {
+    recordAdminSeen: scoped({
+      // The person is the ledger's key next to the tenant, not a resource of one: no other tenant's id exists to hand it.
+      takesIds: false,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        await recordAdminSeen(db, scope, ids.admin.githubId, { seenAt: WHEN, refreshAtOrBefore: WHEN });
+        return ledgerOwnersOf(db, ids.admin.githubId);
+      },
+    }),
+    forgetAdminSeen: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const before = await ledgerOwnersOf(db, ids.admin.githubId);
+        await forgetAdminSeen(db, scope, ids.admin.githubId);
+        const after = await ledgerOwnersOf(db, ids.admin.githubId);
+        return before.filter((owner) => !after.includes(owner));
+      },
+    }),
+    wasAdminSeenSince: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) =>
+        (await wasAdminSeenSince(db, scope, ids.admin.githubId, new Date('2026-01-01T00:00:00Z')))
+          ? ledgerOwnersOf(db, ids.admin.githubId)
+          : [],
+    }),
+  },
+  'services/document-placement.ts': {
+    findDocumentPlacement: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const placement = await findDocumentPlacement(db, scope, ids.scoped.documentId);
+        return placement === null ? [] : ownersOfDocuments(db, [ids.scoped.documentId]);
+      },
+    }),
+    findSignaturePlacement: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const placement = await findSignaturePlacement(db, scope, ids.signatureId);
+        return placement === null ? [] : ownersOfSignatures(db, [ids.signatureId]);
       },
     }),
   },

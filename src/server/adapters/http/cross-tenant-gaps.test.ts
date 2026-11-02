@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { TENANT_TABLES, type TenantTable, type TwoTenants, twoTenants } from '../db/tenant-fixture/test-support.ts';
+import { ROW_TABLES, type RowTable, type TwoTenants, twoTenants } from '../db/tenant-fixture/test-support.ts';
 import { migratedTestDatabase } from '../db/test-support.ts';
 import {
   type CaseTables,
@@ -111,9 +111,9 @@ type Db = Awaited<ReturnType<typeof migratedTestDatabase>>['db'];
 const none = (): null => null;
 const idOf = (value: (w: TwoTenants) => number) => (_db: Db, w: TwoTenants) => Promise.resolve(value(w));
 
-/** Each tenant table with how to find a row of tenant 1 and whom the row is about. */
+/** Each tenant table a response can name a row of, with how to find a row of tenant 1 and whom the row is about. */
 const OWNED: readonly (readonly [
-  TenantTable,
+  RowTable,
   (db: Db, w: TwoTenants) => Promise<number>,
   (w: TwoTenants) => number | null,
 ])[] = [
@@ -172,8 +172,8 @@ const OWNED: readonly (readonly [
   ],
 ];
 
-test('the table above names every tenant table', () => {
-  expect(OWNED.map(([table]) => table)).toEqual([...TENANT_TABLES]);
+test('the table above names every tenant table whose rows have an id a response can name', () => {
+  expect(OWNED.map(([table]) => table)).toEqual([...ROW_TABLES]);
 });
 
 test.each(OWNED)(

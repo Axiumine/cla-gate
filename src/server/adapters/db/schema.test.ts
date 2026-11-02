@@ -127,6 +127,7 @@ const COLUMNS = {
     subject_id: true,
     metadata: true,
   },
+  installation_admin_seen: { installation_id: true, user_github_id: true, seen_at: true },
 } satisfies { [Table in keyof Database]: Record<keyof Database[Table], true> };
 
 const BY_NAME = (a: string, b: string): number => a.localeCompare(b);

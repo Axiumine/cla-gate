@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test, vi } from 'vitest';
+import type { AdminLedger } from './admin-ledger.ts';
 import type { InstallationRow } from './installation-state.ts';
 import { GitHubUnavailableError } from './ports/github-errors.ts';
 import type { DiscoverRepoAdminRole } from './repo-admin-discovery.ts';
@@ -50,7 +51,8 @@ function repositoryOf(n: number, index: number): RepositoryRow {
 function setup(found: 'repo_admin' | 'none' = 'none') {
   const world = rolesWorld(2);
   const discover = vi.fn<DiscoverRepoAdminRole>(() => Promise.resolve({ role: found, truncated: false }));
-  const authorize = createTenantAuthorization({ lookups: world.lookups, discover });
+  const ledger = { isAdmin: vi.fn<AdminLedger['isAdmin']>(() => Promise.resolve(false)) };
+  const authorize = createTenantAuthorization({ lookups: world.lookups, discover, ledger });
   const ask = (overrides: Partial<TenantQuestion> = {}) =>
     authorize({
       mode: 'read',
@@ -62,7 +64,7 @@ function setup(found: 'repo_admin' | 'none' = 'none') {
       ...overrides,
     });
   const methods = () => world.fake.calls.map((call) => call.method);
-  return { ...world, discover, ask, methods };
+  return { ...world, discover, ledger, ask, methods };
 }
 
 test('an org admin is allowed as an org admin, with one call to GitHub and no discovery', async () => {
@@ -162,7 +164,7 @@ test('the owner of a suspended or deleted user account is allowed as an org admi
 
 test.each([
   ['somebody who does not own the user account', { account_type: 'User', account_id: 1 }],
-  ['the admin of an organisation, who cannot be verified', { account_type: 'Organization' }],
+  ['an admin of an organisation that the ledger does not know', { account_type: 'Organization' }],
 ] as const)(
   '%s is not_found on a suspended tenant, with no call to GitHub and no discovery',
   async (_name, overrides) => {
@@ -192,4 +194,67 @@ test('a failure of the discovery is thrown too, not turned into "no role"', asyn
   setOrgRole(1, 'member');
   discover.mockRejectedValueOnce(new GitHubUnavailableError('GitHub is down'));
   await expect(ask()).rejects.toBeInstanceOf(GitHubUnavailableError);
+});
+
+const SUSPENDED = { suspended_at: NOW } as const;
+const DELETED = { deleted_at: NOW } as const;
+
+test.each([
+  ['suspended', SUSPENDED],
+  ['deleted', DELETED],
+] as const)(
+  'an admin the ledger remembers is an org admin of a %s organisation for every requirement, with no call to GitHub',
+  async (_state, state) => {
+    const { ask, ledger, methods, discover } = setup();
+    ledger.isAdmin.mockResolvedValue(true);
+    const installation = installationOf(1, { account_type: 'Organization', ...state });
+    expect(await ask({ installation, active: false })).toEqual({ decision: 'allow', role: 'org_admin' });
+    const repoCall = {
+      installation,
+      active: false,
+      requirement: 'repo_admin',
+      repository: repositoryOf(1, 1),
+    } as const;
+    expect(await ask(repoCall)).toEqual({ decision: 'allow', role: 'org_admin' });
+    expect(await ask({ ...repoCall, mode: 'write' })).toEqual({ decision: 'allow', role: 'org_admin' });
+    expect(ledger.isAdmin).toHaveBeenCalledWith(tenantId(1), VIEWER_ID);
+    expect(methods()).toEqual([]);
+    expect(discover).not.toHaveBeenCalled();
+  },
+);
+
+test('a repository admin is nobody on a suspended organisation, whatever GitHub would say: only an org admin passes there', async () => {
+  const { ask, setOrgRole, setRepoPermission, methods, ledger } = setup('repo_admin');
+  setOrgRole(1, 'member');
+  setRepoPermission(1, 1, 'admin');
+  const installation = installationOf(1, { account_type: 'Organization', ...SUSPENDED });
+  const repoCall = { installation, active: false, requirement: 'repo_admin', repository: repositoryOf(1, 1) } as const;
+  expect(await ask(repoCall)).toEqual({ decision: 'not_found' });
+  expect(ledger.isAdmin).toHaveBeenCalledTimes(1);
+  expect(methods()).toEqual([]);
+});
+
+test.each([
+  ['an active organisation', { account_type: 'Organization' }, true],
+  ['a suspended user account of somebody else', { account_type: 'User', account_id: 1, ...SUSPENDED }, false],
+  ['a suspended account of another type', { account_type: 'Other', ...SUSPENDED }, false],
+] as const)('the ledger is not asked about %s', async (_name, overrides, active) => {
+  const { ask, setOrgRole, ledger } = setup();
+  setOrgRole(1, 'member');
+  ledger.isAdmin.mockResolvedValue(true);
+  await ask({ installation: installationOf(1, overrides), active });
+  expect(ledger.isAdmin).not.toHaveBeenCalled();
+});
+
+test('an account of another type has no admin, even for a viewer whose id is the account id', async () => {
+  const { ask } = setup();
+  const installation = installationOf(1, { account_type: 'Other', account_id: VIEWER_ID, ...SUSPENDED });
+  expect(await ask({ installation, active: false })).toEqual({ decision: 'not_found' });
+});
+
+test('a failure of the ledger is thrown, and is neither an allow nor a denial', async () => {
+  const { ask, ledger } = setup();
+  ledger.isAdmin.mockRejectedValue(new Error('the database is down'));
+  const installation = installationOf(1, { account_type: 'Organization', ...SUSPENDED });
+  await expect(ask({ installation, active: false })).rejects.toThrow('the database is down');
 });

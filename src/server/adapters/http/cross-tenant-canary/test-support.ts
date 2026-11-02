@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyRequest } from 'fastify';
-import type { Kysely } from 'kysely';
 import { z } from 'zod';
-import { findAdmittedTenantRows } from '../../../services/tenant-queries.ts';
-import { installationRowIdSchema } from '../../db/installation-row-id.ts';
-import type { Database } from '../../db/schema.ts';
-import { TENANT_TABLES } from '../../db/tenant-fixture/test-support.ts';
+import { ROW_TABLES } from '../../db/tenant-fixture/test-support.ts';
 import { requireAuth } from '../auth-request.ts';
 import type {
   CrossTenantCase,
@@ -18,7 +14,7 @@ import type {
 } from '../cross-tenant-fixture/test-support.ts';
 import type { MatrixWorld } from '../cross-tenant-runner/test-support.ts';
 import { type TenantResolver, tenantAccess } from '../tenant-access.ts';
-import { byInstallationParam, byRepositoryParam } from '../tenant-resolvers.ts';
+import { byDocumentParam, byInstallationParam, byRepositoryParam } from '../tenant-resolvers.ts';
 
 // The routes the matrix of E11-S06 is proved on. The application has no tenant route yet, so the matrix is run over canaries
 // that are routes of the same kinds the stories after this one add: a read and a write route about an installation, a
@@ -95,40 +91,9 @@ export const LEAKY_ROUTE = `GET ${LEAKY_PATH}`;
 
 export const LEAKY_CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = { [LEAKY_ROUTE]: LEAKY_CASE };
 
-const documentParams = z.object({
-  installationId: z.coerce.number().pipe(installationRowIdSchema),
-  documentId: z.coerce.number().int().positive(),
-});
-
-/**
- * The resolver of a route about one document: the requirement follows the scope of the document, as the role matrix says (an
- * installation-wide document needs an org admin, a repo-scoped one an admin of its repository). The document is read with the
- * installation of the path, so another tenant's document is null.
- */
-function byDocumentParam(db: Kysely<Database>): TenantResolver {
-  return async (request) => {
-    const { installationId, documentId } = documentParams.parse(request.params);
-    const document = await db
-      .selectFrom('cla_documents')
-      .select('repository_id')
-      .where('installation_id', '=', installationId)
-      .where('id', '=', documentId)
-      .executeTakeFirst();
-    if (document === undefined) {
-      return null;
-    }
-    if (document.repository_id === null) {
-      const rows = await findAdmittedTenantRows(db, installationId, null);
-      return rows === null ? null : { installationId, repositoryId: null, requirement: 'org_admin' };
-    }
-    const rows = await findAdmittedTenantRows(db, installationId, document.repository_id);
-    return rows === null ? null : { installationId, repositoryId: document.repository_id, requirement: 'repo_admin' };
-  };
-}
-
 const queryParams = z.object({ installationId: z.coerce.number().optional() });
 
-const rowsBody = z.object({ rows: z.array(z.object({ table: z.enum(TENANT_TABLES), id: z.number() })) });
+const rowsBody = z.object({ rows: z.array(z.object({ table: z.enum(ROW_TABLES), id: z.number() })) });
 
 /** The tenant rows a canary answer names. */
 const rowsOf = (body: unknown): readonly RowRef[] => rowsBody.parse(body).rows;

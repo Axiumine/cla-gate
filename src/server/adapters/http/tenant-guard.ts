@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyRequest } from 'fastify';
 import type { Kysely } from 'kysely';
-import { installationEligibility } from '../../domain/eligibility.ts';
+import { tenantState } from '../../domain/tenant-state.ts';
 import type { InstallationRow } from '../../services/installation-state.ts';
 import { InstallationNotAdmittedError } from '../../services/ports/github-errors.ts';
 import type { AuthorizeTenant, TenantAnswer } from '../../services/tenant-authorization.ts';
@@ -20,8 +20,9 @@ import type { TenantAccess, TenantTarget } from './tenant-access.ts';
 // Denials follow one table and are told apart only where the person already knows: `404 not_found` for a resource that is
 // unknown, removed, of a tenant the policy rejected, or in an installation where the viewer has no role (the four are the
 // same answer, byte for byte but for the request id); `403 forbidden` for a viewer who has a role here but too low a
-// one; `409 installation_suspended` or `409 installation_deleted` for a write by someone allowed to make it; and
-// `502`, `503` or `429` when GitHub could not say (E11-S04). The body never says what role the viewer holds.
+// one; `409 installation_suspended` or `409 installation_deleted` for a write by someone allowed to make it (an org admin
+// the ledger of E11-S07 remembers, when the tenant is an organisation); and `502`, `503` or `429` when GitHub could not
+// say (E11-S04). The body never says what role the viewer holds.
 
 export interface TenantGuardDeps {
   readonly db: Kysely<Database>;
@@ -46,23 +47,26 @@ async function readTenant(db: Kysely<Database>, target: TenantTarget): Promise<T
 type InactiveReason = 'installation_suspended' | 'installation_deleted';
 
 /**
- * Why the tenant is not active, or null when it is: the state of the stored row (E05-S06), read for every request, so no
+ * Why the tenant is not active, or null when it is: the state of the stored row (E11-S07), read for every request, so no
  * transition needs to tell the guard. A tenant the admission policy rejected is invisible and is the `404` here, whatever the
- * resolver said: a resolver that forgets to leave it out cannot let it through.
+ * resolver said: a resolver that forgets to leave it out cannot let it through, and no ledger applies to it.
  */
 function inactiveReason(installation: InstallationRow): InactiveReason | null {
-  const served = installationEligibility({
+  const state = tenantState({
     admissionStatus: installation.admission_status,
     deletedAt: installation.deleted_at,
     suspendedAt: installation.suspended_at,
   });
-  if (served.eligible) {
-    return null;
+  switch (state) {
+    case 'rejected':
+      throw notFound();
+    case 'deleted':
+      return 'installation_deleted';
+    case 'suspended':
+      return 'installation_suspended';
+    case 'active':
+      return null;
   }
-  if (served.reason === 'installation_rejected') {
-    throw notFound();
-  }
-  return served.reason;
 }
 
 /** One request of a tenant route as the guard has it once the tenant is read. */

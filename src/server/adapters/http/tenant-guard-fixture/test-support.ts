@@ -148,6 +148,7 @@ export async function tenantTables(db: Kysely<Database>): Promise<string> {
     db.selectFrom('allowlist_entries').selectAll().orderBy('id').execute(),
     db.selectFrom('pr_evaluations').selectAll().orderBy('id').execute(),
     db.selectFrom('audit_log').selectAll().orderBy('id').execute(),
+    db.selectFrom('installation_admin_seen').selectAll().orderBy('installation_id').orderBy('user_github_id').execute(),
   ];
   return JSON.stringify(await Promise.all(tables));
 }

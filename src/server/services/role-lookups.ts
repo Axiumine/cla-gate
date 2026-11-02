@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { parseGithubId } from '../../shared/github-id.ts';
 import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
-import type { createOrgAdminLookup, OrgAdminInstallation, RoleViewer } from './org-admin.ts';
+import type { OrgAdminInstallation, RoleViewer } from './org-admin.ts';
 import type { ProbeBudget } from './probe-budget.ts';
 import type { RepoAdminInstallation, RepoAdminLookup, RepoAdminRepository } from './repo-admin.ts';
 import type { RoleCache } from './role-cache.ts';
@@ -53,7 +53,8 @@ export interface RoleLookupDeps {
   readonly cache: RoleCache;
   /** The 30 uncached lookups a minute of each person. */
   readonly budget: ViewerLookupBudget;
-  readonly orgAdmin: ReturnType<typeof createOrgAdminLookup>;
+  /** The bare lookup (E11-S02), or one that keeps the ledger of admins by what it finds (E11-S07): it runs for a live answer only. */
+  readonly orgAdmin: CachedOrgAdminLookup;
   readonly repoAdmin: RepoAdminLookup;
 }
 

@@ -12,10 +12,10 @@ import {
   tenantTables,
 } from './tenant-guard-fixture/test-support.ts';
 
-// What the guard does with a tenant that is suspended or deleted (E11-S05; the ledger of past admins is E11-S07): GitHub
-// refuses the installation's tokens then, so no role is asked of it. The owner of a user account is known from the row
-// and passes, a read to be served and a write to be refused with a 409; nobody else can be verified, so everyone else gets
-// the uniform 404 until the ledger of E11-S07 lets the admins of an organisation through.
+// What the guard does with a tenant that is suspended or deleted (E11-S05, E11-S07): GitHub refuses the installation's
+// tokens then, so no role is asked of it. The owner of a user account is known from the row and passes, a read to be served
+// and a write to be refused with a 409; nobody else can be verified, so everyone else gets the uniform 404, except the
+// admins of an organisation that the ledger remembers (tenant-guard-ledger.test.ts).
 
 test.each([
   ['suspended', (world: GuardWorld) => world.tenants.suspendedUser, 'installation_suspended'],
@@ -57,7 +57,7 @@ test.each([
   },
 );
 
-test('an admin of a suspended organisation is told 404 for now, and GitHub is not asked: its tokens are refused', async () => {
+test('an admin of a suspended organisation the ledger has never seen is told 404, and GitHub is not asked: its tokens are refused', async () => {
   const world = await guardWorld();
   const tenant = world.tenants.suspendedOrg;
   const read = await world.ask('GET', `/t/installations/${tenant}`, 'admin1');
@@ -72,15 +72,25 @@ test('the state is read from the database for every request, with no invalidatio
   const world = await guardWorld();
   const url = `/t/installations/${world.tenants.t1}`;
   expect((await world.ask('GET', url, 'admin1')).statusCode).toBe(200);
-  // The admin's role is cached now; the installation is suspended, and the very next request knows.
+  // The admin's role is cached now, and a live lookup put them in the ledger; the installation is suspended, and the very
+  // next request knows: the read is served from the ledger and the write is refused with the state.
   await world.db
     .updateTable('installations')
     .set({ suspended_at: new Date() })
     .where('id', '=', world.tenants.t1)
     .execute();
-  expect((await world.ask('GET', url, 'admin1')).statusCode).toBe(404);
-  await world.db.updateTable('installations').set({ suspended_at: null }).where('id', '=', world.tenants.t1).execute();
   expect((await world.ask('GET', url, 'admin1')).statusCode).toBe(200);
+  const suspended = await world.ask('POST', url, 'admin1');
+  expect([suspended.statusCode, suspended.json()]).toMatchObject([409, { error: { code: 'installation_suspended' } }]);
+  await world.db.updateTable('installations').set({ suspended_at: null }).where('id', '=', world.tenants.t1).execute();
+  expect((await world.ask('POST', url, 'admin1')).statusCode).toBe(200);
+  await world.db
+    .updateTable('installations')
+    .set({ deleted_at: new Date() })
+    .where('id', '=', world.tenants.t1)
+    .execute();
+  const deleted = await world.ask('POST', url, 'admin1');
+  expect([deleted.statusCode, deleted.json()]).toMatchObject([409, { error: { code: 'installation_deleted' } }]);
   const owned = `/t/installations/${world.tenants.suspendedUser}`;
   expect((await world.ask('POST', owned, 'owner')).statusCode).toBe(409);
   await world.db
