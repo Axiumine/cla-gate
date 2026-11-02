@@ -97,3 +97,17 @@ test('an entry carries no signer, no document, no surrogate key and no personal 
     'suspendedAt',
   ]);
 });
+
+test('a repository that was enforced and then removed (the normal case after an uninstall) is removed, and neither active nor enabled', async () => {
+  const { db } = await migratedTestDatabase();
+  const store = createInstallationStore(db);
+  const row = await store.upsertInstallation(installationOf(1));
+  await store.upsertRepositories(row.id, [listed(1, 1), listed(1, 2)]);
+  await store.setRepositoryEnabled(row.id, repoId(1, 1), true, id(41_898_282));
+  await store.setRepositoryEnabled(row.id, repoId(1, 2), true, id(41_898_282));
+  expect((await store.listInstallationsForOperator())[0]?.repositories).toEqual({ active: 2, enabled: 2, removed: 0 });
+  await store.markRepositoriesRemoved(row.id, [repoId(1, 1)], LATER);
+  expect((await store.listInstallationsForOperator())[0]?.repositories).toEqual({ active: 1, enabled: 1, removed: 1 });
+  await store.markRepositoriesRemoved(row.id, [repoId(1, 2)], LATER);
+  expect((await store.listInstallationsForOperator())[0]?.repositories).toEqual({ active: 0, enabled: 0, removed: 2 });
+});
