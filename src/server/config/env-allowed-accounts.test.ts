@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError, loadConfig } from './env.ts';
 import { testRsaKey } from './test-support.ts';
 
@@ -51,6 +52,7 @@ test('a bad list is reported together with the other invalid variables', () => {
 test('the list is optional in production: the owner account alone is served', () => {
   const { github } = loadConfig({
     DATABASE_URL: DB,
+    ...AUTH_ENV,
     NODE_ENV: 'production',
     PUBLIC_BASE_URL: 'https://cla.example.org',
     GITHUB_APP_ID: '12345',

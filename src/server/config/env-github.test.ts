@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
+import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError, loadConfig } from './env.ts';
 import { publicKeyFingerprint } from './github-key.ts';
 import { MASK } from './secret.ts';
@@ -10,7 +11,7 @@ import { escapeNewlines, testRsaKey, testUnsuitableKeys } from './test-support.t
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
 const KEY = testRsaKey();
 const OTHER = testRsaKey();
-const PRODUCTION = { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.org' };
+const PRODUCTION = { ...AUTH_ENV, NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.org' };
 const UNSUITABLE = testUnsuitableKeys();
 
 function capture(env: Record<string, string | undefined>): ConfigError {

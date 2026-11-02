@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
 import type { Kysely } from 'kysely';
-import { ConfigError, loadMigrateConfig } from '../../config/env.ts';
+import { ConfigError } from '../../config/env.ts';
+import { loadMigrateConfig } from '../../config/migrate-config.ts';
 import { loadMigrationFiles, MigrationError } from './migration-files.ts';
 import { migrate } from './migrator.ts';
 import { createPgDatabase } from './pg.ts';

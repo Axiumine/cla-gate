@@ -3,6 +3,7 @@
 import type { KeyObject } from 'node:crypto';
 import { delay, HttpResponse } from 'msw';
 import { expect, test, vi } from 'vitest';
+import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
 import { ConfigError } from '../../config/env.ts';
 import { Secret } from '../../config/secret.ts';
 import { type TestGitHubKey, testGitHubKey } from '../../config/test-support.ts';
@@ -13,7 +14,7 @@ import { createLogger } from '../http/logger.ts';
 import { startGitHubApp } from './start.ts';
 import { APP_ID, appBody, jwtSignedBy, mockApp, START } from './test-support.ts';
 
-const PRODUCTION = { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.test' };
+const PRODUCTION = { ...AUTH_ENV, NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.test' };
 
 function start(env: Record<string, string>, timeoutMs?: number) {
   const logs = captureLogs();
