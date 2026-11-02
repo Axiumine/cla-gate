@@ -112,11 +112,11 @@ This README and the documents below are the source of truth for scope, stack and
 
 ## Roadmap
 
-1. **Scaffold**: toolchain, hooks and CI passing every gate at 100% (done), and the server foundation: configuration, logging, security headers, health routes, the schema and its migration runner, Postgres 18 in the tests (done). Stryker, Playwright, memlab, Semgrep, Trivy and Qodana follow with their CI jobs.
+1. **Scaffold**: toolchain, hooks and CI passing every gate at 100% (done), and the server foundation: configuration, logging, security headers, health routes, the schema and its migration runner, Postgres 18 in the tests (done). Semgrep, Trivy, Stryker, Playwright, memlab and Qodana are wired with their CI jobs (Qodana waits for a licence and token).
 2. **Core**: GitHub App, webhook intake, PR evaluation, Check Run and comment.
 3. **Signing**: login, CLA versions, consent flow, signature storage.
 4. **Dashboard**: repos, signatures, CSV export, revoke, audit log.
-5. **Hardening**: mutation floor ratchet, e2e + visual baselines, memlab nightly, Qodana.
+5. **Hardening**: promote the stable CI jobs to required checks, raise the mutation floor, e2e and visual baselines for every screen, memlab nightly, Qodana once licensed.
 6. **Corporate CLA** and merge queue support.
 
 ## License

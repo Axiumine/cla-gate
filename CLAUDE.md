@@ -35,7 +35,7 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 
 1. **Never bypass a gate.** No `--no-verify`, no `LEFTHOOK=0`, no lowering a threshold, no growing `.code-caps-baseline.json` (it may only shrink), no excluding files from coverage. Fix the code. Agents never run `--init`, `--force` or `--update-baseline` of the caps tool to hide a violation. Only exceptions: `LEFTHOOK_EXCLUDE=trivy,semgrep` when offline (CI still enforces them) and the fixed coverage exclusion list ([quality gates](docs/quality-gates.md), Thresholds).
 2. **100% means real.** Every behaviour change ships with tests that assert behaviour; tests that merely execute lines die in mutation testing.
-3. **No escape hatches without a reason.** `any`, `as`, `@ts-expect-error`, `eslint-disable`, `biome-ignore`, `v8 ignore` are last resorts, each with a written justification on the same line (`v8 ignore` also needs `-- @preserve`; `reportUnusedDisableDirectives` stays on); prefer zod parsing and type guards. Detail: [quality gates](docs/quality-gates.md), Escape hatches.
+3. **No escape hatches without a reason.** `any`, `as`, `@ts-expect-error`, `eslint-disable`, `biome-ignore`, `v8 ignore` are last resorts, each with a written justification on the same line (`v8 ignore` also needs `-- @preserve`; `reportUnusedDisableDirectives` stays on; `yarn lint:hatches` checks it); prefer zod parsing and type guards. Detail: [quality gates](docs/quality-gates.md), Escape hatches.
 4. **Identity is the numeric GitHub id.** Never key signatures, allowlists or approvals on login or email; they are display snapshots.
 5. **The signature core, CLA versions and audit rows are immutable** (DB triggers block UPDATE beyond `revoked_*`, DELETE and TRUNCATE; the runtime DB role must not own the tables). Personal data (name, email, login) lives only in the erasable `signer_pii` table, never in the core or `audit_log`; erasure goes through one audited SQL function. Migrations must not weaken any of this. Revocation is prospective only.
 6. **Migrations are forward-only.** Never edit a merged migration; add a new one.
@@ -55,6 +55,6 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 
 - No direct pushes to `main`: every change goes through a PR whose checks pass.
 - Required checks: `static` and `coverage` (exact job names; renaming one breaks the rule).
-- Flow, emergency unblock and commit policy: [`CONTRIBUTING.md`](CONTRIBUTING.md); runners and fork approval: [`docs/ci-runners.md`](docs/ci-runners.md).
+- Flow, emergency unblock, commit policy, when a job may become required (`leaks`, `qodana` never): [`CONTRIBUTING.md`](CONTRIBUTING.md); runners and fork approval: [`docs/ci-runners.md`](docs/ci-runners.md).
 
 A changed decision updates the owning document above in the same PR.
