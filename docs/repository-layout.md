@@ -16,7 +16,9 @@ Items marked (planned) do not exist yet.
 │   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS)
 │   ├── adapters/db/             Kysely over node-postgres, hand-written schema types, migration runner and CLI,
 │   │                            transaction and advisory-lock helpers, the branded installation row id,
-│   │                            PGlite dialect and test helpers (test only, outside the build)
+│   │                            PGlite dialect and test helpers (test only, outside the build; the independent
+│   │                            connections of the real-Postgres tests are in real-postgres/test-support.ts and
+│   │                            re-exported by test-support.ts)
 │   ├── adapters/github/         the Octokit adapter of the GitHub port (octokit-*.ts: client, requests, errors, auth),
 │   │                            the App JWT (app-jwt.ts, app-auth.ts), the installation token provider
 │   │                            (installation-tokens.ts, token-cache.ts, single-flight.ts), the self-check

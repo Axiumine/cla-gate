@@ -5,7 +5,7 @@ import { expect, inject, test } from 'vitest';
 import { parseGithubId } from '../../../shared/github-id.ts';
 import { lockInstallation } from './advisory-lock.ts';
 import type { Database } from './schema.ts';
-import { emptyTestDatabase, openTestDatabase, realPostgres } from './test-support.ts';
+import { emptyTestDatabase, openTestDatabase, realPostgresOnly } from './test-support.ts';
 
 const id = parseGithubId;
 
@@ -51,23 +51,20 @@ test('taking the lock again in the same transaction is one lock; another install
 
 // PGlite has one session and advisory locks are re-entrant within a session, so a lock held "elsewhere" can never contend
 // there. Only a real server can prove that a second session waits for the same installation and not for another.
-test.skipIf(!realPostgres)(
-  'a second session waits for the lock of the same installation and not for another one',
-  async () => {
-    const { db } = await emptyTestDatabase();
-    const other = await openTestDatabase(inject('testDatabaseUrl'));
-    const waiting: Promise<void>[] = [];
-    await other.db.transaction().execute(async (holder) => {
-      await lockInstallation(holder, id(100));
-      waiting.push(db.transaction().execute((trx) => lockInstallation(trx, id(100))));
-      const early = await Promise.race([
-        waiting[0]?.then(() => 'got the lock'),
-        new Promise((resolve) => setTimeout(resolve, 300, 'still waiting')),
-      ]);
-      expect(early).toBe('still waiting');
-      await db.transaction().execute((trx) => lockInstallation(trx, id(101)));
-    });
-    await Promise.all(waiting);
-    await other.db.destroy();
-  },
-);
+realPostgresOnly('a second session waits for the lock of the same installation and not for another one', async () => {
+  const { db } = await emptyTestDatabase();
+  const other = await openTestDatabase(inject('testDatabaseUrl'));
+  const waiting: Promise<void>[] = [];
+  await other.db.transaction().execute(async (holder) => {
+    await lockInstallation(holder, id(100));
+    waiting.push(db.transaction().execute((trx) => lockInstallation(trx, id(100))));
+    const early = await Promise.race([
+      waiting[0]?.then(() => 'got the lock'),
+      new Promise((resolve) => setTimeout(resolve, 300, 'still waiting')),
+    ]);
+    expect(early).toBe('still waiting');
+    await db.transaction().execute((trx) => lockInstallation(trx, id(101)));
+  });
+  await Promise.all(waiting);
+  await other.db.destroy();
+});

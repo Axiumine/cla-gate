@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
-import { realPostgres } from '../adapters/db/test-support.ts';
 import { createInstallationSync } from './installation-sync.ts';
 import {
   A_INSTALLATION,
@@ -23,39 +22,34 @@ import {
 const id = parseGithubId;
 const FIVE = Array.from({ length: 5 }, (_, index) => index);
 
-test.skipIf(!realPostgres)(
-  'A and B syncing concurrently after a transfer end with one active row for the repository and one removal under A',
-  async () => {
-    const world = await transferWorld();
-    moveShared(world);
-    const fresh = () =>
-      createInstallationSync({
-        db: world.db,
-        github: world.fake,
-        admission: world.admissionFor([OTHER_ACCOUNT]),
-        clock: world.clock,
-        logger: world.logger,
-      });
-    const runs = FIVE.flatMap(() => [
-      fresh().syncInstallation(id(A_INSTALLATION)),
-      fresh().syncInstallation(id(B_INSTALLATION)),
-    ]);
-    await Promise.all(runs);
-    const rows = (await repositoryRows(world.db)).filter((row) => row.github_repo_id === SHARED);
-    expect(rows.map((row) => [row.installation_id === world.bId, row.removed_at === null])).toEqual([
-      [false, false],
-      [true, true],
-    ]);
-    const trail = (await auditRows(world.db)).filter((row) => row.subject_id === SHARED);
-    expect(trail.map((row) => [row.installation_id === world.bId, row.action])).toEqual(
-      expect.arrayContaining([
-        [false, 'repository.removed'],
-        [true, 'repository.added'],
-      ]),
-    );
-    expect(trail.filter((row) => row.action === 'repository.removed')).toHaveLength(1);
-    expect(trail.filter((row) => row.action === 'repository.added' && row.installation_id === world.bId)).toHaveLength(
-      1,
-    );
-  },
-);
+test('A and B syncing concurrently after a transfer end with one active row for the repository and one removal under A', async () => {
+  const world = await transferWorld();
+  moveShared(world);
+  const fresh = () =>
+    createInstallationSync({
+      db: world.db,
+      github: world.fake,
+      admission: world.admissionFor([OTHER_ACCOUNT]),
+      clock: world.clock,
+      logger: world.logger,
+    });
+  const runs = FIVE.flatMap(() => [
+    fresh().syncInstallation(id(A_INSTALLATION)),
+    fresh().syncInstallation(id(B_INSTALLATION)),
+  ]);
+  await Promise.all(runs);
+  const rows = (await repositoryRows(world.db)).filter((row) => row.github_repo_id === SHARED);
+  expect(rows.map((row) => [row.installation_id === world.bId, row.removed_at === null])).toEqual([
+    [false, false],
+    [true, true],
+  ]);
+  const trail = (await auditRows(world.db)).filter((row) => row.subject_id === SHARED);
+  expect(trail.map((row) => [row.installation_id === world.bId, row.action])).toEqual(
+    expect.arrayContaining([
+      [false, 'repository.removed'],
+      [true, 'repository.added'],
+    ]),
+  );
+  expect(trail.filter((row) => row.action === 'repository.removed')).toHaveLength(1);
+  expect(trail.filter((row) => row.action === 'repository.added' && row.installation_id === world.bId)).toHaveLength(1);
+});
