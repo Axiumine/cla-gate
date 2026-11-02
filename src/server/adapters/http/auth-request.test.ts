@@ -97,6 +97,8 @@ test.each([
   ['a route spelled with an escape', '/api/%61uth/session', 401],
   ['a query string', '/api/auth/nothing-here?x=1', 404],
   ['a server error', '/api/auth/probe-boom', 500],
+  ['an invalid percent escape', '/api/auth/%zz', 400],
+  ['an invalid percent escape below a route', '/api/auth/session/%zz', 400],
 ])('%s under /api/auth carries Cache-Control: no-store', async (label, url, status) => {
   const { app, login } = await authWorld();
   const alice = await login(1001);
@@ -104,6 +106,16 @@ test.each([
   const response = await app.inject({ url, headers });
   expect(response.statusCode).toBe(status);
   expect(response.headers['cache-control'], label).toBe('no-store');
+});
+
+test('the 429 of a path under /api/auth that no route answers carries Cache-Control: no-store', async () => {
+  const { app } = await authWorld();
+  for (let sent = 0; sent < 600; sent++) {
+    await app.inject('/api/auth/nothing-here');
+  }
+  const limited = await app.inject('/api/auth/nothing-here');
+  expect(limited.statusCode).toBe(429);
+  expect(limited.headers['cache-control']).toBe('no-store');
 });
 
 test.each([['/healthz'], ['/api/authors'], ['/api/nothing'], ['/probe/auth']])(

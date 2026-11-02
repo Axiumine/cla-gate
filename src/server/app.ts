@@ -7,6 +7,7 @@ import type { Kysely } from 'kysely';
 import type { Database } from './adapters/db/schema.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
+import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
@@ -67,6 +68,8 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     done();
   });
   const clock = options.clock ?? systemClock;
+  // Before the rate limit, so that its 429 for a path no route answers carries the header too.
+  app.addHook('onRequest', noStoreForAuth);
   await registerRateLimit(app, { trustProxy: config.trustProxy, clock });
   const loginSettings = authSettings(config);
   registerRequestGuards(app, { publicBaseUrl: config.publicBaseUrl, sessionSecret: loginSettings?.sessionSecret });

@@ -10,12 +10,12 @@ import { createSessionStore } from '../db/sessions.ts';
 import { createGithubLogin } from '../github/user-login.ts';
 import { LOGIN_TIMEOUT_MS } from '../github/user-login-transport.ts';
 import { callbackRoutes } from './auth-callback.ts';
-import { authenticate, noStoreForAuth } from './auth-hooks.ts';
+import { authenticate } from './auth-hooks.ts';
 import { loginRoutes } from './auth-login.ts';
 import { logoutRoutes } from './auth-logout.ts';
 import { authRoutes } from './auth-routes.ts';
 
-// The login wiring (E10-S02, E10-S05, E10-S06): the cookie plugin, the hooks of auth-hooks.ts and the routes. The shape of
+// The login wiring (E10-S02, E10-S05, E10-S06): the cookie plugin, the session hook of auth-hooks.ts and the routes. The shape of
 // `request.auth` and `requireAuth` are in auth-request.ts, the routes in auth-routes.ts, auth-login.ts, auth-callback.ts and auth-logout.ts,
 // and the slot itself is declared with the request guards (E10-S03).
 
@@ -30,14 +30,13 @@ export interface AuthOptions {
 }
 
 /**
- * Registers the cookie plugin (signing with `SESSION_SECRET`), the hooks and the routes of `/api/auth`. Called by
+ * Registers the cookie plugin (signing with `SESSION_SECRET`), the session hook and the routes of `/api/auth`. Called by
  * `buildApp` only when the login is configured (E10-S01).
  */
 export async function registerAuth(app: FastifyInstance, options: AuthOptions): Promise<void> {
   const store = createSessionStore(options.db, options.settings.session);
   await app.register(fastifyCookie, { secret: options.settings.sessionSecret.reveal() });
   app.decorateRequest('sessionCookiePresented', false);
-  app.addHook('onRequest', noStoreForAuth);
   app.addHook('onRequest', (request) => authenticate(request, store, options.clock));
   await app.register(authRoutes, { sessionSecret: options.settings.sessionSecret });
   await app.register(loginRoutes, {
