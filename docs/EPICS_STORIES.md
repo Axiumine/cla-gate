@@ -53,7 +53,7 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 | E07 | Job queue, concurrency and reconciliation | BC-04 | 🔴 Must have | ⬜ Todo | 10 | [E07.md](epics/E07.md) |
 | E08 | PR evaluation engine | BC-04 | 🔴 Must have | ✅ Done | 8 | [E08.md](epics/E08.md) |
 | E09 | Check Run and PR comment reporting | BC-04 | 🔴 Must have | ⬜ Todo | 9 | [E09.md](epics/E09.md) |
-| E10 | Authentication and sessions | BC-02 | 🔴 Must have | ⬜ Todo | 8 | [E10.md](epics/E10.md) |
+| E10 | Authentication and sessions | BC-02 | 🔴 Must have | ⏳ In progress | 8 | [E10.md](epics/E10.md) |
 | E11 | Authorization and tenant isolation | BC-02 | 🔴 Must have | ⬜ Todo | 8 | [E11.md](epics/E11.md) |
 | E12 | CLA documents and versions | BC-03 | 🔴 Must have | ⬜ Todo | 7 | [E12.md](epics/E12.md) |
 | E13 | Contributor signing flow | BC-03 | 🔴 Must have | ⬜ Todo | 7 | [E13.md](epics/E13.md) |
@@ -72,9 +72,9 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 
 | Status | Stories | Epics |
 |---|---|---|
-| ✅ Done | 64 | 5 |
-| ⏳ In progress | 4 | 3 |
-| ⬜ Todo | 130 | 15 |
+| ✅ Done | 71 | 5 |
+| ⏳ In progress | 5 | 4 |
+| ⬜ Todo | 122 | 14 |
 | Total | 198 | 23 |
 
 ## Dependency and sequencing
@@ -101,6 +101,7 @@ The Depends lines are epic-wide. These stories must also be merged before the st
 | Merge first | Before | Why |
 |---|---|---|
 | E06-S01 | E10-S03, E19-S06 | Defines `WEBHOOK_PATH`, the shared route constants and `AppError`. |
+| E07-S03 | E10-S07 | The handler registry, the job-payload schemas and the delivery wrapper must exist before the `revoke-user-sessions` handler is bound (E10 is wave 5 and E07 wave 6, which no Depends line says); E07-S03 binds the E10-S07 handler when it lands. |
 | E07-S09 | E12-S04, E14-S02, E14-S03, E14-S04, E14-S06 | The `sweep-repository` and `finalise-*` jobs are the one re-evaluation mechanism for policy changes. |
 | E08-S01 | E07-S04 | E07 builds the facts and calls the evaluator, so the evaluation types come first (E07 needs E08, which no Depends line says). |
 | E09-S01 | E10-S03, E12-S01, E16-S03, E16-S06, E17-S06, E17-S11 | The single shared hostile-name corpus and the escaping rules. |

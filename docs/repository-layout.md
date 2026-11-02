@@ -13,37 +13,53 @@ Items marked (planned) do not exist yet.
 │   │                            the parts of start-up: logging the configuration, binding the gate once the policies
 │   │                            exist, reconciling installations, wiring the services
 │   ├── config/                  environment parsing (zod), Secret, TRUST_PROXY parsing; github-app.ts and github-key.ts
-│   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS)
+│   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS),
+│   │                            auth-fields.ts and auth.ts (login variables, the login settings, `callbackUrl`, the
+│   │                            start-up lines), migrate-config.ts (what `yarn db:migrate` needs; apart from env.ts
+│   │                            to keep that file under the FTA score cap)
 │   ├── adapters/db/             Kysely over node-postgres, hand-written schema types, migration runner and CLI,
 │   │                            transaction and advisory-lock helpers, the branded installation row id,
 │   │                            PGlite dialect and test helpers (test only, outside the build; the independent
 │   │                            connections of the real-Postgres tests are in real-postgres/test-support.ts and
-│   │                            re-exported by test-support.ts)
+│   │                            re-exported by test-support.ts); the session store (sessions.ts with sessions-create,
+│   │                            -delete, -model, -read, -row and -touch.ts; sessions-fixture/ is test only) and the
+│   │                            user upsert (users.ts)
 │   ├── adapters/github/         the Octokit adapter of the GitHub port (octokit-*.ts: client, requests, errors, auth),
 │   │                            the App JWT (app-jwt.ts, app-auth.ts), the installation token provider
 │   │                            (installation-tokens.ts, token-cache.ts, single-flight.ts), the self-check
 │   │                            (app-identity.ts, start.ts), the rate limiter (rate-limiter.ts with lane, semaphore,
 │   │                            point-bucket, wait-policy, rate-limit-reading.ts and rate-limit-log.ts), response
-│   │                            schemas (schemas.ts), pagination
+│   │                            schemas (schemas.ts), pagination; the login's calls to GitHub with the user's token
+│   │                            (user-login*.ts: exchange, identity, addresses, revoke)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (also for failures that never
 │   │                            reach a route), HTTP limits, health routes, trust-proxy conversion, the /api
-│   │                            route-audit guard (audit-routes.ts)
+│   │                            route-audit guard (audit-routes.ts); login and sessions: auth.ts (wiring), auth-hooks.ts
+│   │                            (session lookup), auth-no-store.ts, auth-request.ts (`request.auth`, `requireAuth`),
+│   │                            auth-routes.ts (session), auth-login.ts, auth-callback.ts, auth-logout.ts,
+│   │                            session-cookie.ts, oauth-cookie.ts, oauth-attempt.ts; the request guards
+│   │                            (request-guards.ts, csrf-token.ts, csrf-routes.ts); rate-limit.ts and
+│   │                            trust-proxy-warning.ts; auth-fixture/, login-fixture/ and callback-fixture/ are test only
 │   ├── domain/                  admission.ts (who is served, pure), eligibility.ts (when an installation or repository
-│   │                            is evaluated), permissions.ts (the missing-permission check)
+│   │                            is evaluated), permissions.ts (the missing-permission check), session.ts (session
+│   │                            lifetimes), return-to.ts (`safeReturnTo`), github-profile.ts (what is kept of a profile)
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
 │   │                            its public surface
 │   └── services/                audit.ts (appendAudit, the one public entry), audit-entry.ts (AuditEntry, validation);
 │                                ports/ (github.ts, installation-gate.ts, clock.ts, github-errors.ts); the stored
 │                                installation gate and admission policies (installation-gate.ts, admission-policies.ts);
+│                                login.ts (the login callback's transaction), revoke-user-sessions.ts (the job handler),
+│                                ports/github-login.ts;
 │                                the installation and repository state (installation-*.ts, repository-*.ts): store,
 │                                queries, admission, sync and reconcile, transfer, operator view
-├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, the audit
+├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, route constants in
+│                                routes.ts, the session response in auth.ts, verified-email.ts, the audit
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
 │                                codes, parts and stored-details schema `pr-evaluation-*.ts`)
 ├── src/web/                     (planned) React SPA
-├── migrations/                  forward-only SQL, never edited after merge (001 to 004: initial schema, audit metadata allowlist, installation and repository state, account type Other)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 004 and 006: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
+├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
 ├── docs/ci-runners.md           CI runner policy: shared self-hosted runners, fork approval, ports, job rules
 ├── docs/development.md          status, setup and run, and the package.json scripts (exists or deferred)
