@@ -115,10 +115,7 @@ function deliver(app: FastifyInstance, expected: Expectation) {
 }
 
 /** The rows and jobs that exactly the seven deliveries leave: one row each with only its id, event and action, one job each with ids only. */
-async function expectExactlyTheFixtureSet(
-  db: Kysely<Database>,
-  processedAt: 'pending' | 'any' = 'pending',
-): Promise<void> {
+async function expectExactlyTheFixtureSet(db: Kysely<Database>): Promise<void> {
   const rows = (await deliveryRows(db)).toSorted((a, b) => a.delivery_id.localeCompare(b.delivery_id));
   expect(rows.map((row) => sorted(Object.keys(row)))).toEqual(
     EXPECTED.map(() => ['action', 'delivery_id', 'event', 'processed_at', 'received_at']),
@@ -128,7 +125,7 @@ async function expectExactlyTheFixtureSet(
       delivery_id: deliveryId,
       event,
       action,
-      ...(processedAt === 'pending' ? { processed_at: null } : {}),
+      processed_at: null,
     })),
   );
   const jobs = (await sentJobs(db)).toSorted((a, b) => a.idempotencyKey.localeCompare(b.idempotencyKey));
@@ -177,8 +174,8 @@ test('the same set sent again is seven duplicates: still the same seven rows and
     }),
   );
   expect(ignored.statusCode).toBe(202);
-  // A redelivery whose job is still alive is deduplicated by the queue, and the recording marks the delivery processed (E06-S06).
-  await expectExactlyTheFixtureSet(db, 'any');
+  // A redelivery whose job is still alive leaves its row to that job: it stays unprocessed (E06-S06).
+  await expectExactlyTheFixtureSet(db);
 });
 
 realPostgresOnly(

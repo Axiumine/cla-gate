@@ -2,7 +2,13 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { afterAll, expect, test } from 'vitest';
 import { buildApp } from '../../app.ts';
-import { clearRecords, createJobsTable, dropJobs, fakeEnqueuer } from '../../services/jobs-fixture/test-support.ts';
+import {
+  clearRecords,
+  createJobsTable,
+  deliveryRows,
+  dropJobs,
+  fakeEnqueuer,
+} from '../../services/jobs-fixture/test-support.ts';
 import { countingDatabase, tenantDatabase } from '../../services/tenant-fixture/test-support.ts';
 import { markDeliveryProcessed } from '../../services/webhook-delivery-rows.ts';
 import { captureLogs, testConfig } from '../../test-support.ts';
@@ -82,6 +88,18 @@ test('a delivery recorded and finished before costs four statements, the last of
   expect([response.statusCode, response.json()]).toEqual([200, { status: 'duplicate' }]);
   expect(statements).toEqual([SQL.select, SQL.select, SQL.insert, SQL.select]);
   expect(enqueuer.calls).toEqual([]);
+});
+
+test('a redelivery while the first job is still alive costs five statements and leaves the row for that job to finish', async () => {
+  const { app, db, statements, enqueuer } = await running();
+  await deliverFirst(app);
+  statements.length = 0;
+  enqueuer.calls.length = 0;
+  const response = await deliverFirst(app);
+  expect([response.statusCode, response.json()]).toEqual([200, { status: 'duplicate' }]);
+  expect(statements).toEqual([SQL.select, SQL.select, SQL.insert, SQL.select, SQL.enqueue]);
+  expect(statements).toHaveLength(MOST_STATEMENTS);
+  expect((await deliveryRows(db)).map((row) => row.processed_at)).toEqual([null]);
 });
 
 test('a redelivery whose job was lost is the most a delivery costs: five statements', async () => {

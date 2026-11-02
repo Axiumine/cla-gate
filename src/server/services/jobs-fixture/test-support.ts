@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { type Kysely, sql } from 'kysely';
+import { type Kysely, sql, type Transaction } from 'kysely';
 import type { Database } from '../../adapters/db/schema.ts';
 import { type Job, jobSchema } from '../../domain/jobs.ts';
 import { type Clock, systemClock } from '../ports/clock.ts';
@@ -72,13 +72,43 @@ interface EnqueueCall {
   readonly options: EnqueueOptions;
 }
 
+async function keyIsLive(tx: Transaction<Database>, idempotencyKey: string): Promise<boolean> {
+  const { rows } = await sql`select 1 from fake_jobs where idempotency_key = ${idempotencyKey}`.execute(tx);
+  return rows.length > 0;
+}
+
+/** Whether a send under `dedupeKey` was committed or made in this transaction since `since`. */
+async function windowIsOpen(tx: Transaction<Database>, dedupeKey: string, since: Date): Promise<boolean> {
+  const { rows } = await sql`select 1 from fake_jobs where dedupe_key = ${dedupeKey} and sent_at > ${since}`.execute(
+    tx,
+  );
+  return rows.length > 0;
+}
+
+/** What a send inside an open dedupe window gets, or `undefined` when no window stops it. */
+async function refusedByWindow(
+  tx: Transaction<Database>,
+  options: EnqueueOptions,
+  now: Date,
+): Promise<'already_queued' | 'deduplicated' | undefined> {
+  if (options.dedupeKey === undefined) {
+    return undefined;
+  }
+  const since = new Date(now.getTime() - options.dedupeWindowSeconds * 1000);
+  if (!(await windowIsOpen(tx, options.dedupeKey, since))) {
+    return undefined;
+  }
+  return (await keyIsLive(tx, options.idempotencyKey)) ? 'already_queued' : 'deduplicated';
+}
+
 export interface FakeEnqueuer extends JobEnqueuer {
   readonly calls: EnqueueCall[];
 }
 
 /**
- * The fake queue. A send under an idempotency key that is already in the table, or under a `dedupeKey` used less than
- * `dedupeWindowSeconds` before by `clock`, is `deduplicated` and writes nothing; any other send writes one row.
+ * The fake queue. A send under an idempotency key that is already in the table is `already_queued`, and one under a
+ * `dedupeKey` used less than `dedupeWindowSeconds` before by `clock` is `deduplicated`; neither writes anything, and
+ * `already_queued` wins when both apply. Any other send writes one row.
  */
 export function fakeEnqueuer(clock: Clock = systemClock): FakeEnqueuer {
   const calls: EnqueueCall[] = [];
@@ -87,20 +117,16 @@ export function fakeEnqueuer(clock: Clock = systemClock): FakeEnqueuer {
     async enqueue(tx, job, options): Promise<EnqueueOutcome> {
       calls.push({ job, options });
       const now = clock.now();
-      if (options.dedupeKey !== undefined) {
-        const since = new Date(now.getTime() - options.dedupeWindowSeconds * 1000);
-        const { rows } =
-          await sql`select 1 from fake_jobs where dedupe_key = ${options.dedupeKey} and sent_at > ${since}`.execute(tx);
-        if (rows.length > 0) {
-          return 'deduplicated';
-        }
+      const refused = await refusedByWindow(tx, options, now);
+      if (refused !== undefined) {
+        return refused;
       }
       const { rows } = await sql`
         insert into fake_jobs (idempotency_key, dedupe_key, sent_at, job)
         values (${options.idempotencyKey}, ${options.dedupeKey ?? null}, ${now}, ${JSON.stringify(job)}::jsonb)
         on conflict (idempotency_key) do nothing
         returning id`.execute(tx);
-      return rows.length > 0 ? 'queued' : 'deduplicated';
+      return rows.length > 0 ? 'queued' : 'already_queued';
     },
   };
 }

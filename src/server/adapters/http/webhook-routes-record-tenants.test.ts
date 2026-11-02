@@ -177,17 +177,20 @@ test('two tenants deliver: each has its own row and a job that carries its own i
   expect(second).not.toContain(String(TENANT.admitted.installation));
 });
 
-test("a redelivery of one tenant's delivery does not touch the other tenant's: its row stays unprocessed", async () => {
+test("a redelivery of one tenant's delivery sends nothing and touches neither row: both stay for their live jobs", async () => {
   const { app, db } = await running();
   const a = randomUUID();
   const b = randomUUID();
   await deliver(app, 'pull_request', payloadFor('pull_request', TENANT.admitted), a);
   await deliver(app, 'pull_request', payloadFor('pull_request', TENANT.other), b);
+  const before = await deliveryRows(db);
   expect((await deliver(app, 'pull_request', payloadFor('pull_request', TENANT.admitted), a)).statusCode).toBe(200);
-  const processed = Object.fromEntries(
-    (await deliveryRows(db)).map((row) => [row.delivery_id, row.processed_at !== null]),
-  );
-  expect(processed).toEqual({ [a]: true, [b]: false });
+  expect(await deliveryRows(db)).toEqual(before);
+  expect(Object.fromEntries(before.map((row) => [row.delivery_id, row.processed_at]))).toEqual({
+    [a]: null,
+    [b]: null,
+  });
+  expect(await jobCount(db)).toBe(2);
 });
 
 const LIFECYCLE: readonly (readonly [WebhookEvent, string])[] = [

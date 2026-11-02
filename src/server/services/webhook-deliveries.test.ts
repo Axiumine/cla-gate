@@ -17,6 +17,7 @@ import {
   jobCount,
   sentJobs,
 } from './jobs-fixture/test-support.ts';
+import type { JobEnqueuer } from './ports/jobs.ts';
 import { countingDatabase } from './tenant-fixture/test-support.ts';
 import { createWebhookDeliveries } from './webhook-deliveries.ts';
 import { type DeliverySubject, markDeliveryProcessed } from './webhook-delivery-rows.ts';
@@ -27,6 +28,9 @@ import { type DeliverySubject, markDeliveryProcessed } from './webhook-delivery-
 
 const ID_A = deliveryIdSchema.parse('5b8f2c1e-3d4a-4f6b-9a7c-0e1d2f3a4b5c');
 const ID_B = deliveryIdSchema.parse('0f1e2d3c-4b5a-4968-8776-655443322110');
+
+/** A queue that holds a live job under every key: it sends nothing and answers `already_queued`. */
+const aliveEnqueuer: JobEnqueuer = { enqueue: () => Promise.resolve('already_queued') };
 
 const syncOf = (installation: number, deliveryId: DeliveryId): Job => ({
   type: 'sync-installation',
@@ -101,14 +105,24 @@ test('a delivery is sent with only its idempotency key: the delivery id, and no 
   expect(enqueuer.calls).toEqual([{ job, options: { idempotencyKey: ID_A } }]);
 });
 
-test('a delivery whose job is still alive is a duplicate: the same send is deduplicated, and nobody is left to finish it', async () => {
+test('a delivery whose job is still alive is a duplicate and stays unprocessed: the live job will finish it', async () => {
   const { db, deliveries } = await world();
   await deliveries.record(subject(ID_A), syncOf(31_001, ID_A));
   expect(await processedAt(db, ID_A)).toBeNull();
   expect(await deliveries.record(subject(ID_A), syncOf(31_001, ID_A))).toBe('duplicate');
   expect(await deliveryRows(db)).toHaveLength(1);
   expect(await jobCount(db)).toBe(1);
-  expect(await processedAt(db, ID_A)).toBeInstanceOf(Date);
+  expect(await processedAt(db, ID_A)).toBeNull();
+});
+
+test('a redelivery while the first job was alive does not stop a later redelivery from requeuing once that job is lost', async () => {
+  const { db, deliveries } = await world();
+  await deliveries.record(subject(ID_A), syncOf(31_001, ID_A));
+  expect(await deliveries.record(subject(ID_A), syncOf(31_001, ID_A))).toBe('duplicate');
+  await dropJobs(db);
+  expect(await deliveries.record(subject(ID_A), syncOf(31_001, ID_A))).toBe('accepted');
+  expect(await sentJobs(db)).toHaveLength(1);
+  expect(await processedAt(db, ID_A)).toBeNull();
 });
 
 test('a delivery whose earlier job is gone (failed, dead-lettered, expired) is sent again under the same key: accepted', async () => {
@@ -150,13 +164,22 @@ test('a send that is deduplicated for a new delivery marks it processed in the s
   expect(await jobCount(db)).toBe(0);
 });
 
-test('a send that is deduplicated for a delivery recorded before marks it processed too, and is a duplicate', async () => {
+test('a send that is deduplicated for a delivery recorded before leaves its row as it is, and is a duplicate', async () => {
   const { db, deliveries } = await world();
   await deliveries.record(subject(ID_A), syncOf(31_001, ID_A));
   await dropJobs(db);
+  const [before] = await deliveryRows(db);
   const dropping = createWebhookDeliveries({ db, enqueuer: droppingEnqueuer });
   expect(await dropping.record(subject(ID_A), syncOf(31_001, ID_A))).toBe('duplicate');
-  expect(await processedAt(db, ID_A)).toBeInstanceOf(Date);
+  expect(await deliveryRows(db)).toEqual([before]);
+  expect(await jobCount(db)).toBe(0);
+});
+
+test('a send that is already queued for a new delivery leaves it unprocessed: the live job will finish it', async () => {
+  const db = await freshDatabase();
+  const deliveries = createWebhookDeliveries({ db, enqueuer: aliveEnqueuer });
+  expect(await deliveries.record(subject(ID_A), syncOf(31_001, ID_A))).toBe('accepted');
+  expect(await processedAt(db, ID_A)).toBeNull();
   expect(await jobCount(db)).toBe(0);
 });
 

@@ -2,10 +2,11 @@
 // Copyright (C) 2026 Giovanni Manzoni
 
 import type { FastifyInstance } from 'fastify';
-import { sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { expect, inject, onTestFinished, test, vi } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
 import { createPgDatabase } from '../adapters/db/pg.ts';
+import type { Database } from '../adapters/db/schema.ts';
 import {
   backendPid,
   migratedTestDatabase,
@@ -26,7 +27,14 @@ import { buildApp } from '../app.ts';
 import { deliveryIdSchema } from '../domain/delivery-id.ts';
 import type { Job } from '../domain/jobs.ts';
 import { captureLogs, testConfig } from '../test-support.ts';
-import { createJobsTable, deliveryRows, fakeEnqueuer, jobCount, sentJobs } from './jobs-fixture/test-support.ts';
+import {
+  createJobsTable,
+  deliveryRows,
+  dropJobs,
+  fakeEnqueuer,
+  jobCount,
+  sentJobs,
+} from './jobs-fixture/test-support.ts';
 import type { JobEnqueuer } from './ports/jobs.ts';
 import { seedTenants } from './tenant-fixture/test-support.ts';
 import { createWebhookDeliveries } from './webhook-deliveries.ts';
@@ -42,11 +50,23 @@ const TWENTY = Array.from({ length: 20 }, (_, index) => index);
 const FIXTURE_ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_APP_ID: String(FIXTURE_IDS.app) };
 
 /** Twenty identical signed deliveries sent at once to `app`: the answers, as `[status, body]`. */
-async function twentyIdentical(app: FastifyInstance): Promise<[number, unknown][]> {
+async function twentyIdentical(app: FastifyInstance, count = TWENTY.length): Promise<[number, unknown][]> {
   const text = JSON.stringify(webhookFixture('pull_request'));
   const headers = deliveryHeaders(text, { headers: { 'x-github-event': 'pull_request' } });
-  const responses = await Promise.all(TWENTY.map(() => postDelivery(app, text, headers)));
+  const responses = await Promise.all(TWENTY.slice(0, count).map(() => postDelivery(app, text, headers)));
   return responses.map((response): [number, unknown] => [response.statusCode, response.json<unknown>()]);
+}
+
+/**
+ * The twenty left one row that no job has finished, so the job that is lost later is sent again by the next redelivery:
+ * the 19 duplicates must not have marked the row processed.
+ */
+async function expectTheLostJobIsRequeued(app: FastifyInstance, db: Kysely<Database>): Promise<void> {
+  expect((await deliveryRows(db)).map((row) => row.processed_at)).toEqual([null]);
+  await dropJobs(db);
+  const [again] = await twentyIdentical(app, 1);
+  expect(again).toEqual([202, { status: 'accepted' }]);
+  expect(await jobCount(db)).toBe(1);
 }
 
 function expectOneAcceptedAndTheRestDuplicates(answers: readonly [number, unknown][]): void {
@@ -62,6 +82,7 @@ test('20 identical deliveries at once produce one row, one job and the rest 200 
   expectOneAcceptedAndTheRestDuplicates(await twentyIdentical(app));
   expect(await deliveryRows(db)).toHaveLength(1);
   expect(await jobCount(db)).toBe(1);
+  await expectTheLostJobIsRequeued(app, db);
 });
 
 realPostgresOnly(
@@ -84,6 +105,7 @@ realPostgresOnly(
     expectOneAcceptedAndTheRestDuplicates(await twentyIdentical(app));
     expect(await deliveryRows(db)).toHaveLength(1);
     expect(await jobCount(db)).toBe(1);
+    await expectTheLostJobIsRequeued(app, db);
   },
 );
 
