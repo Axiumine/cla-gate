@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
-import { expect, inject, test } from 'vitest';
+import { expect, test } from 'vitest';
 import { MigrationError, toMigrationFile } from './migration-files.ts';
 import { MIGRATION_LOCK_KEY, migrate } from './migrator.ts';
 import type { Database } from './schema.ts';
-import { emptyTestDatabase, openTestDatabase, realPostgres } from './test-support.ts';
+import { backendPid, emptyTestDatabase, realPostgresOnly, waitUntilBlocked, withConnections } from './test-support.ts';
 
 const A = toMigrationFile('001_a.sql', 'create table a (id integer);');
 const B = toMigrationFile('002_b.sql', 'create table b (id integer);');
@@ -133,20 +133,17 @@ test('concurrent runners apply each migration exactly once', async () => {
 
 // PGlite has a single session, and advisory locks are re-entrant within a session, so a lock held "elsewhere" could
 // never contend there. Only a real server can prove that a second runner waits.
-test.skipIf(!realPostgres)('a runner waits while another session holds the advisory lock', async () => {
+realPostgresOnly('a runner waits while another session holds the advisory lock', async () => {
   const { db } = await emptyTestDatabase();
-  const other = await openTestDatabase(inject('testDatabaseUrl'));
-  await other.db.connection().execute(async (connection) => {
-    await sql`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`.execute(connection);
-    const run = migrate(db, [A]);
-    const early = await Promise.race([
-      run.then(() => 'finished'),
-      new Promise((resolve) => setTimeout(resolve, 300, 'waiting')),
-    ]);
-    expect(early).toBe('waiting');
-    expect(await tables(db)).toEqual([]);
-    await sql`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`.execute(connection);
-    await expect(run).resolves.toEqual(['001_a.sql']);
-  });
-  await other.db.destroy();
+  const connections = withConnections(2);
+  const holder = connections.get(0);
+  const runner = connections.get(1);
+  const waiter = await backendPid(runner);
+  await sql`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`.execute(holder);
+  const run = migrate(runner, [A]);
+  await waitUntilBlocked(db, waiter);
+  expect(await tables(db)).toEqual([]);
+  await sql`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`.execute(holder);
+  await expect(run).resolves.toEqual(['001_a.sql']);
+  expect(await tables(db)).toEqual(['a', 'schema_migrations']);
 });

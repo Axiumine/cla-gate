@@ -112,7 +112,8 @@ test('the postgres job starts the helper, then runs the suite, then always remov
   const steps = jobNamed('postgres').steps;
   const stop = steps.findIndex((step) => step.run === 'yarn ci:postgres stop');
   expect(start).toBeGreaterThan(0);
-  expect(suite).toBe(start + 1);
+  // Between the two sits the server version summary (E20-S03, ci-postgres-job.test.ts).
+  expect(suite).toBe(start + 2);
   expect(stop).toBe(suite + 1);
   expect(steps.at(stop)?.if).toBe(expression("always() && env.CLA_PG_CONTAINER != ''"));
 });

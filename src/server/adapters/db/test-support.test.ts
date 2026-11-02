@@ -12,10 +12,13 @@ import {
   seedTenant,
 } from './test-support.ts';
 
-test('a test database is Postgres 18, on PGlite or on the real server of the CI postgres job', async () => {
+// E20-S03: an image or a PGlite pin that drifts to another major version fails here, on both drivers.
+test('a test database is Postgres 18 (180000 up to 189999), on PGlite and on the real server of the CI postgres job', async () => {
   const { kind, db } = await emptyTestDatabase();
-  const { rows } = await sql<{ v: string }>`select current_setting('server_version_num') as v`.execute(db);
-  expect(rows[0]?.v.slice(0, 2)).toBe('18');
+  const { rows } = await sql<{ server_version_num: string }>`show server_version_num`.execute(db);
+  const version = Number(rows[0]?.server_version_num);
+  expect(version).toBeGreaterThanOrEqual(180_000);
+  expect(version).toBeLessThan(190_000);
   expect(kind).toBe(realPostgres ? 'postgres' : 'pglite');
 });
 

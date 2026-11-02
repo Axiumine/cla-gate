@@ -205,6 +205,10 @@ jobs:
   # `cla_test_<hex>` database (the postgres user may), runs the whole suite in it (one file at a time, one connection
   # per file) and drops it afterwards. The last step removes the container even when the job failed or was cancelled.
   # Coverage is measured by the `coverage` job, not here.
+  # E20-S03: the suite runs with REQUIRE_REAL_POSTGRES=1, so a test that needs a real server (realPostgresOnly in
+  # src/server/adapters/db/test-support.ts) fails here instead of being skipped when the database is missing, and with
+  # CLA_ROLE_TESTS=1, which lets the tests that create or alter cluster-wide roles run: the server is this job's own
+  # disposable container, so no other database is touched. The server version goes to the job summary before the tests.
   postgres:
     name: postgres
     runs-on: [self-hosted, Linux, X64]
@@ -276,8 +280,26 @@ jobs:
         run: yarn install --immutable
       - name: Start PostgreSQL 18 (random free loopback port)
         run: yarn ci:postgres start
+      # The container name comes from the start step, never from the event. psql runs inside that container, over the
+      # socket the official image trusts, so no password is involved.
+      - name: Record the server version in the job summary
+        shell: bash
+        run: |
+          set -eu
+          version=$(docker exec "$CLA_PG_CONTAINER" psql --username postgres --no-psqlrc --tuples-only --no-align --command 'select version()')
+          echo "$version"
+          {
+            echo '### PostgreSQL server'
+            echo
+            echo '```'
+            echo "$version"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Tests against PostgreSQL 18
         run: yarn test
+        env:
+          REQUIRE_REAL_POSTGRES: "1"
+          CLA_ROLE_TESTS: "1"
       # CLA_PG_CONTAINER is exported by the start step before docker runs, so a failed start is cleaned up as well, and
       # a job that never got that far (a failed checkout) skips this step.
       - name: Remove the PostgreSQL container
