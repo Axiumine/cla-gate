@@ -5,7 +5,13 @@ import { expect, test } from 'vitest';
 import { AUDIT_METADATA_KEYS } from '../../../shared/audit.ts';
 import { METADATA_CASES } from '../../../shared/test-support.ts';
 import { loadMigrationFiles } from './migration-files.ts';
-import { MIGRATIONS_DIRECTORY, migratedRuntimeDatabase, migratedTestDatabase } from './test-support.ts';
+import { migrate } from './migrator.ts';
+import {
+  emptyTestDatabase,
+  MIGRATIONS_DIRECTORY,
+  migratedRuntimeDatabase,
+  migratedTestDatabase,
+} from './test-support.ts';
 
 const CHECK = { code: '23514' };
 
@@ -44,12 +50,29 @@ test('the unprivileged runtime role can write the new keys and values', async ()
   expect(row.metadata).toEqual({ webhook_deliveries: 4, rows: [7] });
 });
 
-test('rows written under migration 001 keep their shape and the table stays append-only', async () => {
-  const { db } = await migratedTestDatabase();
-  await sql`insert into audit_log (action, metadata) values ('x.y', '{"count": 1}')`.execute(db);
+test('a row written under migration 001 keeps its shape when 002 is applied, and the table stays append-only', async () => {
+  const { db } = await emptyTestDatabase();
+  const files = await loadMigrationFiles(MIGRATIONS_DIRECTORY);
+  const first = files.filter((file) => file.name.startsWith('001_'));
+  expect(first).toHaveLength(1);
+  await migrate(db, first);
+  const insert = (metadata: string) =>
+    sql`insert into audit_log (action, metadata) values ('x.y', ${metadata}::jsonb)`.execute(db);
+  await insert('{"count": 1}');
+  await expect(insert('{"rows": [1]}')).rejects.toMatchObject(CHECK);
+
+  const applied = await migrate(db, files);
+
+  expect(applied[0]).toMatch(/^002_/);
+  expect(await db.selectFrom('audit_log').select('metadata').execute()).toEqual([{ metadata: { count: 1 } }]);
+  await insert('{"rows": [1]}');
   await expect(sql`update audit_log set metadata = '{"count": 2}'`.execute(db)).rejects.toMatchObject({
     code: '23001',
   });
+  expect(await db.selectFrom('audit_log').select('metadata').orderBy('id').execute()).toEqual([
+    { metadata: { count: 1 } },
+    { metadata: { rows: [1] } },
+  ]);
 });
 
 /** The quoted keys between `array[` and `]`, from the newest migration that defines the check function. */
