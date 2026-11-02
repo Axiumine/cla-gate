@@ -3,6 +3,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
+import type { TenantResolver } from './tenant-access.ts';
 
 // Who may call a route (E11-S01). Every route says so in `config.access`, and an app with a route that does not cannot
 // start: this file records the route table, checks it once all plugins are loaded and names every offender. The guard that
@@ -22,8 +23,12 @@ const ACCESS_KINDS = ['public', 'authenticated', 'webhook', 'operator', 'tenant'
  */
 const ACCESS_MODES = ['read', 'write'] as const;
 
-/** A route of the `tenant` kind: the value `tenantAccess` of E11-S05 builds. Extra keys (its resolver) are ignored here. */
-const tenantAccessSchema = z.object({ kind: z.literal('tenant'), mode: z.enum(ACCESS_MODES) });
+/** A route of the `tenant` kind: the value `tenantAccess` of E11-S05 builds, which names its mode and the resolver of the tenant. */
+const tenantAccessSchema = z.object({
+  kind: z.literal('tenant'),
+  mode: z.enum(ACCESS_MODES),
+  resolve: z.custom<TenantResolver>((value) => typeof value === 'function'),
+});
 
 const accessSchema = z.union([z.enum(['public', 'authenticated', 'webhook', 'operator']), tenantAccessSchema]);
 
@@ -31,7 +36,7 @@ type RouteAccess = z.infer<typeof accessSchema>;
 
 declare module 'fastify' {
   interface FastifyContextConfig {
-    /** Who may call the route (E11-S01): one of {@link ACCESS_KINDS}; a `tenant` route declares an object with its mode. */
+    /** Who may call the route (E11-S01): one of {@link ACCESS_KINDS}; a `tenant` route declares `tenantAccess({ mode, resolve })` (E11-S05). */
     access?: RouteAccess;
   }
 
@@ -85,7 +90,7 @@ function malformedProblem(name: string, access: unknown): string {
     return `route ${name} declares no config.access`;
   }
   return isTenantDeclaration(access)
-    ? `route ${name} is a tenant route and must declare its mode, 'read' or 'write'`
+    ? `route ${name} is a tenant route and must declare its mode, 'read' or 'write', and its resolver (tenantAccess)`
     : `route ${name} declares a config.access that is not one of ${ACCESS_KINDS.join(', ')}`;
 }
 

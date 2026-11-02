@@ -9,8 +9,8 @@ import { z } from 'zod';
 // GitHub ids (E04-S09). The only values are the ones read from the database.
 
 /**
- * Brands a number as an `installations.id`. The database types produce branded values, so production code never calls it.
- * @internal Exported for the tests, which make ids for rows that do not exist (Knip ignores `@internal` exports in production mode).
+ * Brands a number as an `installations.id`. The database types produce branded values, so the only production code that
+ * calls it is the one that reads an id from a path (the resolvers of E11-S05); the tests make ids for rows that do not exist.
  */
 export const installationRowIdSchema = z.int().positive().brand<'InstallationRowId'>();
 

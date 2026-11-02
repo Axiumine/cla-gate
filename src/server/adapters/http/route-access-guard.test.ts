@@ -3,10 +3,12 @@
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import { authWorld, COOKIE_NAME } from './auth-fixture/test-support.ts';
+import { tenantAccess } from './tenant-access.ts';
 
 // What the access declaration does to a request (E11-S01): `public` and `webhook` routes are left alone, an `authenticated`
-// route answers 401 without a live session (through requireAuth of E10) before anything else is looked up, and the `tenant`
-// and `operator` routes, whose guards come in E11-S05 and E11-S08, let nobody through yet.
+// route answers 401 without a live session (through requireAuth of E10) before anything else is looked up, a `tenant` route
+// whose resolver names nothing and an `operator` route, whose guard comes in E11-S08, let nobody through. The guard of a
+// tenant route is tested in tenant-guard.test.ts.
 
 const CLEARED = `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`;
 
@@ -23,10 +25,15 @@ async function world() {
   app.get('/t/authenticated', { config: { access: 'authenticated' } }, handler('authenticated'));
   app.post('/t/authenticated', { config: { access: 'authenticated' } }, handler('authenticated-post'));
   app.get('/t/operator', { config: { access: 'operator' } }, handler('operator'));
-  app.get('/t/tenant/:installationId', { config: { access: { kind: 'tenant', mode: 'read' } } }, handler('tenant'));
+  const nothing = () => Promise.resolve(null);
+  app.get(
+    '/t/tenant/:installationId',
+    { config: { access: tenantAccess({ mode: 'read', resolve: nothing }) } },
+    handler('tenant'),
+  );
   app.post(
     '/t/tenant/:installationId',
-    { config: { access: { kind: 'tenant', mode: 'write' } } },
+    { config: { access: tenantAccess({ mode: 'write', resolve: nothing }) } },
     handler('tenant-post'),
   );
   return { ...base, reached };
@@ -127,8 +134,8 @@ function shape(response: { statusCode: number; headers: Record<string, unknown>;
 }
 
 test.each([
-  ['a tenant read route', 'GET', '/t/tenant/7'],
-  ['a tenant write route', 'POST', '/t/tenant/7'],
+  ['a tenant read route whose resolver names nothing', 'GET', '/t/tenant/7'],
+  ['a tenant write route whose resolver names nothing', 'POST', '/t/tenant/7'],
   ['an operator route', 'GET', '/t/operator'],
 ])(
   '%s refuses a caller with no session by 401, and one with a session by the 404 of a route that does not exist',

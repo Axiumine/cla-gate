@@ -29,6 +29,7 @@ import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer } from './services/ports/jobs.ts';
 import { RoleCache } from './services/role-cache.ts';
+import { createTenantAuthorizer, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
 
@@ -51,6 +52,11 @@ export interface AppOptions {
   readonly webhookDeadlineMs?: number;
   /** The cache of the roles GitHub reported (E11-S04), also read from `app.roleCache`. Defaults to an empty one on `clock`. */
   readonly roleCache?: RoleCache;
+  /**
+   * Where the guard of a tenant route reads the roles of the viewer (E11-S05): the GitHub client port, by numeric id. Defaults
+   * to one that fails every call as an outage, so a server with no GitHub App never allows a tenant that needs a role from GitHub.
+   */
+  readonly github?: RoleGitHub | undefined;
 }
 
 /**
@@ -73,7 +79,12 @@ async function registerLoginChecks(
   const loginSettings = authSettings(config);
   registerRequestGuards(app, { publicBaseUrl: config.publicBaseUrl, sessionSecret: loginSettings?.sessionSecret });
   // After the request guards, so the `Origin` and CSRF checks answer first; before the routes, which inherit the hook.
-  guardRouteAccess(app);
+  // The guard of the tenant routes (E11-S05) reads the roles through the one role cache.
+  const github = options.github ?? roleGitHubNotWired;
+  guardRouteAccess(app, {
+    db,
+    authorize: createTenantAuthorizer({ db, github, cache: roleCache, clock, log: app.log }),
+  });
   if (loginSettings !== undefined) {
     await registerAuth(app, {
       db,

@@ -3,12 +3,13 @@
 import { expect, test } from 'vitest';
 import { PUBLIC_ROUTE, testApp } from '../../test-support.ts';
 import { accessProblem, declaredAccess, PUBLIC_ROUTES, RouteAccessError, WEBHOOK_ROUTES } from './route-access.ts';
+import { tenantAccess } from './tenant-access.ts';
 
 // The access declarations (E11-S01): what a route may declare, what is refused, and that an app with a route that declares
 // nothing, or something wrong, does not become ready. The route table of the real application is in route-access-table.test.ts.
 
-const READ = { kind: 'tenant', mode: 'read' };
-const WRITE = { kind: 'tenant', mode: 'write' };
+const READ = tenantAccess({ mode: 'read', resolve: () => Promise.resolve(null) });
+const WRITE = tenantAccess({ mode: 'write', resolve: () => Promise.resolve(null) });
 
 /** `accessProblem` for a route written as `METHOD path`. */
 function problemOf(route: string, access: unknown): string | undefined {
@@ -25,11 +26,6 @@ test.each([
   ['a tenant write route', 'POST /api/installations/:installationId/signatures/:signatureId/revoke', WRITE],
   ['a tenant read route that answers a safe method other than GET', 'OPTIONS /api/x/:installationId', READ],
   ['a tenant write route that only reads', 'GET /api/installations/:installationId/export', WRITE],
-  [
-    'a tenant route with the resolver of E11-S05 beside its kind and mode',
-    'GET /api/x/:entryId',
-    { ...READ, resolve: () => null },
-  ],
   [
     'an authenticated route keyed by the GitHub repository id, which resolves its tenant itself',
     'GET /api/sign/:githubRepoId',
@@ -61,15 +57,37 @@ test.each([
 
 test.each([
   ['the bare word', 'GET /api/things', 'tenant'],
-  ['a tenant object with no mode', 'GET /api/things', { kind: 'tenant' }],
-  ['a tenant object with a mode that does not exist', 'GET /api/things', { kind: 'tenant', mode: 'rw' }],
-  ['a tenant object with a mode in capitals', 'POST /api/things', { kind: 'tenant', mode: 'WRITE' }],
-  ['a tenant object with a mode that is not a text', 'GET /api/things', { kind: 'tenant', mode: 1 }],
-])('a tenant route declared as %s must say whether it reads or writes', (_name, route, access) => {
-  expect(problemOf(route, access)).toBe(
-    `route ${route} is a tenant route and must declare its mode, 'read' or 'write'`,
-  );
-});
+  ['a tenant object with no mode', 'GET /api/things', { kind: 'tenant', resolve: READ.resolve }],
+  [
+    'a tenant object with a mode that does not exist',
+    'GET /api/things',
+    { kind: 'tenant', mode: 'rw', resolve: READ.resolve },
+  ],
+  [
+    'a tenant object with a mode in capitals',
+    'POST /api/things',
+    { kind: 'tenant', mode: 'WRITE', resolve: READ.resolve },
+  ],
+  [
+    'a tenant object with a mode that is not a text',
+    'GET /api/things',
+    { kind: 'tenant', mode: 1, resolve: READ.resolve },
+  ],
+  ['a tenant object with a mode and no resolver', 'GET /api/things', { kind: 'tenant', mode: 'read' }],
+  [
+    'a tenant object whose resolver is not a function',
+    'GET /api/things',
+    { kind: 'tenant', mode: 'read', resolve: 'x' },
+  ],
+  ['a tenant object with neither', 'GET /api/things', { kind: 'tenant' }],
+])(
+  'a tenant route declared as %s must say whether it reads or writes, and how its tenant is found',
+  (_name, route, access) => {
+    expect(problemOf(route, access)).toBe(
+      `route ${route} is a tenant route and must declare its mode, 'read' or 'write', and its resolver (tenantAccess)`,
+    );
+  },
+);
 
 test.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
   'a tenant route that changes data with %s must be write, not read',
@@ -128,12 +146,18 @@ test.each([
   expect(declaredAccess(access)).toEqual(access);
 });
 
-test.each([[undefined], [null], ['tenant'], ['Public'], [{ kind: 'tenant' }], [{ kind: 'tenant', mode: 'x' }], [7]])(
-  'declaredAccess reads %j as no declaration',
-  (access) => {
-    expect(declaredAccess(access)).toBeUndefined();
-  },
-);
+test.each([
+  [undefined],
+  [null],
+  ['tenant'],
+  ['Public'],
+  [{ kind: 'tenant' }],
+  [{ kind: 'tenant', mode: 'x', resolve: READ.resolve }],
+  [{ kind: 'tenant', mode: 'read' }],
+  [7],
+])('declaredAccess reads %j as no declaration', (access) => {
+  expect(declaredAccess(access)).toBeUndefined();
+});
 
 test('the constants are the routes of the story, spelled out here on purpose', () => {
   expect(PUBLIC_ROUTES).toEqual(['GET /healthz', 'GET /readyz', 'GET /api/auth/login', 'GET /api/auth/callback']);
@@ -273,7 +297,7 @@ test('a tenant route that changes data and declares itself read keeps the app fr
   const { app } = await testApp();
   app.post(
     '/api/installations/:installationId/things',
-    { config: { access: { kind: 'tenant', mode: 'read' }, audit: 'repository.enabled' } },
+    { config: { access: READ, audit: 'repository.enabled' } },
     () => 'x',
   );
   await expect(app.ready()).rejects.toThrow(

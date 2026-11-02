@@ -5,6 +5,7 @@ import { expect, test, vi } from 'vitest';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
 import { testApp } from '../../test-support.ts';
 import { accessProblem, declaredAccess, PUBLIC_ROUTES, WEBHOOK_ROUTES } from './route-access.ts';
+import { tenantAccess } from './tenant-access.ts';
 
 // The route table of the real application (E11-S01): every route registered while the app is built, collected twice. Once by
 // an `onRoute` hook that is added to the Fastify instance the moment it is created, before any route exists (so it does not
@@ -144,8 +145,8 @@ test('the mode check of the route table names a tenant route with no mode, an un
 test('a tenant route added to the application is in the table with its mode, and a read route that changes data is caught by name', async () => {
   seen.length = 0;
   const { app } = await testApp({ env: AUTH_ENV });
-  const read = { kind: 'tenant', mode: 'read' } as const;
-  const write = { kind: 'tenant', mode: 'write' } as const;
+  const read = tenantAccess({ mode: 'read', resolve: () => Promise.resolve(null) });
+  const write = tenantAccess({ mode: 'write', resolve: () => Promise.resolve(null) });
   app.get('/api/canary/:installationId', { config: { access: read } }, () => 'x');
   app.delete('/api/canary/:installationId', { config: { access: write, audit: 'repository.enabled' } }, () => 'x');
   expect(tenantModeOffenders(app.routeAccess)).toEqual([]);
