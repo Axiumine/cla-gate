@@ -7,7 +7,7 @@
 # by hand without POSTGRES_PORT fails with the message below instead of publishing 5432.
 # The passwords below are well-known development defaults for a database that listens on 127.0.0.1 only. They are not
 # secrets and must never be reused anywhere else. Production gets its credentials from the environment or a secret
-# manager (see the Configuration table in README.md).
+# manager (see docs/configuration.md).
 #
 # Two roles on purpose: `cla_owner` owns the schema and runs the migrations (`MIGRATION_DATABASE_URL`), `cla_app` is the
 # unprivileged runtime role (`DATABASE_URL`) that migration 001 grants minimal privileges to. The application never

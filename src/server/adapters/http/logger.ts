@@ -13,10 +13,10 @@ const CREDENTIAL_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 's
 
 /**
  * Nothing inside a `headers` object reaches a log line, whatever the header is called or how it is capitalised
- * (`x-forwarded-for` and `user-agent` are network metadata, which docs/architecture.md keeps out of the log), at the top level or
- * up to three objects deep (`request.raw.headers`). The serializers below do not log headers at all; this is a second
- * line of defence for the day somebody logs a request or a reply. The credential names are also redacted when they
- * stand alone as keys, up to two levels deep, in lower case and as `Title-Case`.
+ * (`x-forwarded-for` and `user-agent` are network metadata, which docs/architecture.md keeps out of the log), at the
+ * top level or up to three objects deep (`request.raw.headers`). The serializers below do not log headers at all; this
+ * is a second line of defence for the day somebody logs a request or a reply. The credential names are also redacted
+ * when they stand alone as keys, up to two levels deep, in lower case and as `Title-Case`.
  * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
  */
 export const REDACT_PATHS = [
@@ -31,7 +31,8 @@ interface LoggedRequest {
 
 /**
  * Method and path only. No headers, no body, no query string (OAuth `code` and `state` live there), and no client
- * address: network metadata is not recorded unless a configuration flag asks for it (docs/architecture.md), and a log is a record.
+ * address: network metadata is not recorded unless a configuration flag asks for it (docs/architecture.md), and a log
+ * is a record.
  */
 function serializeRequest(request: LoggedRequest): Record<string, unknown> {
   return { method: request.method, url: request.url?.split('?', 1)[0] };

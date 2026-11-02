@@ -3,9 +3,9 @@
 import process from 'node:process';
 import { defineConfig } from 'vitest/config';
 
-// Thresholds are 100% and the exclusion list is fixed (docs/quality-gates.md, Thresholds): never add to it. The one entry beyond
-// tests, declarations and e2e is the Vitest globalSetup file, a test setup file that runs in the main process where
-// V8 coverage cannot see it.
+// Thresholds are 100% and the exclusion list is fixed (docs/quality-gates.md, Thresholds): never add to it. The one
+// entry beyond tests, declarations and e2e is the Vitest globalSetup file, a test setup file that runs in the main
+// process where V8 coverage cannot see it.
 // The `scripts` and `server` projects exist; `web` joins them with the React app.
 // With DATABASE_URL set, the server project runs against that Postgres instead of PGlite (see global-setup.ts). One
 // shared database per run means one test file at a time.

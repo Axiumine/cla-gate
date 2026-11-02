@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Linter } from 'eslint';
 
-// The layering rules of README.md ("Layering"), as ESLint flat-config blocks that eslint.config.mjs appends. They live
-// here, in a module Vitest can import, so that scripts/eslint-layers.test.ts proves with real snippets what each layer
-// may and may not import. A later block REPLACES a rule for its files, so every block repeats what it inherits.
+// The layering rules of docs/architecture.md ("Layering" and "Rules"), as ESLint flat-config blocks that
+// eslint.config.mjs appends. They live here, in a module Vitest can import, so that scripts/eslint-layers.test.ts
+// proves with real snippets what each layer may and may not import. A later block REPLACES a rule for its files, so
+// every block repeats what it inherits.
 
 /**
  * A regular expression for a RELATIVE specifier with a path segment named `directory`: `../web`, `./web/x`,

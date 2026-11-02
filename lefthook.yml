@@ -2,8 +2,8 @@
 # Copyright (C) 2026 Giovanni Manzoni
 #
 # Git hooks (Lefthook v2). Installed by the root `postinstall` script (Yarn Berry never runs `prepare`).
-# README.md has the hook pipeline table. Hooks are bypassable, so .github/workflows/ci.yml repeats every check
-# and is the authority. `yarn gate` runs the pre-push pipeline over the whole repo.
+# docs/toolchain.md (Hook pipeline) has the hook pipeline table. Hooks are bypassable, so .github/workflows/ci.yml
+# repeats every check and is the authority. `yarn gate` runs the pre-push pipeline over the whole repo.
 #
 # Order is cheap and deterministic first, expensive last; `piped: true` stops at the first failing step.
 # `parallel` and `piped` cannot be combined on one level, hence the nested `group` for the independent checks.

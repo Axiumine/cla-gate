@@ -5,7 +5,7 @@ How a change gets into `main`. The hard rules, the architecture rules and the qu
 ## Pull request flow
 
 1. Branch from `main`. There are no direct pushes to `main`: every change, including docs, goes through a pull request.
-2. Run `yarn gate` before you push. It is the local equivalent of the CI `static` and `coverage` jobs (scripts: [`docs/development.md`](docs/development.md); setup: [README, Development](README.md#development)).
+2. Run `yarn gate` before you push. It is the local equivalent of the CI `static` and `coverage` jobs (scripts and setup: [`docs/development.md`](docs/development.md)).
 3. Add a line under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md), in the matching Keep a Changelog group (Added, Changed, Deprecated, Removed, Fixed, Security). **Every pull request does**, docs-only ones included.
 4. Update the document that owns any decision you changed in the same pull request (the table in [`CLAUDE.md`](CLAUDE.md) says which one), and the epic file and index ([`docs/EPICS_STORIES.md`](docs/EPICS_STORIES.md)) when a story's status or wording changes. A story's acceptance criteria are part of its definition of done.
 5. Open the pull request. `static` and `coverage` must pass and every conversation must be resolved. Merge with squash or rebase (linear history).
