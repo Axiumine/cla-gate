@@ -1,62 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { printable } from '../../code-caps/types.ts';
-import { messageOf } from './errors.ts';
+import { ownedName } from './container-owner.ts';
+import type { Env } from './env.ts';
+import { sinkFor } from './env-sink.ts';
+import { reportLines } from './errors.ts';
 import type { Io } from './io.ts';
 import { startPostgres, stopPostgres } from './postgres-container.ts';
 import type { CliDeps } from './postgres-deps.ts';
-import { CONTAINER_PREFIX } from './postgres-run.ts';
-
-export type Env = Readonly<Record<string, string | undefined>>;
+import { POSTGRES_OWNER } from './postgres-run.ts';
 
 const USAGE = 'usage: ci-postgres <start|stop>';
-const DIGITS = /^\d{1,20}$/;
-
-/** `<run id>-<attempt>` when both come from the environment as plain numbers, else `local`. */
-function runPrefix(env: Env): string {
-  const runId = env['GITHUB_RUN_ID'] ?? '';
-  const attempt = env['GITHUB_RUN_ATTEMPT'] ?? '';
-  return DIGITS.test(runId) && DIGITS.test(attempt) ? `${runId}-${attempt}` : 'local';
-}
 
 /**
- * `cla-pg-<run id>-<attempt>-<random>`: unique per run and attempt, and the random tail keeps two helpers of the same
- * run (or two local shells) apart. The ids come from GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT and are used only when they
- * are plain numbers, so no other field can reach a container name.
+ * `cla-pg-<run id>-<attempt>-<random>`: unique per run and attempt, see {@link ownedName}.
  */
 export function containerName(env: Env, hex: string): string {
-  return `${CONTAINER_PREFIX}${runPrefix(env)}-${hex}`;
-}
-
-interface Sink {
-  /** Hides `value` in the Actions log. */
-  readonly secret: (value: string) => void;
-  /** Exports `name=value` to the next steps (the GITHUB_ENV file), or prints it outside Actions. */
-  readonly set: (name: string, value: string) => void;
-}
-
-function sinkFor(env: Env, io: Io, deps: CliDeps): Sink {
-  const file = env['GITHUB_ENV'] ?? '';
-  if (file === '') {
-    return {
-      secret: () => undefined,
-      set: (name, value) => {
-        io.out(`${name}=${value}`);
-      },
-    };
-  }
-  return {
-    secret: (value) => {
-      io.out(`::add-mask::${value}`);
-    },
-    set: (name, value) => {
-      deps.appendFile(file, `${name}=${value}\n`);
-    },
-  };
+  return ownedName(POSTGRES_OWNER, env, hex);
 }
 
 async function start(env: Env, io: Io, deps: CliDeps): Promise<number> {
-  const sink = sinkFor(env, io, deps);
+  const sink = sinkFor(env, io, deps.appendFile);
   const password = deps.randomHex(24);
   const name = containerName(env, deps.randomHex(4));
   // Mask first, export the name before docker runs: a failure from here on can still be cleaned up by `stop`.
@@ -78,15 +42,6 @@ async function stop(env: Env, io: Io, deps: CliDeps): Promise<number> {
   return 0;
 }
 
-/**
- * One report line per message line. Continuation lines (container logs) get a `| ` prefix and lose their control
- * characters, so nothing a container prints can start with `::` and pass for a workflow command.
- */
-function errorLines(command: string, error: unknown): string[] {
-  const [first = '', ...rest] = messageOf(error).split('\n');
-  return [`ci-postgres ${command}: ${first}`, ...rest.map((line) => `| ${line}`)];
-}
-
 /** Exit code: 0 ok, 1 failure, 2 usage. `start` and `stop` are the only commands. */
 export async function runPostgresCli(argv: readonly string[], env: Env, io: Io, deps: CliDeps): Promise<number> {
   const command = argv.length === 1 ? argv[0] : undefined;
@@ -97,7 +52,7 @@ export async function runPostgresCli(argv: readonly string[], env: Env, io: Io, 
   try {
     return await (command === 'start' ? start(env, io, deps) : stop(env, io, deps));
   } catch (error) {
-    errorLines(command, error).forEach((line) => {
+    reportLines('ci-postgres', command, error).forEach((line) => {
       io.err(line);
     });
     return 1;

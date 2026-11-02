@@ -17,6 +17,7 @@
     "!scripts/escape-hatches/eslint-config.ts!",
     "!scripts/ci/**!",
     "!scripts/dev/**!",
+    "!scripts/e2e/**!",
     "!scripts/semgrep-rules/**!",
     "!scripts/trivy-gate/**!",
     "src/**/*.ts!",

@@ -11,8 +11,9 @@
 //
 // Type information comes from the TypeScript project service: the solution-style tsconfig.json points at
 // tsconfig.server.json (src/server and src/shared, built), tsconfig.server.test.json (the same sources plus their
-// tests), tsconfig.scripts.json (scripts/) and tsconfig.node.json (root config files). The architecture blocks at the
-// end of this file (scripts/eslint-layers.ts) enforce the layering from docs/architecture.md.
+// tests), tsconfig.scripts.json (scripts/), tsconfig.e2e.json (e2e/ and tests/leaks/) and tsconfig.node.json (root
+// config files). The architecture blocks at the end of this file (scripts/eslint-layers.ts) enforce the layering from
+// docs/architecture.md.
 import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import noUnsanitized from 'eslint-plugin-no-unsanitized';

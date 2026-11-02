@@ -12,6 +12,7 @@ afterEach(() => {
   process.exitCode = undefined;
   vi.doUnmock('./lib/free-port-cli.ts');
   vi.doUnmock('./lib/postgres-cli.ts');
+  vi.doUnmock('./lib/e2e-cli.ts');
   vi.doUnmock('./lib/guard-cli.ts');
   vi.resetModules();
   vi.restoreAllMocks();
@@ -20,6 +21,7 @@ afterEach(() => {
 const ENTRIES: ReadonlyMap<string, () => Promise<unknown>> = new Map([
   ['free-port.ts', () => import('./free-port.ts')],
   ['postgres.ts', () => import('./postgres.ts')],
+  ['e2e.ts', () => import('./e2e.ts')],
   ['check-runners.ts', () => import('./check-runners.ts')],
 ]);
 
@@ -61,6 +63,15 @@ test('postgres hands its arguments, the environment, the streams and the real de
   const { systemDeps } = await import('./lib/postgres-deps.ts');
   expect(runPostgresCli).toHaveBeenCalledExactlyOnceWith(['stop'], process.env, stdIo, systemDeps);
   expect(process.exitCode).toBe(2);
+});
+
+test('e2e hands its arguments, the environment, the streams and the real dependencies to the CLI', async () => {
+  const runE2eCli = vi.fn(() => Promise.resolve(3));
+  vi.doMock('./lib/e2e-cli.ts', () => ({ runE2eCli }));
+  const stdIo = await runEntry('e2e.ts', ['run', 'yarn', 'e2e']);
+  const { systemDeps } = await import('./lib/e2e-deps.ts');
+  expect(runE2eCli).toHaveBeenCalledExactlyOnceWith(['run', 'yarn', 'e2e'], process.env, stdIo, systemDeps);
+  expect(process.exitCode).toBe(3);
 });
 
 test('check-runners checks the repository root by default', async () => {

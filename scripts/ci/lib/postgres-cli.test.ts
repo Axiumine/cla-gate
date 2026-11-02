@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { NAME_PATTERN } from './container-owner.ts';
 import { containerName, runPostgresCli } from './postgres-cli.ts';
 import type { CliDeps } from './postgres-deps.ts';
-import { NAME_PATTERN } from './postgres-run.ts';
 import { collectIo, fail, fakeDocker, ok } from './test-support.ts';
 
 const PASSWORD = 'a'.repeat(48);

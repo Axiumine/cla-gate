@@ -2,10 +2,11 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test, vi } from 'vitest';
 import { ContainerError } from './container-health.ts';
+import { NAME_PATTERN } from './container-owner.ts';
 import type { ExecResult } from './exec.ts';
 import { PortError } from './ports.ts';
 import { type StartDeps, startPostgres, stopPostgres } from './postgres-container.ts';
-import { CONTAINER_LABEL, databaseUrl, NAME_PATTERN, POSTGRES_IMAGE, runArguments } from './postgres-run.ts';
+import { CONTAINER_LABEL, databaseUrl, POSTGRES_IMAGE, runArguments } from './postgres-run.ts';
 import { fail, fakeDocker, ok } from './test-support.ts';
 
 const NAME = 'cla-pg-1-1-abcd1234';

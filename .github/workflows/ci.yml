@@ -617,3 +617,136 @@ jobs:
           name: mutation-report
           path: reports/mutation/
           retention-days: 7
+
+  # Browser tests (E20-S06), `yarn e2e` against the built server on a migrated PostgreSQL 18. Not a required check: it joins
+  # `static` and `coverage` only after it has been stable (E20-S15). It waits for `static`. There is no job-level `container:`
+  # and no `services:` (docs/ci-runners.md, rule R7): scripts/ci/postgres.ts starts the database and scripts/ci/e2e.ts starts
+  # the pinned Playwright image, both from `run:` steps, with per-run names, a random free loopback port, and a cleanup step
+  # that runs even when the job fails or is cancelled. The image is Microsoft's Playwright image at the tag of the
+  # @playwright/test version in package.json and at a digest; scripts/e2e-pin.test.ts keeps the three equal, so a bump of the
+  # package fails until this line is bumped with it. The browsers of the image are the only place visual baselines come from
+  # (yarn e2e:update runs the same image), and its Node is the repository's own. The container shares the host network, which
+  # is how it reaches the database on the host's loopback and how the application under test listens on a random port above
+  # 32768; it runs as the runner user, so nothing it writes in the workspace is out of the runner's reach. The application
+  # gets random throw-away secrets from playwright.config.ts: no repository secret exists and none is used. The application
+  # connects as the container's superuser, like the `postgres` job's tests do. The report and the traces are uploaded when a
+  # step fails. The second Playwright step regenerates the baselines twice and fails when the two results differ, which is
+  # the proof that a baseline is byte-stable; it never compares with, or changes, what is committed.
+  e2e:
+    name: e2e
+    needs: static
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    env:
+      E2E_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Both containers need a Docker
+      # daemon the runner user can reach.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+          if ! docker info >/dev/null 2>&1; then
+            echo "::error title=Runner preflight::the Docker daemon is not reachable by $(id -un): install Docker or add the runner user to the docker group (docs/ci-runners.md)"
+            exit 1
+          fi
+          echo "docker server $(docker version --format '{{.Server.Version}}')"
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # The browsers come from the image, so no install script runs here (and none would download one).
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      - name: Build (the server the tests start)
+        run: yarn build
+      - name: Start PostgreSQL 18 (random free loopback port)
+        run: yarn ci:postgres start
+      # The owner URL is the one the start step exported: the container's own superuser, in a database that exists for minutes.
+      - name: Migrate the database
+        run: yarn db:migrate
+        env:
+          MIGRATION_DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Playwright tests in the pinned container
+        run: yarn ci:e2e run yarn e2e
+      - name: Visual baselines are byte-stable (two updates in a row give the same files)
+        run: |
+          set -eu
+          shots=e2e/__screenshots__
+          yarn ci:e2e run yarn e2e --update-snapshots=all
+          before=$(find "$shots" -type f -exec sha256sum {} + | sort -k2)
+          yarn ci:e2e run yarn e2e --update-snapshots=all
+          after=$(find "$shots" -type f -exec sha256sum {} + | sort -k2)
+          if [ -z "$before" ]; then
+            echo "::error title=Visual baselines::no baseline file found under $shots"
+            exit 1
+          fi
+          if [ "$before" != "$after" ]; then
+            echo "::error title=Visual baselines::two update runs in a row wrote different files: the baselines are not byte-stable"
+            exit 1
+          fi
+          echo "byte-stable: $(printf '%s\n' "$after" | wc -l) baseline file(s) identical after the second update"
+      - name: Upload the Playwright report and traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+      # Both names come from the start steps, never from the event; a job that never got that far skips the step.
+      - name: Remove the Playwright container
+        if: ${{ always() && env.CLA_E2E_CONTAINER != '' }}
+        run: yarn ci:e2e stop
+      - name: Remove the PostgreSQL container
+        if: ${{ always() && env.CLA_PG_CONTAINER != '' }}
+        run: yarn ci:postgres stop

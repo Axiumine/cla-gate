@@ -52,8 +52,8 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage, postgres, semgrep, trivy and mutation, and the required ones keep their exact names', () => {
-  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep', 'trivy', 'mutation']);
+test('the jobs are static, coverage, postgres, semgrep, trivy, mutation and e2e, and the required ones keep their exact names', () => {
+  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep', 'trivy', 'mutation', 'e2e']);
   expect([...jobs.entries()].map(([id, job]) => [id, job.name])).toEqual([
     ['static', 'static'],
     ['coverage', 'coverage'],
@@ -61,6 +61,7 @@ test('the jobs are static, coverage, postgres, semgrep, trivy and mutation, and 
     ['semgrep', 'semgrep'],
     ['trivy', 'trivy'],
     ['mutation', 'mutation'],
+    ['e2e', 'e2e'],
   ]);
 });
 
@@ -129,9 +130,9 @@ test('every job starts with the preflight and keeps tool state in the runner tem
   }
 });
 
-test('only the postgres job needs, and checks for, a Docker daemon', () => {
+test('only the postgres and e2e jobs need, and check for, a Docker daemon', () => {
   for (const [id, job] of [...jobs.entries()]) {
-    expect(job.steps[0]?.run?.includes('docker info')).toBe(id === 'postgres');
+    expect(job.steps[0]?.run?.includes('docker info')).toBe(id === 'postgres' || id === 'e2e');
   }
 });
 

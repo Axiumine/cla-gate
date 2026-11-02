@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Giovanni Manzoni -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Visual canary</title>
+    <style>
+      html, body { margin: 0; background: #ffffff; }
+      body { width: 480px; height: 270px; box-sizing: border-box; padding: 24px; font-family: sans-serif; color: #1a1a2e; }
+      h1 { margin: 0 0 16px; font-size: 28px; font-weight: 700; }
+      p { margin: 0 0 20px; font-size: 16px; line-height: 24px; }
+      .row { display: flex; gap: 16px; }
+      .swatch { width: 96px; height: 64px; border-radius: 8px; }
+      .a { background: #0b6e4f; }
+      .b { background: #f2a900; }
+      .c { background: #b3261e; }
+      .d { background: #3a5ba0; }
+    </style>
+  </head>
+  <body>
+    <h1>Visual canary</h1>
+    <p>Static page, no script and no remote resource. Its screenshot is the baseline of the pinned container.</p>
+    <div class="row">
+      <div class="swatch a"></div>
+      <div class="swatch b"></div>
+      <div class="swatch c"></div>
+      <div class="swatch d"></div>
+    </div>
+  </body>
+</html>

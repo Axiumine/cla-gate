@@ -48,7 +48,7 @@ function runner() {
   return { temp, files, log, run };
 }
 
-const JOBS = [['static'], ['coverage'], ['postgres'], ['semgrep'], ['trivy']];
+const JOBS = [['static'], ['coverage'], ['postgres'], ['semgrep'], ['trivy'], ['e2e']];
 
 test.each(JOBS)('the %s job sends every tool directory to the runner temp directory', (job) => {
   const { temp, files, run } = runner();
