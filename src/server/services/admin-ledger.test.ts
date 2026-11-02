@@ -175,3 +175,34 @@ test('a failure of the ledger while forgetting is thrown, not swallowed', async 
     'the database is down',
   );
 });
+
+const AT_START = { isCurrent: () => true };
+const DISPLACED = { isCurrent: () => false };
+
+test.each([
+  ['an admin', true],
+  ['not an admin', false],
+])('a lookup that is no longer the current one writes nothing when it finds %s', async (_name, admin) => {
+  const ledger = spyLedger();
+  expect(await recordingAdmins(() => Promise.resolve(admin), ledger)(organisation(3), VIEWER, DISPLACED)).toBe(admin);
+  expect(ledger.record).not.toHaveBeenCalled();
+  expect(ledger.forget).not.toHaveBeenCalled();
+});
+
+test('a lookup that is still the current one writes as one with no cache in front does', async () => {
+  const ledger = spyLedger();
+  expect(await recordingAdmins(() => Promise.resolve(true), ledger)(organisation(3), VIEWER, AT_START)).toBe(true);
+  expect(await recordingAdmins(() => Promise.resolve(false), ledger)(organisation(3), VIEWER, AT_START)).toBe(false);
+  expect(ledger.record.mock.calls).toEqual([[installationRowIdSchema.parse(3), PERSON]]);
+  expect(ledger.forget.mock.calls).toEqual([[installationRowIdSchema.parse(3), PERSON]]);
+});
+
+test('the context is handed on to the lookup it wraps', async () => {
+  const seen: unknown[] = [];
+  const lookup: CachedOrgAdminLookup = (_installation, _viewer, context) => {
+    seen.push(context);
+    return Promise.resolve(true);
+  };
+  await recordingAdmins(lookup, spyLedger())(organisation(3), VIEWER, AT_START);
+  expect(seen).toEqual([AT_START]);
+});

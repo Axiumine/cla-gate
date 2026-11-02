@@ -70,11 +70,16 @@ export function createAdminLedger(options: { readonly db: Kysely<Database>; read
  * for a live answer only (a cached one asks nobody and writes nothing). Only an organisation has a ledger: the owner of a
  * user account is known from the row. A lookup that throws writes nothing, and the error is the caller's as it was; an error
  * of the ledger itself is thrown too, so a failure to record is never swallowed (and is no answer, so the cache keeps nothing).
+ *
+ * The same rule as the cache's applies to the ledger: a lookup that a fresh one displaced, or that an invalidation dropped,
+ * while it waited for GitHub (`context.isCurrent()` is false) answers its own caller and writes nothing, so an older "admin"
+ * cannot put a demoted admin back, nor an older "not an admin" take a newer one out. Without a context (no cache in front)
+ * the lookup is the only one there is.
  */
 export function recordingAdmins(lookup: CachedOrgAdminLookup, ledger: AdminLedger): CachedOrgAdminLookup {
-  return async (installation, viewer) => {
-    const admin = await lookup(installation, viewer);
-    if (installation.account_type === 'Organization') {
+  return async (installation, viewer, context) => {
+    const admin = await lookup(installation, viewer, context);
+    if (installation.account_type === 'Organization' && (context?.isCurrent() ?? true)) {
       await (admin ? ledger.record(installation.id, viewer.githubId) : ledger.forget(installation.id, viewer.githubId));
     }
     return admin;

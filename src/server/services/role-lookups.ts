@@ -5,7 +5,7 @@ import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { OrgAdminInstallation, RoleViewer } from './org-admin.ts';
 import type { ProbeBudget } from './probe-budget.ts';
 import type { RepoAdminInstallation, RepoAdminLookup, RepoAdminRepository } from './repo-admin.ts';
-import type { RoleCache } from './role-cache.ts';
+import type { LookupContext, RoleCache } from './role-cache.ts';
 import { ORG_SCOPE, repoScope } from './role-key.ts';
 import type { ViewerLookupBudget } from './role-lookup-budget.ts';
 
@@ -27,10 +27,14 @@ interface RepositoryKey {
   readonly github_repo_id: number;
 }
 
-/** Whether the viewer is an admin of the account the installation belongs to (E11-S02), through the cache. */
+/**
+ * Whether the viewer is an admin of the account the installation belongs to (E11-S02), through the cache. The cache tells
+ * the lookup behind it whether it is still the current one (`context`), which the ledger of E11-S07 asks before it writes.
+ */
 export type CachedOrgAdminLookup = (
   installation: OrgAdminInstallation & TenantKey,
   viewer: RoleViewer,
+  context?: LookupContext,
 ) => Promise<boolean>;
 
 /**
@@ -72,9 +76,11 @@ function orgAdminLookup(deps: RoleLookupDeps, fresh: boolean): CachedOrgAdminLoo
       return deps.orgAdmin(installation, viewer);
     }
     const key = { installationId: installation.id, viewerGithubId: viewer.githubId, scope: ORG_SCOPE };
-    return deps.cache.resolve(key, () => costing(deps.budget, viewer, () => deps.orgAdmin(installation, viewer)), {
-      fresh,
-    });
+    return deps.cache.resolve(
+      key,
+      (context) => costing(deps.budget, viewer, () => deps.orgAdmin(installation, viewer, context)),
+      { fresh },
+    );
   };
 }
 

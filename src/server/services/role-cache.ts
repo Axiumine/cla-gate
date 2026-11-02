@@ -36,6 +36,20 @@ export interface ResolveOptions {
   readonly fresh?: boolean;
 }
 
+/**
+ * What a lookup is told by the cache that runs it. A lookup that does more than answer (E11-S07 writes the ledger of org
+ * admins from what it finds) asks {@link LookupContext.isCurrent} right before it does, so that an older answer cannot undo
+ * a newer one.
+ */
+export interface LookupContext {
+  /**
+   * Whether this lookup is still the current one of its key: false once a fresh lookup displaced it or an invalidation
+   * dropped it. A lookup that is not current answers its own callers and the cache keeps nothing of it; whatever else it
+   * would write must not outlive it either. Ask after the first `await` of the lookup, not before.
+   */
+  readonly isCurrent: () => boolean;
+}
+
 /** A lookup that is under way. `ticket` tells which one is the current for its key: a later one displaces an earlier. */
 interface Flight {
   readonly key: RoleKey;
@@ -68,13 +82,17 @@ export class RoleCache {
    * its result, so 20 simultaneous requests cost GitHub one call; lookups for different keys never wait on each other.
    * `load` runs once per miss, and only a miss: whatever it costs (a GitHub call, a share of a budget) is not spent by a
    * hit or by a caller that joins one. It may throw or reject: the failure goes to everyone who waited for it, nothing is
-   * kept, and the next caller asks again.
+   * kept, and the next caller asks again. It is told whether it is still the current lookup of its key (`isCurrent`).
    *
    * With `fresh` the cache is not read and no lookup is joined: a new one starts, and its answer replaces the cached one
    * and displaces any lookup of the key still under way (so an older answer that arrives later cannot overwrite it). Later
    * callers without `fresh` may then join it.
    */
-  resolve(key: RoleKey, load: () => Promise<boolean>, options: ResolveOptions = {}): Promise<boolean> {
+  resolve(
+    key: RoleKey,
+    load: (context: LookupContext) => Promise<boolean>,
+    options: ResolveOptions = {},
+  ): Promise<boolean> {
     const id = roleKeyText(key);
     if (options.fresh !== true) {
       const hit = this.#entries.hit(id, this.#now());
@@ -108,22 +126,23 @@ export class RoleCache {
     return this.#clock.now().getTime();
   }
 
-  #start(id: string, key: RoleKey, load: () => Promise<boolean>): Promise<boolean> {
+  #start(id: string, key: RoleKey, load: (context: LookupContext) => Promise<boolean>): Promise<boolean> {
     this.#tickets += 1;
     const ticket = this.#tickets;
     // The age of an answer counts from the moment its question was sent: that is the latest GitHub can have said it.
     const expiresAt = this.#now() + TTL_MS;
     // Whether this lookup is still the current one of its key, which it stops being when it is displaced or invalidated.
+    const isCurrent = (): boolean => this.#flights.get(id)?.ticket === ticket;
     // A lookup that is current ends here; one that is not leaves the map as it found it.
     const settle = (): boolean => {
-      const current = this.#flights.get(id)?.ticket === ticket;
+      const current = isCurrent();
       if (current) {
         this.#flights.delete(id);
       }
       return current;
     };
     // `Promise.try` turns a `load` that throws at once into a rejection too, so no failure skips the bookkeeping below.
-    const promise = Promise.try(load).then(
+    const promise = Promise.try(load, { isCurrent }).then(
       (allowed) => {
         if (settle()) {
           this.#entries.keep(id, { key, allowed, expiresAt });
