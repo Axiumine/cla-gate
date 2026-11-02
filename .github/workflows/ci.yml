@@ -982,3 +982,13 @@ jobs:
           upload-result: false
           push-fixes: none
           use-annotations: false
+      # The action's own upload stays off (E20-S08). This uploads only the SARIF file, so that the problems of a failed scan
+      # can be read without a login to Qodana Cloud. The repository is public and the artifact lives for 7 days.
+      - name: Upload the Qodana findings (SARIF)
+        if: ${{ always() && steps.gate.outputs.available == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qodana-sarif
+          path: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+          retention-days: 7
+          if-no-files-found: warn

@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `qodana` job uploads its SARIF file as a 7-day artifact (`qodana-sarif`), so the problems of a failed scan can be read without a login to Qodana Cloud; the action's own upload stays off. First scan with the real token: 13 problems, fixed in the same pull request.
 - Semgrep verified on the shared runners (E20-S01 is Done after `pipx` was installed on them) and the two failures of the mutation job recorded with their causes in E20-S04 and `docs/ci-runners.md`.
 - `CLAUDE.md` is now a short operating contract; commands, quality gates, architecture rules, tooling notes and the contributing flow moved to `docs/` and `CONTRIBUTING.md`.
 - `README.md` is now a landing page (product, scope, quick start, documentation map); the architecture, repository layout, auth and security, data model, GitHub App, operations, toolchain, decisions and configuration sections moved to `docs/`, and `scripts/docs/doc-size.test.ts` fails when `README.md` (10240 bytes) or `CLAUDE.md` (6144 bytes) outgrows its ceiling.

@@ -20,6 +20,8 @@ const GATE = 'Check whether Qodana can run (a token, and not a fork pull request
 const DOWNLOAD = 'Download the lcov report of the coverage job';
 const CHECK = 'Check the lcov report (present, and paths relative to the repository)';
 const SCAN = 'Qodana scan';
+const UPLOAD = 'Upload the Qodana findings (SARIF)';
+const ALWAYS_AVAILABLE = expression("always() && steps.gate.outputs.available == 'true'");
 
 function step(name: string) {
   const found = job.steps.find((candidate) => candidate.name === name);
@@ -63,7 +65,7 @@ test('the runner guard accepts ci.yml as it is: qodana is the only job on a GitH
   expect(hosted.map(([id]) => id)).toEqual(['qodana']);
 });
 
-test('the steps are the gate, the standard setup, the download, the lcov check and the scan, in that order', () => {
+test('the steps are the gate, the standard setup, the download, the lcov check, the scan and the SARIF upload, in that order', () => {
   expect(job.steps.map((each) => each.name)).toEqual([
     GATE,
     'Check out the repository',
@@ -73,6 +75,7 @@ test('the steps are the gate, the standard setup, the download, the lcov check a
     DOWNLOAD,
     CHECK,
     SCAN,
+    UPLOAD,
   ]);
   expect(step(GATE).id).toBe('gate');
   expect(step('Install dependencies').run).toBe('yarn install --immutable --mode=skip-build');
@@ -82,7 +85,8 @@ test('the steps are the gate, the standard setup, the download, the lcov check a
 test('every step after the gate is skipped unless the gate said the job can run, and none may fail softly', () => {
   expect(step(GATE).if).toBeUndefined();
   for (const each of job.steps.slice(1)) {
-    expect(each.if).toBe(AVAILABLE);
+    // The SARIF upload also runs after a failed scan, which is when the findings are wanted.
+    expect(each.if).toBe(each.name === UPLOAD ? ALWAYS_AVAILABLE : AVAILABLE);
   }
   expect(job.steps.filter((each) => each['continue-on-error'] !== undefined)).toEqual([]);
   expect(job.steps.filter((each) => (each.run ?? '').includes('${{'))).toEqual([]);
@@ -95,6 +99,7 @@ test('every action is pinned to a full commit SHA with its version in a comment'
     'actions/setup-node',
     'actions/download-artifact',
     'JetBrains/qodana-action',
+    'actions/upload-artifact',
   ]);
   for (const each of used) {
     expect(each).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
