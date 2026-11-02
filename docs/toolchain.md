@@ -28,7 +28,7 @@ Everything is strict by default: 100% coverage, zero lint findings, 100% type co
 | Trivy | Wired (`trivy` job) | pre-commit (secrets), pre-push, CI | v0.76.1 (pinned exactly in `mise.toml`), installed in CI with `aquasecurity/setup-trivy` v0.3.1 pinned by full SHA. Two passes: vulnerabilities (HIGH/CRITICAL, prod deps in the gate, dev deps in the nightly run) and an unfiltered secret + misconfig pass |
 | memlab | Wired (`leaks` job) | CI nightly, manual run and release tags | Runs on Node 26.13.0 with Playwright's Chromium. It has no leak-based exit code, so the `@memlab/api` wrapper in `tests/leaks/run.ts` turns `leaks.length` into one, and `yarn leaks:control` proves the wrapper can fail |
 | Vitest `--logHeapUsage`, Node `--heap-prof` / `--cpu-prof` | Adopt, diagnostic only | on demand | Not gates. Used to investigate memlab or CI memory findings |
-| Qodana (`qodana-js`) | Wired, never run (`qodana` job) | CI | Paid licence and token (`QODANA_TOKEN`, not created yet); fork PRs get no secrets, so it is a maintainer-side check that skips itself without a token and is never required |
+| Qodana (`qodana-js`) | Wired and green since 2026-11-02 (`qodana` job) | CI | Paid licence and token (`QODANA_TOKEN`, an Actions secret); fork PRs get no secrets, so it is a maintainer-side check that skips itself without a token and is never required |
 | Lefthook | Adopt | hooks | v2 `jobs:` syntax. Hooks installed from root `postinstall` (Yarn never runs `prepare`), skipped in CI and without `.git` (`scripts/dev/install-hooks.ts`) |
 | GitNexus | Adopt as dev tooling | dev | Not a gate. PolyForm Noncommercial licence, and it edits CLAUDE.md |
 

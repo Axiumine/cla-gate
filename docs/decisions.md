@@ -40,5 +40,5 @@ As of 2026-11 the common options are ageing or limited:
 Resolved: self-hosted only (one instance per server, serving several orgs, no hosted SaaS, no published image), corporate CLA is not in the MVP (epic E21), hosting target and region are the operator's choice (the operator is the data controller).
 
 - AGPLv3 "only" or "or later"? `AGPL-3.0-only` is assumed. GitNexus (dev tooling) is PolyForm Noncommercial, which matters if this becomes a commercial product.
-- Is a Qodana licence and token available? No token yet. The `qodana` job is wired and ends green with a notice until the maintainer adds the secret `QODANA_TOKEN`; it is never a required check, and its first real run (the findings, the exit code 255 gate failure and the image digest) is still to be done (epic E20, E20-S08).
+- Is a Qodana licence and token available? Yes (answered 2026-11-02): an Ultimate Plus licence, a Qodana Cloud project and the secret `QODANA_TOKEN`. The `qodana` job runs on GitHub-hosted `ubuntu-24.04`, passes after the 13 findings of its first scan were fixed, and stays a check that is never required (epic E20, E20-S08).
 - Legal: e-signature validity (ESIGN, eIDAS) and GDPR retention choices need counsel; this repo contains no legal advice.
