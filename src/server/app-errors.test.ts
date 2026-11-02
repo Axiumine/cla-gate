@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { errorResponseSchema } from '../shared/errors.ts';
 import { authWorld } from './adapters/http/auth-fixture/test-support.ts';
-import { testApp } from './test-support.ts';
+import { PUBLIC_ROUTE, testApp } from './test-support.ts';
 
 // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up message: the test proves that an exception message never reaches the response
 const SECRET_MESSAGE = 'connect to db.internal:5432 failed, password=hunter2';
@@ -13,19 +13,19 @@ const SECRET_MESSAGE = 'connect to db.internal:5432 failed, password=hunter2';
 async function withRoutes() {
   const test_ = await testApp();
   const { app } = test_;
-  app.get('/boom', () => {
+  app.get('/boom', PUBLIC_ROUTE, () => {
     throw new Error(SECRET_MESSAGE);
   });
-  app.get('/conflict', () => {
+  app.get('/conflict', PUBLIC_ROUTE, () => {
     throw Object.assign(new Error('internal conflict details'), { statusCode: 409 });
   });
-  app.get('/teapot-as-500', () => {
+  app.get('/teapot-as-500', PUBLIC_ROUTE, () => {
     throw Object.assign(new Error('weird status'), { statusCode: 599 });
   });
-  app.get('/below-client-errors', () => {
+  app.get('/below-client-errors', PUBLIC_ROUTE, () => {
     throw Object.assign(new Error('a redirect status on an error'), { statusCode: 302 });
   });
-  app.get('/validation-without-status', () => {
+  app.get('/validation-without-status', PUBLIC_ROUTE, () => {
     // The marker fastify-type-provider-zod puts on every validation issue it creates (Symbol.for, a global registry).
     const issue = {
       [Symbol.for('ZodFastifySchemaValidationError')]: true,
@@ -35,14 +35,18 @@ async function withRoutes() {
     };
     throw Object.assign(new Error('validation details'), { validation: [issue] });
   });
-  app.get('/unnamed-status', () => {
+  app.get('/unnamed-status', PUBLIC_ROUTE, () => {
     throw Object.assign(new Error('no standard text for this status'), { statusCode: 499 });
   });
-  app.get('/string', () => {
+  app.get('/string', PUBLIC_ROUTE, () => {
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- exercises the path for a thrown value that is not an Error
     throw 'a plain string with hunter2';
   });
-  app.post('/echo', { schema: { body: z.object({ name: z.string().min(1) }) } }, (request) => request.body);
+  app.post(
+    '/echo',
+    { ...PUBLIC_ROUTE, schema: { body: z.object({ name: z.string().min(1) }) } },
+    (request) => request.body,
+  );
   return test_;
 }
 
@@ -118,7 +122,11 @@ test('a validation error that carries no status of its own is still a generic 40
 
 test('a valid body passes validation, for a caller the state-changing guard lets through (E10-S03)', async () => {
   const { app, login } = await authWorld();
-  app.post('/echo', { schema: { body: z.object({ name: z.string().min(1) }) } }, (request) => request.body);
+  app.post(
+    '/echo',
+    { ...PUBLIC_ROUTE, schema: { body: z.object({ name: z.string().min(1) }) } },
+    (request) => request.body,
+  );
   const alice = await login(1001);
   const response = await app.inject({ method: 'POST', url: '/echo', headers: alice.headers, payload: { name: 'Ada' } });
   expect(response.statusCode).toBe(200);

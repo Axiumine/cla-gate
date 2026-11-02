@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { CONTEXT, IDS, payloadOf } from '../../domain/test-support.ts';
 import { routeWebhook } from '../../domain/webhook-routing.ts';
 import { createRevokeUserSessionsHandler } from '../../services/revoke-user-sessions.ts';
+import { roleKey } from '../../services/role-fixture/test-support.ts';
 import { authWorld } from './auth-fixture/test-support.ts';
 
 // What a revoked App authorization does to the browsers of that person (E10-S07): the `revoke-user-sessions` job runs
@@ -14,7 +15,11 @@ const job = (githubUserId: number) => ({ type: 'revoke-user-sessions', githubUse
 
 async function world() {
   const base = await authWorld();
-  const handler = createRevokeUserSessionsHandler({ sessions: base.store, log: base.app.log });
+  const handler = createRevokeUserSessionsHandler({
+    sessions: base.store,
+    roles: base.app.roleCache,
+    log: base.app.log,
+  });
   const whoAmI = (cookie: string) => base.app.inject({ url: '/api/auth/session', headers: { cookie } });
   const sessionRows = async (userId: number) =>
     (await base.db.selectFrom('sessions').select('id').where('user_id', '=', userId).orderBy('id').execute()).map(
@@ -143,4 +148,22 @@ test('the job the webhook intake routes for a revoked authorization is the one t
   expect(await handler(z.object({ job: z.unknown() }).parse(routing).job)).toBe(1);
   expect((await whoAmI(person.cookie)).statusCode).toBe(401);
   expect((await whoAmI(bystander.cookie)).statusCode).toBe(200);
+});
+
+test('the roles the application cached for the person are forgotten with their sessions, and those of others are kept', async () => {
+  const { app, handler, login } = await world();
+  await login(1001);
+  const loads: number[] = [];
+  const ask = (githubId: number) =>
+    app.roleCache.resolve(roleKey(1, githubId), () => {
+      loads.push(githubId);
+      return Promise.resolve(true);
+    });
+  await ask(1001);
+  await ask(2002);
+  expect(loads).toEqual([1001, 2002]);
+  await handler(job(1001));
+  await ask(2002);
+  await ask(1001);
+  expect(loads).toEqual([1001, 2002, 1001]);
 });

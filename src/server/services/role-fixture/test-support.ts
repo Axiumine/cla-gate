@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import { parseGithubId } from '../../../shared/github-id.ts';
+import { type InstallationRowId, installationRowIdSchema } from '../../adapters/db/installation-row-id.ts';
+import type { OrgAdminInstallation, RoleViewer } from '../org-admin.ts';
+import type { RepoAdminInstallation, RepoAdminRepository } from '../repo-admin.ts';
+import { ORG_SCOPE, type RoleKey, type RoleScope } from '../role-key.ts';
+
+// The people and installations the role lookups of E11 are tested with: made-up ids, as the stored rows hold them.
+
+/** The signed-in person of the role tests: numeric id 501, who logged in as `alice`. */
+export const VIEWER_ID = parseGithubId(501);
+
+export const VIEWER: RoleViewer = { githubId: VIEWER_ID, login: 'alice' };
+
+/** An installation of an organisation, as its stored row reads: the account id is the installation id plus 5000. */
+export function orgInstallation(
+  githubInstallationId: number,
+  accountLogin: string,
+  overrides: Partial<OrgAdminInstallation> = {},
+): OrgAdminInstallation {
+  return {
+    github_installation_id: githubInstallationId,
+    account_id: githubInstallationId + 5000,
+    account_login: accountLogin,
+    account_type: 'Organization',
+    ...overrides,
+  };
+}
+
+/** An installation of a user account whose owner has the numeric id `accountId`. */
+export function userInstallation(githubInstallationId: number, accountId: number): OrgAdminInstallation {
+  return orgInstallation(githubInstallationId, 'alice', { account_id: accountId, account_type: 'User' });
+}
+
+/** An installation as the repository lookup reads its stored row. */
+export const installationRow = (githubInstallationId: number): RepoAdminInstallation => ({
+  github_installation_id: githubInstallationId,
+});
+
+/** A stored repository as the repository lookup reads it: the display name, and not removed unless `removedAt` says so. */
+export const storedRepository = (fullName: string, removedAt: Date | null = null): RepoAdminRepository => ({
+  full_name: fullName,
+  removed_at: removedAt,
+});
+
+/** An `installations.id`, for the tests of the role cache: the tenant key, never a GitHub installation id. */
+export const tenantId = (n: number): InstallationRowId => installationRowIdSchema.parse(n);
+
+/** What the role cache keeps an answer under: tenant `installation`, the person with numeric id `viewer`, and the scope. */
+export function roleKey(installation: number, viewer: number = VIEWER_ID, scope: RoleScope = ORG_SCOPE): RoleKey {
+  return { installationId: tenantId(installation), viewerGithubId: parseGithubId(viewer), scope };
+}
+
+/** A promise a test settles by hand: the way to hold a lookup under way while something else happens. */
+export function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason: Error) => void;
+} {
+  const handles = Promise.withResolvers<T>();
+  return { promise: handles.promise, resolve: handles.resolve, reject: handles.reject };
+}
+
+/** The fields the logger puts on every line: they say nothing of the event, and `time` and `pid` are digits that may spell any id. */
+const LOGGER_FIELDS: ReadonlySet<string> = new Set(['level', 'time', 'pid', 'hostname']);
+
+/** What log lines say beyond the fields the logger adds to every line, so a test can assert on the whole event and not on raw text. */
+export const eventsOf = (lines: readonly Record<string, unknown>[]): Record<string, unknown>[] =>
+  lines.map((each) => Object.fromEntries(Object.entries(each).filter(([key]) => !LOGGER_FIELDS.has(key))));

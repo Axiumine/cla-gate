@@ -7,6 +7,7 @@ import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import { notWiredEnqueuer } from '../../services/jobs-not-wired.ts';
 import { systemClock } from '../../services/ports/clock.ts';
 import { FakeClock } from '../../services/test-support.ts';
+import { PUBLIC_ROUTE } from '../../test-support.ts';
 import { auditProblem } from './audit-routes.ts';
 import { authWorld } from './auth-fixture/test-support.ts';
 import {
@@ -158,7 +159,7 @@ test('the legacy header is ignored next to a good SHA-256 one and cannot rescue 
 
 test('no body parser runs on a refused delivery: broken JSON, deep nesting and a form body are all a 401', async () => {
   const { app } = await webhookTestApp({ env: ENV });
-  app.post('/ordinary', () => 'ok');
+  app.post('/ordinary', PUBLIC_ROUTE, () => 'ok');
   const parse = vi.spyOn(JSON, 'parse');
   onTestFinished(() => {
     parse.mockRestore();
@@ -229,7 +230,7 @@ test('the route needs no session, cookie, CSRF token or Origin header, and ignor
 test('the raw body belongs to this route only: another route still gets its JSON parsed', async () => {
   // A state-changing route is behind the login's guards (E10-S03), so the caller is a person who is logged in.
   const { app, login } = await authWorld(ENV);
-  app.post('/elsewhere', (request) => ({ body: request.body, raw: request.rawBody ?? null }));
+  app.post('/elsewhere', PUBLIC_ROUTE, (request) => ({ body: request.body, raw: request.rawBody ?? null }));
   const alice = await login(1001);
   const response = await app.inject({ method: 'POST', url: '/elsewhere', headers: alice.headers, payload: { a: 1 } });
   expect(response.json()).toEqual({ body: { a: 1 }, raw: null });

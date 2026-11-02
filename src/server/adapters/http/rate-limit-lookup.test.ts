@@ -50,6 +50,7 @@ test('a route that keys its budget on the signed-in user sets hook preHandler an
     '/by-user',
     {
       config: {
+        access: 'public',
         rateLimit: {
           ...routeRateLimit(2),
           hook: 'preHandler',

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../../shared/github-id.ts';
-import type { GitHubOrgMembership, GitHubRepository } from '../../services/ports/github.ts';
+import type { GitHubOrgMembership, GitHubRepository, GitHubRepositoryPermission } from '../../services/ports/github.ts';
 import { type Channel, pager, type RequestHeaders, readOrNull, readOrNullWhenForbidden } from './octokit-request.ts';
 import { collectPages } from './pagination.ts';
-import { orgMembershipSchema, repositoryPageSchema, repositorySchema } from './schemas.ts';
+import { orgMembershipSchema, repositoryPageSchema, repositoryPermissionSchema, repositorySchema } from './schemas.ts';
 
 // The requests the GitHub client port makes with an installation's token (E05-S04): `headers` carry the token. Route
 // templates name a route in errors and are what Octokit expands. `channel` is the installation's lane in the rate
@@ -41,5 +41,20 @@ export function fetchMembership(
     route,
     () => channel.octokit.request(route, { org, username: login, headers }),
     orgMembershipSchema,
+  );
+}
+
+export function fetchRepositoryPermission(
+  channel: Channel,
+  headers: RequestHeaders,
+  repository: { readonly owner: string; readonly repo: string },
+  login: string,
+): Promise<GitHubRepositoryPermission | null> {
+  const route = 'GET /repos/{owner}/{repo}/collaborators/{username}/permission';
+  return readOrNull(
+    channel,
+    route,
+    () => channel.octokit.request(route, { owner: repository.owner, repo: repository.repo, username: login, headers }),
+    repositoryPermissionSchema,
   );
 }

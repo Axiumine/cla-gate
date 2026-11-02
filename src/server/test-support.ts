@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { EventEmitter, once } from 'node:events';
 import net from 'node:net';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import type { Kysely } from 'kysely';
 import type { DestinationStream } from 'pino';
 import { onTestFinished } from 'vitest';
@@ -13,8 +13,11 @@ import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
+import type { OperatorPolicies } from './services/operator-policies.ts';
 import type { Clock } from './services/ports/clock.ts';
 import type { JobEnqueuer } from './services/ports/jobs.ts';
+import type { RoleCache } from './services/role-cache.ts';
+import type { RoleGitHub } from './services/tenant-authorizer.ts';
 
 const LogLine = z.record(z.string(), z.unknown());
 
@@ -79,29 +82,34 @@ export interface TestAppOptions {
   readonly enqueuer?: JobEnqueuer;
   /** Where the webhook route answers `503` `webhook_timeout` (E06-S07). Defaults to the app's own, 8 seconds. */
   readonly webhookDeadlineMs?: number;
+  /** The cache of the roles GitHub reported (E11-S04); defaults to the app's own, which a test reads from `app.roleCache`. */
+  readonly roleCache?: RoleCache;
+  /** Where the guard of a tenant route reads the roles (E11-S05); defaults to the app's own, which fails every call as an outage. */
+  readonly github?: RoleGitHub;
+  /** Who operates the instance (E11-S08); defaults to the app's own, from `OPERATOR_GITHUB_IDS` in `env`. */
+  readonly operators?: OperatorPolicies;
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */
 export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
-  const config = testConfig(options.env);
+  // What is left of the options once `env` and `db` are taken is what `buildApp` takes as it is.
+  const { env, db: given, ...appOptions } = options;
+  const config = testConfig(env);
   const logs = captureLogs();
-  const db = options.db ?? (await openPgliteDatabase());
-  const app = await buildApp({
-    config,
-    db,
-    logger: createLogger(config, logs.destination),
-    ...(options.readinessTimeoutMs === undefined ? {} : { readinessTimeoutMs: options.readinessTimeoutMs }),
-    ...(options.clock === undefined ? {} : { clock: options.clock }),
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-    ...(options.githubTimeoutMs === undefined ? {} : { githubTimeoutMs: options.githubTimeoutMs }),
-    ...(options.enqueuer === undefined ? {} : { enqueuer: options.enqueuer }),
-    ...(options.webhookDeadlineMs === undefined ? {} : { webhookDeadlineMs: options.webhookDeadlineMs }),
-  });
+  const db = given ?? (await openPgliteDatabase());
+  const app = await buildApp({ config, db, logger: createLogger(config, logs.destination), ...appOptions });
   onTestFinished(async () => {
     await app.close();
   });
   return { app, logs, db };
 }
+
+/**
+ * The options of a route that a test adds to the app: `public`, so it needs no session (E11-S01 refuses to start an app
+ * with a route that declares no access). Spread it to add more options: `{ ...PUBLIC_ROUTE, schema }`; a route that
+ * needs other config declares `config: { access: 'public', ... }` itself.
+ */
+export const PUBLIC_ROUTE = { config: { access: 'public' } } satisfies RouteShorthandOptions;
 
 /** A TCP server that accepts connections and never answers: what a database behind a black-holing firewall looks like. */
 export async function silentPostgres(): Promise<{ url: string; close: () => Promise<void> }> {

@@ -13,7 +13,8 @@ Items marked (planned) do not exist yet.
 │   │                            the parts of start-up: logging the configuration, binding the gate once the policies
 │   │                            exist, reconciling installations, wiring the services
 │   ├── config/                  environment parsing (zod), Secret, TRUST_PROXY parsing; github-app.ts and github-key.ts
-│   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS), env-github.ts
+│   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS), operator-ids.ts
+│   │                            (OPERATOR_GITHUB_IDS), env-github.ts
 │   │                            (the GitHub variables and their cross-field rules, webhook secrets included) and
 │   │                            github-config.ts (the settings the server reads), auth-fields.ts and auth.ts (login
 │   │                            variables, the login settings, `callbackUrl`, the start-up lines), migrate-config.ts
@@ -22,7 +23,9 @@ Items marked (planned) do not exist yet.
 │   │                            transaction and advisory-lock helpers, the branded installation row id,
 │   │                            PGlite dialect and test helpers (test only, outside the build; the independent
 │   │                            connections of the real-Postgres tests are in real-postgres/test-support.ts and
-│   │                            re-exported by test-support.ts); the session store (sessions.ts with sessions-create,
+│   │                            re-exported by test-support.ts); tenant-scope.ts (`TenantScope`, `assertRepositoryInTenant`;
+│   │                            tenant-fixture/, tenant-registry/ and tenant-scan/ are test only: the two tenants, the registry of
+│   │                            tenant queries and the source scan of the cross-tenant tests); the session store (sessions.ts with sessions-create,
 │   │                            -delete, -model, -read, -row and -touch.ts; sessions-fixture/ is test only) and the
 │   │                            user upsert (users.ts)
 │   ├── adapters/github/         the Octokit adapter of the GitHub port (octokit-*.ts: client, requests, errors, auth),
@@ -31,7 +34,8 @@ Items marked (planned) do not exist yet.
 │   │                            (app-identity.ts, start.ts), the rate limiter (rate-limiter.ts with lane, semaphore,
 │   │                            point-bucket, wait-policy, rate-limit-reading.ts and rate-limit-log.ts), response
 │   │                            schemas (schemas.ts), pagination; the login's calls to GitHub with the user's token
-│   │                            (user-login*.ts: exchange, identity, addresses, revoke)
+│   │                            (user-login*.ts: exchange, identity, addresses, revoke); membership-fixture/ and
+│   │                            permission-fixture/ (test only: the contract fixtures of the two role calls)
 │   ├── adapters/github/webhook-schemas.ts  zod schemas of the subscribed events (webhook-fixture/ holds the test payloads)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (errors.ts: AppError; also for
 │   │                            failures that never reach a route), HTTP limits, health routes, trust-proxy conversion,
@@ -44,13 +48,20 @@ Items marked (planned) do not exist yet.
 │   │                            auth-request.ts (`request.auth`, `requireAuth`), auth-routes.ts (session), auth-login.ts,
 │   │                            auth-callback.ts, auth-logout.ts, session-cookie.ts, oauth-cookie.ts, oauth-attempt.ts; the
 │   │                            request guards (request-guards.ts, csrf-token.ts, csrf-routes.ts); rate-limit.ts and
-│   │                            trust-proxy-warning.ts; test-support.ts, webhook-table-fixture/, auth-fixture/,
-│   │                            login-fixture/ and callback-fixture/ are test only
+│   │                            trust-proxy-warning.ts; who may call a route: route-access.ts (the table,
+│   │                            `RouteAccessError`), route-access-model.ts (the kinds, `PUBLIC_ROUTES`, `declaredAccess`),
+│   │                            route-access-problems.ts (`accessProblem`) and route-access-guard.ts (the preHandler), tenant-access.ts
+│   │                            (`tenantAccess`, `request.tenant`), tenant-resolvers.ts, tenant-guard.ts, upstream-failure.ts
+│   │                            (502, 503 and 429), role-cache-slot.ts, operator-guard.ts and operator-routes.ts;
+│   │                            test-support.ts, webhook-table-fixture/, auth-fixture/, login-fixture/, callback-fixture/,
+│   │                            tenant-guard-fixture/, cross-tenant-fixture/, cross-tenant-runner/ and cross-tenant-canary/ are test only
 │   ├── domain/                  admission.ts (who is served, pure), eligibility.ts (when an installation or repository
 │   │                            is evaluated), permissions.ts (the missing-permission check), jobs.ts (the job
 │   │                            catalogue), delivery-id.ts, webhook-routing*.ts (the routing table: delivery to job or
 │   │                            ignore), webhook-tenant.ts (the tenant and admission verdict), session.ts (session
-│   │                            lifetimes), return-to.ts (`safeReturnTo`), github-profile.ts (what is kept of a profile);
+│   │                            lifetimes), return-to.ts (`safeReturnTo`), github-profile.ts (what is kept of a profile),
+│   │                            authz.ts (`decide`, the role decision table), tenant-state.ts (`tenantState`), operator.ts
+│   │                            (`isOperator`, `createOperatorPolicy`);
 │   │                            test-support.ts is test only
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
@@ -64,13 +75,19 @@ Items marked (planned) do not exist yet.
 │                                revoke-user-sessions.ts (the job handler), ports/github-login.ts;
 │                                the stored installation gate and admission policies (installation-gate.ts, admission-policies.ts);
 │                                the installation and repository state (installation-*.ts, repository-*.ts): store,
-│                                queries, admission, sync and reconcile, transfer, operator view
+│                                queries, admission, sync and reconcile, transfer, operator view; roles and tenants (E11): org-admin.ts,
+│                                repo-admin.ts, repo-admin-discovery.ts, repo-admin-candidates.ts and probe-budget.ts (the role facts and
+│                                the discovery), role-deadline.ts (the 5 s rule), role-cache.ts, role-cache-entries.ts, role-key.ts and role-lookup-context.ts (`isCurrent`),
+│                                role-lookups.ts and role-lookup-budget.ts (the cache in front of the lookups, 30 a minute), tenant-queries.ts,
+│                                tenant-authorization.ts and tenant-authorizer.ts (the guard's reads and decision), admin-ledger.ts and
+│                                admin-ledger-queries.ts (the ledger of org admins), document-placement.ts, operator-policies.ts;
+│                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only
 ├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
-│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts)
+│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts, operator.ts (the operator list))
 ├── src/web/                     (planned) React SPA
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)

@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Kysely } from 'kysely';
 import type { AuthSettings } from '../../config/auth.ts';
 import type { Clock } from '../../services/ports/clock.ts';
+import type { RoleCache } from '../../services/role-cache.ts';
 import type { Database } from '../db/schema.ts';
 import { createSessionStore } from '../db/sessions.ts';
 import { createGithubLogin } from '../github/user-login.ts';
@@ -23,6 +24,8 @@ export interface AuthOptions {
   readonly db: Kysely<Database>;
   readonly settings: AuthSettings;
   readonly clock: Clock;
+  /** The cache of the roles GitHub reported (E11-S04): logout forgets what it holds about the caller. */
+  readonly roleCache: RoleCache;
   /** How the login reaches GitHub (E10-S05); defaults to the global `fetch`. Tests intercept it with MSW. */
   readonly fetch?: typeof fetch | undefined;
   /** The ceiling of each call to GitHub during the login; defaults to 10 seconds. */
@@ -56,5 +59,5 @@ export async function registerAuth(app: FastifyInstance, options: AuthOptions): 
     fetch: options.fetch,
   });
   await app.register(callbackRoutes, { db: options.db, github, limits: settings.session, clock: options.clock });
-  await app.register(logoutRoutes, { store });
+  await app.register(logoutRoutes, { store, roles: options.roleCache });
 }

@@ -3,7 +3,7 @@
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
-import { testApp, testConfig } from '../../test-support.ts';
+import { PUBLIC_ROUTE, testApp, testConfig } from '../../test-support.ts';
 import { authWorld, COOKIE_NAME, expectedToken } from './auth-fixture/test-support.ts';
 
 // The guard on every state-changing request (E10-S03): Origin, then a live session, then the CSRF token. Each row of a
@@ -253,7 +253,7 @@ test('a refused request never reaches the route and the token is not echoed or l
 
 test('with login not configured the guard is still on: a wrong Origin is 403 and the right one is 401', async () => {
   const { app } = await testApp();
-  app.post('/thing', () => 'reached');
+  app.post('/thing', PUBLIC_ROUTE, () => 'reached');
   const own = new URL(testConfig().publicBaseUrl).origin;
   const wrong = await app.inject({ method: 'POST', url: '/thing', headers: { origin: 'https://evil.example' } });
   const right = await app.inject({ method: 'POST', url: '/thing', headers: { origin: own } });

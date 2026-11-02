@@ -12,6 +12,7 @@ import type {
   GitHubInstallation,
   GitHubOrgMembership,
   GitHubRepository,
+  GitHubRepositoryPermission,
 } from '../../../services/ports/github.ts';
 import type { InstallationGate } from '../../../services/ports/installation-gate.ts';
 import { FakeClock, FakeGate } from '../../../services/test-support.ts';
@@ -43,6 +44,7 @@ interface Entry {
 interface State {
   readonly entries: Map<GithubId, Entry>;
   readonly memberships: Map<string, GitHubOrgMembership>;
+  readonly permissions: Map<string, GitHubRepositoryPermission>;
   readonly requests: string[];
 }
 
@@ -91,6 +93,9 @@ const notFound = (): Response => HttpResponse.json({ message: 'Not Found' }, { s
 
 const membershipKey = (installationId: unknown, org: string, login: string): string =>
   `${String(installationId)}/${org.toLowerCase()}/${login.toLowerCase()}`;
+
+const permissionKey = (installationId: unknown, fullName: string, login: string): string =>
+  `${String(installationId)}/${fullName.toLowerCase()}/${login.toLowerCase()}`;
 
 const idOf = (value: unknown): GithubId => parseGithubId(Number(z.string().parse(value)));
 
@@ -146,7 +151,7 @@ function tokenRoute(state: State, signer: TestGitHubKey, clock: FakeClock) {
   });
 }
 
-/** The routes an installation token opens: its repositories, one repository, one membership of its organisation. */
+/** The routes an installation token opens: its repositories, one repository, one membership, one repository permission. */
 function installationRoutes(state: State) {
   return [
     http.get(`${GITHUB_API_ORIGIN}/installation/repositories`, ({ request }) => {
@@ -174,6 +179,20 @@ function installationRoutes(state: State) {
             state: membership.state,
             role: membership.role,
             user: { id: membership.userId, login },
+          });
+    }),
+    http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/collaborators/:username/permission`, ({ request, params }) => {
+      const owner = z.string().parse(params['owner']);
+      const repo = z.string().parse(params['repo']);
+      const login = z.string().parse(params['username']);
+      const key = permissionKey(installationOf(state, request)?.installation.id, `${owner}/${repo}`, login);
+      const answer = state.permissions.get(key);
+      return answer === undefined
+        ? notFound()
+        : HttpResponse.json({
+            permission: answer.permission,
+            role_name: answer.permission,
+            user: { id: answer.userId, login },
           });
     }),
   ];
@@ -210,6 +229,9 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
     addMembership: (githubInstallationId, org, login, membership) => {
       state.memberships.set(membershipKey(githubInstallationId, org, login), membership);
     },
+    addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
+      state.permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
+    },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);
     },
@@ -222,7 +244,7 @@ async function startWorld(
   signer: TestGitHubKey,
   gate: InstallationGate,
 ): Promise<{ client: GitHubClient; state: State }> {
-  const state: State = { entries: new Map(), memberships: new Map(), requests: [] };
+  const state: State = { entries: new Map(), memberships: new Map(), permissions: new Map(), requests: [] };
   const clock = new FakeClock(START);
   serve(state, signer, clock);
   const app = await startGitHubApp({

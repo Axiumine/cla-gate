@@ -174,6 +174,13 @@ interface AuditLogTable {
   metadata: JsonObject<true>;
 }
 
+/** The org admins a live lookup last saw, for a suspended or deleted installation (migration 007, E11-S07): numeric ids and a time. */
+interface InstallationAdminSeenTable {
+  installation_id: InstallationRowId;
+  user_github_id: number;
+  seen_at: Date;
+}
+
 /** Every table created by the migrations except schema_migrations, which only the runner touches. */
 export interface Database {
   users: UsersTable;
@@ -189,4 +196,5 @@ export interface Database {
   pr_evaluations: PrEvaluationsTable;
   webhook_deliveries: WebhookDeliveriesTable;
   audit_log: AuditLogTable;
+  installation_admin_seen: InstallationAdminSeenTable;
 }

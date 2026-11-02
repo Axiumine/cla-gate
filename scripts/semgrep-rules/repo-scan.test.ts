@@ -12,6 +12,10 @@ import { ROOT, SCRIPTS, SEMGREP_BINARY } from './test-support.ts';
 // enforces it; this test shows the same with the offline copy of the rules (`yarn semgrep:rules`), so a change that adds
 // a finding fails `yarn test` on a machine that has the binary and the rules. Skipped where either is missing (the
 // coverage job has neither). The offline rules are a git-ignored download and are never committed.
+//
+// The scan takes about 15 s alone, but the same scan took 160 to 270 s inside the full suite on a busy development
+// machine (Semgrep starts one process per core, next to every Vitest worker and whatever else runs). The limit only
+// has to tell "slow" from "hung", so it is generous; the result still has to be zero findings and exit status 0.
 
 const offlineRules = path.join(ROOT, 'rules');
 const available = SEMGREP_BINARY !== undefined && exists(offlineRules);
@@ -31,5 +35,5 @@ test.skipIf(!available)(
     expect(result.stdout + result.stderr).not.toContain('Code Findings');
     expect(result.status).toBe(0);
   },
-  120_000,
+  600_000,
 );

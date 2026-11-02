@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { githubIdSchema } from '../../shared/github-id.ts';
 import type { SessionStore } from '../adapters/db/sessions.ts';
+import type { RoleCache } from './role-cache.ts';
 
 // The consumer of the `revoke-user-sessions` job (E10-S07). A person who revokes the App's authorization on GitHub has
 // said "no more"; every login of theirs on this instance ends at once. The job is enqueued by the webhook intake
@@ -46,12 +47,15 @@ interface HandlerLog {
 
 export interface RevokeUserSessionsDeps {
   readonly sessions: Pick<SessionStore, 'removeAllOfGithubId'>;
+  /** The cache of the roles GitHub reported (E11-S04), the one the application's guards read: the same instance, in this process. */
+  readonly roles: Pick<RoleCache, 'invalidateViewer'>;
   readonly log: HandlerLog;
 }
 
 /**
- * The handler of `revoke-user-sessions`. It validates the envelope, deletes every session of the person and logs the
- * numeric id and the count, never a login or a name. The job is idempotent: running it again, or for a person with no
+ * The handler of `revoke-user-sessions`. It validates the envelope, deletes every session of the person, forgets the roles
+ * cached for them (E11-S04: the person said "no more", so nothing GitHub said earlier is served on) and logs the numeric
+ * id and the count, never a login or a name. The job is idempotent: running it again, or for a person with no
  * session, deletes nothing and succeeds with count 0. An error from the database is not caught: the job fails, the queue
  * retries it and, after the limit, dead-letters it (E07-S05). Resolves to the count.
  */
@@ -63,6 +67,7 @@ export function createRevokeUserSessionsHandler(deps: RevokeUserSessionsDeps): (
     }
     const { githubUserId } = payload.data;
     const revoked = await deps.sessions.removeAllOfGithubId(githubUserId);
+    deps.roles.invalidateViewer(githubUserId);
     deps.log.info({ githubUserId, revoked }, 'auth.sessions_revoked');
     return revoked;
   };

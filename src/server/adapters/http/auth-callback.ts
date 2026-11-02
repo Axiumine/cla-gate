@@ -88,7 +88,7 @@ async function complete(request: FastifyRequest, options: CallbackRoutesOptions)
 export const callbackRoutes: FastifyPluginCallbackZod<CallbackRoutesOptions> = (app, options, done) => {
   app.get(
     '/api/auth/callback',
-    { config: { rateLimit: routeRateLimit(RATE_LIMITS.callback) }, exposeHeadRoute: false },
+    { config: { access: 'public', rateLimit: routeRateLimit(RATE_LIMITS.callback) }, exposeHeadRoute: false },
     async (request, reply) => {
       clearOauthCookie(reply);
       const outcome = await complete(request, options);

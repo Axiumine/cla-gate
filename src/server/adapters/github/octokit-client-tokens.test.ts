@@ -15,6 +15,7 @@ import {
   json,
   line,
   membershipJson,
+  permissionJson,
   type RouteCall,
   repositoryJson,
 } from './client-fixture/test-support.ts';
@@ -64,6 +65,15 @@ const CASES: [name: string, spec: Case][] = [
       request: 'GET /orgs/acme/memberships/alice',
       route: 'GET /orgs/:org/memberships/:username',
       ok: () => json(membershipJson(501)),
+    },
+  ],
+  [
+    'getRepositoryPermission',
+    {
+      run: (client) => client.getRepositoryPermission(id(11), 'acme', 'api', 'alice'),
+      request: 'GET /repos/acme/api/collaborators/alice/permission',
+      route: 'GET /repos/:owner/:repo/collaborators/:username/permission',
+      ok: () => json(permissionJson(501)),
     },
   ],
 ];

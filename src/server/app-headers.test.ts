@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { testApp } from './test-support.ts';
+import { PUBLIC_ROUTE, testApp } from './test-support.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -93,7 +93,7 @@ test.each([
   ],
 ])('client address: %s', async (_label, env, forwardedFor, expected) => {
   const { app } = await testApp({ env });
-  app.get('/ip', (request) => ({ ip: request.ip }));
+  app.get('/ip', PUBLIC_ROUTE, (request) => ({ ip: request.ip }));
   const response = await app.inject({ url: '/ip', headers: { 'x-forwarded-for': forwardedFor } });
   expect(response.json()).toEqual({ ip: expected });
 });

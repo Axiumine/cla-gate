@@ -4,7 +4,7 @@ import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
-import { testApp } from '../../test-support.ts';
+import { PUBLIC_ROUTE, testApp } from '../../test-support.ts';
 import { CSRF_EXEMPT, csrfProblem } from './csrf-routes.ts';
 
 // The route table of the real application (E10-S03): every route that is registered while the app is built, collected by
@@ -69,7 +69,7 @@ test('every route of the table that sets config.csrf is on the CSRF_EXEMPT list,
 test('every state-changing route of the table, a canary added here included, is exempt by list or refuses a request with no Origin', async () => {
   seen.length = 0;
   const { app } = await testApp({ env: AUTH_ENV });
-  app.post('/canary', () => 'reached');
+  app.post('/canary', PUBLIC_ROUTE, () => 'reached');
   const checked: string[] = [];
   for (const route of seen) {
     for (const method of methodsOf(route).filter(isMutating)) {
