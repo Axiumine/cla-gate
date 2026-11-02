@@ -39,6 +39,31 @@ export function markRepositoriesRemoved(
   });
 }
 
+/**
+ * Gives the installation's active repository the `fullName` GitHub shows now (a rename, or a new owner after a transfer)
+ * and nothing else: the row, its `enabled` flag, its document and everything that points at it stay. One conditional
+ * statement, so of two concurrent calls only the first changes the row. Runs in the caller's transaction, or on its own.
+ * @returns false when nothing changed: the name was already that one, or the installation has no active row for the id
+ * (unknown, removed, or stored under another installation, whose row is never touched).
+ */
+export async function renameActiveRepository(
+  db: Kysely<Database>,
+  installationId: number,
+  githubRepoId: GithubId,
+  fullName: string,
+): Promise<boolean> {
+  const row = await db
+    .updateTable('repositories')
+    .set({ full_name: fullName, updated_at: sql`now()` })
+    .where('installation_id', '=', installationId)
+    .where('github_repo_id', '=', githubRepoId)
+    .where('removed_at', 'is', null)
+    .where('full_name', '<>', fullName)
+    .returning('id')
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
 /** The repository stored for this installation that is not removed, or `null`: at most one row, never another tenant's. */
 export async function findActiveRepositoryByGithubId(
   db: Kysely<Database>,

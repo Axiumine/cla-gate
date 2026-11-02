@@ -105,6 +105,7 @@ test('a reconciliation that fails is logged as a warning and never rejects: the 
   const logs = captureLogs();
   const failing: InstallationSync = {
     syncInstallation: () => Promise.reject(new Error('not used')),
+    refreshRepositorySnapshot: () => Promise.reject(new Error('not used')),
     reconcileInstallations: () => Promise.reject(new Error('GitHub is unreachable')),
   };
   const logger = createLogger({ logLevel: 'info' }, logs.destination);

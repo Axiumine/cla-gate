@@ -3,18 +3,20 @@
 import type { Transaction } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import { markInstallationSynced } from './installation-queries.ts';
-import { auditRepositoryChanges } from './installation-sync-audit.ts';
 import type { SyncContext, SyncOutcome } from './installation-sync-model.ts';
 import type { GitHubRepository } from './ports/github.ts';
+import { auditRepositoryChanges } from './repository-audit.ts';
 import { listActiveRepositoryIds, markRepositoriesRemoved } from './repository-queries.ts';
+import { releaseTransferred } from './repository-transfer.ts';
 import { upsertRepositories } from './repository-upsert.ts';
 
 // The writes of the repository half of a sync (E05-S08), inside the caller's transaction.
 
 /**
  * Stores the listed repositories (new ones with `enabled = false`, known ones with a fresh `full_name`, removed ones
- * brought back), then marks the active ones that are no longer listed as removed. A repository that is active under another installation
- * makes the whole write fail with a unique violation and changes nothing (moving a repository between tenants is E05-S09).
+ * brought back), then marks the active ones that are no longer listed as removed. A listed repository that is still
+ * active under another installation of this server has been transferred here: that tenant's row is released first, in
+ * the same transaction (E05-S09), so this tenant's row can take its place. If the write fails, the release is undone too.
  */
 export async function reconcile(
   ctx: SyncContext,
@@ -24,8 +26,9 @@ export async function reconcile(
 ): Promise<SyncOutcome> {
   const snapshots = listed.map((repository) => ({ githubRepoId: repository.id, fullName: repository.fullName }));
   const now = ctx.clock.now();
-  const { added, renamed } = await upsertRepositories(trx, installationId, snapshots);
   const listedIds = new Set(snapshots.map((snapshot) => snapshot.githubRepoId));
+  await releaseTransferred(trx, installationId, [...listedIds], now);
+  const { added, renamed } = await upsertRepositories(trx, installationId, snapshots);
   const missing = (await listActiveRepositoryIds(trx, installationId)).filter(
     (githubRepoId) => !listedIds.has(githubRepoId),
   );

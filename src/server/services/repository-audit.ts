@@ -6,15 +6,25 @@ import type { Database } from '../adapters/db/schema.ts';
 import { appendAudit } from './audit.ts';
 import type { RepositoryChanges } from './repository-rows.ts';
 
-// The audit rows of the repository half of a sync (E05-S08): one per repository change, in the transaction that made it.
+// The audit rows of the repository changes (E05-S08, E05-S09): one per change, in the transaction that made it. The
+// subject is the GitHub repository id and no name is recorded, because names stay out of the audit log.
 
-/** The audit row of one repository change: the subject is the GitHub repository id, and no name is recorded. */
-function appendRepositoryAudit(
+/**
+ * Why a repository was removed, as `reason_code` records it.
+ * - `not_listed`: the sync (E05-S08) found it missing from GitHub's list for the installation.
+ * - `access_lost`: GitHub answered 404 or 403 when the snapshot was refreshed (E05-S09).
+ * - `transferred`: another installation lists it now (E05-S09); written under the tenant that lost it.
+ */
+export type RemovalReason = 'not_listed' | 'access_lost' | 'transferred';
+
+/** The audit row of one repository change. `reasonCode` is for a removal. */
+export function appendRepositoryAudit(
   trx: Transaction<Database>,
   entry: {
     readonly action: 'repository.added' | 'repository.renamed' | 'repository.removed';
     readonly installationId: number;
     readonly githubRepoId: GithubId;
+    readonly reasonCode?: RemovalReason;
   },
 ): Promise<void> {
   return appendAudit(trx, {
@@ -22,7 +32,7 @@ function appendRepositoryAudit(
     installationId: entry.installationId,
     actorGithubId: null,
     subject: { type: 'repository', id: entry.githubRepoId },
-    ...(entry.action === 'repository.removed' ? { metadata: { reason_code: 'not_listed' } } : {}),
+    ...(entry.reasonCode === undefined ? {} : { metadata: { reason_code: entry.reasonCode } }),
   });
 }
 
@@ -34,7 +44,11 @@ export async function auditRepositoryChanges(
   const rows = [
     ...changes.added.map((githubRepoId) => ({ action: 'repository.added' as const, githubRepoId })),
     ...changes.renamed.map((githubRepoId) => ({ action: 'repository.renamed' as const, githubRepoId })),
-    ...changes.removed.map((githubRepoId) => ({ action: 'repository.removed' as const, githubRepoId })),
+    ...changes.removed.map((githubRepoId) => ({
+      action: 'repository.removed' as const,
+      githubRepoId,
+      reasonCode: 'not_listed' as const,
+    })),
   ];
   for (const row of rows) {
     await appendRepositoryAudit(trx, { ...row, installationId });

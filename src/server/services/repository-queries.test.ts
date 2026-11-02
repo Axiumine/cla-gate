@@ -4,6 +4,7 @@ import { InsertQueryNode, type Kysely, type KyselyPlugin, ValuesNode } from 'kys
 import { expect, test } from 'vitest';
 import type { Database } from '../adapters/db/schema.ts';
 import { createInstallationStore } from './installation-store.ts';
+import { renameActiveRepository } from './repository-queries.ts';
 import { REPOSITORY_BATCH_SIZE } from './repository-rows.ts';
 import { listed, repoId, worldOfTwoTenants } from './store-fixture/test-support.ts';
 
@@ -222,4 +223,45 @@ test('a sync of A renames and removes only its own rows when both tenants hold r
     [10_002, 'org-1/repo-2', REMOVED_AT],
     [10_003, 'org-1/repo-3', null],
   ]);
+});
+
+// ------------------------------------------------------------------------------------------------------ renaming
+
+test('renaming gives the active repository its new name and changes no other column but the update time', async () => {
+  const { db, a } = await worldOfTwoTenants();
+  await db.updateTable('repositories').set({ enabled: true }).where('github_repo_id', '=', repoId(1, 1)).execute();
+  const [before] = await repositoriesOf(db, a.installation.id);
+  expect(await renameActiveRepository(db, a.installation.id, repoId(1, 1), 'new-owner/new-name')).toBe(true);
+  const [after] = await repositoriesOf(db, a.installation.id);
+  expect(after).toEqual({ ...before, full_name: 'new-owner/new-name', updated_at: after?.updated_at });
+});
+
+test('renaming to the name already stored, a removed repository or an unknown id changes nothing and says so', async () => {
+  const { db, store, a } = await worldOfTwoTenants();
+  await store.markRepositoriesRemoved(a.installation.id, [repoId(1, 2)], REMOVED_AT);
+  const before = await repositoriesOf(db, a.installation.id);
+  expect(await renameActiveRepository(db, a.installation.id, repoId(1, 1), 'org-1/repo-1')).toBe(false);
+  expect(await renameActiveRepository(db, a.installation.id, repoId(1, 2), 'org-1/elsewhere')).toBe(false);
+  expect(await renameActiveRepository(db, a.installation.id, repoId(1, 99), 'org-1/elsewhere')).toBe(false);
+  expect(await repositoriesOf(db, a.installation.id)).toEqual(before);
+});
+
+test('renaming with the id of A never renames a repository of B, whichever name it is given', async () => {
+  const { db, a, b } = await worldOfTwoTenants();
+  const before = await repositoriesOf(db, b.installation.id);
+  expect(await renameActiveRepository(db, a.installation.id, b.repoIds[0], 'org-1/taken-over')).toBe(false);
+  expect(await renameActiveRepository(db, a.installation.id, b.repoIds[0], 'org-2/repo-1')).toBe(false);
+  expect(await repositoriesOf(db, b.installation.id)).toEqual(before);
+});
+
+test('renaming inside the caller transaction commits or rolls back with it', async () => {
+  const { db, a } = await worldOfTwoTenants();
+  await db
+    .transaction()
+    .execute(async (trx) => {
+      expect(await renameActiveRepository(trx, a.installation.id, repoId(1, 1), 'org-1/rolled-back')).toBe(true);
+      throw new Error('stop');
+    })
+    .catch(() => undefined);
+  expect((await repositoriesOf(db, a.installation.id))[0]?.full_name).toBe('org-1/repo-1');
 });

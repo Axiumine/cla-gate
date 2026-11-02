@@ -7,6 +7,7 @@ import { createInstallationSync } from './installation-sync.ts';
 import { findActiveRepositoryByGithubId } from './repository-queries.ts';
 import {
   auditRows,
+  failRepositoryInsert,
   installationRows,
   OWNER,
   remoteInstallation,
@@ -86,24 +87,6 @@ test.each(CHANGES)('a sync of A after %s changes nothing of tenant B', async (_l
   expect(await tenantB(world)).toEqual(before);
 });
 
-test('a repository id in the listings of both tenants is stored once: the second sync fails and writes nothing', async () => {
-  const world = await syncWorld([OTHER_ACCOUNT]);
-  const shared = remoteRepository(300, 'acme/shared');
-  world.fake.addInstallation(remoteInstallation(11, OWNER), [...remoteRepositories(100, 2), shared]);
-  world.fake.addInstallation(remoteInstallation(12, OTHER_ACCOUNT), [...remoteRepositories(200, 2), shared]);
-  await world.sync.syncInstallation(id(11));
-  const rowsOfA = await repositoryRows(world.db);
-  await expect(world.sync.syncInstallation(id(12))).rejects.toMatchObject({ code: '23505' });
-  const a = await rowIdOf(world.db, 11);
-  const b = await rowIdOf(world.db, 12);
-  expect(rowsOfA).toHaveLength(3);
-  expect(rowsOfA.every((row) => row.installation_id === a)).toBe(true);
-  expect(await repositoryRows(world.db)).toEqual(rowsOfA);
-  expect((await auditRows(world.db)).filter((row) => row.installation_id === b).map((row) => row.action)).toEqual([
-    'installation.admitted',
-  ]);
-});
-
 test('once A no longer lists the shared repository, B stores it and the queries of each tenant see only their own row', async () => {
   const world = await syncWorld([OTHER_ACCOUNT]);
   const shared = remoteRepository(300, 'acme/shared');
@@ -153,12 +136,17 @@ test('a sync of 2,500 repositories writes them in batches of at most 500 rows', 
   expect(await repositoryRows(world.db)).toHaveLength(2500);
 });
 
-test('a conflict in the last batch of 2,500 repositories leaves the whole sync unwritten: it is one transaction', async () => {
-  const world = await syncWorld([OTHER_ACCOUNT]);
-  world.fake.addInstallation(remoteInstallation(12, OTHER_ACCOUNT), [remoteRepository(3499, 'acme/taken')]);
-  await world.sync.syncInstallation(id(12));
+test('a failure in the last batch of 2,500 repositories leaves the whole sync unwritten: it is one transaction', async () => {
+  const world = await syncWorld();
+  const sync = createInstallationSync({
+    db: world.db.withPlugin(failRepositoryInsert(5)),
+    github: world.fake,
+    admission: world.admissionFor([]),
+    clock: world.clock,
+    logger: world.logger,
+  });
   world.fake.addInstallation(remoteInstallation(11, OWNER), remoteRepositories(1000, 2500));
-  await expect(world.sync.syncInstallation(id(11))).rejects.toMatchObject({ code: '23505' });
+  await expect(sync.syncInstallation(id(11))).rejects.toThrow('disk full');
   const a = await rowIdOf(world.db, 11);
   expect((await repositoryRows(world.db)).filter((row) => row.installation_id === a)).toEqual([]);
   expect((await auditRows(world.db)).filter((row) => row.installation_id === a).map((row) => row.action)).toEqual([

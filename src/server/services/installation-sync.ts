@@ -11,6 +11,7 @@ import { syncRepositories } from './installation-sync-repositories.ts';
 import { syncInstallationState } from './installation-sync-state.ts';
 import type { Clock } from './ports/clock.ts';
 import type { GitHubClient } from './ports/github.ts';
+import { refreshRepositorySnapshot, type SnapshotOutcome } from './repository-refresh.ts';
 
 // Keeps the stored installations and their repositories in line with GitHub (E05-S08). GitHub is the truth: a sync takes
 // the installation id and fetches the state itself, so an event payload (E06) is never trusted for anything but the id.
@@ -28,7 +29,10 @@ export interface InstallationSync {
    * 5. An admitted, active installation has its repositories listed and reconciled in one transaction: new ones are
    *    inserted with `enabled = false` (`repository.added`), known ones get the name refreshed (`repository.renamed`
    *    when it changed), removed ones listed again are brought back (`repository.added`) and stored ones that are no
-   *    longer listed are marked removed (`repository.removed`). A listing that fails changes nothing.
+   *    longer listed are marked removed (`repository.removed`). A listed repository that is still active under another
+   *    installation of this server was transferred here: that row is first marked removed (`repository.removed`,
+   *    `transferred`, under the other tenant) in the same transaction, then this tenant gets its own new row, so the
+   *    order in which the two tenants sync does not matter (E05-S09). A listing that fails changes nothing.
    *
    * Idempotent: a second run over unchanged state writes no row and no audit entry. Steps 1 to 4 and step 5 are two
    * transactions, each under the installation's advisory lock, so concurrent runs take turns; the list is fetched
@@ -47,6 +51,15 @@ export interface InstallationSync {
    * @throws when GitHub's list of installations cannot be read (including `pagination_limit`): nothing is inferred then.
    */
   reconcileInstallations(): Promise<ReconcileOutcome>;
+  /**
+   * Re-fetches one repository of an installation and updates the stored snapshot (E05-S09): a new `full_name` after a
+   * rename or a transfer to another owner is stored and audited as `repository.renamed` (ids only, no name), and a 404
+   * or 403 from GitHub marks the repository removed (`repository.removed`, `access_lost`). Calling it again changes
+   * nothing. The evaluation job (E07-S04) calls it when the name it saw differs from the stored one, and the sweep
+   * (E07-S08) for the repositories it re-checks; every sync and reconciliation refreshes all names as well.
+   * @throws whatever the GitHub client throws, `InstallationNotAdmittedError` for an installation the instance does not serve included.
+   */
+  refreshRepositorySnapshot(githubInstallationId: GithubId, githubRepoId: GithubId): Promise<SnapshotOutcome>;
 }
 
 export interface InstallationSyncOptions {
@@ -58,8 +71,8 @@ export interface InstallationSyncOptions {
 }
 
 export function createInstallationSync(options: InstallationSyncOptions): InstallationSync {
-  const { db, github, logger } = options;
-  const ctx: SyncContext = { db, admission: options.admission, clock: options.clock, logger };
+  const { db, github, logger, clock } = options;
+  const ctx: SyncContext = { db, admission: options.admission, clock, logger };
   const syncInstallation: InstallationSync['syncInstallation'] = async (githubInstallationId) => {
     const remote = await github.getInstallation(githubInstallationId);
     const step = await syncInstallationState(ctx, githubInstallationId, remote);
@@ -74,5 +87,7 @@ export function createInstallationSync(options: InstallationSyncOptions): Instal
   return {
     syncInstallation,
     reconcileInstallations: () => reconcileInstallations({ db, github, logger, sync: syncInstallation }),
+    refreshRepositorySnapshot: (githubInstallationId, githubRepoId) =>
+      refreshRepositorySnapshot({ db, github, clock }, githubInstallationId, githubRepoId),
   };
 }

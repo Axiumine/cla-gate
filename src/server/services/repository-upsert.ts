@@ -16,7 +16,8 @@ import { storedStates, writeChanged } from './repository-statements.ts';
  * It does not serialise concurrent callers (the sync takes a per-installation lock, E05-S08): two that race may both
  * report the same id as added.
  * A repository that is active under another installation violates the partial unique index (`unique_violation`) and
- * changes nothing at all: moving a repository between tenants is the transfer rule of E05-S09, not an upsert.
+ * changes nothing at all: moving a repository between tenants is the transfer rule of E05-S09 (`releaseTransferred`, run
+ * by the sync before this), not an upsert.
  */
 export function upsertRepositories(
   db: Kysely<Database>,
