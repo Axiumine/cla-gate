@@ -58,6 +58,26 @@ test('every authenticated request touches the session, but the store writes at m
   expect((await touchedAt(db, alice.sessionId)).last_seen_at).toEqual(new Date('2026-11-02T10:02:02.000Z'));
 });
 
+test.each([['/healthz'], ['/readyz'], ['/api/nothing'], ['/webhooks/github'], ['/nothing-here']])(
+  'GET %s with a live session cookie costs no session lookup: a probe or a path no route answers needs no caller',
+  async (url) => {
+    const { app, login, queries } = await authWorld();
+    const alice = await login(1001);
+    queries.length = 0;
+    await app.inject({ url, headers: { cookie: alice.cookie } });
+    expect(queries).not.toContain('SelectQueryNode');
+    expect(queries).not.toContain('UpdateQueryNode');
+  },
+);
+
+test('GET /healthz answers while the database is down, even for a browser that sends its session cookie', async () => {
+  const { app, db, login } = await authWorld();
+  const alice = await login(1001);
+  await db.destroy();
+  const response = await app.inject({ url: '/healthz', headers: { cookie: alice.cookie } });
+  expect([response.statusCode, response.json()]).toEqual([200, { status: 'ok' }]);
+});
+
 test('a request for a path that is no API route still authenticates, so a probe route sees the caller', async () => {
   const { app, login } = await authWorld();
   const alice = await login(1001);

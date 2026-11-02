@@ -17,7 +17,7 @@ test.each([
   ['GET /api/auth/callback', { method: 'GET', url: '/api/auth/callback' }, 20],
   ['POST /api/auth/logout', { method: 'POST', url: '/api/auth/logout' }, 20],
   ['GET /api/auth/session', { method: 'GET', url: '/api/auth/session' }, 120],
-  ['GET /healthz (the global budget)', { method: 'GET', url: '/healthz' }, 600],
+  ['GET /probe/auth (the global budget)', { method: 'GET', url: '/probe/auth' }, 600],
 ] as const)('a request over the budget of %s is refused before the session lookup', async (_name, probe, budget) => {
   const { app, queries } = await authWorld();
   for (let sent = 0; sent < budget; sent++) {

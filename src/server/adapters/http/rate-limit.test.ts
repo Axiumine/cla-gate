@@ -114,14 +114,13 @@ test('a request that no route answers spends the global budget, and the 601st is
   expect((await app.inject('/healthz')).statusCode).toBe(429);
 });
 
-test('a limited request that no route answers never reaches the session lookup', async () => {
+test('a request that no route answers never reaches the session lookup, within its budget or over it', async () => {
   const { app, queries } = await authWorld();
+  const before = queries.length;
   const forged = { cookie: `${COOKIE_NAME}=${'A'.repeat(43)}` };
   for (let sent = 0; sent < 600; sent++) {
-    await app.inject({ url: '/no-such-page', headers: forged });
+    expect((await app.inject({ url: '/no-such-page', headers: forged })).statusCode).toBe(404);
   }
-  expect(queries.length).toBeGreaterThanOrEqual(600);
-  const before = queries.length;
   const limited = await app.inject({ url: '/no-such-page', headers: forged });
   expect(limited.statusCode).toBe(429);
   expect(queries).toHaveLength(before);
