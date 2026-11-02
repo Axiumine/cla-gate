@@ -4,9 +4,8 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { expect, test } from 'vitest';
-import { exists } from '../ci/lib/test-support.ts';
 import { makeRepo, tempDir } from '../code-caps/test-support.ts';
-import { SCRIPTS } from './test-support.ts';
+import { SCRIPTS, SEMGREP_BINARY } from './test-support.ts';
 
 // E20-S01: "any finding makes the command exit non-zero", shown with the real binary and the flags of the real `semgrep`
 // script, one local rule in place of the registry rule sets (so it needs no network). Skipped where Semgrep is not
@@ -15,10 +14,7 @@ import { SCRIPTS } from './test-support.ts';
 const RULE =
   'rules:\n- id: demo.forbidden-call\n  pattern: forbidden()\n  message: demo\n  languages: [typescript]\n  severity: ERROR\n';
 
-const binary = (process.env['PATH'] ?? '')
-  .split(path.delimiter)
-  .map((directory) => path.join(directory, 'semgrep'))
-  .find(exists);
+const binary = SEMGREP_BINARY;
 
 /** Runs `yarn semgrep`'s own flags over a directory that holds `source`. */
 function scan(source: string) {

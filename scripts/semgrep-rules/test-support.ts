@@ -4,9 +4,10 @@
 // Test helpers for E20-S01: a fake `fetch`, and the repository's own configuration files read and parsed once.
 import fs from 'node:fs';
 import path from 'node:path';
+import process from 'node:process';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { readText } from '../ci/lib/test-support.ts';
+import { exists, readText } from '../ci/lib/test-support.ts';
 import { compareNames } from '../code-caps/types.ts';
 import type { FetchLike } from './download.ts';
 
@@ -36,6 +37,12 @@ export function perRuleset(responses: Readonly<Record<string, Response | Error>>
 }
 
 export const ROOT = path.resolve(import.meta.dirname, '../..');
+
+/** The `semgrep` executable on the PATH of this process, or undefined where it is not installed. */
+export const SEMGREP_BINARY = String(process.env['PATH'])
+  .split(path.delimiter)
+  .map((directory) => path.join(directory, 'semgrep'))
+  .find(exists);
 
 /** The names in a directory, in code point order. */
 export function listDir(directory: string): string[] {
