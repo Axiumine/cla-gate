@@ -10,6 +10,7 @@ import type { Clock } from '../../services/ports/clock.ts';
 import { AppError, rejectRequest } from './errors.ts';
 import { WEBHOOK_BODY_LIMIT } from './limits.ts';
 import { readEnvelope } from './webhook-envelope.ts';
+import { checkPayload } from './webhook-payload.ts';
 import { matchWebhookSignature, type WebhookSecrets } from './webhook-signature.ts';
 
 export interface WebhookRoutesOptions {
@@ -95,10 +96,10 @@ function signatureHook(options: WebhookRoutesOptions) {
  * The plugin owns an encapsulated scope, which is how `fastify-raw-body` applies to this route only: the plugin keeps
  * the bytes GitHub sent (`encoding: false`, a Buffer; `global: false`, and only a route with `config.rawBody`), and the
  * scope has no content type parser that reads the body: every media type reaches the route as bytes, whatever its
- * `Content-Type`. The checks run in a fixed order (E06-S02): the body size (`413`, by the route's own limit, before
- * any hook), the signature in `preValidation` (`401`, the first hook after the body is read), then in the handler the
- * headers (`400`), the media type (`415`) and the JSON (`400`). Nothing parses a body whose signature is wrong (an
- * unsigned request with broken JSON or a form body is a `401`, never a `400` or `415`).
+ * `Content-Type`. The checks run in a fixed order (E06-S02, E06-S03): the body size (`413`, by the route's own limit,
+ * before any hook), the signature in `preValidation` (`401`, the first hook after the body is read), then in the handler
+ * the headers (`400`), the media type (`415`), the JSON (`400`) and the schema of the event (`400`). Nothing parses a
+ * body whose signature is wrong (an unsigned request with broken JSON or a form body is a `401`, never a `400` or `415`).
  */
 export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async (app, options) => {
   const contentTypes = holdContentType(app);
@@ -122,11 +123,11 @@ export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async 
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
       schema: { response: { 200: verifiedSchema } },
     },
-    // The end of the chain so far: the event schemas (S03) and the rest come after the envelope, so a delivery that
+    // The end of the chain so far: the routing table (S04) and the rest come after the event schema, so a delivery that
     // passes it is acknowledged here and nothing more is done with it yet.
     (request): z.infer<typeof verifiedSchema> => {
       const headers = { ...request.headers, 'content-type': contentTypes.get(request.raw) };
-      readEnvelope(headers, rawBodyOf(request), options.appId);
+      checkPayload(readEnvelope(headers, rawBodyOf(request), options.appId), request.log);
       return { status: 'verified' };
     },
   );

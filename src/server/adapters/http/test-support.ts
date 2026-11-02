@@ -6,6 +6,7 @@ import { onTestFinished, vi } from 'vitest';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import { type TestAppOptions, testApp, UNREACHABLE_DATABASE_URL } from '../../test-support.ts';
 import { createPgDatabase } from '../db/pg.ts';
+import { readEnvelope, type WebhookEnvelope } from './webhook-envelope.ts';
 
 /**
  * The real app on a database that is never queried: the webhook route reads none before S06, so a test of it need not
@@ -77,7 +78,8 @@ export function deliveryHeaders(
   const merged: Record<string, string | undefined> = {
     'content-type': 'application/json',
     'x-hub-signature-256': options.signature ?? sign(options.secret ?? SECRET_CURRENT, body),
-    'x-github-event': 'pull_request',
+    // `ping` has no payload schema (E06-S03), so a test that is about the envelope may send any JSON object.
+    'x-github-event': 'ping',
     'x-github-delivery': DELIVERY_ID,
     ...options.headers,
   };
@@ -86,8 +88,34 @@ export function deliveryHeaders(
   );
 }
 
+/** What `run` throws, or `undefined` when it returns: for the tests that look at the error itself. */
+export function thrownBy(run: () => unknown): unknown {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
+/** What a payload that fails its schema is refused with (E06-S03): a `400` whose details are the failed `paths`. */
+export function payloadInvalid(paths: readonly string[]) {
+  return { status: 400, code: 'webhook_payload_invalid', details: { paths } };
+}
+
+/** A logger for the code that is given one: it keeps the calls to `info`. */
+export function recordingLog() {
+  return { info: vi.fn<(fields: unknown, message?: string) => void>() };
+}
+
+/** The envelope of a delivery of `event` with `body`, as the route has it once the checks of E06-S02 passed: for the tests of what comes after them. */
+export function envelopeOf(event: string, body: Buffer | string): WebhookEnvelope {
+  const headers = { 'x-github-event': event, 'x-github-delivery': DELIVERY_ID, 'content-type': 'application/json' };
+  return readEnvelope(headers, Buffer.from(body), undefined);
+}
+
 /** The header lines of a raw HTTP request that carry the event and the delivery id, for tests that write the request by hand. */
-export const GITHUB_HEADER_LINES = ['X-GitHub-Event: pull_request', `X-GitHub-Delivery: ${DELIVERY_ID}`] as const;
+export const GITHUB_HEADER_LINES = ['X-GitHub-Event: ping', `X-GitHub-Delivery: ${DELIVERY_ID}`] as const;
 
 /**
  * A whole HTTP/1.1 `POST` to the webhook route as text, for {@link sendRaw}: `headerLines` are written as they are (so a
