@@ -5,10 +5,13 @@ import type { FastifyInstance } from 'fastify';
 import type { Kysely } from 'kysely';
 import { onTestFinished, vi } from 'vitest';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
+import { buildApp } from '../../app.ts';
+import { createJobsTable, fakeEnqueuer, switchableEnqueuer } from '../../services/jobs-fixture/test-support.ts';
 import { tenantDatabase } from '../../services/tenant-fixture/test-support.ts';
-import { type TestAppOptions, testApp, UNREACHABLE_DATABASE_URL } from '../../test-support.ts';
+import { captureLogs, type TestAppOptions, testApp, testConfig, UNREACHABLE_DATABASE_URL } from '../../test-support.ts';
 import { createPgDatabase } from '../db/pg.ts';
 import type { Database } from '../db/schema.ts';
+import { createLogger } from './logger.ts';
 import { readEnvelope, type WebhookEnvelope } from './webhook-envelope.ts';
 
 /** A database handle that never reaches a server (nothing connects until a query runs, and then it is refused). The caller closes it. */
@@ -28,9 +31,31 @@ export function webhookTestApp(options: Omit<TestAppOptions, 'db'> = {}) {
 /**
  * {@link webhookTestApp} over a database that holds the tenants of the tenant filter (E06-S05), for the deliveries that
  * name one: the admitted one is the tenant of the webhook fixtures, so an unchanged fixture is a delivery the instance serves.
+ * A delivery that starts a job is recorded and its job sent (E06-S06) to the fake enqueuer, which writes into a test table
+ * of the same database (`sentJobs` reads it) and is returned with the app.
  */
-export async function tenantWebhookApp(options: Omit<TestAppOptions, 'db'> = {}) {
-  return testApp({ ...options, db: await tenantDatabase() });
+export async function tenantWebhookApp(options: Omit<TestAppOptions, 'db' | 'enqueuer'> = {}) {
+  const db = await tenantDatabase();
+  await createJobsTable(db);
+  const enqueuer = fakeEnqueuer(options.clock);
+  return { ...(await testApp({ ...options, db, enqueuer })), enqueuer };
+}
+
+/**
+ * {@link tenantWebhookApp} for a test file whose tests share one app: a database with the tenants costs seconds to build.
+ * The app is not closed after each test as {@link testApp}'s is: the file closes it in `afterAll`, and clears what the
+ * tests recorded (`clearRecords`) between them. `failSends(error)` makes the queue fail after each send until it is
+ * called with `undefined`; `enqueuer` is the fake behind it, which records the calls.
+ */
+export async function sharedTenantWebhookApp(env: Readonly<Record<string, string>>) {
+  const db = await tenantDatabase();
+  await createJobsTable(db);
+  const enqueuer = fakeEnqueuer();
+  const queue = switchableEnqueuer(enqueuer);
+  const config = testConfig(env);
+  const logs = captureLogs();
+  const app = await buildApp({ config, db, logger: createLogger(config, logs.destination), enqueuer: queue });
+  return { app, db, enqueuer, logs, failSends: queue.failWith };
 }
 
 /** GitHub's documented example for `X-Hub-Signature-256` (the secret, the payload and the header it yields). */

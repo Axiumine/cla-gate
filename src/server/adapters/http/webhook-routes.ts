@@ -6,20 +6,25 @@ import fastifyRawBody from 'fastify-raw-body';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
+import type { JobEnqueuer } from '../../services/ports/jobs.ts';
 import { createTenantFilter } from '../../services/tenant-filter.ts';
+import { createWebhookDeliveries } from '../../services/webhook-deliveries.ts';
 import type { Database } from '../db/schema.ts';
 import { AppError, rejectRequest } from './errors.ts';
 import { WEBHOOK_BODY_LIMIT } from './limits.ts';
 import { answerFor, routeDelivery, webhookResponseSchemas } from './webhook-answer.ts';
 import { readEnvelope } from './webhook-envelope.ts';
 import { checkPayload } from './webhook-payload.ts';
+import { recordingOf } from './webhook-record.ts';
 import { rawBodyOf, type SignatureHookOptions, signatureHook } from './webhook-signature-hook.ts';
 
 export interface WebhookRoutesOptions extends SignatureHookOptions {
   /** `GITHUB_APP_ID`: the App a delivery that names its target must have been sent for (E06-S02). */
   readonly appId: string | undefined;
-  /** What the tenant filter reads the stored installations and repositories from (E06-S05). Not closed by the route. */
+  /** What the tenant filter reads the stored installations and repositories from (E06-S05), and the deliveries are recorded in (E06-S06). Not closed by the route. */
   readonly db: Kysely<Database>;
+  /** Where the job of a delivery is sent, in the transaction that records the delivery (E06-S06). */
+  readonly enqueuer: JobEnqueuer;
 }
 
 /**
@@ -45,8 +50,8 @@ function isBodyTooLarge(error: unknown): boolean {
 
 /**
  * `POST /webhooks/github`, the one route GitHub calls (E06-S01). It sits outside `/api`, so the route audit guard
- * (`requireAuditedRoutes`) does not apply: the route itself mutates nothing audited, and the lifecycle handlers it will
- * hand deliveries to record their own audit rows. It still declares `auditExempt: 'webhook'`, so it stays valid if the
+ * (`requireAuditedRoutes`) does not apply: the route itself mutates nothing audited (the delivery it records is operational
+ * state, not an audit row), and the lifecycle handlers it hands deliveries to record their own audit rows. It still declares `auditExempt: 'webhook'`, so it stays valid if the
  * path ever moves under `/api`. It has no session, cookie, CSRF or `Origin` dependency: the HMAC is the only credential.
  *
  * The plugin owns an encapsulated scope, which is how `fastify-raw-body` applies to this route only: the plugin keeps
@@ -59,11 +64,14 @@ function isBodyTooLarge(error: unknown): boolean {
  * Only then does the routing table (E06-S04) decide what the delivery is: a ping is answered, one that maps to no job is
  * a `202` `ignored` with the reason, and one that maps to a job is judged by the tenant filter (E06-S05), which reads the
  * stored installation (a database read, never a GitHub call) and turns away a delivery of an installation the instance
- * does not serve. What survives is acknowledged until it is recorded and enqueued (E06-S06).
+ * does not serve. What survives is recorded and its job sent in one transaction (E06-S06): `202` `accepted` for a delivery
+ * recorded now, `200` `duplicate` for one recorded before, `503` `webhook_enqueue_failed` when the transaction failed
+ * (nothing is kept, so a redelivery works). A ping and an ignored delivery record nothing.
  */
 export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async (app, options) => {
   const contentTypes = holdContentType(app);
   const tenants = createTenantFilter({ db: options.db, clock: options.clock });
+  const deliveries = createWebhookDeliveries({ db: options.db, enqueuer: options.enqueuer });
   // The scope's parsers are replaced, not extended: the default JSON and text parsers would read the body before the hook.
   app.removeAllContentTypeParsers();
   app.addContentTypeParser('*', { parseAs: 'buffer' }, (_request, _body, done) => {
@@ -84,15 +92,15 @@ export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async 
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
       schema: { response: webhookResponseSchemas },
     },
-    // The end of the chain so far: the routing table (E06-S04) decides what the delivery is and the tenant filter
-    // (E06-S05) whether its installation is served. The recording and the enqueue (E06-S06) come after them, so a
-    // delivery that becomes a job is acknowledged here and nothing more is done yet.
+    // The end of the chain: the routing table (E06-S04) decides what the delivery is, the tenant filter (E06-S05)
+    // whether its installation is served, and what survives is recorded with its job in one transaction (E06-S06).
     async (request, reply) => {
       const headers = { ...request.headers, 'content-type': contentTypes.get(request.raw) };
       const envelope = readEnvelope(headers, rawBodyOf(request), options.appId);
       const delivery = checkPayload(envelope, request.log);
       const routing = routeDelivery(envelope, delivery, options.appId);
-      const answer = answerFor(await tenants.admit(routing, request.log));
+      const admitted = await tenants.admit(routing, request.log);
+      const answer = await answerFor(admitted, recordingOf(deliveries, envelope, delivery, request.log));
       reply.code(answer.statusCode);
       return answer.body;
     },

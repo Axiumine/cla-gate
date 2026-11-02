@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { randomUUID } from 'node:crypto';
 import { expect, test, vi } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
+import { createJobsTable, fakeEnqueuer } from '../../services/jobs-fixture/test-support.ts';
 import {
   countingDatabase,
   TENANT,
@@ -28,16 +30,20 @@ const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_APP_ID: String(FIXTU
 const CANARY = 'canary-value-8e1f5b2a';
 const MINUTE = 60_000;
 
-/** The app over the tenants, with the statements it sends counted. */
+/** The app over the tenants, with the statements it sends counted. A job it starts goes to the fake enqueuer (E06-S06). */
 async function countedApp(options: { readonly clock?: FakeClock } = {}) {
   const counted = countingDatabase(await tenantDatabase());
-  const running = await testApp({ env: ENV, db: counted.db, ...options });
+  await createJobsTable(counted.db);
+  counted.statements.length = 0;
+  const running = await testApp({ env: ENV, db: counted.db, enqueuer: fakeEnqueuer(), ...options });
   return { ...running, statements: counted.statements };
 }
 
+/** Every delivery has an id of its own: the app records the deliveries it accepts, and a repeated id is a duplicate. */
 function deliver(app: Awaited<ReturnType<typeof testApp>>['app'], event: string, body: string | object) {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
-  return postDelivery(app, text, deliveryHeaders(text, { headers: { 'x-github-event': event } }));
+  const headers = { 'x-github-event': event, 'x-github-delivery': randomUUID() };
+  return postDelivery(app, text, deliveryHeaders(text, { headers }));
 }
 
 const TENANT_EVENTS: readonly WebhookEvent[] = ['pull_request', 'check_run', 'check_suite', 'issue_comment'];

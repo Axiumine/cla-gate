@@ -12,13 +12,13 @@ import {
 import { deliveryHeaders, postDelivery, SECRET_CURRENT, tenantWebhookApp, webhookTestApp } from './test-support.ts';
 
 // The routing table (E06-S04) over the real route: what a signed delivery of each event is answered with. A delivery
-// that becomes a job is acknowledged with 200 `verified` until it is recorded and enqueued (E06-S06); one that does not
-// is a 202 `ignored` with the reason; a ping is a 200 `pong`.
+// that becomes a job is recorded and its job sent (E06-S06) and answered 202 `accepted`; one that does not is a 202
+// `ignored` with the reason; a ping is a 200 `pong`.
 
 const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_APP_ID: String(FIXTURE_IDS.app) };
 const CANARY = 'canary-value-8e1f5b2a';
 
-const VERIFIED = { status: 'verified' };
+const ACCEPTED = { status: 'accepted' };
 const ignored = (reason: string) => ({ status: 'ignored', reason });
 
 function deliver(app: Awaited<ReturnType<typeof webhookTestApp>>['app'], event: string, body: unknown) {
@@ -42,15 +42,15 @@ const ROWS: readonly Row[] = [
     title: 'a pull request opened',
     event: 'pull_request',
     payload: fixture('pull_request'),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'a pull request closed',
     event: 'pull_request',
     payload: fixture('pull_request', ['action', 'closed']),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'a pull request labeled',
@@ -63,8 +63,8 @@ const ROWS: readonly Row[] = [
     title: 'a check run re-requested',
     event: 'check_run',
     payload: fixture('check_run'),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'a check run completed',
@@ -91,8 +91,8 @@ const ROWS: readonly Row[] = [
     title: 'a check suite re-requested',
     event: 'check_suite',
     payload: fixture('check_suite'),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'a check suite of another App',
@@ -105,8 +105,8 @@ const ROWS: readonly Row[] = [
     title: 'a /recheck comment',
     event: 'issue_comment',
     payload: fixture('issue_comment'),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'a comment without the command',
@@ -140,29 +140,29 @@ const ROWS: readonly Row[] = [
     title: 'an installation created',
     event: 'installation',
     payload: fixture('installation'),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'an installation action GitHub adds later',
     event: 'installation',
     payload: fixture('installation', ['action', 'a_new_action']),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'repositories added to an installation',
     event: 'installation_repositories',
     payload: fixture('installation_repositories'),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'an authorisation revoked',
     event: 'github_app_authorization',
     payload: fixture('github_app_authorization'),
-    statusCode: 200,
-    body: VERIFIED,
+    statusCode: 202,
+    body: ACCEPTED,
   },
   {
     title: 'an authorisation of another action',
@@ -174,15 +174,12 @@ const ROWS: readonly Row[] = [
 ];
 
 /**
- * The events whose job is about a tenant's repository, the ones the tenant filter (E06-S05) reads the database for. A
- * delivery of any other event, or one that is ignored or answered before the filter, reads none: its app has a database
- * that refuses every connection, so a read would fail the row.
+ * A delivery that becomes a job reads the tenant (E06-S05) and is recorded (E06-S06), so its app has the database of
+ * the tenants. One that is ignored or answered before that has a database that refuses every connection, so a read or
+ * a write would fail the row.
  */
-const TENANT_EVENTS: readonly WebhookEvent[] = ['pull_request', 'check_run', 'check_suite', 'issue_comment'];
-
 test.each(ROWS)('$title is answered $statusCode', async ({ event, payload, statusCode, body }) => {
-  const reachesFilter = statusCode === 200 && TENANT_EVENTS.includes(event);
-  const { app } = await (reachesFilter ? tenantWebhookApp : webhookTestApp)({ env: ENV });
+  const { app } = await (body === ACCEPTED ? tenantWebhookApp : webhookTestApp)({ env: ENV });
   const response = await deliver(app, event, payload);
   expect(response.statusCode).toBe(statusCode);
   expect(response.json()).toEqual(body);
@@ -200,7 +197,7 @@ test('with no GITHUB_APP_ID configured no check is ours, and the other events ar
   const { app } = await tenantWebhookApp({ env: { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT } });
   expect((await deliver(app, 'check_run', webhookFixture('check_run'))).json()).toEqual(ignored('foreign_check'));
   expect((await deliver(app, 'check_suite', webhookFixture('check_suite'))).json()).toEqual(ignored('foreign_check'));
-  expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).json()).toEqual(VERIFIED);
+  expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).json()).toEqual(ACCEPTED);
 });
 
 test.each(['push', 'repository', 'merge_group', 'issues', 'workflow_run', 'constructor', '__proto__'])(
@@ -256,5 +253,5 @@ test('the answer holds constants of the server only: not the action, the event, 
 test('an ignored delivery leaves the app serving: the next delivery is routed', async () => {
   const { app } = await tenantWebhookApp({ env: ENV });
   expect((await deliver(app, 'push', { ref: 'refs/heads/main' })).statusCode).toBe(202);
-  expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).statusCode).toBe(200);
+  expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).statusCode).toBe(202);
 });

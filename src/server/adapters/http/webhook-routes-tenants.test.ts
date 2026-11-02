@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Kysely } from 'kysely';
 import { afterAll, expect, test } from 'vitest';
 import { buildApp } from '../../app.ts';
+import { createJobsTable, fakeEnqueuer } from '../../services/jobs-fixture/test-support.ts';
 import { createTenantFilter } from '../../services/tenant-filter.ts';
 import {
   countingDatabase,
@@ -22,7 +24,9 @@ import { routeDelivery } from './webhook-answer.ts';
 
 // The tenant and admission filter (E06-S05) over the real route: what a signed delivery of each event is answered with
 // when the installation it names is admitted, rejected, suspended, deleted, unknown, or holds a repository that is stored
-// under another. One app, one database and one statement counter serve the file: nothing here writes.
+// under another. One app, one database and one statement counter serve the file. A delivery that starts a job is recorded
+// and its job sent (E06-S06), so every delivery here has an id of its own and the statement counts include the insert
+// of the delivery and the send of the job.
 
 const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_APP_ID: String(FIXTURE_IDS.app) };
 
@@ -41,10 +45,12 @@ afterAll(async () => {
 async function start(): Promise<Running> {
   const config = testConfig(ENV);
   const counted = countingDatabase(await tenantDatabase());
+  await createJobsTable(counted.db);
   const app = await buildApp({
     config,
     db: counted.db,
     logger: createLogger(config, captureLogs().destination),
+    enqueuer: fakeEnqueuer(),
   });
   return { app, db: counted.db, statements: counted.statements };
 }
@@ -59,7 +65,8 @@ async function server(): Promise<Running> {
 
 function deliver(app: FastifyInstance, event: string, body: unknown) {
   const text = JSON.stringify(body);
-  return postDelivery(app, text, deliveryHeaders(text, { headers: { 'x-github-event': event } }));
+  const headers = { 'x-github-event': event, 'x-github-delivery': randomUUID() };
+  return postDelivery(app, text, deliveryHeaders(text, { headers }));
 }
 
 /** The fixture of `event` as it would be sent for the installation and the repository with these ids. */
@@ -71,32 +78,34 @@ function payloadFor(event: WebhookEvent, ids: { readonly installation: number; r
   );
 }
 
-const VERIFIED = { statusCode: 200, body: { status: 'verified' } };
+const ACCEPTED = { statusCode: 202, body: { status: 'accepted' } };
 const ignored = (reason: string) => ({ statusCode: 202, body: { status: 'ignored', reason } });
 
 const STATES = [
-  { tenant: 'admitted', ids: TENANT.admitted, ...VERIFIED, statements: 2 },
+  // The two reads of the filter, the insert of the delivery and the send of its job.
+  { tenant: 'admitted', ids: TENANT.admitted, ...ACCEPTED, statements: 4 },
   {
     tenant: 'admitted, repository not stored yet',
     ids: { ...TENANT.admitted, repository: UNSTORED_REPOSITORY },
-    ...VERIFIED,
-    statements: 2,
+    ...ACCEPTED,
+    statements: 4,
   },
   { tenant: 'rejected', ids: TENANT.rejected, ...ignored('installation_not_admitted'), statements: 1 },
   { tenant: 'suspended', ids: TENANT.suspended, ...ignored('installation_suspended'), statements: 1 },
   { tenant: 'deleted', ids: TENANT.deleted, ...ignored('installation_deleted'), statements: 1 },
-  { tenant: 'unknown', ids: TENANT.unknown, ...ignored('installation_unknown'), statements: 1 },
+  // The sync that replaces the delivery is recorded and sent: the read of the installation, the insert and the send.
+  { tenant: 'unknown', ids: TENANT.unknown, ...ignored('installation_unknown'), statements: 3 },
   {
     tenant: 'A with a repository stored under B',
     ids: { installation: TENANT.admitted.installation, repository: TENANT.other.repository },
     ...ignored('repository_installation_mismatch'),
-    statements: 2,
+    statements: 4,
   },
   {
     tenant: 'B with a repository stored under A',
     ids: { installation: TENANT.other.installation, repository: TENANT.admitted.repository },
     ...ignored('repository_installation_mismatch'),
-    statements: 2,
+    statements: 4,
   },
 ] as const;
 
@@ -123,7 +132,7 @@ const LIFECYCLE: readonly (readonly [WebhookEvent, string])[] = [
 ];
 
 test.each(LIFECYCLE)(
-  'the lifecycle event %s %s of a rejected account is not filtered: it reaches the sync and reads nothing',
+  'the lifecycle event %s %s of a rejected account is not filtered: it is recorded and sent as a sync, and reads nothing',
   async (event, action) => {
     const { app, statements } = await server();
     const payload = withValue(
@@ -132,9 +141,9 @@ test.each(LIFECYCLE)(
       TENANT.rejected.installation,
     );
     const response = await deliver(app, event, payload);
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'verified' });
-    expect(statements).toEqual([]);
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ status: 'accepted' });
+    expect(statements).toEqual(['InsertQueryNode', 'RawNode']);
   },
 );
 
@@ -166,8 +175,8 @@ test.each(LIFECYCLE)(
 test('an authorisation revoked names no installation, so it is not filtered', async () => {
   const { app, statements } = await server();
   const response = await deliver(app, 'github_app_authorization', webhookFixture('github_app_authorization'));
-  expect(response.json()).toEqual({ status: 'verified' });
-  expect(statements).toEqual([]);
+  expect(response.json()).toEqual({ status: 'accepted' });
+  expect(statements).toEqual(['InsertQueryNode', 'RawNode']);
 });
 
 test('a ping, an unsubscribed event and an ignored action are answered without a read', async () => {

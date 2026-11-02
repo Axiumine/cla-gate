@@ -41,11 +41,11 @@ const EVENTS: readonly WebhookEvent[] = [
   'github_app_authorization',
 ];
 
-test.each(EVENTS)('a signed %s delivery that fits its schema is acknowledged', async (event) => {
+test.each(EVENTS)('a signed %s delivery that fits its schema is accepted', async (event) => {
   const { app, logs } = await tenantWebhookApp({ env: ENV });
   const response = await deliver(app, event, webhookFixture(event));
-  expect(response.statusCode).toBe(200);
-  expect(response.json()).toEqual({ status: 'verified' });
+  expect(response.statusCode).toBe(202);
+  expect(response.json()).toEqual({ status: 'accepted' });
   expect(logs.text()).not.toContain('webhook.payload_invalid');
 });
 
@@ -144,7 +144,7 @@ test.each([
   },
 );
 
-test('a payload with __proto__ keys is acknowledged and leaves Object.prototype alone', async () => {
+test('a payload with __proto__ keys is accepted and leaves Object.prototype alone', async () => {
   const { app } = await tenantWebhookApp({ env: ENV });
   const before = prototypeNames();
   const body = JSON.stringify(webhookFixture('pull_request')).replace(
@@ -152,7 +152,7 @@ test('a payload with __proto__ keys is acknowledged and leaves Object.prototype 
     '"__proto__":{"polluted":true},"installation":{"__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},',
   );
   const response = await deliver(app, 'pull_request', body);
-  expect(response.statusCode).toBe(200);
+  expect(response.statusCode).toBe(202);
   expect(Reflect.get({}, 'polluted')).toBeUndefined();
   expect(prototypeNames()).toEqual(before);
 });
@@ -185,5 +185,5 @@ test('a schema that throws something that is not a validation failure is a 500, 
   expect(logs.lines().find((line) => line['msg'] === 'unhandled error')).toBeDefined();
   expect(logs.text()).not.toContain(CANARY);
   expect(logs.text()).not.toContain('fixture-');
-  expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).statusCode).toBe(200);
+  expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).statusCode).toBe(202);
 });

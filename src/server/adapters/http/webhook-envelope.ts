@@ -2,14 +2,15 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { IncomingHttpHeaders } from 'node:http';
 import { z } from 'zod';
+import { type DeliveryId, deliveryIdSchema } from '../../domain/delivery-id.ts';
 import { AppError } from './errors.ts';
 
 /** A delivery that passed the envelope checks: what the headers say, and the body as a JSON object. */
 export interface WebhookEnvelope {
   /** The `X-GitHub-Event` header: lower-case letters and underscores, 64 characters at most. */
   readonly event: string;
-  /** The `X-GitHub-Delivery` header, a UUID in lower case, the key a delivery is recorded under. */
-  readonly deliveryId: string;
+  /** The `X-GitHub-Delivery` header, a UUID in lower case, the key a delivery is recorded under (E06-S06). */
+  readonly deliveryId: DeliveryId;
   /** The parsed body, still unchecked: the event schemas (E06-S03) decide what is in it. */
   readonly payload: Record<string, unknown>;
 }
@@ -19,9 +20,6 @@ const eventHeader = z
   .string()
   .max(64)
   .regex(/^[a-z_]+$/);
-
-/** A UUID in any version, as GitHub writes it; stored lower-case so one delivery never has two keys. */
-const deliveryHeader = z.guid().transform((id) => id.toLowerCase());
 
 const WRONG_APP_HINT =
   'This delivery was sent for another GitHub App: the webhook secret is shared with it. Give each App its own secret.';
@@ -41,7 +39,7 @@ function readDeliveryHeaders(headers: IncomingHttpHeaders): Pick<WebhookEnvelope
   if (!event.success) {
     throw invalidHeader('X-GitHub-Event');
   }
-  const deliveryId = deliveryHeader.safeParse(headers['x-github-delivery']);
+  const deliveryId = deliveryIdSchema.safeParse(headers['x-github-delivery']);
   if (!deliveryId.success) {
     throw invalidHeader('X-GitHub-Delivery');
   }

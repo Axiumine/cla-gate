@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
+import { notWiredEnqueuer } from '../../services/jobs-not-wired.ts';
 import { systemClock } from '../../services/ports/clock.ts';
 import { FakeClock } from '../../services/test-support.ts';
 import { auditProblem } from './audit-routes.ts';
@@ -253,6 +254,7 @@ test('the route sits outside /api, so the audit guard does not apply, and it dec
     clock: systemClock,
     appId: undefined,
     db,
+    enqueuer: notWiredEnqueuer,
   });
   expect(declared).toHaveLength(1);
   expect(declared[0]).toMatchObject({

@@ -59,7 +59,7 @@ function installationOf(ids: TenantIds, overrides: Partial<InstallationUpsert>):
 }
 
 /** Stores the five tenants of {@link TENANT} with one repository each, enforcement off, as the sync (E05-S08) leaves them. */
-async function seedTenants(db: Kysely<Database>): Promise<void> {
+export async function seedTenants(db: Kysely<Database>): Promise<void> {
   const store = createInstallationStore(db);
   const stored: readonly [TenantIds, Partial<InstallationUpsert>][] = [
     [TENANT.admitted, {}],

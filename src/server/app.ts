@@ -16,7 +16,9 @@ import { securityHeaders } from './adapters/http/security.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import { webhookRoutes } from './adapters/http/webhook-routes.ts';
 import type { AppConfig } from './config/env.ts';
+import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
+import type { JobEnqueuer } from './services/ports/jobs.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
 
@@ -29,6 +31,8 @@ export interface AppOptions {
   readonly readinessTimeoutMs?: number;
   /** Where the webhook route takes its time from (E06-S01). Defaults to the wall clock. */
   readonly clock?: Clock;
+  /** Where the webhook route sends the job of a delivery (E06-S06). Defaults to one that fails every send until the queue is wired (E07-S01). */
+  readonly enqueuer?: JobEnqueuer;
 }
 
 /**
@@ -69,6 +73,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     clock: options.clock ?? systemClock,
     appId: config.github.appId,
     db,
+    enqueuer: options.enqueuer ?? notWiredEnqueuer,
   });
 
   app.addHook('onClose', async () => {

@@ -14,6 +14,7 @@ import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
 import type { Clock } from './services/ports/clock.ts';
+import type { JobEnqueuer } from './services/ports/jobs.ts';
 
 const LogLine = z.record(z.string(), z.unknown());
 
@@ -70,6 +71,8 @@ export interface TestAppOptions {
   readonly readinessTimeoutMs?: number;
   /** Defaults to the wall clock. */
   readonly clock?: Clock;
+  /** Where the webhook route sends a job (E06-S06). Defaults to the app's own, which fails every send. */
+  readonly enqueuer?: JobEnqueuer;
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */
@@ -83,6 +86,7 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
     logger: createLogger(config, logs.destination),
     ...(options.readinessTimeoutMs === undefined ? {} : { readinessTimeoutMs: options.readinessTimeoutMs }),
     ...(options.clock === undefined ? {} : { clock: options.clock }),
+    ...(options.enqueuer === undefined ? {} : { enqueuer: options.enqueuer }),
   });
   onTestFinished(async () => {
     await app.close();

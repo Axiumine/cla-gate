@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { IGNORE_REASONS, REDIRECT_REASONS, type Routing } from '../../domain/webhook-routing-types.ts';
 import type { AdmittedRouting } from '../../domain/webhook-tenant.ts';
 import { FIXTURE_IDS, type WebhookEvent, webhookFixture } from '../github/webhook-fixture/test-support.ts';
 import { webhookDeliverySchema } from '../github/webhook-schemas.ts';
 import { envelopeOf } from './test-support.ts';
-import { answerFor, routeDelivery, webhookResponseSchemas } from './webhook-answer.ts';
+import { answerFor, type RecordDelivery, routeDelivery, webhookResponseSchemas } from './webhook-answer.ts';
 
 // The glue between the checked delivery and the routing table (E06-S04): what the router is given and what is answered.
 
@@ -67,7 +67,7 @@ test('an event with no schema is routed without a delivery: ping is answered, an
   });
 });
 
-const JOB: Routing = {
+const JOB: Extract<Routing, { kind: 'job' }> = {
   kind: 'job',
   job: checkedJob(),
 };
@@ -81,20 +81,48 @@ function checkedJob(): Extract<Routing, { kind: 'job' }>['job'] {
   return routing.job;
 }
 
-test('a job is acknowledged with 200 verified, and says nothing of the job', () => {
-  expect(answerFor(JOB)).toEqual({ statusCode: 200, body: { status: 'verified' } });
+const accepted = () => Promise.resolve('accepted' as const);
+const duplicate = () => Promise.resolve('duplicate' as const);
+
+test('a job recorded now is a 202 accepted, and says nothing of the job', async () => {
+  expect(await answerFor(JOB, accepted)).toEqual({ statusCode: 202, body: { status: 'accepted' } });
 });
 
-test('a ping is answered with 200 pong', () => {
-  expect(answerFor({ kind: 'pong' })).toEqual({ statusCode: 200, body: { status: 'pong' } });
+test('a job already recorded is a 200 duplicate', async () => {
+  expect(await answerFor(JOB, duplicate)).toEqual({ statusCode: 200, body: { status: 'duplicate' } });
 });
 
-test.each(IGNORE_REASONS)('an ignored delivery (%s) is a 202 that names the reason and nothing else', (reason) => {
-  expect(answerFor({ kind: 'ignored', reason })).toEqual({ statusCode: 202, body: { status: 'ignored', reason } });
+test('the job that is recorded is the one the delivery became, and it is recorded once', async () => {
+  const record = vi.fn<RecordDelivery>(accepted);
+  await answerFor(JOB, record);
+  expect(record.mock.calls).toEqual([[JOB.job]]);
 });
+
+test('a failed recording is not caught here: the route turns it into a 503', async () => {
+  const failure = new Error('the send failed');
+  await expect(answerFor(JOB, () => Promise.reject(failure))).rejects.toBe(failure);
+});
+
+test('a ping is answered with 200 pong and records nothing', async () => {
+  const record = vi.fn<RecordDelivery>(accepted);
+  expect(await answerFor({ kind: 'pong' }, record)).toEqual({ statusCode: 200, body: { status: 'pong' } });
+  expect(record).not.toHaveBeenCalled();
+});
+
+test.each(IGNORE_REASONS)(
+  'an ignored delivery (%s) is a 202 that names the reason and nothing else, and records nothing',
+  async (reason) => {
+    const record = vi.fn<RecordDelivery>(accepted);
+    expect(await answerFor({ kind: 'ignored', reason }, record)).toEqual({
+      statusCode: 202,
+      body: { status: 'ignored', reason },
+    });
+    expect(record).not.toHaveBeenCalled();
+  },
+);
 
 /** The delivery of a pull request of an installation nobody stored, replaced by the sync of that installation (E06-S05). */
-function redirected(reason: (typeof REDIRECT_REASONS)[number]): AdmittedRouting {
+function redirected(reason: (typeof REDIRECT_REASONS)[number]): Extract<AdmittedRouting, { kind: 'redirected' }> {
   const job = checkedJob();
   if (job.type !== 'sync-installation') {
     throw new Error('the installation fixture is a sync-installation job');
@@ -103,19 +131,36 @@ function redirected(reason: (typeof REDIRECT_REASONS)[number]): AdmittedRouting 
 }
 
 test.each(REDIRECT_REASONS)(
-  'a delivery replaced by a sync (%s) is a 202 that names the reason, not the sync or the installation',
-  (reason) => {
-    expect(answerFor(redirected(reason))).toEqual({ statusCode: 202, body: { status: 'ignored', reason } });
+  'a delivery replaced by a sync (%s) is recorded as the sync and answered 202 with the reason, not the sync or the installation',
+  async (reason) => {
+    const replaced = redirected(reason);
+    const record = vi.fn<RecordDelivery>(accepted);
+    expect(await answerFor(replaced, record)).toEqual({ statusCode: 202, body: { status: 'ignored', reason } });
+    expect(record.mock.calls).toEqual([[replaced.job]]);
   },
 );
 
-test.each([
-  JOB,
-  { kind: 'pong' } as const,
-  ...IGNORE_REASONS.map((reason) => ({ kind: 'ignored', reason }) as const),
-  ...REDIRECT_REASONS.map(redirected),
-])('every answer fits the response schema of its status code', (routing) => {
-  const answer = answerFor(routing);
+test.each(REDIRECT_REASONS)(
+  'a delivery replaced by a sync (%s) that was recorded before is a 200 duplicate',
+  async (reason) => {
+    expect(await answerFor(redirected(reason), duplicate)).toEqual({ statusCode: 200, body: { status: 'duplicate' } });
+  },
+);
+
+const EVERY_ANSWER: readonly (readonly [AdmittedRouting, RecordDelivery])[] = [
+  [JOB, accepted],
+  [JOB, duplicate],
+  [{ kind: 'pong' }, accepted],
+  ...IGNORE_REASONS.map((reason): readonly [AdmittedRouting, RecordDelivery] => [
+    { kind: 'ignored', reason },
+    accepted,
+  ]),
+  ...REDIRECT_REASONS.map((reason): readonly [AdmittedRouting, RecordDelivery] => [redirected(reason), accepted]),
+  ...REDIRECT_REASONS.map((reason): readonly [AdmittedRouting, RecordDelivery] => [redirected(reason), duplicate]),
+];
+
+test.each(EVERY_ANSWER)('every answer fits the response schema of its status code', async (routing, record) => {
+  const answer = await answerFor(routing, record);
   expect(webhookResponseSchemas[answer.statusCode].safeParse(answer.body).success).toBe(true);
 });
 
@@ -125,4 +170,6 @@ test('the response schemas refuse an ignore reason that is not a constant of thi
   ).toBe(false);
   expect(webhookResponseSchemas[202].safeParse({ status: 'ignored' }).success).toBe(false);
   expect(webhookResponseSchemas[200].safeParse({ status: 'accepted' }).success).toBe(false);
+  expect(webhookResponseSchemas[202].safeParse({ status: 'duplicate' }).success).toBe(false);
+  expect(webhookResponseSchemas[200].safeParse({ status: 'verified' }).success).toBe(false);
 });
