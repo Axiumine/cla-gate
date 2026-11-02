@@ -30,7 +30,7 @@ test('bytes written to the socket are the bytes that were signed: CRLF, spacing 
   const address = await listening();
   const response = await post(address, PAYLOAD, sign(SECRET_CURRENT, PAYLOAD));
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ status: 'verified' });
+  expect(await response.json()).toEqual({ status: 'pong' });
 });
 
 test('bytes that are not text are verified as bytes: signed, they pass the signature and fail as a payload', async () => {

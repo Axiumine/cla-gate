@@ -4,11 +4,11 @@ import type { IncomingMessage } from 'node:http';
 import type { FastifyInstance, FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 import fastifyRawBody from 'fastify-raw-body';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { z } from 'zod';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import type { Clock } from '../../services/ports/clock.ts';
 import { AppError, rejectRequest } from './errors.ts';
 import { WEBHOOK_BODY_LIMIT } from './limits.ts';
+import { answerFor, routeDelivery, webhookResponseSchemas } from './webhook-answer.ts';
 import { readEnvelope } from './webhook-envelope.ts';
 import { checkPayload } from './webhook-payload.ts';
 import { matchWebhookSignature, type WebhookSecrets } from './webhook-signature.ts';
@@ -23,8 +23,6 @@ export interface WebhookRoutesOptions {
 
 /** The rotation warning is logged at most this often, so a busy instance does not drown the log in it. */
 const WARNING_INTERVAL_MS = 60_000;
-
-const verifiedSchema = z.object({ status: z.literal('verified') });
 
 const NO_BODY = Buffer.alloc(0);
 
@@ -100,6 +98,8 @@ function signatureHook(options: WebhookRoutesOptions) {
  * before any hook), the signature in `preValidation` (`401`, the first hook after the body is read), then in the handler
  * the headers (`400`), the media type (`415`), the JSON (`400`) and the schema of the event (`400`). Nothing parses a
  * body whose signature is wrong (an unsigned request with broken JSON or a form body is a `401`, never a `400` or `415`).
+ * Only then does the routing table (E06-S04) decide what the delivery is: a ping is answered, one that maps to no job is
+ * a `202` `ignored` with the reason, and one that maps to a job is acknowledged until it is recorded and enqueued (E06-S06).
  */
 export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async (app, options) => {
   const contentTypes = holdContentType(app);
@@ -121,14 +121,17 @@ export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async 
       bodyLimit: WEBHOOK_BODY_LIMIT,
       preValidation: signatureHook(options),
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
-      schema: { response: { 200: verifiedSchema } },
+      schema: { response: webhookResponseSchemas },
     },
-    // The end of the chain so far: the routing table (S04) and the rest come after the event schema, so a delivery that
-    // passes it is acknowledged here and nothing more is done with it yet.
-    (request): z.infer<typeof verifiedSchema> => {
+    // The end of the chain so far: the routing table (E06-S04) decides what the delivery is, and the recording and the
+    // enqueue (E06-S06) come after it, so a delivery that becomes a job is acknowledged here and nothing more is done yet.
+    (request, reply) => {
       const headers = { ...request.headers, 'content-type': contentTypes.get(request.raw) };
-      checkPayload(readEnvelope(headers, rawBodyOf(request), options.appId), request.log);
-      return { status: 'verified' };
+      const envelope = readEnvelope(headers, rawBodyOf(request), options.appId);
+      const delivery = checkPayload(envelope, request.log);
+      const answer = answerFor(routeDelivery(envelope, delivery, options.appId));
+      reply.code(answer.statusCode);
+      return answer.body;
     },
   );
 };

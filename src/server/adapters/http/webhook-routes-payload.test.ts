@@ -3,6 +3,7 @@
 import { expect, test, vi } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import {
+  FIXTURE_IDS,
   prototypeNames,
   type WebhookEvent,
   webhookFixture,
@@ -14,7 +15,7 @@ import { deliveryHeaders, postDelivery, SECRET_CURRENT, sign, webhookTestApp } f
 // The event schemas (E06-S03) at the end of the chain, over the real route: signed deliveries of GitHub's events, and the
 // answer a payload that fails its schema gets.
 
-const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT };
+const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_APP_ID: String(FIXTURE_IDS.app) };
 const CANARY = 'canary-value-8e1f5b2a';
 
 /** A signed delivery of `event` with `body`, the way GitHub sends one. */
@@ -116,16 +117,23 @@ test('the schema comes last: an unsigned delivery is a 401, a bad header a 400 h
   expect(errorResponseSchema.parse(broken.json()).error.details).toBeUndefined();
 });
 
-test.each(['ping', 'push', 'repository', 'constructor', '__proto__'])(
-  'the event %s has no schema, so any JSON object is acknowledged for the router to ignore',
-  async (event) => {
+test.each([
+  ['ping', 200, { status: 'pong' }],
+  ['push', 202, { status: 'ignored', reason: 'unsupported_event' }],
+  ['repository', 202, { status: 'ignored', reason: 'unsupported_event' }],
+  ['constructor', 202, { status: 'ignored', reason: 'unsupported_event' }],
+  ['__proto__', 202, { status: 'ignored', reason: 'unsupported_event' }],
+] as const)(
+  'the event %s has no schema, so any JSON object passes it and the router alone decides (%s, %j)',
+  async (event, statusCode, body) => {
     const { app } = await webhookTestApp({ env: ENV });
     const response = await deliver(app, event, {
       action: { not: 'text' },
       installation: [1, 'x'],
       zen: 'Keep it simple.',
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(statusCode);
+    expect(response.json()).toEqual(body);
   },
 );
 
