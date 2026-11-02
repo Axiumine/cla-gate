@@ -19,6 +19,8 @@ test('the thresholds are 100% and the exclusion list is the fixed one', () => {
     '**/*.test.{ts,tsx}',
     '**/*.d.ts',
     '**/global-setup.ts',
+    '**/vitest.setup.ts',
+    'src/web/test-support/handlers/**',
     'e2e/**',
     'tests/leaks/**',
   ]);

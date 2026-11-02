@@ -89,7 +89,7 @@ test('Knip does not count the e2e tooling as production code', () => {
   expect(knip.project).toContain('!scripts/e2e/**!');
 });
 
-test('Biome applies its Playwright rules to e2e/ only, because other code has functions called describe', () => {
+test('Biome applies its Playwright rules to e2e/ only, because other code has functions called describe (and its React rules to src/web only, E17-S01)', () => {
   const biome = z
     .object({
       linter: z.object({ domains: z.record(z.string(), z.string()) }),
@@ -98,8 +98,11 @@ test('Biome applies its Playwright rules to e2e/ only, because other code has fu
       ),
     })
     .parse(JSON.parse(repoText('biome.json')));
-  expect(biome.linter.domains).toEqual({ playwright: 'none' });
-  expect(biome.overrides).toEqual([{ includes: ['e2e/**'], linter: { domains: { playwright: 'recommended' } } }]);
+  expect(biome.linter.domains).toEqual({ playwright: 'none', react: 'none' });
+  expect(biome.overrides).toEqual([
+    { includes: ['e2e/**'], linter: { domains: { playwright: 'recommended' } } },
+    { includes: ['src/web/**'], linter: { domains: { react: 'recommended' } } },
+  ]);
 });
 
 test('the canary page is static: no script, no stylesheet link, no image and no remote address', () => {
