@@ -3,7 +3,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
-import { testApp } from '../../test-support.ts';
+import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import { registerErrorHandlers } from './errors.ts';
 import {
   RATE_LIMIT_EXEMPT,
@@ -13,6 +13,7 @@ import {
   registerRateLimit,
   routeRateLimit,
 } from './rate-limit.ts';
+import { postDelivery, SECRET_CURRENT, webhookTestApp } from './test-support.ts';
 
 // The routes that may leave the rate limit (E10-S08), and the rules a route with a budget of its own follows.
 
@@ -120,28 +121,28 @@ test('a limit that is neither false nor an object is refused by the plugin', asy
   expect(register).toThrow('Unknown value for route rate-limit configuration');
 });
 
-test('the webhook route switched off spends no budget: 700 deliveries, no 429 and no ratelimit header', async () => {
-  const { app } = await testApp();
-  app.post('/webhooks/github', { config: { csrf: 'exempt', rateLimit: false } }, () => 'delivered');
-  let limited = 0;
+test('the real webhook route spends no budget: 700 signed deliveries, no 429 and no ratelimit header', async () => {
+  const { app } = await webhookTestApp({ env: { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT } });
+  const ping = '{"zen":"Keep it logically awesome."}';
+  let answered = 0;
   for (let sent = 0; sent < 700; sent++) {
-    const response = await app.inject({ method: 'POST', url: '/webhooks/github' });
-    limited += response.statusCode === 429 ? 1 : 0;
+    const response = await postDelivery(app, ping);
+    answered += response.statusCode === 200 ? 1 : 0;
     if (sent === 0) {
       expect(response.headers['x-ratelimit-limit']).toBeUndefined();
     }
   }
-  expect(limited).toBe(0);
+  expect(answered).toBe(700);
 });
 
-test('the webhook route left under the global limit is limited like any other: the 601st delivery gets a 429', async () => {
-  const { app } = await testApp();
-  app.post('/webhooks/github', { config: { csrf: 'exempt' } }, () => 'delivered');
+test('a webhook route left under the global limit would be limited like any other: the 601st delivery gets a 429', async () => {
+  const app = await bare();
+  app.post(WEBHOOK_PATH, () => 'delivered');
   let delivered = 0;
   for (let sent = 0; sent < 600; sent++) {
-    delivered += (await app.inject({ method: 'POST', url: '/webhooks/github' })).statusCode === 200 ? 1 : 0;
+    delivered += (await app.inject({ method: 'POST', url: WEBHOOK_PATH })).statusCode === 200 ? 1 : 0;
   }
-  const response = await app.inject({ method: 'POST', url: '/webhooks/github' });
+  const response = await app.inject({ method: 'POST', url: WEBHOOK_PATH });
   expect(delivered).toBe(600);
   expect(response.statusCode).toBe(429);
   expect(errorResponseSchema.parse(response.json()).error.code).toBe('too_many_requests');

@@ -6,12 +6,18 @@ import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError, loadConfig } from './env.ts';
 import { loadMigrateConfig } from './migrate-config.ts';
 import { MASK, Secret } from './secret.ts';
-import { testRsaKey } from './test-support.ts';
+import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 const KEY = testRsaKey();
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
-/** Production with the GitHub App settings it requires (E05-S01), so a row is about one variable only. */
-const PRODUCTION = { ...AUTH_ENV, NODE_ENV: 'production', GITHUB_APP_ID: '12345', GITHUB_APP_PRIVATE_KEY: KEY.pkcs8 };
+/** Production with the GitHub App and login settings it requires (E05-S01, E06-S01, E10-S01), so a row is about one variable only. */
+const PRODUCTION = {
+  ...AUTH_ENV,
+  NODE_ENV: 'production',
+  GITHUB_APP_ID: '12345',
+  GITHUB_APP_PRIVATE_KEY: KEY.pkcs8,
+  GITHUB_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
+};
 
 function capture(env: Record<string, string | undefined>): ConfigError {
   try {
@@ -56,7 +62,7 @@ test('every variable is read and secrets become Secret values', () => {
     SESSION_SECRET: 's'.repeat(32),
     GITHUB_APP_ID: '12345',
     GITHUB_APP_PRIVATE_KEY: KEY.pkcs8,
-    GITHUB_WEBHOOK_SECRET: 'whsec',
+    GITHUB_WEBHOOK_SECRET: 'whsec-0123456789abcdef',
     GITHUB_CLIENT_ID: 'Iv1.abc',
     GITHUB_CLIENT_SECRET: 'client-secret',
   });
@@ -71,7 +77,7 @@ test('every variable is read and secrets become Secret values', () => {
   });
   expect(config.sessionSecret).toBeInstanceOf(Secret);
   expect(config.github.privateKey?.pem.reveal()).toBe(KEY.pkcs8.trim());
-  expect(config.github.webhookSecret?.reveal()).toBe('whsec');
+  expect(config.github.webhookSecret?.reveal()).toBe('whsec-0123456789abcdef');
   expect(config.github.clientSecret?.reveal()).toBe('client-secret');
 });
 
@@ -97,11 +103,17 @@ test('an empty variable counts as unset', () => {
 });
 
 test('secrets in the loaded config cannot be printed', () => {
-  const config = loadConfig({ DATABASE_URL: DB, SESSION_SECRET: 'x'.repeat(40), GITHUB_WEBHOOK_SECRET: 'whsec-bytes' });
+  const config = loadConfig({
+    DATABASE_URL: DB,
+    SESSION_SECRET: 'x'.repeat(40),
+    GITHUB_WEBHOOK_SECRET: 'whsec-bytes-0123456789',
+    GITHUB_WEBHOOK_SECRET_PREVIOUS: 'old-whsec-bytes-0123456789',
+  });
   for (const printed of [JSON.stringify(config), inspect(config, { depth: 6 }), String(config.databaseUrl)]) {
     expect(printed).not.toContain('s3cr3t-pw');
     expect(printed).not.toContain('xxxx');
     expect(printed).not.toContain('whsec-bytes');
+    expect(printed).not.toContain('old-whsec-bytes');
   }
   expect(JSON.stringify(config)).toContain(MASK);
 });

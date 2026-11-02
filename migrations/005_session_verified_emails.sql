@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-only
 -- Copyright (C) 2026 Giovanni Manzoni
 --
--- 006_session_verified_emails (E10-S01): the verified e-mail addresses a person had at login. Forward-only: never edit
+-- 005_session_verified_emails (E10-S01): the verified e-mail addresses a person had at login. Forward-only: never edit
 -- this file once merged, add a new migration instead.
 --
 -- The signing page (E13) offers the signer the verified addresses of their GitHub account. No GitHub user token is

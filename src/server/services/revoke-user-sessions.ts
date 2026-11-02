@@ -11,7 +11,7 @@ import type { SessionStore } from '../adapters/db/sessions.ts';
 // installation to scope it by.
 
 /** The queue and envelope `type` of the job. */
-export const REVOKE_USER_SESSIONS_JOB = 'revoke-user-sessions';
+export const REVOKE_SESSIONS_JOB = 'revoke-user-sessions';
 
 /**
  * The envelope of the job: the type, the id of the webhook delivery it came from (kept for the delivery bookkeeping of
@@ -19,7 +19,7 @@ export const REVOKE_USER_SESSIONS_JOB = 'revoke-user-sessions';
  * action and must not be lost to an extra key; the identity itself is held to a positive safe integer.
  */
 export const revokeUserSessionsPayloadSchema = z.object({
-  type: z.literal(REVOKE_USER_SESSIONS_JOB),
+  type: z.literal(REVOKE_SESSIONS_JOB),
   deliveryId: z.string().min(1).max(100).optional(),
   githubUserId: githubIdSchema,
 });

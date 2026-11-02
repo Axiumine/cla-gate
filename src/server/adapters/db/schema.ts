@@ -36,7 +36,7 @@ interface SessionsTable {
   last_seen_at: Generated<Date>;
   idle_expires_at: Date;
   absolute_expires_at: Date;
-  /** The verified addresses of the person at login, `[{ email, primary }]`, at most 20; personal data, gone with the row (migration 006, E10-S01). */
+  /** The verified addresses of the person at login, `[{ email, primary }]`, at most 20; personal data, gone with the row (migration 005, E10-S01). */
   verified_emails: JsonArray;
 }
 

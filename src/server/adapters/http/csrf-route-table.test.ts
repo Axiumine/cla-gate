@@ -57,13 +57,12 @@ test('the table is collected: the application registers its routes with the logi
   expect(all).toContain('GET /healthz');
 });
 
-// The webhook route (E06-S01) joins the table when the two branches meet; from then on the flagged routes are exactly
-// the list, and this assertion can say so with `toEqual`.
-test('every route of the table that sets config.csrf is on the CSRF_EXEMPT list', async () => {
+// The webhook route (E06-S01) is in the table, so the flagged routes are exactly the list.
+test('every route of the table that sets config.csrf is on the CSRF_EXEMPT list, and the list is all of them', async () => {
   seen.length = 0;
   await testApp({ env: AUTH_ENV });
   const flagged = seen.filter(flaggedExempt).flatMap(names);
-  expect(CSRF_EXEMPT).toEqual(expect.arrayContaining(flagged));
+  expect(flagged).toEqual(CSRF_EXEMPT);
   expect(seen.flatMap((route) => csrfProblem(route.method, route.url, route.config) ?? [])).toEqual([]);
 });
 

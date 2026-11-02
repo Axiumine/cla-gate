@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { z } from 'zod';
+import { CONTEXT, IDS, payloadOf } from '../../domain/test-support.ts';
+import { routeWebhook } from '../../domain/webhook-routing.ts';
 import { createRevokeUserSessionsHandler } from '../../services/revoke-user-sessions.ts';
 import { authWorld } from './auth-fixture/test-support.ts';
 
@@ -129,4 +132,15 @@ test('an invalid job deletes nothing: a string id, or the id of an internal user
   });
   expect(await handler(job(alice.userId))).toBe(0);
   expect((await whoAmI(alice.cookie)).statusCode).toBe(200);
+});
+
+test('the job the webhook intake routes for a revoked authorization is the one this handler takes, and it ends that person only', async () => {
+  const { handler, whoAmI, login } = await world();
+  const person = await login(IDS.sender);
+  const bystander = await login(IDS.account);
+  const routing = routeWebhook('github_app_authorization', 'revoked', payloadOf('github_app_authorization'), CONTEXT);
+  expect(routing).toMatchObject({ kind: 'job', job: { type: 'revoke-user-sessions', githubUserId: IDS.sender } });
+  expect(await handler(z.object({ job: z.unknown() }).parse(routing).job)).toBe(1);
+  expect((await whoAmI(person.cookie)).statusCode).toBe(401);
+  expect((await whoAmI(bystander.cookie)).statusCode).toBe(200);
 });

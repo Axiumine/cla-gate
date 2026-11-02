@@ -8,6 +8,8 @@ import { csrfToken, csrfTokenMatches } from './csrf-token.ts';
 // The CSRF token (E10-S03): base64url(hmac_sha256(SESSION_SECRET, "csrf:" + csrf_secret)).
 
 const KEY = new Secret('test-session-secret-0123456789ab');
+/** Another `SESSION_SECRET`, as after a rotation. */
+const ROTATED_KEY = new Secret('rotated-session-secret-0123456789');
 // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up value for the tests, not a credential
 const CSRF_SECRET = 'a-csrf-secret-of-a-session';
 
@@ -26,7 +28,7 @@ test('the token is the HMAC-SHA256 of "csrf:" and the session secret under SESSI
 test('the token is the same for the same session and differs per session and per SESSION_SECRET', () => {
   expect(csrfToken(KEY, CSRF_SECRET)).toBe(csrfToken(KEY, CSRF_SECRET));
   expect(csrfToken(KEY, 'another-session')).not.toBe(csrfToken(KEY, CSRF_SECRET));
-  expect(csrfToken(new Secret('rotated-session-secret-0123456789'), CSRF_SECRET)).not.toBe(csrfToken(KEY, CSRF_SECRET));
+  expect(csrfToken(ROTATED_KEY, CSRF_SECRET)).not.toBe(csrfToken(KEY, CSRF_SECRET));
 });
 
 test('the prefix is part of the input: the HMAC of the bare csrf secret is not the token', () => {

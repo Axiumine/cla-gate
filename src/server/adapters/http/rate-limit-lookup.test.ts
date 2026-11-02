@@ -3,6 +3,7 @@
 import { expect, test } from 'vitest';
 import { authWorld, COOKIE_NAME } from './auth-fixture/test-support.ts';
 import { routeRateLimit } from './rate-limit.ts';
+import { deliveryHeaders, postDelivery, SECRET_CURRENT } from './test-support.ts';
 
 // The session lookup is a database query, so it must sit behind the budget of the client address (E10-S08): a request
 // that is over its budget is refused before it costs a query, whatever route it was sent to. The budgets are spelled out
@@ -32,14 +33,12 @@ test.each([
 });
 
 test('the webhook route, which is outside the rate limit, never runs the session lookup for a forged cookie', async () => {
-  const { app, queries } = await authWorld();
-  app.post('/webhooks/github', { config: { csrf: 'exempt', rateLimit: false } }, (request) => ({
-    auth: request.auth,
-  }));
+  const { app, queries } = await authWorld({ GITHUB_WEBHOOK_SECRET: SECRET_CURRENT });
+  const ping = '{"zen":"Keep it logically awesome."}';
   const before = queries.length;
   for (let sent = 0; sent < 5; sent++) {
-    const response = await app.inject({ method: 'POST', url: '/webhooks/github', headers: FORGED });
-    expect([response.statusCode, response.json()]).toEqual([200, { auth: null }]);
+    const response = await postDelivery(app, ping, deliveryHeaders(ping, { headers: FORGED }));
+    expect([response.statusCode, response.json()]).toEqual([200, { status: 'pong' }]);
   }
   expect(queries).toHaveLength(before);
 });

@@ -5,7 +5,7 @@ import type { GithubId } from '../../shared/github-id.ts';
 import {
   createRevokeUserSessionsHandler,
   InvalidJobPayloadError,
-  REVOKE_USER_SESSIONS_JOB,
+  REVOKE_SESSIONS_JOB,
   revokeUserSessionsPayloadSchema,
 } from './revoke-user-sessions.ts';
 
@@ -13,7 +13,7 @@ import {
 // envelope check, what is logged, and what happens when the deletion fails. The real deletion and the old cookies that
 // stop working are in adapters/http/auth-revoke-sessions.test.ts.
 
-const valid = { type: REVOKE_USER_SESSIONS_JOB, githubUserId: 1001 };
+const valid = { type: REVOKE_SESSIONS_JOB, githubUserId: 1001 };
 
 function handlerWith(removed: number | Error = 3) {
   const asked: GithubId[] = [];
@@ -63,7 +63,7 @@ test.each([
   ['an empty object', {}],
   ['no type', { githubUserId: 1001 }],
   ['another type', { type: 'evaluate-pr', githubUserId: 1001 }],
-  ['no id', { type: REVOKE_USER_SESSIONS_JOB }],
+  ['no id', { type: REVOKE_SESSIONS_JOB }],
   ['the id as a string', { ...valid, githubUserId: '1001' }],
   ['the id as an e-mail address', { ...valid, githubUserId: 'jane@example.com' }],
   ['id 0', { ...valid, githubUserId: 0 }],
@@ -99,7 +99,7 @@ test('a failing deletion is not swallowed: the same error reaches the worker, wh
 
 test('the schema accepts the largest GitHub id a JavaScript number holds and a delivery id of 100 characters', () => {
   const parsed = revokeUserSessionsPayloadSchema.parse({
-    type: REVOKE_USER_SESSIONS_JOB,
+    type: REVOKE_SESSIONS_JOB,
     deliveryId: 'd'.repeat(100),
     githubUserId: Number.MAX_SAFE_INTEGER,
   });

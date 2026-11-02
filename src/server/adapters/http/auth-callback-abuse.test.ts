@@ -12,6 +12,7 @@ import { OAUTH_COOKIE_NAME } from './login-fixture/test-support.ts';
 // the login-failed screen with a closed reason, the attempt cookie cleared and no call to GitHub that could have been avoided.
 
 const OAUTH_CLEARED = `${OAUTH_COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`;
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up value for the tests, not a credential
 const OTHER_SECRET = 'another-session-secret-0123456789';
 
 /** Asserts the answer of a refused callback and that nothing was written. */

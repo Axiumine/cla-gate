@@ -51,12 +51,11 @@ test('the table is collected: the application registers its routes with the logi
   expect(table.flatMap(names)).toContain('GET /healthz');
 });
 
-// The webhook route (E06-S01) joins the table when the two branches meet; from then on the routes switched off are
-// exactly the list, and this assertion can say so with `toEqual`.
-test('every route of the table that switches the limit off is on the RATE_LIMIT_EXEMPT list, and none breaks a rule', async () => {
+// The webhook route (E06-S01) is in the table, so the routes switched off are exactly the list.
+test('every route of the table that switches the limit off is on the RATE_LIMIT_EXEMPT list, and the list is all of them', async () => {
   const table = await tableOfTheApp();
   const off = table.filter((route) => limitOf(route) === false).flatMap(names);
-  expect(RATE_LIMIT_EXEMPT).toEqual(expect.arrayContaining(off));
+  expect(off).toEqual(RATE_LIMIT_EXEMPT);
   expect(table.flatMap((route) => rateLimitProblem(route.method, route.url, route.config) ?? [])).toEqual([]);
 });
 

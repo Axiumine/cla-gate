@@ -42,6 +42,7 @@ test('every secret is left empty, so the file holds no value that could be one',
     'GITHUB_APP_PRIVATE_KEY',
     'GITHUB_APP_PRIVATE_KEY_PREVIOUS',
     'GITHUB_WEBHOOK_SECRET',
+    'GITHUB_WEBHOOK_SECRET_PREVIOUS',
   ];
   const values = new Map(assignments);
   expect(secrets.map((name) => [name, values.get(name)])).toEqual(secrets.map((name) => [name, '']));

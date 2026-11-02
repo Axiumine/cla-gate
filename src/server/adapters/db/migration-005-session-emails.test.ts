@@ -6,7 +6,7 @@ import { loadMigrationFiles } from './migration-files.ts';
 import { migrate } from './migrator.ts';
 import { emptyTestDatabase, MIGRATIONS_DIRECTORY, migratedTestDatabase } from './test-support.ts';
 
-// Migration 006 (E10-S01): sessions.verified_emails, the addresses a person had at login, kept as long as the session.
+// Migration 005 (E10-S01): sessions.verified_emails, the addresses a person had at login, kept as long as the session.
 
 const CHECK = { code: '23514' };
 const NOT_NULL = { code: '23502' };
@@ -62,7 +62,7 @@ test('a session that existed before the migration holds an empty list afterwards
   const files = await loadMigrationFiles(MIGRATIONS_DIRECTORY);
   await migrate(
     db,
-    files.filter((file) => file.name < '006'),
+    files.filter((file) => file.name < '005'),
   );
   await sql`insert into users (github_id, login) values (1001, 'login-1001')`.execute(db);
   await sql`insert into sessions (session_hash, user_id, csrf_secret, idle_expires_at, absolute_expires_at)

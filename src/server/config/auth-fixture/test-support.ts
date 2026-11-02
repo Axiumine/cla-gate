@@ -5,8 +5,10 @@
 // real secret.
 
 /** The session secret of a test: 32 characters, the least the configuration accepts. */
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up value for the tests, not a credential
 export const TEST_SESSION_SECRET = 'test-session-secret-0123456789ab';
 export const TEST_CLIENT_ID = 'Iv1.test-client-id';
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up value for the tests, not a credential
 export const TEST_CLIENT_SECRET = 'test-client-secret-value';
 
 /** The three variables production requires for login, so a test about something else can still be production. */

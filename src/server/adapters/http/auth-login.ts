@@ -37,6 +37,7 @@ export const loginRoutes: FastifyPluginCallbackZod<LoginRoutesOptions> = (app, o
       exposeHeadRoute: false,
     },
     (request, reply) => {
+      // nosemgrep: ajinabraham.njsscan.redirect.open_redirect.express_open_redirect -- safeReturnTo keeps a relative path of this origin only, never a host
       const returnTo = safeReturnTo(request.query.return_to);
       if (request.auth !== null) {
         return reply.redirect(returnTo);

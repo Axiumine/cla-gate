@@ -4,6 +4,10 @@ import { generateKeyPairSync, type KeyObject } from 'node:crypto';
 import { type GitHubPrivateKey, publicKeyFingerprint } from './github-key.ts';
 import { Secret } from './secret.ts';
 
+/** A made-up webhook secret of the length the configuration demands (E06-S01), for the tests that need a valid one. */
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up value for the tests, not a credential
+export const TEST_WEBHOOK_SECRET = 'made-up-webhook-secret-for-tests';
+
 // Key material for tests is made when the test runs and never written down: no key is committed (E05-S01), so the
 // secret scanner has nothing to find and no test depends on a key that leaked.
 

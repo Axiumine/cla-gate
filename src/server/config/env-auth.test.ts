@@ -3,7 +3,7 @@
 import { expect, test } from 'vitest';
 import { AUTH_ENV, TEST_CLIENT_ID, TEST_CLIENT_SECRET, TEST_SESSION_SECRET } from './auth-fixture/test-support.ts';
 import { ConfigError, loadConfig } from './env.ts';
-import { testRsaKey } from './test-support.ts';
+import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 // The login settings of E10-S01: three secrets that production requires, two session lifetimes.
 
@@ -13,6 +13,7 @@ const PRODUCTION = {
   PUBLIC_BASE_URL: 'https://cla.example.org',
   GITHUB_APP_ID: '12345',
   GITHUB_APP_PRIVATE_KEY: testRsaKey().pkcs8,
+  GITHUB_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
 };
 
 function capture(env: Record<string, string | undefined>): ConfigError {
