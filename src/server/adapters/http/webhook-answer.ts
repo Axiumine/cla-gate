@@ -3,11 +3,12 @@
 import { z } from 'zod';
 import { routeWebhook } from '../../domain/webhook-routing.ts';
 import { IGNORE_REASONS, type Routing } from '../../domain/webhook-routing-types.ts';
+import type { AdmittedRouting } from '../../domain/webhook-tenant.ts';
 import type { WebhookDelivery } from '../github/webhook-schemas.ts';
 import type { WebhookEnvelope } from './webhook-envelope.ts';
 
-// What the webhook route answers once a delivery has passed the checks of E06-S01 to E06-S03 and the routing table
-// (E06-S04) has decided what it is. The answers hold constants of this server only, never a header, a payload field or
+// What the webhook route answers once a delivery has passed the checks of E06-S01 to E06-S03, the routing table
+// (E06-S04) has decided what it is and the tenant filter (E06-S05) has judged the installation it names. The answers hold constants of this server only, never a header, a payload field or
 // any text the delivery chose.
 
 const verifiedSchema = z.object({ status: z.literal('verified') });
@@ -44,16 +45,19 @@ export function routeDelivery(
 }
 
 /**
- * The answer for a routing outcome. A delivery that became a job is acknowledged with `verified` until the delivery is
- * recorded and the job enqueued in one transaction (E06-S06), which then answers `accepted` or `duplicate`; an ignored
- * delivery is `202` with the reason (a delivery GitHub should not redeliver, and nothing recorded); a ping is `pong`.
+ * The answer for what a delivery became. A delivery that became a job is acknowledged with `verified` until the delivery
+ * is recorded and the job enqueued in one transaction (E06-S06), which then answers `accepted` or `duplicate`; an ignored
+ * delivery is `202` with the reason (a delivery GitHub should not redeliver, and nothing recorded); a ping is `pong`. A
+ * delivery the tenant filter replaced by a sync (E06-S05) is `202 ignored` with the reason it was replaced for: its
+ * event is not acted on, and the reason is what an operator reads in GitHub's delivery log.
  */
-export function answerFor(routing: Routing): WebhookAnswer {
-  switch (routing.kind) {
+export function answerFor(admitted: AdmittedRouting): WebhookAnswer {
+  switch (admitted.kind) {
     case 'pong':
       return { statusCode: 200, body: { status: 'pong' } };
     case 'ignored':
-      return { statusCode: 202, body: { status: 'ignored', reason: routing.reason } };
+    case 'redirected':
+      return { statusCode: 202, body: { status: 'ignored', reason: admitted.reason } };
     case 'job':
       return { statusCode: 200, body: { status: 'verified' } };
   }

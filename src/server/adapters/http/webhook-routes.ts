@@ -1,34 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { IncomingMessage } from 'node:http';
-import type { FastifyInstance, FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import fastifyRawBody from 'fastify-raw-body';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import type { Kysely } from 'kysely';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
-import type { Clock } from '../../services/ports/clock.ts';
+import { createTenantFilter } from '../../services/tenant-filter.ts';
+import type { Database } from '../db/schema.ts';
 import { AppError, rejectRequest } from './errors.ts';
 import { WEBHOOK_BODY_LIMIT } from './limits.ts';
 import { answerFor, routeDelivery, webhookResponseSchemas } from './webhook-answer.ts';
 import { readEnvelope } from './webhook-envelope.ts';
 import { checkPayload } from './webhook-payload.ts';
-import { matchWebhookSignature, type WebhookSecrets } from './webhook-signature.ts';
+import { rawBodyOf, type SignatureHookOptions, signatureHook } from './webhook-signature-hook.ts';
 
-export interface WebhookRoutesOptions {
-  readonly secrets: WebhookSecrets;
-  /** Where the once-a-minute limit of the rotation warning takes its time from. */
-  readonly clock: Clock;
+export interface WebhookRoutesOptions extends SignatureHookOptions {
   /** `GITHUB_APP_ID`: the App a delivery that names its target must have been sent for (E06-S02). */
   readonly appId: string | undefined;
-}
-
-/** The rotation warning is logged at most this often, so a busy instance does not drown the log in it. */
-const WARNING_INTERVAL_MS = 60_000;
-
-const NO_BODY = Buffer.alloc(0);
-
-/** The bytes GitHub sent. A request with no body at all is never read by the framework, so the plugin may not have seen its end. */
-function rawBodyOf(request: FastifyRequest): Buffer {
-  return Buffer.isBuffer(request.rawBody) ? request.rawBody : NO_BODY;
+  /** What the tenant filter reads the stored installations and repositories from (E06-S05). Not closed by the route. */
+  readonly db: Kysely<Database>;
 }
 
 /**
@@ -53,39 +44,6 @@ function isBodyTooLarge(error: unknown): boolean {
 }
 
 /**
- * The `preValidation` hook that checks the signature, with the state of the rotation warning (when it was last logged).
- * A callback hook, not an async one: it awaits nothing, and a sync hook without `done` would never finish.
- */
-function signatureHook(options: WebhookRoutesOptions) {
-  let previousWarnedAt: number | undefined;
-
-  /** One WARN a minute at most, so the operator can tell when no delivery is signed with the old secret any more. */
-  function warnPreviousSecretUsed(request: FastifyRequest): void {
-    const now = options.clock.now().getTime();
-    if (previousWarnedAt === undefined || now - previousWarnedAt >= WARNING_INTERVAL_MS) {
-      previousWarnedAt = now;
-      request.log.warn('webhook.secret_previous_used');
-    }
-  }
-
-  /** The failure every refused signature gets, identical whatever the cause; `undefined` when the delivery is signed. */
-  function refusal(request: FastifyRequest): AppError | undefined {
-    const match = matchWebhookSignature(rawBodyOf(request), request.headers['x-hub-signature-256'], options.secrets);
-    if (match === 'none') {
-      return new AppError(401, 'webhook_signature_invalid');
-    }
-    if (match === 'previous') {
-      warnPreviousSecretUsed(request);
-    }
-    return undefined;
-  }
-
-  return (request: FastifyRequest, _reply: FastifyReply, done: HookHandlerDoneFunction): void => {
-    done(refusal(request));
-  };
-}
-
-/**
  * `POST /webhooks/github`, the one route GitHub calls (E06-S01). It sits outside `/api`, so the route audit guard
  * (`requireAuditedRoutes`) does not apply: the route itself mutates nothing audited, and the lifecycle handlers it will
  * hand deliveries to record their own audit rows. It still declares `auditExempt: 'webhook'`, so it stays valid if the
@@ -99,10 +57,13 @@ function signatureHook(options: WebhookRoutesOptions) {
  * the headers (`400`), the media type (`415`), the JSON (`400`) and the schema of the event (`400`). Nothing parses a
  * body whose signature is wrong (an unsigned request with broken JSON or a form body is a `401`, never a `400` or `415`).
  * Only then does the routing table (E06-S04) decide what the delivery is: a ping is answered, one that maps to no job is
- * a `202` `ignored` with the reason, and one that maps to a job is acknowledged until it is recorded and enqueued (E06-S06).
+ * a `202` `ignored` with the reason, and one that maps to a job is judged by the tenant filter (E06-S05), which reads the
+ * stored installation (a database read, never a GitHub call) and turns away a delivery of an installation the instance
+ * does not serve. What survives is acknowledged until it is recorded and enqueued (E06-S06).
  */
 export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async (app, options) => {
   const contentTypes = holdContentType(app);
+  const tenants = createTenantFilter({ db: options.db, clock: options.clock });
   // The scope's parsers are replaced, not extended: the default JSON and text parsers would read the body before the hook.
   app.removeAllContentTypeParsers();
   app.addContentTypeParser('*', { parseAs: 'buffer' }, (_request, _body, done) => {
@@ -123,13 +84,15 @@ export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async 
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
       schema: { response: webhookResponseSchemas },
     },
-    // The end of the chain so far: the routing table (E06-S04) decides what the delivery is, and the recording and the
-    // enqueue (E06-S06) come after it, so a delivery that becomes a job is acknowledged here and nothing more is done yet.
-    (request, reply) => {
+    // The end of the chain so far: the routing table (E06-S04) decides what the delivery is and the tenant filter
+    // (E06-S05) whether its installation is served. The recording and the enqueue (E06-S06) come after them, so a
+    // delivery that becomes a job is acknowledged here and nothing more is done yet.
+    async (request, reply) => {
       const headers = { ...request.headers, 'content-type': contentTypes.get(request.raw) };
       const envelope = readEnvelope(headers, rawBodyOf(request), options.appId);
       const delivery = checkPayload(envelope, request.log);
-      const answer = answerFor(routeDelivery(envelope, delivery, options.appId));
+      const routing = routeDelivery(envelope, delivery, options.appId);
+      const answer = answerFor(await tenants.admit(routing, request.log));
       reply.code(answer.statusCode);
       return answer.body;
     },

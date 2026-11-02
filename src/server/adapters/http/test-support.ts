@@ -2,21 +2,35 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import type { Kysely } from 'kysely';
 import { onTestFinished, vi } from 'vitest';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
+import { tenantDatabase } from '../../services/tenant-fixture/test-support.ts';
 import { type TestAppOptions, testApp, UNREACHABLE_DATABASE_URL } from '../../test-support.ts';
 import { createPgDatabase } from '../db/pg.ts';
+import type { Database } from '../db/schema.ts';
 import { readEnvelope, type WebhookEnvelope } from './webhook-envelope.ts';
 
+/** A database handle that never reaches a server (nothing connects until a query runs, and then it is refused). The caller closes it. */
+export function unreachableDatabase(): Kysely<Database> {
+  return createPgDatabase({ connectionString: UNREACHABLE_DATABASE_URL, onError: vi.fn() });
+}
+
 /**
- * The real app on a database that is never queried: the webhook route reads none before S06, so a test of it need not
- * pay for a PGlite. Closed after the test like {@link testApp}.
+ * The real app on a database that is never reached: a delivery that is refused or ignored before the tenant filter
+ * (E06-S05) reads none, so a test of those need not pay for a PGlite, and one that does reach it fails with a refused
+ * connection. Closed after the test like {@link testApp}.
  */
 export function webhookTestApp(options: Omit<TestAppOptions, 'db'> = {}) {
-  return testApp({
-    ...options,
-    db: createPgDatabase({ connectionString: UNREACHABLE_DATABASE_URL, onError: vi.fn() }),
-  });
+  return testApp({ ...options, db: unreachableDatabase() });
+}
+
+/**
+ * {@link webhookTestApp} over a database that holds the tenants of the tenant filter (E06-S05), for the deliveries that
+ * name one: the admitted one is the tenant of the webhook fixtures, so an unchanged fixture is a delivery the instance serves.
+ */
+export async function tenantWebhookApp(options: Omit<TestAppOptions, 'db'> = {}) {
+  return testApp({ ...options, db: await tenantDatabase() });
 }
 
 /** GitHub's documented example for `X-Hub-Signature-256` (the secret, the payload and the header it yields). */

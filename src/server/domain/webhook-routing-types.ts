@@ -4,6 +4,22 @@ import type { Job } from './jobs.ts';
 
 // The vocabulary of the routing table (E06-S04): what a delivery can become, and what each row of the table is given.
 
+/**
+ * Why a delivery of an installation that is stored is not acted on (E06-S05): the tenant filter turns it away before any
+ * job exists. The wording is the one of the installation gate (E05-S03).
+ */
+export const TENANT_IGNORE_REASONS = [
+  'installation_not_admitted',
+  'installation_deleted',
+  'installation_suspended',
+] as const;
+
+/**
+ * Why a delivery of a tenant's pull request is dropped and replaced by a `sync-installation` job (E06-S05): what the
+ * payload says disagrees with what is stored, and the sync is how the stored state catches up.
+ */
+export const REDIRECT_REASONS = ['installation_unknown', 'repository_installation_mismatch'] as const;
+
 /** Why a delivery starts no job. The reason is a constant of this module, never text taken from the delivery. */
 export const IGNORE_REASONS = [
   'unsupported_event',
@@ -12,6 +28,8 @@ export const IGNORE_REASONS = [
   'not_pull_request',
   'bot_sender',
   'no_recheck_command',
+  ...TENANT_IGNORE_REASONS,
+  ...REDIRECT_REASONS,
 ] as const;
 
 /** One reason of {@link IGNORE_REASONS}. */

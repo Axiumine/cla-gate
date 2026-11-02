@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { IGNORE_REASONS, type Routing } from '../../domain/webhook-routing-types.ts';
+import { IGNORE_REASONS, REDIRECT_REASONS, type Routing } from '../../domain/webhook-routing-types.ts';
+import type { AdmittedRouting } from '../../domain/webhook-tenant.ts';
 import { FIXTURE_IDS, type WebhookEvent, webhookFixture } from '../github/webhook-fixture/test-support.ts';
 import { webhookDeliverySchema } from '../github/webhook-schemas.ts';
 import { envelopeOf } from './test-support.ts';
@@ -92,15 +93,33 @@ test.each(IGNORE_REASONS)('an ignored delivery (%s) is a 202 that names the reas
   expect(answerFor({ kind: 'ignored', reason })).toEqual({ statusCode: 202, body: { status: 'ignored', reason } });
 });
 
-test.each([JOB, { kind: 'pong' } as const, ...IGNORE_REASONS.map((reason) => ({ kind: 'ignored', reason }) as const)])(
-  'every answer fits the response schema of its status code',
-  (routing) => {
-    const answer = answerFor(routing);
-    expect(webhookResponseSchemas[answer.statusCode].safeParse(answer.body).success).toBe(true);
+/** The delivery of a pull request of an installation nobody stored, replaced by the sync of that installation (E06-S05). */
+function redirected(reason: (typeof REDIRECT_REASONS)[number]): AdmittedRouting {
+  const job = checkedJob();
+  if (job.type !== 'sync-installation') {
+    throw new Error('the installation fixture is a sync-installation job');
+  }
+  return { kind: 'redirected', reason, job };
+}
+
+test.each(REDIRECT_REASONS)(
+  'a delivery replaced by a sync (%s) is a 202 that names the reason, not the sync or the installation',
+  (reason) => {
+    expect(answerFor(redirected(reason))).toEqual({ statusCode: 202, body: { status: 'ignored', reason } });
   },
 );
 
-test('the response schemas refuse an ignore reason that is not a constant of the router', () => {
+test.each([
+  JOB,
+  { kind: 'pong' } as const,
+  ...IGNORE_REASONS.map((reason) => ({ kind: 'ignored', reason }) as const),
+  ...REDIRECT_REASONS.map(redirected),
+])('every answer fits the response schema of its status code', (routing) => {
+  const answer = answerFor(routing);
+  expect(webhookResponseSchemas[answer.statusCode].safeParse(answer.body).success).toBe(true);
+});
+
+test('the response schemas refuse an ignore reason that is not a constant of this server', () => {
   expect(
     webhookResponseSchemas[202].safeParse({ status: 'ignored', reason: 'whatever the sender wrote' }).success,
   ).toBe(false);

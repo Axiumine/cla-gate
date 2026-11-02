@@ -68,6 +68,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock: options.clock ?? systemClock,
     appId: config.github.appId,
+    db,
   });
 
   app.addHook('onClose', async () => {

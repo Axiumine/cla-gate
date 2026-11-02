@@ -9,7 +9,7 @@ import {
   webhookFixture,
   withValue,
 } from '../github/webhook-fixture/test-support.ts';
-import { deliveryHeaders, postDelivery, SECRET_CURRENT, webhookTestApp } from './test-support.ts';
+import { deliveryHeaders, postDelivery, SECRET_CURRENT, tenantWebhookApp, webhookTestApp } from './test-support.ts';
 
 // The routing table (E06-S04) over the real route: what a signed delivery of each event is answered with. A delivery
 // that becomes a job is acknowledged with 200 `verified` until it is recorded and enqueued (E06-S06); one that does not
@@ -173,8 +173,16 @@ const ROWS: readonly Row[] = [
   },
 ];
 
+/**
+ * The events whose job is about a tenant's repository, the ones the tenant filter (E06-S05) reads the database for. A
+ * delivery of any other event, or one that is ignored or answered before the filter, reads none: its app has a database
+ * that refuses every connection, so a read would fail the row.
+ */
+const TENANT_EVENTS: readonly WebhookEvent[] = ['pull_request', 'check_run', 'check_suite', 'issue_comment'];
+
 test.each(ROWS)('$title is answered $statusCode', async ({ event, payload, statusCode, body }) => {
-  const { app } = await webhookTestApp({ env: ENV });
+  const reachesFilter = statusCode === 200 && TENANT_EVENTS.includes(event);
+  const { app } = await (reachesFilter ? tenantWebhookApp : webhookTestApp)({ env: ENV });
   const response = await deliver(app, event, payload);
   expect(response.statusCode).toBe(statusCode);
   expect(response.json()).toEqual(body);
@@ -189,7 +197,7 @@ test('a ping is answered 200 pong, whatever the body holds', async () => {
 });
 
 test('with no GITHUB_APP_ID configured no check is ours, and the other events are routed as usual', async () => {
-  const { app } = await webhookTestApp({ env: { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT } });
+  const { app } = await tenantWebhookApp({ env: { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT } });
   expect((await deliver(app, 'check_run', webhookFixture('check_run'))).json()).toEqual(ignored('foreign_check'));
   expect((await deliver(app, 'check_suite', webhookFixture('check_suite'))).json()).toEqual(ignored('foreign_check'));
   expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).json()).toEqual(VERIFIED);
@@ -246,7 +254,7 @@ test('the answer holds constants of the server only: not the action, the event, 
 });
 
 test('an ignored delivery leaves the app serving: the next delivery is routed', async () => {
-  const { app } = await webhookTestApp({ env: ENV });
+  const { app } = await tenantWebhookApp({ env: ENV });
   expect((await deliver(app, 'push', { ref: 'refs/heads/main' })).statusCode).toBe(202);
   expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).statusCode).toBe(200);
 });

@@ -15,6 +15,7 @@ import {
   SECRET_PREVIOUS,
   sign,
   signLegacy,
+  unreachableDatabase,
   watchTimingSafeEqual,
   webhookTestApp,
 } from './test-support.ts';
@@ -243,10 +244,15 @@ test('the route sits outside /api, so the audit guard does not apply, and it dec
   app.addHook('onRoute', ({ method, url, config }) => {
     declared.push({ method, url, config });
   });
+  const db = unreachableDatabase();
+  onTestFinished(async () => {
+    await db.destroy();
+  });
   await app.register(webhookRoutes, {
     secrets: { current: undefined, previous: undefined },
     clock: systemClock,
     appId: undefined,
+    db,
   });
   expect(declared).toHaveLength(1);
   expect(declared[0]).toMatchObject({

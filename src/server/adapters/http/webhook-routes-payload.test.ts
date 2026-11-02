@@ -10,7 +10,14 @@ import {
   withValue,
 } from '../github/webhook-fixture/test-support.ts';
 import { webhookDeliverySchema } from '../github/webhook-schemas.ts';
-import { deliveryHeaders, postDelivery, SECRET_CURRENT, sign, webhookTestApp } from './test-support.ts';
+import {
+  deliveryHeaders,
+  postDelivery,
+  SECRET_CURRENT,
+  sign,
+  tenantWebhookApp,
+  webhookTestApp,
+} from './test-support.ts';
 
 // The event schemas (E06-S03) at the end of the chain, over the real route: signed deliveries of GitHub's events, and the
 // answer a payload that fails its schema gets.
@@ -35,7 +42,7 @@ const EVENTS: readonly WebhookEvent[] = [
 ];
 
 test.each(EVENTS)('a signed %s delivery that fits its schema is acknowledged', async (event) => {
-  const { app, logs } = await webhookTestApp({ env: ENV });
+  const { app, logs } = await tenantWebhookApp({ env: ENV });
   const response = await deliver(app, event, webhookFixture(event));
   expect(response.statusCode).toBe(200);
   expect(response.json()).toEqual({ status: 'verified' });
@@ -138,7 +145,7 @@ test.each([
 );
 
 test('a payload with __proto__ keys is acknowledged and leaves Object.prototype alone', async () => {
-  const { app } = await webhookTestApp({ env: ENV });
+  const { app } = await tenantWebhookApp({ env: ENV });
   const before = prototypeNames();
   const body = JSON.stringify(webhookFixture('pull_request')).replace(
     '"installation":{',
@@ -160,7 +167,7 @@ test('a repeated key in the body: the last one wins, so a last value that fails 
 });
 
 test('a schema that throws something that is not a validation failure is a 500, and the log holds no body', async () => {
-  const { app, logs } = await webhookTestApp({ env: ENV });
+  const { app, logs } = await tenantWebhookApp({ env: ENV });
   const spy = vi.spyOn(webhookDeliverySchema, 'safeParse').mockImplementation(() => {
     throw new Error('the schema is broken');
   });
