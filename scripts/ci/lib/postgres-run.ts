@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { labelOf, type Owner } from './container-owner.ts';
 import { LOOPBACK } from './ports.ts';
 
 /**
@@ -9,18 +10,12 @@ import { LOOPBACK } from './ports.ts';
 export const POSTGRES_IMAGE = 'postgres:18@sha256:3a4264520e121176619f54ff867d12774bc81e95e7b84db58d63bccdb6144b81';
 
 /**
- * Marks every container this helper creates, so a leftover can be found with `docker ps -a --filter label=...`, and so
- * that `stop` removes nothing else: the Docker daemon is shared with other repositories.
+ * Every container name this helper creates starts with `cla-pg-` and carries the label `cla-gate.ci=postgres`, so a
+ * leftover can be found with `docker ps -a --filter label=...`, and so that `stop` removes nothing else: the Docker
+ * daemon is shared with other repositories.
  */
-export const LABEL_KEY = 'cla-gate.ci';
-export const LABEL_VALUE = 'postgres';
-export const CONTAINER_LABEL = `${LABEL_KEY}=${LABEL_VALUE}`;
-
-/** Every container name this helper creates starts with this; `stop` refuses any other name. */
-export const CONTAINER_PREFIX = 'cla-pg-';
-
-/** What Docker accepts as a name, minus the characters that could pass for an option when handed to the CLI. */
-export const NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$/;
+export const POSTGRES_OWNER: Owner = { prefix: 'cla-pg-', labelKey: 'cla-gate.ci', labelValue: 'postgres' };
+export const CONTAINER_LABEL = labelOf(POSTGRES_OWNER);
 
 /** The password reaches docker through its environment (`-e POSTGRES_PASSWORD` without a value), never through argv. */
 export function runArguments(name: string, port: number, image: string): string[] {

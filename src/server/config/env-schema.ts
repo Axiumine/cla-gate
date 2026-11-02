@@ -29,6 +29,7 @@ export const envSchema = z
   .superRefine((env, ctx) => {
     // Session cookies are `Secure` and `__Host-` prefixed, so a production deployment is HTTPS by definition.
     if (env.NODE_ENV === 'production' && !env.PUBLIC_BASE_URL?.startsWith('https://')) {
+      // Stryker disable next-line StringLiteral: only the variable name of an issue is ever reported, never its message
       ctx.addIssue({ code: 'custom', path: ['PUBLIC_BASE_URL'], message: 'https origin required in production' });
     }
   });

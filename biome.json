@@ -13,7 +13,9 @@
         "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 10 } },
         "useLiteralKeys": "off"
       }
-    }
+    },
+    "domains": { "playwright": "none" }
   },
+  "overrides": [{ "includes": ["e2e/**"], "linter": { "domains": { "playwright": "recommended" } } }],
   "assist": { "actions": { "source": { "organizeImports": "on" } } }
 }

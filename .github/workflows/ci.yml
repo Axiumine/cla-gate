@@ -5,9 +5,11 @@
 # `static` and `coverage` are the exact job names that branch protection requires on main (CONTRIBUTING.md,
 # "Repository protection"): renaming a job breaks the rule.
 #
-# Runners: every job runs on the maintainer's persistent, shared, self-hosted runners, spelled as the literal list
+# Runners: every job but one runs on the maintainer's persistent, shared, self-hosted runners, spelled as the literal list
 # [self-hosted, Linux, X64] and never as an expression (a runs-on expression is not a security boundary: on
 # pull_request the workflow file comes from the PR). The only protection of that shared host is the fork approval gate.
+# The exception is `qodana` (E20-S08): the one job that holds a secret (QODANA_TOKEN), which the runner policy keeps off the
+# shared runners, so it runs on the literal ubuntu-24.04 (GitHub-hosted, a fresh virtual machine per run).
 # docs/ci-runners.md is the policy, and `yarn ci:runners` (the static job runs it) enforces it on this directory.
 #
 # Hygiene on a shared host: timeout-minutes on every job, contents: read, no secrets, persist-credentials: false, a
@@ -23,12 +25,27 @@ on:
   pull_request:
   push:
     branches: [main]
+    # Release candidates (E20-S07): a v* tag runs every job, and it is one of the three events that run the leaks job.
+    tags: ["v*"]
+  # Nightly run on the default branch (E20-S02): every job runs, and the trivy job also scans the dev dependencies.
+  schedule:
+    - cron: "17 3 * * *"
+  # Manual run (E20-S04). `force` adds --force to the mutation run: needed after a snapshot or environment change, which
+  # Stryker's incremental mode does not notice.
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Run every mutant again instead of reusing the incremental cache
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# The event name is part of the group so that a queued nightly run is never replaced by a newer push to main (GitHub keeps
+# one pending run per group and cancels the rest).
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -109,6 +126,8 @@ jobs:
         run: yarn typecheck
       - name: ESLint
         run: yarn lint:eslint
+      - name: Escape hatches (justification gate)
+        run: yarn lint:hatches
       - name: Type coverage (per tsconfig project)
         run: yarn type-coverage
       - name: Knip (default and production modes)
@@ -189,6 +208,15 @@ jobs:
       # CI=1 (set by the script) makes Vitest refuse to write new snapshots; thresholds are 100%.
       - name: Tests with 100% coverage
         run: yarn coverage
+      # E20-S08: the qodana job reads the lcov report (paths relative to the repository root) as its coverage input. One day
+      # is enough: the job needs this one, runs in the same workflow run, and the report is rebuilt on every run.
+      - name: Upload the lcov report for Qodana
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 1
+          if-no-files-found: error
 
   # Not a required check (branch protection requires only `static` and `coverage`): it repeats the unit tests against
   # a real PostgreSQL 18 server instead of PGlite, so a difference between the two shows up here. No `services:` block:
@@ -198,6 +226,10 @@ jobs:
   # `cla_test_<hex>` database (the postgres user may), runs the whole suite in it (one file at a time, one connection
   # per file) and drops it afterwards. The last step removes the container even when the job failed or was cancelled.
   # Coverage is measured by the `coverage` job, not here.
+  # E20-S03: the suite runs with REQUIRE_REAL_POSTGRES=1, so a test that needs a real server (realPostgresOnly in
+  # src/server/adapters/db/test-support.ts) fails here instead of being skipped when the database is missing, and with
+  # CLA_ROLE_TESTS=1, which lets the tests that create or alter cluster-wide roles run: the server is this job's own
+  # disposable container, so no other database is touched. The server version goes to the job summary before the tests.
   postgres:
     name: postgres
     runs-on: [self-hosted, Linux, X64]
@@ -269,10 +301,684 @@ jobs:
         run: yarn install --immutable
       - name: Start PostgreSQL 18 (random free loopback port)
         run: yarn ci:postgres start
+      # The container name comes from the start step, never from the event. psql runs inside that container, over the
+      # socket the official image trusts, so no password is involved.
+      - name: Record the server version in the job summary
+        shell: bash
+        run: |
+          set -eu
+          version=$(docker exec "$CLA_PG_CONTAINER" psql --username postgres --no-psqlrc --tuples-only --no-align --command 'select version()')
+          echo "$version"
+          {
+            echo '### PostgreSQL server'
+            echo
+            echo '```'
+            echo "$version"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Tests against PostgreSQL 18
         run: yarn test
+        env:
+          REQUIRE_REAL_POSTGRES: "1"
+          CLA_ROLE_TESTS: "1"
       # CLA_PG_CONTAINER is exported by the start step before docker runs, so a failed start is cleaned up as well, and
       # a job that never got that far (a failed checkout) skips this step.
       - name: Remove the PostgreSQL container
         if: ${{ always() && env.CLA_PG_CONTAINER != '' }}
         run: yarn ci:postgres stop
+
+  # Security scan (E20-S01). Not a required check: it joins `static` and `coverage` only after it has been stable (E20-S10).
+  # Semgrep is a Python tool, installed with pipx at the exact version pinned in mise.toml (a test keeps the two equal).
+  # PIPX_HOME and PIPX_BIN_DIR point into the runner's temp directory, never into the shared runner user's home, and so do
+  # the files Semgrep itself writes (settings and log). `yarn semgrep` is `semgrep scan --config p/... --error`, the
+  # same command as the pre-push hook and `semgrep ci` is never used (it ignores --config and targets the platform).
+  # No SARIF upload, no artifact and no cache of rules/: the Semgrep Rules License v1.0 restricts redistribution.
+  semgrep:
+    name: semgrep
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. python3 and pipx are needed
+      # to install Semgrep: the log shows who runs here and says what is missing.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar python3 pipx; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Install Semgrep (pinned, in the runner temp directory)
+        run: |
+          set -eu
+          base="$RUNNER_TEMP/semgrep"
+          mkdir -p "$base"
+          export PIPX_HOME="$base/pipx" PIPX_BIN_DIR="$base/bin" PIPX_MAN_DIR="$base/man"
+          export SEMGREP_SETTINGS_FILE="$base/settings.yml" SEMGREP_LOG_FILE="$base/semgrep.log"
+          pipx install semgrep==1.183.0
+          {
+            echo "SEMGREP_SETTINGS_FILE=$SEMGREP_SETTINGS_FILE"
+            echo "SEMGREP_LOG_FILE=$SEMGREP_LOG_FILE"
+          } >> "$GITHUB_ENV"
+          echo "$PIPX_BIN_DIR" >> "$GITHUB_PATH"
+          "$PIPX_BIN_DIR/semgrep" --version
+      - name: Semgrep (security scan)
+        run: yarn semgrep
+
+  # Vulnerability, secret and misconfiguration scan (E20-S02). Not a required check: it joins `static` and `coverage` only
+  # after it has been stable (E20-S11). Trivy comes from aquasecurity/setup-trivy at the exact version pinned in mise.toml
+  # (a test keeps the two equal and fails on a compromised release); trivy-action is not used. The binary and Trivy's cache
+  # live in the runner's temp directory (setup-trivy wants a literal path, hence the expression, which the runner resolves
+  # before the step runs), never in the shared runner user's home directory. The cache is keyed by calendar day: the
+  # vulnerability database is refreshed at most once a day and a restored older one is updated by Trivy itself.
+  # `yarn trivy` is the one source of the command (the pre-push hook runs it too). Only on the nightly schedule the job also
+  # runs `yarn trivy:dev`, so a vulnerability in a dev-only dependency fails the nightly run and not pull requests. The
+  # action's own install step checks out the Trivy repository with the workflow token (contents: read, expires with the
+  # job) and deletes that copy again. No image is built or scanned: Trivy only reads files.
+  trivy:
+    name: trivy
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    env:
+      TRIVY_NO_PROGRESS: "true"
+      TRIVY_SKIP_VERSION_CHECK: "true"
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. The Trivy install script
+      # downloads with curl, unpacks with tar and verifies the archive with sha256sum.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar sha256sum; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Install Trivy (pinned, in the runner temp directory)
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.1
+          path: ${{ runner.temp }}/trivy
+          cache: false
+      - name: Keep Trivy's cache in the runner temp directory
+        id: day
+        run: |
+          echo "TRIVY_CACHE_DIR=$RUNNER_TEMP/trivy-cache" >> "$GITHUB_ENV"
+          echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - name: Restore the Trivy cache (one per calendar day)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-${{ runner.os }}-${{ steps.day.outputs.day }}
+          restore-keys: trivy-${{ runner.os }}-
+      - name: Trivy (vulnerabilities, then secrets and misconfiguration)
+        run: yarn trivy
+      - name: Trivy (dev dependencies, nightly run only)
+        if: ${{ github.event_name == 'schedule' }}
+        run: yarn trivy:dev
+
+  # Mutation gate (E20-S04), `yarn mutate` = `stryker run --incremental`. Not a required check: it joins `static` and `coverage`
+  # only after it has been stable (E20-S13). It waits for `static`, because mutating code that does not even pass the static
+  # checks is wasted time. The incremental file is restored from a cache whose key starts with a hash of everything that makes
+  # an old result untrustworthy (the lockfile, Node, the Stryker config, the Vitest configs); the key ends with the commit, so
+  # every successful run saves a new file, and `restore-keys` is the same prefix, so a change to any of those files starts from
+  # a fresh run. Snapshot and environment changes are not seen by Stryker: a manual run with `force` covers them, and the
+  # nightly run always adds --force, so the cache cannot hide a regression for longer than a day. The report is uploaded
+  # even when the score is below the threshold. Mutation never runs in a git hook. `--logLevel debug` is never used: it
+  # crashes with Vitest 5 (Stryker issue 6272). No secret, no network beyond the package registry.
+  # The same job runs a second scope (E20-S05), `yarn mutate:scripts` = `STRYKER_SCOPE=scripts stryker run --incremental`,
+  # for the code caps tool, with its own incremental file and its own cache, so neither scope can spoil the other's cache.
+  # It runs after the server scope succeeded, and both reports land in the one uploaded artifact.
+  mutation:
+    name: mutation
+    needs: static
+    # Not on pull requests (2026-11-02): the first cold run on the shared runners hit the 45-minute timeout and was cancelled,
+    # so no incremental file was saved, and a job that long on every push would hold one of the three shared runners that other
+    # repositories also use. It runs on pushes to main, tags, the nightly schedule and by hand, which is where the incremental
+    # cache is written. The condition is removed after the first green run (E20-S04, Open line).
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Restore the Stryker incremental file
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-${{ github.sha }}
+          restore-keys: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-
+      - name: Restore the Stryker incremental file (scripts scope)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental-scripts.json
+          key: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-${{ github.sha }}
+          restore-keys: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-
+      # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command.
+      - name: Mutation tests
+        env:
+          MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
+        run: |
+          set -eu
+          if [ "$MUTATE_FORCE" = "true" ]; then
+            yarn mutate --force
+          else
+            yarn mutate
+          fi
+      - name: Mutation tests (scripts scope)
+        env:
+          MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
+        run: |
+          set -eu
+          if [ "$MUTATE_FORCE" = "true" ]; then
+            yarn mutate:scripts --force
+          else
+            yarn mutate:scripts
+          fi
+      - name: Upload the mutation report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 7
+
+  # Browser tests (E20-S06), `yarn e2e` against the built server on a migrated PostgreSQL 18. Not a required check: it joins
+  # `static` and `coverage` only after it has been stable (E20-S15). It waits for `static`. There is no job-level `container:`
+  # and no `services:` (docs/ci-runners.md, rule R7): scripts/ci/postgres.ts starts the database and scripts/ci/e2e.ts starts
+  # the pinned Playwright image, both from `run:` steps, with per-run names, a random free loopback port, and a cleanup step
+  # that runs even when the job fails or is cancelled. The image is Microsoft's Playwright image at the tag of the
+  # @playwright/test version in package.json and at a digest; scripts/e2e-pin.test.ts keeps the three equal, so a bump of the
+  # package fails until this line is bumped with it. The browsers of the image are the only place visual baselines come from
+  # (yarn e2e:update runs the same image), and its Node is the repository's own. The container shares the host network, which
+  # is how it reaches the database on the host's loopback and how the application under test listens on a random port above
+  # 32768; it runs as the runner user, so nothing it writes in the workspace is out of the runner's reach. The application
+  # gets random throw-away secrets from playwright.config.ts: no repository secret exists and none is used. The application
+  # connects as the container's superuser, like the `postgres` job's tests do. The report and the traces are uploaded when a
+  # step fails. The second Playwright step regenerates the baselines twice and fails when the two results differ, which is
+  # the proof that a baseline is byte-stable, and then fails when git status of the baseline directory is not clean, which
+  # is the proof that the files are the committed ones, written by this image (nothing is committed from the job).
+  e2e:
+    name: e2e
+    needs: static
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    env:
+      E2E_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Both containers need a Docker
+      # daemon the runner user can reach.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+          if ! docker info >/dev/null 2>&1; then
+            echo "::error title=Runner preflight::the Docker daemon is not reachable by $(id -un): install Docker or add the runner user to the docker group (docs/ci-runners.md)"
+            exit 1
+          fi
+          echo "docker server $(docker version --format '{{.Server.Version}}')"
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # The browsers come from the image, so no install script runs here (and none would download one).
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      - name: Build (the server the tests start)
+        run: yarn build
+      - name: Start PostgreSQL 18 (random free loopback port)
+        run: yarn ci:postgres start
+      # The owner URL is the one the start step exported: the container's own superuser, in a database that exists for minutes.
+      - name: Migrate the database
+        run: yarn db:migrate
+        env:
+          MIGRATION_DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Playwright tests in the pinned container
+        run: yarn ci:e2e run yarn e2e
+      # Two updates in a row must agree with each other, and the files they leave must be the committed ones: git status of
+      # the baseline directory stays clean, so a baseline that was not written by this image cannot pass.
+      - name: Visual baselines are byte-stable (two updates in a row give the same files)
+        run: |
+          set -eu
+          shots=e2e/__screenshots__
+          yarn ci:e2e run yarn e2e --update-snapshots=all
+          before=$(find "$shots" -type f -exec sha256sum {} + | sort -k2)
+          yarn ci:e2e run yarn e2e --update-snapshots=all
+          after=$(find "$shots" -type f -exec sha256sum {} + | sort -k2)
+          if [ -z "$before" ]; then
+            echo "::error title=Visual baselines::no baseline file found under $shots"
+            exit 1
+          fi
+          if [ "$before" != "$after" ]; then
+            echo "::error title=Visual baselines::two update runs in a row wrote different files: the baselines are not byte-stable"
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain --untracked-files=all -- "$shots")" ]; then
+            git status --short --untracked-files=all -- "$shots"
+            echo "::error title=Visual baselines::the update runs left files under $shots that differ from the committed ones: commit the baselines written by yarn e2e:update in the pinned image"
+            exit 1
+          fi
+          echo "byte-stable: $(printf '%s\n' "$after" | wc -l) baseline file(s) identical after the second update and equal to the committed files"
+      - name: Upload the Playwright report and traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+      # Both names come from the start steps, never from the event; a job that never got that far skips the step.
+      - name: Remove the Playwright container
+        if: ${{ always() && env.CLA_E2E_CONTAINER != '' }}
+        run: yarn ci:e2e stop
+      - name: Remove the PostgreSQL container
+        if: ${{ always() && env.CLA_PG_CONTAINER != '' }}
+        run: yarn ci:postgres stop
+
+  # Memory leak scenarios (E20-S07), `yarn leaks:control` and then `yarn leaks`. Never a required check and never promoted: it
+  # runs only on the nightly schedule, on a manual run and on a v* tag (a release candidate), so a pull request does not wait
+  # for it. It waits for `coverage`, so a build that fails the unit tests is not measured. memlab has no exit code for a leak,
+  # so tests/leaks/run.ts turns the number of leaks into one (0 clean, 1 a leak, 2 an error), and leaks:control proves that
+  # with a fixture that leaks on purpose, a clean one and a broken one before the real scenarios run. memlab works on Node
+  # 26 (smoke run of E20-S07), so the job runs on the runner with the repository's Node, not in a container. It drives the
+  # Chromium that Playwright installs, so one browser is downloaded; PLAYWRIGHT_BROWSERS_PATH points into the runner's temp
+  # directory, because the default is the shared runner user's home directory. The step after the install runs the browser
+  # once, so a runner that lacks the libraries Chromium needs says so in one line. No secret, no container, no Docker. The
+  # scenario reports (memlab's traces and heap snapshots, plus any *.heapprofile written there by hand with
+  # `node --heap-prof --heap-prof-dir=reports/leaks`) are uploaded when a step fails.
+  leaks:
+    name: leaks
+    needs: coverage
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # No install script runs: memlab's puppeteer would download a second Chromium from it, and the next step installs the one
+      # browser the job uses.
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      # The variable goes to the next steps through GITHUB_ENV; tests/leaks/run.ts asks Playwright where the browser is, and
+      # Playwright reads the same variable.
+      - name: Install Chromium (the one browser, in the runner temp directory)
+        run: |
+          set -eu
+          browsers="$RUNNER_TEMP/playwright-browsers"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$browsers" >> "$GITHUB_ENV"
+          PLAYWRIGHT_BROWSERS_PATH="$browsers" yarn playwright install --no-shell chromium
+      - name: Check that Chromium starts
+        run: |
+          set -eu
+          chrome=$(node -p "require('@playwright/test').chromium.executablePath()")
+          if ! "$chrome" --version; then
+            echo "::error title=Chromium::the browser Playwright installed does not start on this runner: a system library is probably missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+      - name: Positive control (the wrapper must fail on a leak, pass on a clean page and report an error)
+        run: yarn leaks:control
+      - name: Leak scenarios
+        run: yarn leaks
+      - name: Upload the leak report, traces and heap profiles
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: leaks-report
+          path: reports/leaks/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # E20-S08: Qodana (JetBrains, qodana-js), an optional maintainer-side check that is never a required check. It needs a
+  # paid licence and the secret QODANA_TOKEN. This is the one job on a GitHub-hosted runner: the secret must not reach the
+  # shared self-hosted runners (docs/ci-runners.md, "Where each job runs and why"), and a fresh ubuntu-24.04 machine holds it
+  # for one run only. The first step decides whether the job can do anything. A pull request from a fork gets no secrets, and
+  # so does a run before the maintainer has created the secret: then every later step is skipped, a notice says why and the
+  # job ends green, so a contributor is never blocked by it. With a token, the Qodana action fails the step when the quality
+  # gate fails (exit code 255), and so the job.
+  # The action runs with pr-mode off (the whole project), no pull request comment, no result upload, no pushed fixes and no
+  # annotations: it needs nothing beyond contents: read, and the report lives in Qodana Cloud. The coverage report of the
+  # `coverage` job is downloaded into .qodana/code-coverage, one of the places where the qodana-js linter looks for an
+  # lcov report (the Qodana documentation, "Code coverage"; .qodana/ is git-ignored). The linter is pinned by tag in
+  # qodana.yaml and by digest here (`--linter`); refresh the digest with the tag: a test keeps the two in step.
+  qodana:
+    name: qodana
+    needs: coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check whether Qodana can run (a token, and not a fork pull request)
+        id: gate
+        shell: bash
+        env:
+          HAS_TOKEN: ${{ secrets.QODANA_TOKEN != '' }}
+          FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          set -eu
+          if [ "$FORK_PR" = "true" ]; then
+            echo "::notice title=Qodana skipped::this pull request comes from a fork and GitHub gives it no secrets, so Qodana cannot sign in; it is a maintainer-side check and never blocks a contributor"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_TOKEN" != "true" ]; then
+            echo "::notice title=Qodana skipped::the secret QODANA_TOKEN is not set (no licence yet, or a run that gets no secrets), so Qodana did not run; this is not a failure"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check out the repository
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      # The dependencies give the TypeScript inspections something to resolve imports against. No install script runs.
+      - name: Install dependencies
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        run: yarn install --immutable --mode=skip-build
+      - name: Download the lcov report of the coverage job
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-lcov
+          path: .qodana/code-coverage
+      # Qodana matches a coverage file to a source file by the path in the report, relative to the project root.
+      - name: Check the lcov report (present, and paths relative to the repository)
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        shell: bash
+        run: |
+          set -eu
+          report=.qodana/code-coverage/lcov.info
+          if [ ! -s "$report" ]; then
+            echo "::error title=Qodana coverage::$report is missing or empty: the coverage-lcov artifact is not what the coverage job uploads"
+            exit 1
+          fi
+          if ! grep -q '^SF:' "$report"; then
+            echo "::error title=Qodana coverage::$report lists no source file (no SF: line)"
+            exit 1
+          fi
+          if grep -q '^SF:/' "$report"; then
+            echo "::error title=Qodana coverage::$report has absolute paths: Qodana needs paths relative to the repository root (src/..., not /home/...)"
+            exit 1
+          fi
+          echo "coverage report: $(grep -c '^SF:' "$report") source files"
+      - name: Qodana scan
+        if: ${{ steps.gate.outputs.available == 'true' }}
+        uses: JetBrains/qodana-action@3e8d76ff0e0241618abd808682f426afe84bab3f # v2026.2.2
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+        with:
+          args: --linter jetbrains/qodana-js:2026.2@sha256:aadf928b1e8e846069f74edbf00aca614336708402b795f8c539fa06e766a096
+          pr-mode: false
+          post-pr-comment: false
+          upload-result: false
+          push-fixes: none
+          use-annotations: false

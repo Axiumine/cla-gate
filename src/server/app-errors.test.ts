@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { errorResponseSchema } from '../shared/errors.ts';
 import { testApp } from './test-support.ts';
 
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up message: the test proves that an exception message never reaches the response
 const SECRET_MESSAGE = 'connect to db.internal:5432 failed, password=hunter2';
 
 async function withRoutes() {
@@ -19,6 +20,19 @@ async function withRoutes() {
   });
   app.get('/teapot-as-500', () => {
     throw Object.assign(new Error('weird status'), { statusCode: 599 });
+  });
+  app.get('/below-client-errors', () => {
+    throw Object.assign(new Error('a redirect status on an error'), { statusCode: 302 });
+  });
+  app.get('/validation-without-status', () => {
+    // The marker fastify-type-provider-zod puts on every validation issue it creates (Symbol.for, a global registry).
+    const issue = {
+      [Symbol.for('ZodFastifySchemaValidationError')]: true,
+      keyword: 'zod',
+      instancePath: '',
+      schemaPath: '#',
+    };
+    throw Object.assign(new Error('validation details'), { validation: [issue] });
   });
   app.get('/unnamed-status', () => {
     throw Object.assign(new Error('no standard text for this status'), { statusCode: 499 });
@@ -65,6 +79,7 @@ test('a client error status without a standard text falls back to a plain Error'
 
 test.each([
   ['a status outside 4xx', '/teapot-as-500'],
+  ['a status below 400', '/below-client-errors'],
   ['a thrown string', '/string'],
 ])('%s is a 500', async (_label, url) => {
   const { app } = await withRoutes();
@@ -87,6 +102,17 @@ test('a body that fails validation is a generic 400 that echoes nothing and logs
   });
   expect(response.body).not.toMatch(/name|body-secret-value|issue|expected/);
   expect(logs.text()).not.toContain('body-secret-value');
+});
+
+test('a validation error that carries no status of its own is still a generic 400', async () => {
+  const { app } = await withRoutes();
+  const response = await app.inject('/validation-without-status');
+  expect(response.statusCode).toBe(400);
+  expect(errorResponseSchema.parse(response.json()).error).toMatchObject({
+    code: 'bad_request',
+    message: 'Bad Request',
+  });
+  expect(response.body).not.toContain('validation details');
 });
 
 test('a valid body passes validation', async () => {

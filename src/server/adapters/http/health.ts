@@ -20,8 +20,10 @@ async function databaseAnswers(db: Kysely<Database>, timeoutMs: number): Promise
     timeout.addEventListener(
       'abort',
       () => {
+        // Stryker disable next-line StringLiteral: the reason is thrown away by the catch below, only the rejection matters
         reject(new Error('the database did not answer in time'));
       },
+      // Stryker disable next-line ObjectLiteral,BooleanLiteral: an AbortSignal aborts once, so the listener runs once either way
       { once: true },
     );
   });
@@ -40,6 +42,7 @@ async function databaseAnswers(db: Kysely<Database>, timeoutMs: number): Promise
 export const healthRoutes: FastifyPluginCallbackZod<HealthRoutesOptions> = (app, options, done) => {
   app.get(
     '/healthz',
+    // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
     { schema: { response: { 200: healthResponseSchema } } },
     (): z.infer<typeof healthResponseSchema> => ({
       status: 'ok',
@@ -48,6 +51,7 @@ export const healthRoutes: FastifyPluginCallbackZod<HealthRoutesOptions> = (app,
 
   app.get(
     '/readyz',
+    // Stryker disable next-line ObjectLiteral: the response schemas restate what the handler returns, so dropping them changes no response
     { schema: { response: { 200: readyResponseSchema, 503: unavailableResponseSchema } } },
     async (request, reply): Promise<z.infer<typeof readyResponseSchema | typeof unavailableResponseSchema>> => {
       if (await databaseAnswers(options.db, options.readinessTimeoutMs)) {

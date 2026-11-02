@@ -24,11 +24,13 @@ export function byName(a: { readonly name: string }, b: { readonly name: string 
   if (a.name === b.name) {
     return 0;
   }
+  // Stryker disable next-line EqualityOperator: equal names returned 0 above, so < and <= agree on everything that gets here
   return a.name < b.name ? -1 : 1;
 }
 
 /** @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode). */
 export function toMigrationFile(name: string, sql: string): MigrationFile {
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos -- NAME is anchored with no nested quantifier (linear time); not a request handler
   if (!NAME.test(name)) {
     throw new MigrationError(`invalid migration file name ${JSON.stringify(name)}: expected NNN_snake_case.sql`);
   }

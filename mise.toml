@@ -3,5 +3,14 @@
 #
 # Canonical Node version for mise (mise ignores .nvmrc unless configured). Keep in sync with .nvmrc,
 # package.json devEngines.runtime and the CI workflow (which reads .nvmrc).
+#
+# Semgrep (E20-S01) is a Python tool, installed by mise through pipx. Its exact version is also spelled in the
+# `semgrep` job of .github/workflows/ci.yml (`pipx install semgrep==<version>`): a test keeps the two equal.
+#
+# Trivy (E20-S02) is pinned exactly, at v0.76.1 or later, which keeps clear of the releases compromised in March 2026
+# (a test names them and fails on any mention). The `trivy` job of ci.yml installs the same version with
+# aquasecurity/setup-trivy (`version: v<version>`); a test keeps the two equal.
 [tools]
 node = "26.13.0"
+"pipx:semgrep" = "1.183.0"
+"aqua:aquasecurity/trivy" = "0.76.1"

@@ -9,6 +9,7 @@ const HOPS = /^\d{1,3}$/;
 const PREFIX = /^\d{1,3}$/;
 
 function isAddressOrCidr(entry: string): boolean {
+  // Stryker disable next-line StringLiteral: split() always returns at least one element, so the default is never used (the compiler wants it)
   const [address = '', prefix, ...rest] = entry.split('/');
   const family = isIP(address);
   if (rest.length > 0 || (family !== 4 && family !== 6)) {

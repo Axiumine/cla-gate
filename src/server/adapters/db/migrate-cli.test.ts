@@ -10,6 +10,7 @@ import { openPgliteDatabase } from './pglite.ts';
 import type { Database } from './schema.ts';
 import { MIGRATIONS_DIRECTORY, writeMigrationDirectory } from './test-support.ts';
 
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_password -- made-up value: the tests prove that the password never reaches the output
 const URL_WITH_PASSWORD = 'postgres://owner:s3cr3t-pw@db.internal:5432/cla';
 const ENV = { DATABASE_URL: URL_WITH_PASSWORD };
 
@@ -38,6 +39,14 @@ test('with nothing pending it says the database is up to date', async () => {
   const { out, io } = sinks();
   expect(await runMigrateCli({ env: ENV, directory, connect: () => db, ...io })).toBe(0);
   expect(out).toEqual(['migrations: up to date']);
+});
+
+test('several applied migrations are listed in order, separated by a comma and a space', async () => {
+  const db = await openPgliteDatabase();
+  const { out, io } = sinks();
+  const directory = await writeMigrationDirectory({ ...A, '002_b.sql': 'create table b (id integer);' });
+  expect(await runMigrateCli({ env: ENV, directory, connect: () => db, ...io })).toBe(0);
+  expect(out).toEqual(['migrations applied: 001_a.sql, 002_b.sql']);
 });
 
 test('the real migrations apply cleanly through the CLI', async () => {
@@ -119,6 +128,19 @@ test('errors that carry no message or are not errors still produce one line', as
   expect(await runMigrateCli({ env: ENV, directory, connect: silent, ...io })).toBe(1);
   expect(await runMigrateCli({ env: ENV, directory, connect: weird, ...io })).toBe(1);
   expect(err).toEqual(['migration failed: Error: no details', 'migration failed: unknown error']);
+});
+
+test.each([
+  ['a string code stands in for an empty message', 'ECONNREFUSED', 'ECONNREFUSED'],
+  ['a numeric code is not a code', 5, 'no details'],
+])('an error with no message: %s', async (_label, code, shown) => {
+  const { err, io } = sinks();
+  const directory = await writeMigrationDirectory({});
+  const broken = (): Kysely<Database> => {
+    throw Object.assign(new Error(''), { code });
+  };
+  expect(await runMigrateCli({ env: ENV, directory, connect: broken, ...io })).toBe(1);
+  expect(err).toEqual([`migration failed: Error: ${shown}`]);
 });
 
 test('without custom sinks it writes to stdout', async () => {

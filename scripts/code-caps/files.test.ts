@@ -3,8 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { expect, test } from 'vitest';
-import { measureRepo, sourceFiles } from './files.ts';
+import { afterEach, expect, test, vi } from 'vitest';
+import { gitFiles, measureRepo, sourceFiles, walkFiles } from './files.ts';
 import { func, git, makeRepo, tempDir } from './test-support.ts';
 import { CapsError, compareNames } from './types.ts';
 
@@ -25,6 +25,16 @@ const OUTPUT_DIRS = [
   'test-results',
 ];
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+/** A directory name, and whether it belongs to the tool-directory set or the output-directory set. */
+const DIRECTORIES: (readonly [string, 'tool' | 'output'])[] = [
+  ...TOOL_DIRS.map((name) => [name, 'tool'] as const),
+  ...OUTPUT_DIRS.map((name) => [name, 'output'] as const),
+];
+
 /** A `{path: SMALL}` file map. */
 function smallFiles(names: readonly string[]): Record<string, string> {
   return Object.fromEntries(names.map((name) => [name, SMALL]));
@@ -37,11 +47,16 @@ test('keeps only source extensions, sorted', () => {
   expect(sourceFiles(root)).toEqual(['a.tsx', 'b.mts', 'c.cts', 'd.js', 'dir/k.ts', 'e.jsx', 'f.mjs', 'g.cjs', 'z.ts']);
 });
 
-test('walking a plain directory prunes every tool and output directory, at the top and deeper', () => {
+test.each(DIRECTORIES)('walking a plain directory prunes %s (%s directory) at the top and nested', (name) => {
   const root = tempDir();
-  const inside = [...TOOL_DIRS, ...OUTPUT_DIRS].flatMap((dir) => [`${dir}/top.ts`, `src/${dir}/deep.ts`]);
-  makeRepo(root, smallFiles([...inside, 'src/ok.ts']));
+  makeRepo(root, smallFiles([`${name}/top.ts`, `src/${name}/deep.ts`, `src/a/${name}/deeper.ts`, 'src/ok.ts']));
   expect(sourceFiles(root)).toEqual(['src/ok.ts']);
+});
+
+test('the plain walk lists files of every extension and leaves out the files of pruned directories only', () => {
+  const root = tempDir();
+  makeRepo(root, smallFiles(['a.ts', 'notes.md', 'sub/b.png', 'node_modules/x.ts', 'sub/dist/y.ts']));
+  expect(walkFiles(root).sort(compareNames)).toEqual(['a.ts', 'notes.md', 'sub/b.png']);
 });
 
 test('a directory whose name looks like a source file is not a file', () => {
@@ -50,12 +65,10 @@ test('a directory whose name looks like a source file is not a file', () => {
   expect(sourceFiles(root)).toEqual(['odd.ts/inner.ts']);
 });
 
-test('names are sorted by code point, uppercase first', () => {
+test('names are sorted by code point in a plain directory: uppercase first, a file before the directory of the same stem', () => {
   const root = tempDir();
-  makeRepo(root, smallFiles(['b.ts', 'A.ts', 'a.ts', 'B.ts']));
-  expect(sourceFiles(root)).toEqual(['A.ts', 'B.ts', 'a.ts', 'b.ts']);
-  git(root, 'init', '-q');
-  expect(sourceFiles(root)).toEqual(['A.ts', 'B.ts', 'a.ts', 'b.ts']);
+  makeRepo(root, smallFiles(['C.ts', 'a/b.ts', 'a.ts', 'B.ts']));
+  expect(sourceFiles(root)).toEqual(['B.ts', 'C.ts', 'a.ts', 'a/b.ts']);
 });
 
 // --------------------------------------------------------------------------- git
@@ -67,19 +80,70 @@ test('uses git: honours .gitignore and lists untracked files', () => {
   expect(sourceFiles(root)).toEqual(['untracked.ts']);
 });
 
-test('uses git: a tracked path below a tool directory is skipped at any depth', () => {
+test('names are sorted by code point in a repository: uppercase first, tracked and untracked files together', () => {
   const root = tempDir();
   git(root, 'init', '-q');
-  const inside = TOOL_DIRS.filter((dir) => dir !== '.git').map((dir) => `a/b/${dir}/c.ts`);
-  makeRepo(root, smallFiles([...inside, 'a/b/ok.ts']));
-  expect(sourceFiles(root)).toEqual(['a/b/ok.ts']);
+  makeRepo(root, smallFiles(['C.ts', 'a.ts', 'B.ts']));
+  git(root, 'add', 'C.ts', 'a.ts');
+  expect(sourceFiles(root)).toEqual(['B.ts', 'C.ts', 'a.ts']);
 });
 
-test('uses git: source in a directory named like build output is still measured', () => {
+test.each(TOOL_DIRS.filter((name) => name !== '.git'))(
+  'uses git: a path below the tool directory %s is skipped at the top and at any depth',
+  (name) => {
+    const root = tempDir();
+    git(root, 'init', '-q');
+    makeRepo(root, smallFiles([`${name}/top.ts`, `a/b/${name}/deep.ts`, 'a/b/ok.ts']));
+    git(root, 'add', '.');
+    expect(sourceFiles(root)).toEqual(['a/b/ok.ts']);
+  },
+);
+
+test.each(OUTPUT_DIRS)(
+  'uses git: a tracked file below the output directory %s is kept at the top and nested',
+  (name) => {
+    const root = tempDir();
+    git(root, 'init', '-q');
+    makeRepo(root, smallFiles([`${name}/top.ts`, `src/${name}/deep.ts`, 'ok.ts']));
+    git(root, 'add', '.');
+    expect(sourceFiles(root)).toEqual(['ok.ts', `${name}/top.ts`, `src/${name}/deep.ts`].sort(compareNames));
+  },
+);
+
+test('git lists only the source extensions, and no empty entry from the final NUL', () => {
   const root = tempDir();
   git(root, 'init', '-q');
-  makeRepo(root, smallFiles(OUTPUT_DIRS.map((dir) => `src/${dir}/x.ts`)));
-  expect(sourceFiles(root)).toEqual(OUTPUT_DIRS.map((dir) => `src/${dir}/x.ts`).sort(compareNames));
+  makeRepo(root, smallFiles(['z.ts', 'a.ts', 'sub/c.tsx', 'notes.md', 'logo.png']));
+  git(root, 'add', 'z.ts');
+  expect(gitFiles(root)).toEqual(['a.ts', 'sub/c.tsx', 'z.ts']);
+});
+
+test('an empty repository lists nothing: the empty text after the final NUL is not a file name', () => {
+  const root = tempDir();
+  git(root, 'init', '-q');
+  expect(gitFiles(root)).toEqual([]);
+  expect(sourceFiles(root)).toEqual([]);
+});
+
+test('outside a repository git has no list and the plain walk answers instead', () => {
+  const root = tempDir();
+  makeRepo(root, smallFiles(['src/ok.ts', 'node_modules/x.ts', 'src/build/y.ts']));
+  expect(gitFiles(root)).toBeUndefined();
+  expect(sourceFiles(root)).toEqual(['src/ok.ts']);
+});
+
+test('when git cannot be run inside a repository, the list is the one the plain walk gives', () => {
+  const files = smallFiles(['src/ok.ts', 'node_modules/x.ts', 'src/build/y.ts']);
+  const root = tempDir();
+  git(root, 'init', '-q');
+  makeRepo(root, files);
+  expect(sourceFiles(root)).toEqual(['src/build/y.ts', 'src/ok.ts']);
+  vi.stubEnv('PATH', tempDir());
+  expect(gitFiles(root)).toBeUndefined();
+  expect(sourceFiles(root)).toEqual(['src/ok.ts']);
+  const plain = tempDir();
+  makeRepo(plain, files);
+  expect(sourceFiles(root)).toEqual(sourceFiles(plain));
 });
 
 test('uses git: a tracked file deleted from the work tree is skipped', () => {

@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { ContainerError, type HealthDeps, waitHealthy } from './container-health.ts';
+import { firstLine, removeOwned } from './container-owner.ts';
 import type { Exec } from './exec.ts';
 import { withFreePort } from './ports.ts';
-import {
-  CONTAINER_LABEL,
-  CONTAINER_PREFIX,
-  databaseUrl,
-  LABEL_KEY,
-  LABEL_VALUE,
-  NAME_PATTERN,
-  POSTGRES_IMAGE,
-  runArguments,
-} from './postgres-run.ts';
+import { databaseUrl, POSTGRES_IMAGE, POSTGRES_OWNER, runArguments } from './postgres-run.ts';
 
 const PORT_ATTEMPTS = 5;
 const HEALTH_TIMEOUT_MS = 120_000;
@@ -35,53 +27,17 @@ export interface Started {
   readonly url: string;
 }
 
-/** One line of docker's stderr is enough for a log; the rest is noise. */
-function firstLine(text: string): string {
-  return text.trim().split('\n', 1).join('');
-}
-
 /** `docker run` refused the name because a container of that name exists: not ours to clean up. */
 class NameConflictError extends ContainerError {}
 
 const NAME_IN_USE = /container name .* is already in use/i;
-const NO_SUCH_CONTAINER = /no such (container|object)/i;
-
-/** The value of our label on the container, or undefined when there is no such container. */
-async function ownerLabel(exec: Exec, name: string): Promise<string | undefined> {
-  const format = `{{index .Config.Labels "${LABEL_KEY}"}}`;
-  const result = await exec('docker', ['container', 'inspect', '--format', format, name]);
-  if (result.code === 0) {
-    return result.stdout.trim();
-  }
-  if (NO_SUCH_CONTAINER.test(result.stderr)) {
-    return undefined;
-  }
-  throw new ContainerError(`docker inspect failed: ${firstLine(result.stderr)}`);
-}
 
 /**
  * Removes the container and its anonymous volume. Idempotent: a container that is already gone is not an error. The
  * Docker daemon is shared, so it removes only a name that starts with `cla-pg-` and a container that carries our label.
  */
-export async function stopPostgres(exec: Exec, name: string): Promise<'removed' | 'absent'> {
-  if (!NAME_PATTERN.test(name) || !name.startsWith(CONTAINER_PREFIX)) {
-    throw new ContainerError('refusing to remove a container with an unexpected name');
-  }
-  const label = await ownerLabel(exec, name);
-  if (label === undefined) {
-    return 'absent';
-  }
-  if (label !== LABEL_VALUE) {
-    throw new ContainerError(`refusing to remove container ${name}: it does not carry the label ${CONTAINER_LABEL}`);
-  }
-  const result = await exec('docker', ['rm', '--force', '--volumes', name]);
-  if (result.code === 0) {
-    return result.stdout.trim() === name ? 'removed' : 'absent';
-  }
-  if (NO_SUCH_CONTAINER.test(result.stderr)) {
-    return 'absent';
-  }
-  throw new ContainerError(`docker rm failed: ${firstLine(result.stderr)}`);
+export function stopPostgres(exec: Exec, name: string): Promise<'removed' | 'absent'> {
+  return removeOwned(exec, name, POSTGRES_OWNER);
 }
 
 async function runOnFreePort(deps: StartDeps, options: StartOptions): Promise<number> {

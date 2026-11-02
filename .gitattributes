@@ -1,2 +1,5 @@
 # Migrations are checksummed (src/server/adapters/db/migrator.ts): a CRLF checkout on Windows must not change the hash.
 migrations/*.sql text eol=lf
+
+# Visual baselines are PNG files written only by the pinned container: never diffed, merged or converted as text.
+e2e/__screenshots__/** binary

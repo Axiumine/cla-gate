@@ -10,3 +10,13 @@ export function messageOf(error: unknown): string {
     .map((line) => printable(line))
     .join('\n');
 }
+
+/**
+ * `<tool> <command>: <first line>`, then one `| `-prefixed line per further line of the message. Continuation lines
+ * (container logs) lose their control characters and cannot start with `::`, so nothing a container prints can pass for
+ * a workflow command.
+ */
+export function reportLines(tool: string, command: string, error: unknown): string[] {
+  const [first = '', ...rest] = messageOf(error).split('\n');
+  return [`${tool} ${command}: ${first}`, ...rest.map((line) => `| ${line}`)];
+}

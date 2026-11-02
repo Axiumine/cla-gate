@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
 import { expect, test } from 'vitest';
-import { GIT_HOOK_VARIABLES, scrubGitHookEnv } from './test-support.ts';
+import { causeOf, GIT_HOOK_VARIABLES, scrubGitHookEnv } from './test-support.ts';
 
 test('the scrub removes every variable a git hook sets and keeps the rest', () => {
   const env: Record<string, string | undefined> = {
@@ -31,3 +31,27 @@ test.each(['GIT_INDEX_FILE', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_AUTHOR_NAME', 'GIT
     expect(GIT_HOOK_VARIABLES).toContain(name);
   },
 );
+
+test('causeOf returns the cause of the error that is thrown', () => {
+  const cause = new RangeError('inner');
+  expect(
+    causeOf(() => {
+      throw new Error('outer', { cause });
+    }),
+  ).toBe(cause);
+});
+
+test('causeOf returns undefined for an error without a cause, for a value that is not an error, and for no throw', () => {
+  expect(
+    causeOf(() => {
+      throw new Error('plain');
+    }),
+  ).toBeUndefined();
+  const notAnError: unknown = 'text';
+  expect(
+    causeOf(() => {
+      throw notAnError;
+    }),
+  ).toBeUndefined();
+  expect(causeOf(() => 1)).toBeUndefined();
+});

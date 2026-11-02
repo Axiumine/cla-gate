@@ -35,6 +35,15 @@ test.each([
   expect(() => toMigrationFile(name, 'select 1')).toThrow(MigrationError);
 });
 
+test('a migration problem is named MigrationError', () => {
+  const error = new MigrationError('two migrations share the number 001');
+  expect([error.name, error.message, error instanceof Error]).toEqual([
+    'MigrationError',
+    'two migrations share the number 001',
+    true,
+  ]);
+});
+
 test('byName orders by plain code point and never reports a difference for equal names', () => {
   const names = ['002_b.sql', '010_c.sql', '001_a.sql'].map((name) => ({ name }));
   expect(names.toSorted(byName).map((file) => file.name)).toEqual(['001_a.sql', '002_b.sql', '010_c.sql']);

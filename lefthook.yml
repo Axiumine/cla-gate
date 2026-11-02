@@ -7,7 +7,7 @@
 #
 # Order is cheap and deterministic first, expensive last; `piped: true` stops at the first failing step.
 # `parallel` and `piped` cannot be combined on one level, hence the nested `group` for the independent checks.
-# Trivy and Semgrep join this file together with their CI jobs (a hook job must have a CI counterpart).
+# Semgrep (E20-S01) and Trivy (E20-S02) joined this file together with their CI jobs (a hook job must have a CI counterpart).
 min_version: 2.0.0
 assert_lefthook_installed: true
 glob_matcher: doublestar
@@ -34,6 +34,11 @@ pre-commit:
             skip: [merge, rebase]
           - name: caps
             run: yarn caps
+          # Secret scan of the whole tree (E20-S02); the CI trivy job repeats it inside `yarn trivy`. It needs no vulnerability
+          # database, so it is fast and works offline once Trivy is installed. Unlike Semgrep it has NO skip rule for a missing
+          # binary: an operator without Trivy uses LEFTHOOK_EXCLUDE=trivy,semgrep, which leaves out both jobs of this name.
+          - name: trivy
+            run: yarn trivy:secrets
 
 pre-push:
   piped: true
@@ -48,6 +53,9 @@ pre-push:
         jobs:
           - name: eslint
             run: yarn lint:eslint
+          # Escape hatches without a written reason (explicit any, as, coverage and type-coverage ignores): E20-S16.
+          - name: escape-hatches
+            run: yarn lint:hatches
           - name: type-coverage
             run: yarn type-coverage
           - name: knip
@@ -56,6 +64,18 @@ pre-push:
             run: yarn fta
           - name: caps
             run: yarn caps
+          # Security scan (E20-S01), the same script as the CI semgrep job. Skipped when the binary is not installed
+          # (it is a Python tool and not a dependency of this repository); CI never skips it. The name matters:
+          # LEFTHOOK_EXCLUDE=trivy,semgrep is the sanctioned offline exception. Not in pre-commit.
+          - name: semgrep
+            run: yarn semgrep
+            skip:
+              - run: "! command -v semgrep >/dev/null 2>&1"
+          # Vulnerabilities (HIGH and CRITICAL, fixed only), then secrets and misconfiguration (E20-S02): the same script as the
+          # CI trivy job. No skip rule: a missing Trivy fails the push, and LEFTHOOK_EXCLUDE=trivy,semgrep is the way out
+          # offline (the vulnerability database and the checks bundle are downloaded). The dev-dependency pass is CI-only.
+          - name: trivy
+            run: yarn trivy
           # The same script as the CI static job: no job may run on a runner docs/ci-runners.md does not allow.
           - name: ci-runners
             run: yarn ci:runners

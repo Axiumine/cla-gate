@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'vitest';
 import { compare, hasFailed, loadBaseline, ratcheted, writeBaseline } from './baseline.ts';
-import { makeRepo, tempDir } from './test-support.ts';
+import { causeOf, makeRepo, tempDir } from './test-support.ts';
 import { BASELINE_NAME, CAPS, CapsError, type Kind, type Measure } from './types.ts';
 
 function measure(kind: Kind, name: string, value: number): Measure {
@@ -132,6 +132,7 @@ test('a baseline that is not JSON is reported with its file name', () => {
   const read = (): unknown => loadBaseline(path.join(root, BASELINE_NAME));
   expect(read).toThrow(CapsError);
   expect(read).toThrow(`${BASELINE_NAME}: SyntaxError`);
+  expect(causeOf(read)).toBeInstanceOf(SyntaxError);
 });
 
 test('writing replaces the baseline atomically and leaves no temporary file', () => {

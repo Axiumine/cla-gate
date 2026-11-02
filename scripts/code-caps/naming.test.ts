@@ -50,6 +50,20 @@ test('a function that is not directly bound or passed stays anonymous', () => {
   expect(kinds(big('x.y += () => {', '};'))).toEqual(anonymous);
 });
 
+test('assigning to a member names the function after the member, adding to it does not', () => {
+  expect(kinds(big('x.y = () => {', '};'))).toEqual({ 'function:x.y': 51 });
+  expect(kinds(big('x.y += () => {', '};'))).toEqual({ 'function:<anonymous>': 51 });
+  expect(kinds(big('x.y ||= () => {', '};'))).toEqual({ 'function:<anonymous>': 51 });
+});
+
+test('a function called at once is anonymous even when the call has arguments: it is the callee, not a callback', () => {
+  const anonymous = { 'function:<anonymous>': 51 };
+  expect(kinds(big('(() => {', '})();'))).toEqual(anonymous);
+  expect(kinds(big('(() => {', '})(1, 2);'))).toEqual(anonymous);
+  expect(kinds(big('(function () {', '})(1);'))).toEqual(anonymous);
+  expect(kinds(big('foo(1, () => {', '});'))).toEqual({ 'function:foo()': 51 });
+});
+
 test('namespaces qualify what they hold', () => {
   expect(kinds(`namespace NS {\n${big('  function nf() {', '  }')}}\n`)).toEqual({ 'function:NS.nf': 51 });
   expect(kinds(`namespace A.B {\n${big('  function f() {', '  }')}}\n`)).toEqual({ 'function:A.B.f': 51 });

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
+import { z } from 'zod';
 import { captureLogs } from '../../test-support.ts';
 import { openPgliteDatabase } from '../db/pglite.ts';
 import { createLogger, REDACT_PATHS } from './logger.ts';
@@ -49,6 +50,7 @@ test.each([
   ['a header map at the top level', { headers: SENSITIVE }],
   ['a header map one level down', { reqHeaders: SENSITIVE, req: { headers: SENSITIVE } }],
   ['credential keys with no container', { 'proxy-authorization': 'sekrit-d', x: { authorization: 'sekrit-a' } }],
+  ['credential keys two levels down', { a: { b: { authorization: 'sekrit-a', Cookie: 'sekrit-b' } } }],
 ])('credentials are redacted in %s', (_case, shape) => {
   const { log, logs } = logger();
   log.info(shape, 'shape');
@@ -134,6 +136,26 @@ test('a system error with an uppercase code is not mistaken for a database error
   const { log, logs } = logger();
   log.error({ err: Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }) }, 'socket');
   expect(logs.lines()[0]?.['err']).toMatchObject({ message: 'write EPIPE', code: 'EPIPE' });
+});
+
+test.each(['ECONNRESET', 'xxEPIPE', 'EPIPEx', '2350', '235055'])(
+  'the code %j is not a SQLSTATE (exactly five digits or capitals), even on an error that has a severity',
+  (code) => {
+    const { log, logs } = logger();
+    log.error({ err: Object.assign(new Error('socket trouble'), { code, severity: 'ERROR' }) }, 'socket');
+    expect(logs.lines()[0]?.['err']).toMatchObject({ message: 'socket trouble', code });
+  },
+);
+
+test('the stack of a database error keeps its frames on separate lines', async () => {
+  const db = await openPgliteDatabase();
+  const { log, logs } = logger();
+  const error: unknown = await sql`select 'not a number'::bigint`.execute(db).catch((caught: unknown) => caught);
+  await db.destroy();
+  log.error({ err: error }, 'query failed');
+  const lines = z.object({ stack: z.string() }).parse(logs.lines()[0]?.['err']).stack.split('\n');
+  expect(lines.length).toBeGreaterThan(1);
+  expect(lines.every((line) => line.trimStart().startsWith('at '))).toBe(true);
 });
 
 test('an error passed on its own is logged under err, as the database pool error handler does', () => {

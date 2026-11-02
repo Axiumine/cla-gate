@@ -40,6 +40,14 @@ function readYaml(file: string): unknown {
 }
 
 const CI_FILE = '.github/workflows/ci.yml';
+const LONG_JOBS = new Map([
+  ['mutation', 45],
+  ['leaks', 30],
+  ['qodana', 30],
+]);
+// E20-S08: the one job that holds a secret (QODANA_TOKEN) runs on a GitHub-hosted machine; see scripts/qodana-gate.
+const GITHUB_HOSTED_JOBS = ['qodana'];
+const sharedJobs = () => [...jobs.entries()].filter(([id]) => !GITHUB_HOSTED_JOBS.includes(id));
 const ciText = readText(path.join(ROOT, CI_FILE));
 const jobs = new Map(Object.entries(workflowSchema.parse(readYaml(CI_FILE)).jobs));
 const allSteps = [...jobs.values()].flatMap((job) => job.steps);
@@ -52,21 +60,40 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage and postgres, and the required ones keep their exact names', () => {
-  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres']);
+test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, leaks and qodana, and the required ones keep their exact names', () => {
+  expect([...jobs.keys()]).toEqual([
+    'static',
+    'coverage',
+    'postgres',
+    'semgrep',
+    'trivy',
+    'mutation',
+    'e2e',
+    'leaks',
+    'qodana',
+  ]);
   expect([...jobs.entries()].map(([id, job]) => [id, job.name])).toEqual([
     ['static', 'static'],
     ['coverage', 'coverage'],
     ['postgres', 'postgres'],
+    ['semgrep', 'semgrep'],
+    ['trivy', 'trivy'],
+    ['mutation', 'mutation'],
+    ['e2e', 'e2e'],
+    ['leaks', 'leaks'],
+    ['qodana', 'qodana'],
   ]);
 });
 
-test('every job runs on one and the same allowed runner and has a timeout', () => {
-  const runners = new Set([...jobs.values()].map((job) => JSON.stringify(job['runs-on'])));
-  expect(runners.size).toBe(1);
-  for (const job of [...jobs.values()]) {
+test('every job but qodana runs on the shared self-hosted runners, qodana on ubuntu-24.04, and each has a timeout', () => {
+  const runners = new Set(sharedJobs().map(([, job]) => JSON.stringify(job['runs-on'])));
+  expect([...runners]).toEqual([JSON.stringify(['self-hosted', 'Linux', 'X64'])]);
+  expect(GITHUB_HOSTED_JOBS.map((id) => jobNamed(id)['runs-on'])).toEqual([HOSTED]);
+  for (const [id, job] of [...jobs.entries()]) {
     expect(job['timeout-minutes']).toBeGreaterThan(0);
-    expect(job['timeout-minutes']).toBeLessThanOrEqual(20);
+    // The mutation run (E20-S04), the leak scenarios (E20-S07, three browser runs and a download) and Qodana (E20-S08, a
+    // 1 GiB linter image) are the long jobs; the guard caps every job at 60.
+    expect(job['timeout-minutes']).toBeLessThanOrEqual(LONG_JOBS.get(id) ?? 20);
   }
 });
 
@@ -75,7 +102,7 @@ test('the break-glass edit (every runs-on becomes ubuntu-24.04) still passes the
   const hosted = ciText.replaceAll(SELF_HOSTED_LINE, `runs-on: ${HOSTED}`);
   const parsed: unknown = parse(hosted);
   const runners = Object.values(workflowSchema.parse(parsed).jobs).map((job) => job['runs-on']);
-  expect(runners).toEqual([HOSTED, HOSTED, HOSTED]);
+  expect(runners).toEqual(Array.from({ length: jobs.size }, () => HOSTED));
   expect(checkWorkflow(CI_FILE, parsed)).toEqual([]);
 });
 
@@ -86,7 +113,7 @@ test('every third-party action is pinned to a full commit SHA, and every checkou
     expect(step.uses).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
   }
   const checkouts = used.filter((step) => step.uses?.startsWith('actions/checkout@'));
-  expect(checkouts).toHaveLength(3);
+  expect(checkouts).toHaveLength(jobs.size);
   for (const step of checkouts) {
     expect(step.with).toMatchObject({ 'persist-credentials': false, clean: true });
   }
@@ -110,13 +137,15 @@ test('the postgres job starts the helper, then runs the suite, then always remov
   const steps = jobNamed('postgres').steps;
   const stop = steps.findIndex((step) => step.run === 'yarn ci:postgres stop');
   expect(start).toBeGreaterThan(0);
-  expect(suite).toBe(start + 1);
+  // Between the two sits the server version summary (E20-S03, ci-postgres-job.test.ts).
+  expect(suite).toBe(start + 2);
   expect(stop).toBe(suite + 1);
   expect(steps.at(stop)?.if).toBe(expression("always() && env.CLA_PG_CONTAINER != ''"));
 });
 
-test('every job starts with the preflight and keeps tool state in the runner temp directory', () => {
-  for (const job of [...jobs.values()]) {
+test('every job on the shared runners starts with the preflight and keeps tool state in the runner temp directory', () => {
+  // The qodana job lives on a fresh GitHub-hosted machine that is thrown away after the run: it starts with its own gate.
+  for (const [, job] of sharedJobs()) {
     expect(job.steps[0]?.name).toBe('Preflight (runner capabilities)');
     expect(job.steps[1]?.name).toBe('Keep tool state in the runner temp directory');
     expect(job.steps[1]?.run).toContain('COREPACK_HOME=$RUNNER_TEMP/corepack');
@@ -124,9 +153,9 @@ test('every job starts with the preflight and keeps tool state in the runner tem
   }
 });
 
-test('only the postgres job needs, and checks for, a Docker daemon', () => {
+test('only the postgres and e2e jobs need, and check for, a Docker daemon', () => {
   for (const [id, job] of [...jobs.entries()]) {
-    expect(job.steps[0]?.run?.includes('docker info')).toBe(id === 'postgres');
+    expect(job.steps[0]?.run?.includes('docker info')).toBe(id === 'postgres' || id === 'e2e');
   }
 });
 

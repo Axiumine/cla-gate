@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# E20-S02. Trivy reads this file from the working directory, so the hook, the CI job and a run by hand scan the same
+# files. Every entry but the first is anchored to the repository root: a source directory that is merely called coverage,
+# reports, build or rules (src/server/domain/coverage/, say) must never drop out of the scan. node_modules is the one
+# name that is skipped at any depth, because a nested package must not pull its dependencies into the scan either.
+# `.git` needs no entry: Trivy leaves it alone. No flag on the command line (package.json) repeats or extends this list.
+scan:
+  skip-dirs:
+    - "**/node_modules"
+    - .yarn
+    - coverage
+    - dist
+    - build
+    - reports
+    - .stryker-tmp
+    - .vitest
+    - playwright-report
+    - test-results
+    - rules

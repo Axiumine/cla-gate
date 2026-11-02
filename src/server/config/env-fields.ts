@@ -44,6 +44,7 @@ export const portField = z
 function toTrustProxy(value: string, ctx: z.core.$RefinementCtx<string>): TrustProxy {
   const parsed = parseTrustProxy(value);
   if (parsed === undefined) {
+    // Stryker disable next-line StringLiteral: only the variable name of an issue is ever reported, never its message
     ctx.issues.push({ code: 'custom', message: 'invalid', input: value });
     return z.NEVER;
   }

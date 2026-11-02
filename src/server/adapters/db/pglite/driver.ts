@@ -13,6 +13,7 @@ export class PgliteDriver implements Driver {
     this.#client = client;
   }
 
+  // Stryker disable next-line BlockStatement: PGlite waits for its own start-up before every query, so this wait is only early
   async init(): Promise<void> {
     await this.#client.waitReady;
   }
@@ -26,6 +27,7 @@ export class PgliteDriver implements Driver {
       settings.isolationLevel ? `isolation level ${settings.isolationLevel}` : '',
       settings.accessMode ?? '',
     ].join(' ');
+    // Stryker disable next-line MethodExpression: Postgres ignores whitespace around a statement, the trim is cosmetic
     await connection.executeQuery(CompiledQuery.raw(`start transaction ${mode}`.trimEnd()));
   }
 

@@ -68,6 +68,14 @@ test('bare blocks and labels are transparent', () => {
   expect(depthOf(`outer: for (;;) { ${nestedIfs(4)} }`)).toBe(5);
 });
 
+test('a labelled loop adds exactly one level, however many labels it has', () => {
+  expect(depthOf('outer: for (;;) { x; }')).toBe(1);
+  expect(depthOf('a: b: c: while (x) { x; }')).toBe(1);
+  expect(depthOf('outer: do { x; } while (x);')).toBe(1);
+  expect(depthOf('outer: for (const a of x) { inner: for (const b of x) { x; } }')).toBe(2);
+  expect(depthOf('outer: for (;;) x;')).toBe(1);
+});
+
 test('statements without braces count like blocks', () => {
   expect(depthOf('if (x) if (x) if (x) if (x) if (x) x;')).toBe(5);
   expect(depthOf('for (;;) while (x) x;')).toBe(2);

@@ -63,7 +63,7 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 | E17 | Web application shell and design system | BC-06 | 🔴 Must have | ⬜ Todo | 11 | [E17.md](epics/E17.md) |
 | E18 | Contributor and maintainer screens | BC-03 / BC-06 | 🔴 Must have | ⬜ Todo | 14 | [E18.md](epics/E18.md) |
 | E19 | Self-hosting kit | BC-09 | 🔴 Must have | ⬜ Todo | 12 | [E19.md](epics/E19.md) |
-| E20 | Extended quality gates | BC-08 | 🟠 Should have | ⬜ Todo | 16 | [E20.md](epics/E20.md) |
+| E20 | Extended quality gates | BC-08 | 🟠 Should have | ⏳ In progress | 16 | [E20.md](epics/E20.md) |
 | E21 | Corporate CLA (later) | BC-03 | 🟢 Could have | ⬜ Todo | 5 | [E21.md](epics/E21.md) |
 | E22 | Merge queue, badge and public verification (later) | BC-04 / BC-03 | 🟢 Could have | ⬜ Todo | 5 | [E22.md](epics/E22.md) |
 | E23 | Self-hosted CI runners | BC-08 | 🔴 Must have | ⏳ In progress | 11 | [E23.md](epics/E23.md) |
@@ -72,9 +72,9 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 
 | Status | Stories | Epics |
 |---|---|---|
-| ✅ Done | 48 | 5 |
-| ⏳ In progress | 1 | 1 |
-| ⬜ Todo | 149 | 17 |
+| ✅ Done | 55 | 5 |
+| ⏳ In progress | 4 | 2 |
+| ⬜ Todo | 139 | 16 |
 | Total | 198 | 23 |
 
 ## Dependency and sequencing

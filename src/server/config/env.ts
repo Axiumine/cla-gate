@@ -60,12 +60,13 @@ function toAppConfig(env: ValidEnv): AppConfig {
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-/** An empty variable (`PORT=` in a compose file) counts as unset. */
+/** An empty variable (`PORT=` in a compose file) counts as unset. A variable that is undefined already does (zod). */
 function withoutEmpty(env: Env): Env {
-  return Object.fromEntries(Object.entries(env).filter(([, value]) => value !== undefined && value !== ''));
+  return Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ''));
 }
 
 function variableNames(error: z.ZodError): string[] {
+  // Stryker disable next-line ConditionalExpression: a type guard for the compiler; the first path element of every issue of envSchema is a variable name
   const names = error.issues.map((issue) => issue.path[0]).filter((key): key is string => typeof key === 'string');
   return [...new Set(names)].sort((a, b) => a.localeCompare(b));
 }

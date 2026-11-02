@@ -24,6 +24,9 @@ As of 2026-11 the common options are ageing or limited:
 | Code-based TanStack routing | No generated `routeTree.gen.ts` to exclude from every gate |
 | `radix-ui` primitives, not shadcn copy-in | Copied components would count toward coverage, caps and FTA |
 | React Compiler off in v0 | `@vitejs/plugin-react` 6 needs `@rolldown/plugin-babel` with a peer-range mismatch; lint rules for it are still enabled via `eslint-plugin-react-hooks` |
+| `as` assertions need the same written reason as `any` | Hard rule 3 lists them as escape hatches, and `type-coverage --strict` penalises them. `yarn lint:hatches` requires a comment with ` -- <reason>` on the same line or alone on the line above; the coverage-ignore form is `/* v8 ignore next -- @preserve <reason> */` |
+| Gate tools join as informative CI jobs, then become required one at a time | A job that has never run on the shared runners could block every merge. E20 wires `semgrep`, `trivy`, `postgres`, `mutation`, `e2e`, `leaks` and `qodana`; the promotion of the first six to required checks follows a stability definition and a template (E20-S09, [`CONTRIBUTING.md`](../CONTRIBUTING.md), Repository protection). `leaks` and `qodana` are never required |
+| `.trivyignore` accepts CVE-2026-102990 until 2027-01-15 | `basic-ftp` 5.3.1 is a dev-only dependency of `memlab` (memlab, puppeteer, proxy-agent, get-uri, basic-ftp). It parses FTP directory listings, which only a PAC proxy script fetching over `ftp:` would reach; the leak scenarios load loopback fixtures and configure no proxy. `get-uri` still asks for `^5`, so only a new `puppeteer` release fixes it: remove the entry then. The `memlab` CLI package stays only through `ignoreDependencies` in `knip.json` |
 | No user tokens stored | Least privilege and liability; identity is read once at login |
 | Self-hosted only, one instance per server, multi-org | Any developer runs it on their own server with one GitHub App; that instance serves several GitHub orgs, each org being a tenant keyed by its GitHub installation id. An instance-level admission policy decides which orgs may use the server. No hosted SaaS and no published container image: operators build the image from the checkout |
 
@@ -32,5 +35,5 @@ As of 2026-11 the common options are ageing or limited:
 Resolved: self-hosted only (one instance per server, serving several orgs, no hosted SaaS, no published image), corporate CLA is not in the MVP (epic E21), hosting target and region are the operator's choice (the operator is the data controller).
 
 - AGPLv3 "only" or "or later"? `AGPL-3.0-only` is assumed. GitNexus (dev tooling) is PolyForm Noncommercial, which matters if this becomes a commercial product.
-- Is a Qodana licence and token available? Until then Qodana stays an optional maintainer-side check (epic E20).
+- Is a Qodana licence and token available? No token yet. The `qodana` job is wired and ends green with a notice until the maintainer adds the secret `QODANA_TOKEN`; it is never a required check, and its first real run (the findings, the exit code 255 gate failure and the image digest) is still to be done (epic E20, E20-S08).
 - Legal: e-signature validity (ESIGN, eIDAS) and GDPR retention choices need counsel; this repo contains no legal advice.

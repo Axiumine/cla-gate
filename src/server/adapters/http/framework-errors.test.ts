@@ -3,7 +3,7 @@
 import { PassThrough } from 'node:stream';
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
-import { freePort, sendRaw, testApp, testConfig } from '../../test-support.ts';
+import { captureLogs, freePort, sendRaw, testApp, testConfig } from '../../test-support.ts';
 import { frameworkErrorHandlers } from './framework-errors.ts';
 import { createLogger } from './logger.ts';
 
@@ -33,6 +33,8 @@ test.each([
   expect(response.headers['x-request-id']).toBe('trace-abc-123');
   expect(response.headers['content-type']).toBe('application/json; charset=utf-8');
   expect(securityOf(response.headers)).toEqual(securityOf(normal.headers));
+  // Nothing the probe response of the security headers carried (a date, a connection) leaks into the answer.
+  expect(new Set(Object.keys(response.headers))).toEqual(new Set(Object.keys(normal.headers)));
   expect(response.body).not.toMatch(/FST_ERR|not a valid url|exceeding|%ZZ|aaaa/);
   expect(logs.lines().find((line) => line['msg'] === 'request rejected')).toMatchObject({
     statusCode: expected.status,
@@ -68,6 +70,16 @@ test.each([
     expect(raw.headers['content-length']).toBe(String(Buffer.byteLength(raw.body)));
     expect(raw.headers['connection']).toBe('close');
     expect(securityOf(raw.headers)).toEqual(securityOf(normal.headers));
+    // The answer is written by hand: its fields are the security headers, the id, the body's own and nothing else.
+    expect(new Set(Object.keys(raw.headers))).toEqual(
+      new Set([
+        ...Object.keys(securityOf(normal.headers)),
+        'connection',
+        'content-length',
+        'content-type',
+        'x-request-id',
+      ]),
+    );
   },
 );
 
@@ -105,9 +117,28 @@ test('a reset connection and a socket that is already gone get no answer', async
 
 test('a socket that cannot be written to is destroyed without a write', async () => {
   const closing = new PassThrough();
-  closing.on('error', () => undefined);
+  const errors: string[] = [];
+  closing.on('error', (error) => errors.push(error.message));
   closing.end();
   (await handler())(new Error('half closed'), closing);
+  await new Promise((resolve) => closing.on('close', resolve));
   expect(closing.destroyed).toBe(true);
   expect(closing.readableLength).toBe(0);
+  // Only the error that ended the connection: a write after the end would add one of its own.
+  expect(errors).toEqual(['half closed']);
+});
+
+test('a rejected connection is logged at trace level with the error', async () => {
+  const logs = captureLogs();
+  const { clientErrorHandler } = await frameworkErrorHandlers(
+    testConfig(),
+    createLogger({ logLevel: 'trace' }, logs.destination),
+  );
+  const socket = new PassThrough();
+  socket.on('error', () => undefined);
+  clientErrorHandler(Object.assign(new Error('parse'), { code: 'HPE_INVALID_METHOD' }), socket);
+  await new Promise((resolve) => socket.on('close', resolve));
+  expect(logs.lines()).toMatchObject([
+    { level: 10, msg: 'client error', err: { type: 'Error', code: 'HPE_INVALID_METHOD' } },
+  ]);
 });

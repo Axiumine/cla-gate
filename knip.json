@@ -1,5 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["semgrep", "trivy"],
+  "ignoreDependencies": ["memlab"],
   "entry": [
     "scripts/*.ts!",
     "scripts/ci/*.ts",
@@ -8,13 +10,22 @@
     "src/server/migrate.ts!",
     "src/server/domain/evaluation/index.ts!",
     "src/shared/pr-evaluation-details.ts!",
-    "src/server/services/audit.ts!"
+    "src/server/services/audit.ts!",
+    "tests/leaks/scenarios/*.ts",
+    "tests/leaks/control/*.ts"
   ],
   "project": [
     "scripts/**/*.ts!",
     "!scripts/code-caps/test-support.ts!",
+    "!scripts/escape-hatches/eslint-config.ts!",
     "!scripts/ci/**!",
+    "!scripts/ci-contract/**!",
     "!scripts/dev/**!",
+    "!scripts/e2e/**!",
+    "!scripts/leaks/**!",
+    "!scripts/qodana-gate/**!",
+    "!scripts/semgrep-rules/**!",
+    "!scripts/trivy-gate/**!",
     "src/**/*.ts!",
     "!src/**/test-support.ts!",
     "!src/server/adapters/db/pglite.ts!",

@@ -11,14 +11,16 @@
 //
 // Type information comes from the TypeScript project service: the solution-style tsconfig.json points at
 // tsconfig.server.json (src/server and src/shared, built), tsconfig.server.test.json (the same sources plus their
-// tests), tsconfig.scripts.json (scripts/) and tsconfig.node.json (root config files). The architecture blocks at the
-// end of this file (scripts/eslint-layers.ts) enforce the layering from docs/architecture.md.
+// tests), tsconfig.scripts.json (scripts/), tsconfig.e2e.json (e2e/ and tests/leaks/) and tsconfig.node.json (root
+// config files). The architecture blocks at the end of this file (scripts/eslint-layers.ts) enforce the layering from
+// docs/architecture.md.
 import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import noUnsanitized from 'eslint-plugin-no-unsanitized';
 import security from 'eslint-plugin-security';
 import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
+import { escapeHatchConfig } from './scripts/escape-hatches/eslint-config.ts';
 import { layerConfigs } from './scripts/eslint-layers.ts';
 
 /** Same counting as scripts/code-caps/measure.ts: a function or file is its whole line span, blanks and comments included. */
@@ -47,6 +49,7 @@ export default defineConfig([
     '**/reports/',
     '**/.vitest/',
     '**/.stryker-tmp/',
+    '**/.qodana/',
     '**/playwright-report/',
     '**/test-results/',
     '.yarn/',
@@ -60,7 +63,6 @@ export default defineConfig([
       sonarjs.configs.recommended,
     ],
     languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
-    linterOptions: { reportUnusedDisableDirectives: 'error' },
     rules: {
       // Numbers cannot turn into "[object Object]"; any, boolean, nullish, regexp and never stay errors.
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
@@ -84,6 +86,9 @@ export default defineConfig([
     rules: Object.fromEntries(securityEntries),
   },
   { files, ...noUnsanitized.configs.recommended },
+  // Escape hatches (E20-S16): ts-expect-error and eslint-disable need a written reason, unused disable
+  // directives are errors. scripts/escape-hatches/eslint-config.ts, with the tests that feed it violating source.
+  escapeHatchConfig,
   // Layering (docs/architecture.md, Layering): scripts/eslint-layers.ts, with the tests that prove each direction.
   ...layerConfigs,
 ]);
