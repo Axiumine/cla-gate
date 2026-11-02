@@ -47,3 +47,81 @@ test('the rules apply to src/web only: the same mistake elsewhere is not their b
   expect(violations(COMPONENT, code)).toContain('react-hooks/rules-of-hooks');
   expect(violations('src/server/panel.ts', code)).toEqual([]);
 });
+
+// E17-S02: no user-visible string is written inline in a component, so a second language is a catalog addition. The
+// selectors are in scripts/web/eslint-config.ts (not eslint.config.mjs, so that this test can import them); the real
+// eslint.config.mjs appends the same blocks, which scripts/web/wiring.test.ts pins.
+
+const SYNTAX = 'no-restricted-syntax';
+const page = (jsx: string): string => `export function Panel() {\n  return ${jsx};\n}`;
+
+test.each([
+  ['a word in an element', '<p>Hello</p>'],
+  ['two words in a button', '<button type="button">Save changes</button>'],
+  ['text after an expression', '<p>{count} items</p>'],
+  ['text before an expression', '<p>Total: {count}</p>'],
+  ['text on a line of its own', '<p>\n  Hello\n</p>'],
+  ['a letter that is not ASCII', '<p>Größe</p>'],
+  ['a letter of another script', '<p>日本語</p>'],
+  ['a single letter', '<p>x</p>'],
+  ['text in a fragment', '<>Hello</>'],
+  ['an aria-label', '<button type="button" aria-label="Close" />'],
+  ['a title', '<button type="button" title="Close" />'],
+  ['a placeholder', '<input placeholder="Your name" />'],
+  ['an alt', '<img alt="A cat" src="/cat.png" />'],
+  ['a label', '<Field label="Name" />'],
+  ['a string in braces', '<button type="button" aria-label={\'Close\'} />'],
+  ['a template literal without expressions', '<button type="button" title={`Close`} />'],
+  ['a template literal with an expression', `<button type="button" aria-label={\`Close \${name}\`} />`],
+])('inline text is refused: %s', (_what, jsx) => {
+  expect(violations('src/web/Panel.tsx', page(jsx))).toContain(SYNTAX);
+});
+
+test.each([
+  ['a catalog call as a child', "<p>{t('app.name')}</p>"],
+  ['a catalog call as an aria-label', '<button type="button" aria-label={t(\'common.close\')} />'],
+  ['a variable as a title', '<button type="button" title={title} />'],
+  ['an empty alt, the way to mark a decorative image', '<img alt="" src="/cat.png" />'],
+  ['an empty alt in braces', '<img alt={\'\'} src="/cat.png" />'],
+  ['whitespace between elements', '<div>\n  <p>{value}</p>\n</div>'],
+  ['a number as a child', '<p>{42}</p>'],
+  ['a symbol that is no letter', '<p>→ ✓ · 1/2</p>'],
+  ['a character reference', '<p>&nbsp;&copy;</p>'],
+  ['a template literal without a letter in a title', `<button type="button" title={\`\${a}\${b}\`} />`],
+  [
+    'strings in props that nobody reads out',
+    '<a className="link" href="/x" role="status" data-testid="x" id="main" />',
+  ],
+  ['a string as the key of a call inside a prop', '<button type="button" aria-label={t(\'common.close\', {})} />'],
+])('allowed: %s', (_what, jsx) => {
+  expect(violations('src/web/Panel.tsx', page(jsx))).toEqual([]);
+});
+
+test.each([
+  ['a test file', 'src/web/Panel.test.tsx'],
+  ['a test helper', 'src/web/test-support/render.tsx'],
+])('inline text is allowed in %s, which writes the strings it asserts on', (_what, filename) => {
+  expect(violations(filename, page('<p aria-label="Close">Hello</p>'))).toEqual([]);
+});
+
+test('the rule is for the .tsx files of src/web: the same code in another source directory is not its business', () => {
+  const code = page('<p aria-label="Close">Hello</p>');
+  expect(violations('src/server/Panel.tsx', code)).toEqual([]);
+  expect(violations('src/shared/Panel.tsx', code)).toEqual([]);
+});
+
+test('the message tells the developer what to do instead', () => {
+  const parser = { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.parser } };
+  const [finding, ...rest] = linter.verify(page('<p>Hello</p>'), [parser, ...webConfigs], {
+    filename: 'src/web/Panel.tsx',
+  });
+  expect(rest).toEqual([]);
+  expect(finding?.message).toBe('User-visible text comes from the message catalog: use t(...) from useT() (E17-S02).');
+});
+
+test('the layering rule still holds in a component: the new selectors add to it, they do not replace it', () => {
+  const imports =
+    "export const lazy = () => import('../server/app.ts');\nexport const other = (x: string) => import(x);";
+  const rules = violations('src/web/Panel.tsx', imports);
+  expect(rules).toEqual([SYNTAX, SYNTAX]);
+});

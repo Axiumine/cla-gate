@@ -36,6 +36,12 @@ const dynamicInto = (directory: string, message: string) => ({
 });
 
 /**
+ * The `no-restricted-syntax` selectors that keep src/web off src/server. A block for some src/web files that sets selectors
+ * of its own (scripts/web/eslint-config.ts) must repeat these, because a later block replaces the rule instead of adding to it.
+ */
+export const webLayerSelectors = [nonLiteralImport, dynamicInto('server', sharedAndWeb)];
+
+/**
  * Everything the pure domain layer may import: its own files (no `..` anywhere), src/shared, and zod. Any other
  * specifier matches this "not allowed" expression: Node built-ins (`node:fs`, `node:dns/promises`, `node:sqlite`), I/O
  * libraries, and every other layer (`../app.ts`, `../boot.ts`, `../config`, `../adapters`, `../services`). An allow-list
@@ -93,7 +99,7 @@ export const layerConfigs: Linter.Config[] = [
     files: ['src/web/**'],
     rules: {
       ...restrictImports({ regex: into('server'), message: sharedAndWeb }),
-      ...restrictedSyntax(nonLiteralImport, dynamicInto('server', sharedAndWeb)),
+      ...restrictedSyntax(...webLayerSelectors),
     },
   },
   {

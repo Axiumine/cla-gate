@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import vitestConfig from '../../vitest.config.ts';
 import { scriptsProject, serverProject, webProject } from '../../vitest.projects.ts';
+import { webLayerSelectors } from '../eslint-layers.ts';
 import { repoText, SCRIPTS } from '../semgrep-rules/test-support.ts';
+import { inlineTextSelectors } from './eslint-config.ts';
 
 // E17-S01: the files and scripts that put the web project (src/web) under every gate the server is under.
 
@@ -111,6 +115,7 @@ test('knip has src/web/main.tsx as a production entry and leaves the test helper
     .object({ entry: z.array(z.string()), project: z.array(z.string()) })
     .parse(JSON.parse(repoText('knip.json')));
   expect(knip.entry).toContain('src/web/main.tsx!');
+  expect(knip.entry).toContain('src/web/i18n/index.ts!');
   expect(knip.project).toContain('src/**/*.{ts,tsx}!');
   expect(knip.project).toContain('!src/web/test-support/**!');
 });
@@ -122,4 +127,35 @@ test('FTA skips the tests and the test helpers of src/web, and keeps its cap', (
   expect(fta.score_cap).toBe(50);
   expect(fta.exclude_filenames).toContain('*.test.tsx');
   expect(fta.exclude_directories).toContain('/src/web/test-support');
+});
+
+// E17-S02: the repository ESLint config, not just the blocks of scripts/web/eslint-config.ts, carries the inline-text rule.
+// A child process on purpose: ESLint loads eslint.config.mjs and the TypeScript it imports natively.
+
+const ROOT = path.resolve(import.meta.dirname, '../..');
+
+/** The selectors that the repository ESLint config sets for `no-restricted-syntax` on `file`; empty when the rule is off. */
+function syntaxSelectors(file: string): string[] {
+  const result = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'node_modules/eslint/bin/eslint.js'), '--print-config', file],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+    },
+  );
+  expect(result.status).toBe(0);
+  const { rules } = z.object({ rules: z.record(z.string(), z.array(z.unknown())) }).parse(JSON.parse(result.stdout));
+  const options = z
+    .array(z.union([z.string(), z.object({ selector: z.string() })]))
+    .parse((rules['no-restricted-syntax'] ?? []).slice(1));
+  return options.flatMap((option) => (typeof option === 'string' ? [] : option.selector));
+}
+
+test('ESLint refuses inline text in a component of src/web, keeps the layering selectors there, and spares the tests', () => {
+  const component = syntaxSelectors('src/web/App.tsx');
+  expect(component).toEqual(expect.arrayContaining(inlineTextSelectors.map((entry) => entry.selector)));
+  expect(component).toEqual(expect.arrayContaining(webLayerSelectors.map((entry) => entry.selector)));
+  const spared = syntaxSelectors('src/web/App.test.tsx');
+  expect(spared).toEqual(webLayerSelectors.map((entry) => entry.selector));
 });
