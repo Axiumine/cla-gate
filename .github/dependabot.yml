@@ -28,7 +28,7 @@ updates:
       default-days: 7
     open-pull-requests-limit: 5
     ignore:
-      # CLAUDE.md, "TypeScript": stay on ~6.0.x until typescript-eslint, Stryker, type-coverage and the caps tool
+      # docs/quality-gates.md, "TypeScript": stay on ~6.0.x until typescript-eslint, Stryker, type-coverage and the caps tool
       # support the TypeScript 7 compiler API. Patch releases still come through.
       - dependency-name: typescript
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
