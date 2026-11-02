@@ -14,12 +14,14 @@ function violations(filename: string, code: string): string[] {
 }
 
 const DOMAIN = 'src/server/domain/evaluate.ts';
+const DOMAIN_TEST = 'src/server/domain/evaluation/types.test.ts';
 const SHARED = 'src/shared/health.ts';
 const WEB = 'src/web/main.ts';
 const SERVER = 'src/server/app.ts';
 const IMPORT = 'no-restricted-imports';
 const SYNTAX = 'no-restricted-syntax';
 const GLOBAL = 'no-restricted-globals';
+const PROPERTY = 'no-restricted-properties';
 
 test.each([
   ['its own file', DOMAIN, "import { x } from './coverage.ts';"],
@@ -36,6 +38,11 @@ test.each([
   ['a dynamic import of a shared file', WEB, "export const lazy = () => import('../shared/errors.ts');"],
   ['a file whose name only starts with "web"', SERVER, "import { x } from './webhooks.ts';"],
   ['a directory whose name only starts with "server"', SHARED, "import { x } from '../servers/x.ts';"],
+  ['the test runner from a domain test file', DOMAIN_TEST, "import { expect, test } from 'vitest';"],
+  ['a sibling file from a domain test file', DOMAIN_TEST, "import { account } from './test-support.ts';"],
+  ['src/shared from a domain test file', DOMAIN_TEST, "import { x } from '../../../shared/errors.ts';"],
+  ['Math.floor and Math.max in the domain', DOMAIN, 'export const n = Math.max(Math.floor(1.5), 0);'],
+  ['a local variable that shadows a clock global', DOMAIN, 'export const f = (Date: number) => Date + 1;'],
   ['a dynamic import of such a file', SERVER, "export const lazy = () => import('./web-hooks.ts');"],
 ])('allowed: %s', (_what, filename, code) => {
   expect(violations(filename, code)).toEqual([]);
@@ -69,8 +76,53 @@ test.each([
   ['require', "export const fs = require('node:fs');", GLOBAL],
   ['fetch through globalThis', "export const get = () => globalThis.fetch('https://example.org');", SYNTAX],
   ['process through global', 'export const home = global.process;', SYNTAX],
+  ['new Date()', 'export const now = new Date();', GLOBAL],
+  ['Date.now()', 'export const now = Date.now();', GLOBAL],
+  ['Date through globalThis', 'export const now = globalThis.Date.now();', SYNTAX],
+  ['Temporal.Now', 'export const now = Temporal.Now.instant();', GLOBAL],
+  ['performance.now()', 'export const t = performance.now();', GLOBAL],
+  ['crypto.randomUUID()', 'export const id = crypto.randomUUID();', GLOBAL],
+  ['Math.random()', 'export const r = Math.random();', PROPERTY],
+  ['Math["random"]()', "export const r = Math['random']();", PROPERTY],
+  ['Math.random through destructuring', 'export const { random } = Math;', PROPERTY],
 ])('the domain layer may not use %s', (_what, code, rule) => {
   expect(violations(DOMAIN, code)).toContain(rule);
+});
+
+test.each([
+  ['the test runner from a domain source file', DOMAIN, "import { test } from 'vitest';"],
+  [
+    'the test runner from a domain helper',
+    'src/server/domain/evaluation/test-support.ts',
+    "import { vi } from 'vitest';",
+  ],
+  ['a package that only starts with vitest', DOMAIN_TEST, "import { x } from 'vitest-extra';"],
+  ['a sub-path of vitest', DOMAIN_TEST, "import { x } from 'vitest/node';"],
+  ['a Node built-in from a domain test file', DOMAIN_TEST, "import { readFile } from 'node:fs/promises';"],
+  ['an adapter from a domain test file', DOMAIN_TEST, "import { x } from '../../adapters/db/pg.ts';"],
+  ['a parent directory of the domain from a test file', DOMAIN_TEST, "import { x } from '../app.ts';"],
+  ['an I/O library from a domain test file', DOMAIN_TEST, "import { Kysely } from 'kysely';"],
+])('domain imports: %s is refused', (_what, filename, code) => {
+  expect(violations(filename, code)).toContain(IMPORT);
+});
+
+test.each([
+  ['a service', "import { x } from '../../services/ports/github.ts';"],
+  ['an adapter', "import { x } from '../../adapters/github/client.ts';"],
+  ['src/web', "import { x } from '../../../web/main.ts';"],
+  ['a Node built-in', "import { randomUUID } from 'node:crypto';"],
+])('the evaluation engine (src/server/domain/evaluation) may not import %s', (_what, code) => {
+  expect(violations('src/server/domain/evaluation/evaluate.ts', code)).toContain(IMPORT);
+});
+
+test.each([
+  ['process', 'export const home = process.env;', GLOBAL],
+  ['new Date()', 'export const now = new Date();', GLOBAL],
+  ['Math.random()', 'export const r = Math.random();', PROPERTY],
+  ['a dynamic import()', "export const lazy = () => import('./types.ts');", SYNTAX],
+  ['the global object', 'export const now = globalThis.Date;', SYNTAX],
+])('a domain test file may not use %s either', (_what, code, rule) => {
+  expect(violations(DOMAIN_TEST, code)).toContain(rule);
 });
 
 test.each([
