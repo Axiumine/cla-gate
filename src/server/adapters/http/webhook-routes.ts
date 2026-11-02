@@ -13,6 +13,7 @@ import { createWebhookDeliveries } from '../../services/webhook-deliveries.ts';
 import type { Database } from '../db/schema.ts';
 import { AppError, rejectRequest } from './errors.ts';
 import { WEBHOOK_BODY_LIMIT } from './limits.ts';
+import { mintRequestId } from './request-id.ts';
 import { webhookResponseSchemas } from './webhook-answer.ts';
 import { deliveryHandler } from './webhook-handler.ts';
 import { logDeliveries } from './webhook-log.ts';
@@ -76,6 +77,8 @@ function isBodyTooLarge(error: unknown): boolean {
  * deadline (`503` `webhook_timeout`, E06-S07), and every delivery ends with one `webhook.received` line.
  */
 export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async (app, options) => {
+  // Encapsulated: only this scope mints its ids. Fastify asks the generator of the scope the router matched, so a caller's `X-Request-Id` never reaches a log line of a delivery, however the path is spelled.
+  app.setGenReqId(mintRequestId);
   const log = logDeliveries(app);
   const contentTypes = holdContentType(app);
   const throttle = createFailureThrottle({ clock: options.clock, ...SIGNATURE_FAILURE_LIMITS });
