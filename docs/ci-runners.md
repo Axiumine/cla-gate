@@ -5,7 +5,7 @@ Copyright (C) 2026 Giovanni Manzoni
 
 # CI runners policy
 
-Where the CI of this repository runs, what that exposes, and the rules every job and every pull request approval must follow. Written 2026-11-01 from the maintainer's decisions; if a decision changes, change this file, [`README.md`](../README.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md) (Repository protection) and [`CLAUDE.md`](../CLAUDE.md) in the same pull request.
+Where the CI of this repository runs, what that exposes, and the rules every job and every pull request approval must follow. Written 2026-11-01 from the maintainer's decisions; if a decision changes, change this file, [`toolchain.md`](toolchain.md) (CI), [`decisions.md`](decisions.md), [`README.md`](../README.md) (Quality gates summary), [`CONTRIBUTING.md`](../CONTRIBUTING.md) (Repository protection) and [`CLAUDE.md`](../CLAUDE.md) in the same pull request.
 
 ## Purpose and scope
 
@@ -139,7 +139,7 @@ Audit of fixed ports, 2026-11-01 (grep over `src`, `scripts`, `docker`, compose,
 | `docker-compose.yml` | `127.0.0.1:5432:5432` | Fixed: `127.0.0.1:${POSTGRES_PORT:?...}:5432`, no default |
 | `.github/workflows/ci.yml` | `services:` with `ports: 5432:5432`, `DATABASE_URL` on `localhost:5432` | Fixed: no `services:`, `scripts/ci/postgres.ts` |
 | `package.json` `dev`, `db:migrate` | default URLs on `127.0.0.1:5432`, and the server on its default 3000 | Fixed: `scripts/dev/db.ts run` uses the remembered database port or an explicit variable, and for `app` a random free `PORT` |
-| `README.md`, `docs/development.md` (then `CLAUDE.md`) | `5432` in commands and advice | Fixed: rewritten for `yarn db:up` |
+| `README.md` (Development, now in `docs/development.md`), `docs/development.md` (then `CLAUDE.md`) | `5432` in commands and advice | Fixed: rewritten for `yarn db:up` |
 | `src/server/config/env-schema.ts` | `DEFAULT_PORT = 3000` | Recorded exception: the application's configuration default for `yarn start` and deployments (self-hosting epic); no script, compose file, CI job or test uses it; `HOST` defaults to `127.0.0.1` |
 | `src/server/main.test.ts`, `boot.test.ts`, `framework-errors.test.ts`, `test-support.ts`, `scripts/ci/lib/ports.test.ts` | `PORT: '0'`, `listen(0, '127.0.0.1')`, `port: 0` | Fixed: `pickSystemFreePort()`, 32769 to 60999, loopback only |
 | `src/server` unit tests and `test-support.ts` (`env`, `security`, `app-errors`, `migrate`, `migrate-cli`, `pg`, `test-support`), a doc comment in `boot.ts`, and the helper tests in `scripts/ci` and `scripts/dev` | fake `host:port` strings such as `db.internal:5432`, `localhost:3000`, `127.0.0.1:1` (nothing listens there), or the helper's own port-range fixtures | Test-only values, nothing binds them |
@@ -167,4 +167,4 @@ Audit of fixed ports, 2026-11-01 (grep over `src`, `scripts`, `docker`, compose,
 
 ## Change log pointer
 
-History is the git log of this file: `git log --follow -- docs/ci-runners.md`. Any change to the policy lands together with the matching edits to `README.md` (Quality gates, CI, Decisions), the matching lines in `CONTRIBUTING.md` (Repository protection) and the pointer lines in `CLAUDE.md`.
+History is the git log of this file: `git log --follow -- docs/ci-runners.md`. Any change to the policy lands together with the matching edits to `docs/toolchain.md` (CI), `docs/decisions.md` (Decisions) and `README.md` (Quality gates summary), the matching lines in `CONTRIBUTING.md` (Repository protection) and the pointer lines in `CLAUDE.md`.

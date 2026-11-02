@@ -25,3 +25,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `CLAUDE.md` is now a short operating contract; commands, quality gates, architecture rules, tooling notes and the contributing flow moved to `docs/` and `CONTRIBUTING.md`.
+- `README.md` is now a landing page (product, scope, quick start, documentation map); the architecture, repository layout, auth and security, data model, GitHub App, operations, toolchain, decisions and configuration sections moved to `docs/`, and `scripts/docs/doc-size.test.ts` fails when `README.md` (10240 bytes) or `CLAUDE.md` (6144 bytes) outgrows its ceiling.

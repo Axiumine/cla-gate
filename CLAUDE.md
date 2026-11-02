@@ -4,22 +4,32 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 
 **Licence: AGPL-3.0-only**; every source file starts with `// SPDX-License-Identifier: AGPL-3.0-only`. AGPL section 13: the web UI offers every network user the corresponding source (a visible dashboard footer link to the exact repository and commit).
 
-**Status:** server foundation built, product not built (no GitHub App, webhook, queue, session, signing route or `src/web` yet; no placeholders).
+**Status:** server foundation built, product not built, no placeholders ([details](docs/development.md#status)).
 
 ## Where things are
 
 | Document | What it holds |
 |---|---|
-| [`README.md`](README.md) | Product, architecture, data model, GitHub App settings and rules, security, setup, open questions (legal) |
-| [`docs/development.md`](docs/development.md) | Status; every `package.json` script and whether it exists or is deferred |
+| [`README.md`](README.md) | Landing page: product, scope, quick start, documentation map |
+| [`docs/development.md`](docs/development.md) | Status, setup and run, every `package.json` script (exists or deferred) |
+| [`docs/configuration.md`](docs/configuration.md) | Environment variables |
+| [`docs/architecture.md`](docs/architecture.md) | Stack, layering, PR check flow, rules (webhooks, evaluation, auth, cookies, start-up) |
+| [`docs/data-model.md`](docs/data-model.md) | Tables, immutability, erasure, database roles |
+| [`docs/security.md`](docs/security.md) | Auth model, role matrix, security and privacy |
+| [`docs/github-app.md`](docs/github-app.md) | App permissions, events, check name, rules |
+| [`docs/operations.md`](docs/operations.md) | Key rotation, backups, poison jobs |
+| [`docs/decisions.md`](docs/decisions.md) | Decisions and reasons, open questions (legal) |
+| [`docs/repository-layout.md`](docs/repository-layout.md) | The directory tree |
 | [`docs/quality-gates.md`](docs/quality-gates.md) | Thresholds, TypeScript setup, testing conventions, escape hatches |
-| [`docs/architecture.md`](docs/architecture.md) | Architecture rules: layering, webhooks, evaluation, auth, cookies, start-up |
-| [`docs/tooling-gotchas.md`](docs/tooling-gotchas.md) | Tool facts and traps, GitNexus, open tool verifications |
+| [`docs/toolchain.md`](docs/toolchain.md) | Tool evaluation, hook pipeline, CI jobs |
+| [`docs/tooling-gotchas.md`](docs/tooling-gotchas.md) | Tool facts and traps, GitNexus, open verifications |
 | [`scripts/code-caps/README.md`](scripts/code-caps/README.md) | The structure-cap ratchet tool (`yarn caps`) |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | PR flow, branch protection, commit policy, changelog rule, dependency licences |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | PR flow, branch protection, commit policy, changelog rule, licences |
 | [`docs/ci-runners.md`](docs/ci-runners.md) | CI runner policy, fork-PR approval |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes; every PR adds a line under `[Unreleased]` |
-| [`docs/EPICS_STORIES.md`](docs/EPICS_STORIES.md) | Work queue (`docs/epics/`); a story's acceptance criteria are part of its definition of done |
+| [`docs/EPICS_STORIES.md`](docs/EPICS_STORIES.md) | Work queue (`docs/epics/`); acceptance criteria are part of the definition of done |
+
+`README.md` (at most 10240 bytes) and this file (at most 6144) stay short on purpose; `scripts/docs/doc-size.test.ts` enforces both.
 
 ## Hard rules (non-negotiable)
 
@@ -37,8 +47,7 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 ## Cross-cutting rules (detail: [`docs/architecture.md`](docs/architecture.md))
 
 - Layering: `src/shared` imports neither `src/server` nor `src/web`; `src/web` and `src/server` never import each other; decision logic is pure in `src/server/domain`, I/O only in `src/server/adapters`.
-- Immutability: signatures, CLA versions and audit rows never change (hard rule 5).
-- Identity: the numeric GitHub id, never login or email (hard rule 4).
+- Immutability and identity: hard rules 5 and 4.
 - Tenancy: every query filters by installation id; cross-tenant tests are mandatory.
 - Boundaries: validate every external input (HTTP, webhooks, GitHub API responses, env) with zod; share schemas through `src/shared`.
 

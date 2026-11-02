@@ -6,7 +6,7 @@ import { envSchema, type ValidEnv } from './env-schema.ts';
 import type { Secret } from './secret.ts';
 import type { TrustProxy } from './trust-proxy.ts';
 
-/** Everything the server reads from the environment, validated and typed (see the Configuration table in README.md). */
+/** Everything the server reads from the environment, validated and typed (see docs/configuration.md). */
 export interface AppConfig {
   readonly nodeEnv: ValidEnv['NODE_ENV'];
   readonly host: string;
