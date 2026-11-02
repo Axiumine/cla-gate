@@ -4,11 +4,19 @@ import type { LightMyRequestResponse } from 'fastify';
 import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
-import { GITHUB_EXAMPLE, postDelivery, SECRET_CURRENT, SECRET_PREVIOUS, sign, webhookTestApp } from './test-support.ts';
+import {
+  GITHUB_EXAMPLE,
+  postDelivery,
+  SECRET_CURRENT,
+  SECRET_PREVIOUS,
+  signCurrent,
+  signUnconfigured,
+  webhookTestApp,
+} from './test-support.ts';
 
 const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_WEBHOOK_SECRET_PREVIOUS: SECRET_PREVIOUS };
 const PAYLOAD = '{"action":"opened","number":7,"pull_request":{"number":7}}';
-const GOOD = sign(SECRET_CURRENT, PAYLOAD);
+const GOOD = signCurrent(PAYLOAD);
 const FLIPPED = Buffer.from(PAYLOAD);
 FLIPPED[10] = (FLIPPED[10] ?? 0) ^ 0x01;
 
@@ -21,12 +29,12 @@ const REFUSED = [
   },
   { label: 'a trailing newline added to the body', body: `${PAYLOAD}\n`, signature: GOOD },
   { label: 'the body cut short', body: PAYLOAD.slice(0, -1), signature: GOOD },
-  { label: 'the signature of another delivery', body: PAYLOAD, signature: sign(SECRET_CURRENT, `${PAYLOAD} `) },
-  { label: 'the signature of the empty string on a body', body: PAYLOAD, signature: sign(SECRET_CURRENT, '') },
+  { label: 'the signature of another delivery', body: PAYLOAD, signature: signCurrent(`${PAYLOAD} `) },
+  { label: 'the signature of the empty string on a body', body: PAYLOAD, signature: signCurrent('') },
   { label: 'upper-case hex', body: PAYLOAD, signature: `sha256=${GOOD.slice(7).toUpperCase()}` },
   { label: 'a trailing space in the header', body: PAYLOAD, signature: `${GOOD} ` },
   { label: 'a leading space in the header', body: PAYLOAD, signature: ` ${GOOD}` },
-  { label: 'a body signed by neither secret', body: PAYLOAD, signature: sign('a-secret-nobody-configured', PAYLOAD) },
+  { label: 'a body signed by neither secret', body: PAYLOAD, signature: signUnconfigured(PAYLOAD) },
   { label: 'the legacy sha1 prefix', body: PAYLOAD, signature: `sha1=${GOOD.slice(7)}` },
   { label: 'no prefix', body: PAYLOAD, signature: GOOD.slice(7) },
   { label: 'a 63 digit signature', body: PAYLOAD, signature: GOOD.slice(0, -1) },

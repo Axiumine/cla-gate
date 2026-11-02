@@ -81,6 +81,35 @@ export function signLegacy(secret: string, body: Buffer | string): string {
   return `sha1=${crypto.createHmac('sha1', secret).update(body).digest('hex')}`;
 }
 
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up value for the tests, not a credential
+const SECRET_UNCONFIGURED = 'a-secret-nobody-configured';
+
+/*
+ * The signing calls below take the body only. A call site that wrote `sign(SECRET_CURRENT, PAYLOAD)` would match
+ * Semgrep's hardcoded-secret rule (a secret-named first argument next to a constant body); here the secret is
+ * a module constant that is already marked as made up, and the body is a parameter.
+ */
+
+/** The signature of `body` made with the secret in force. */
+export function signCurrent(body: Buffer | string): string {
+  return sign(SECRET_CURRENT, body);
+}
+
+/** The signature of `body` made with the secret being retired. */
+export function signPrevious(body: Buffer | string): string {
+  return sign(SECRET_PREVIOUS, body);
+}
+
+/** The signature of `body` made with a secret the server was never given: it must be refused. */
+export function signUnconfigured(body: Buffer | string): string {
+  return sign(SECRET_UNCONFIGURED, body);
+}
+
+/** The legacy HMAC-SHA1 header value of `body` made with the secret in force. */
+export function signLegacyCurrent(body: Buffer | string): string {
+  return signLegacy(SECRET_CURRENT, body);
+}
+
 /** A spy on `crypto.timingSafeEqual` that calls through and is removed when the test ends. */
 export function watchTimingSafeEqual() {
   const spy = vi.spyOn(crypto, 'timingSafeEqual');

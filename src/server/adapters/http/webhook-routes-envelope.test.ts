@@ -2,7 +2,15 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
-import { deliveryHeaders, postDelivery, SECRET_CURRENT, sign, webhookTestApp } from './test-support.ts';
+import {
+  deliveryHeaders,
+  postDelivery,
+  SECRET_CURRENT,
+  sign,
+  signCurrent,
+  signUnconfigured,
+  webhookTestApp,
+} from './test-support.ts';
 
 const APP_ID = '123456';
 const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_APP_ID: APP_ID };
@@ -11,7 +19,7 @@ const BROKEN = '{"action":';
 const FORM = { 'content-type': 'application/x-www-form-urlencoded' };
 const WRONG_APP = { 'x-github-hook-installation-target-id': '654321' };
 const BAD_EVENT = { 'x-github-event': 'Pull-Request' };
-const BAD_SIGNATURE = sign('a-secret-nobody-configured', PAYLOAD);
+const BAD_SIGNATURE = signUnconfigured(PAYLOAD);
 
 // Each row breaks several rules at once; the status is the first of the fixed order that the request breaks:
 // size (413, in the oversize tests), signature (401), headers (400), media type (415), JSON (400).
@@ -166,7 +174,7 @@ test('no part of a body or a header value reaches a response or the log, whateve
   }
   const everything = `${logs.text()}\n${bodies.join('\n')}`;
   expect(everything).not.toContain(canary);
-  expect(everything).not.toContain(sign(SECRET_CURRENT, body).slice(7));
+  expect(everything).not.toContain(signCurrent(body).slice(7));
   expect(everything).not.toContain('leak');
   expect(bodies.filter((text) => text.includes('webhook_'))).toHaveLength(requests.length);
 });

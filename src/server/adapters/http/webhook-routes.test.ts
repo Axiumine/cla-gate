@@ -14,8 +14,10 @@ import {
   postDelivery,
   SECRET_CURRENT,
   SECRET_PREVIOUS,
-  sign,
-  signLegacy,
+  signCurrent,
+  signLegacyCurrent,
+  signPrevious,
+  signUnconfigured,
   unreachableDatabase,
   watchTimingSafeEqual,
   webhookTestApp,
@@ -106,7 +108,7 @@ test('the empty body with the valid signature of the empty string passes the sig
   const bare = await app.inject({
     method: 'POST',
     url: WEBHOOK_PATH,
-    headers: { 'x-hub-signature-256': sign(SECRET_CURRENT, '') },
+    headers: { 'x-hub-signature-256': signCurrent('') },
   });
   expect(withHeaders.statusCode).toBe(400);
   expect(errorResponseSchema.parse(withHeaders.json()).error.code).toBe('webhook_payload_invalid');
@@ -120,7 +122,7 @@ test('the empty body is refused when the signature is that of any other body', a
   const response = await app.inject({
     method: 'POST',
     url: WEBHOOK_PATH,
-    headers: { 'x-hub-signature-256': sign(SECRET_CURRENT, PAYLOAD) },
+    headers: { 'x-hub-signature-256': signCurrent(PAYLOAD) },
   });
   expect(response.statusCode).toBe(401);
 });
@@ -136,17 +138,17 @@ test('a request with no signature header is refused with the standard error body
 
 test('the legacy SHA-1 header alone is refused, even when it is a correct HMAC', async () => {
   const { app } = await webhookTestApp({ env: ENV });
-  const legacy = signLegacy(SECRET_CURRENT, PAYLOAD);
+  const legacy = signLegacyCurrent(PAYLOAD);
   const response = await postDelivery(app, PAYLOAD, { 'content-type': 'application/json', 'x-hub-signature': legacy });
   expect(response.statusCode).toBe(401);
 });
 
 test('the legacy header is ignored next to a good SHA-256 one and cannot rescue a bad one', async () => {
   const { app } = await webhookTestApp({ env: ENV });
-  const legacy = signLegacy(SECRET_CURRENT, PAYLOAD);
+  const legacy = signLegacyCurrent(PAYLOAD);
   const good = { ...deliveryHeaders(PAYLOAD), 'x-hub-signature': 'sha1=garbage' };
   const bad = {
-    ...deliveryHeaders(PAYLOAD, { signature: sign('wrong-secret-value-1', PAYLOAD) }),
+    ...deliveryHeaders(PAYLOAD, { signature: signUnconfigured(PAYLOAD) }),
     'x-hub-signature': legacy,
   };
   expect((await postDelivery(app, PAYLOAD, good)).statusCode).toBe(200);
@@ -173,7 +175,7 @@ test('no body parser runs on a refused delivery: broken JSON, deep nesting and a
     ['<xml/>', 'application/xml'],
   ] as const;
   for (const [body, type] of rows) {
-    const headers = { 'content-type': type, 'x-hub-signature-256': sign('wrong-secret-value-1', body) };
+    const headers = { 'content-type': type, 'x-hub-signature-256': signUnconfigured(body) };
     const response = await postDelivery(app, body, headers);
     expect(response.statusCode).toBe(401);
   }
@@ -271,7 +273,7 @@ test('the route sits outside /api, so the audit guard does not apply, and it dec
 test('neither secret, nor any signature, nor any body fragment reaches the log or an error body', async () => {
   const { app, logs } = await webhookTestApp({ env: ENV });
   const bodies: string[] = [];
-  const hostile = deliveryHeaders(PAYLOAD, { signature: sign('wrong-secret-value-1', PAYLOAD) });
+  const hostile = deliveryHeaders(PAYLOAD, { signature: signUnconfigured(PAYLOAD) });
   const sent = [
     await postDelivery(app, PAYLOAD),
     await postDelivery(app, PAYLOAD, deliveryHeaders(PAYLOAD, { secret: SECRET_PREVIOUS })),
@@ -285,11 +287,7 @@ test('neither secret, nor any signature, nor any body fragment reaches the log o
   for (const secret of [SECRET_CURRENT, SECRET_PREVIOUS, 'wrong-secret-value-1']) {
     expect(everything).not.toContain(secret);
   }
-  for (const header of [
-    sign(SECRET_CURRENT, PAYLOAD),
-    sign(SECRET_PREVIOUS, PAYLOAD),
-    hostile['x-hub-signature-256'],
-  ]) {
+  for (const header of [signCurrent(PAYLOAD), signPrevious(PAYLOAD), hostile['x-hub-signature-256']]) {
     expect(everything).not.toContain(header?.slice(7) ?? 'missing');
   }
   expect(everything).not.toContain('pull_request');

@@ -193,6 +193,7 @@ test.each(SHAPES)('%s is refused with a ZodError and builds no job', (_title, ev
 });
 
 test('the refusal names fields, and nothing the payload held', () => {
+  // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up canary: the test proves that a rejected value never reaches the error
   const secret = 'canary-value-8e1f5b2a';
   const bad = withValue(withValue(payloadOf('pull_request'), 'repository.id', secret), 'installation.id', secret);
   expect(() => routeWebhook('pull_request', 'opened', bad, CONTEXT)).toThrow(ZodError);

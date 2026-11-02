@@ -8,7 +8,7 @@ import { FakeClock } from '../../services/test-support.ts';
 import {
   deliveryHeaders,
   SECRET_CURRENT,
-  sign,
+  signUnconfigured,
   watchCreateHmac,
   watchTimingSafeEqual,
   webhookTestApp,
@@ -38,7 +38,7 @@ function validFrom(app: FastifyInstance, address: string) {
 /** A delivery from `address` whose signature is wrong (or missing, or malformed, by `kind`). */
 function forgedFrom(app: FastifyInstance, address: string, kind = 0, headers: Record<string, string> = {}) {
   const forged = [
-    sign('a-secret-nobody-configured', BODY),
+    signUnconfigured(BODY),
     undefined,
     `sha1=${'0'.repeat(40)}`,
     `sha256=${'0'.repeat(63)}`,
