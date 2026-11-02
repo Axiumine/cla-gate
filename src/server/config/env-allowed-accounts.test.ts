@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { ConfigError, loadConfig } from './env.ts';
-import { testRsaKey } from './test-support.ts';
+import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
 
@@ -53,6 +53,7 @@ test('the list is optional in production: the owner account alone is served', ()
     DATABASE_URL: DB,
     NODE_ENV: 'production',
     PUBLIC_BASE_URL: 'https://cla.example.org',
+    GITHUB_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
     GITHUB_APP_ID: '12345',
     GITHUB_APP_PRIVATE_KEY: testRsaKey().pkcs8,
   });

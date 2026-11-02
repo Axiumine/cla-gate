@@ -5,12 +5,16 @@ import { expect, test } from 'vitest';
 import { ConfigError, loadConfig } from './env.ts';
 import { publicKeyFingerprint } from './github-key.ts';
 import { MASK } from './secret.ts';
-import { escapeNewlines, testRsaKey, testUnsuitableKeys } from './test-support.ts';
+import { escapeNewlines, TEST_WEBHOOK_SECRET, testRsaKey, testUnsuitableKeys } from './test-support.ts';
 
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
 const KEY = testRsaKey();
 const OTHER = testRsaKey();
-const PRODUCTION = { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.org' };
+const PRODUCTION = {
+  NODE_ENV: 'production',
+  PUBLIC_BASE_URL: 'https://cla.example.org',
+  GITHUB_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
+};
 const UNSUITABLE = testUnsuitableKeys();
 
 function capture(env: Record<string, string | undefined>): ConfigError {

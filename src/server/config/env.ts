@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { z } from 'zod';
-import type { GithubId } from '../../shared/github-id.ts';
 import { databaseUrlField } from './env-fields.ts';
 import { envSchema, type ValidEnv } from './env-schema.ts';
-import type { GitHubPrivateKey } from './github-key.ts';
+import { type GithubConfig, toGithubConfig } from './github-config.ts';
 import type { Secret } from './secret.ts';
 import type { TrustProxy } from './trust-proxy.ts';
 
@@ -19,22 +18,7 @@ export interface AppConfig {
   readonly publicBaseUrl: string;
   readonly trustProxy: TrustProxy;
   readonly sessionSecret: Secret | undefined;
-  /** The App id and key are required in production; the rest are placeholders for the slices that use them. */
-  readonly github: {
-    readonly appId: string | undefined;
-    /** The signing key. With {@link previousPrivateKey}, the key list of the JWT signer (E05-S02): current first. */
-    readonly privateKey: GitHubPrivateKey | undefined;
-    /** The key kept during a rotation; never equal to {@link privateKey}. */
-    readonly previousPrivateKey: GitHubPrivateKey | undefined;
-    /**
-     * The numeric ids of the accounts the instance serves besides the App owner's (E05-S07); empty when unset. The
-     * admission policy adds the owner once the self-check has named it.
-     */
-    readonly allowedAccountIds: readonly GithubId[];
-    readonly webhookSecret: Secret | undefined;
-    readonly clientId: string | undefined;
-    readonly clientSecret: Secret | undefined;
-  };
+  readonly github: GithubConfig;
 }
 
 /** Thrown for an invalid environment. Carries variable NAMES only: a value must never reach an error message or log. */
@@ -58,15 +42,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     publicBaseUrl: env.PUBLIC_BASE_URL ?? `http://localhost:${env.PORT}`,
     trustProxy: env.TRUST_PROXY,
     sessionSecret: env.SESSION_SECRET,
-    github: {
-      appId: env.GITHUB_APP_ID,
-      privateKey: env.GITHUB_APP_PRIVATE_KEY,
-      previousPrivateKey: env.GITHUB_APP_PRIVATE_KEY_PREVIOUS,
-      allowedAccountIds: env.GITHUB_ALLOWED_ACCOUNT_IDS ?? [],
-      webhookSecret: env.GITHUB_WEBHOOK_SECRET,
-      clientId: env.GITHUB_CLIENT_ID,
-      clientSecret: env.GITHUB_CLIENT_SECRET,
-    },
+    github: toGithubConfig(env),
   };
 }
 

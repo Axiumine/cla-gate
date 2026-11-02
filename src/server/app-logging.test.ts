@@ -25,7 +25,7 @@ test('configuration secrets never appear in the logs', async () => {
   const { app, logs } = await testApp({
     env: {
       SESSION_SECRET: 's3ssion-'.repeat(8),
-      GITHUB_WEBHOOK_SECRET: 'whsec-value',
+      GITHUB_WEBHOOK_SECRET: 'whsec-value-0123456789',
       GITHUB_APP_PRIVATE_KEY: key,
     },
   });

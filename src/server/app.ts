@@ -14,7 +14,9 @@ import { createLogger } from './adapters/http/logger.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { securityHeaders } from './adapters/http/security.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
+import { webhookRoutes } from './adapters/http/webhook-routes.ts';
 import type { AppConfig } from './config/env.ts';
+import { type Clock, systemClock } from './services/ports/clock.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
 
@@ -25,6 +27,8 @@ export interface AppOptions {
   /** Defaults to the pino logger from {@link createLogger}. */
   readonly logger?: FastifyBaseLogger;
   readonly readinessTimeoutMs?: number;
+  /** Where the webhook route takes its time from (E06-S01). Defaults to the wall clock. */
+  readonly clock?: Clock;
 }
 
 /**
@@ -58,6 +62,11 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   await app.register(healthRoutes, {
     db,
     readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
+  });
+
+  await app.register(webhookRoutes, {
+    secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
+    clock: options.clock ?? systemClock,
   });
 
   app.addHook('onClose', async () => {

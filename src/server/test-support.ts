@@ -13,6 +13,7 @@ import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
+import type { Clock } from './services/ports/clock.ts';
 
 const LogLine = z.record(z.string(), z.unknown());
 
@@ -67,6 +68,8 @@ export interface TestAppOptions {
   /** Defaults to a fresh PGlite. */
   readonly db?: Kysely<Database>;
   readonly readinessTimeoutMs?: number;
+  /** Defaults to the wall clock. */
+  readonly clock?: Clock;
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */
@@ -79,6 +82,7 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
     db,
     logger: createLogger(config, logs.destination),
     ...(options.readinessTimeoutMs === undefined ? {} : { readinessTimeoutMs: options.readinessTimeoutMs }),
+    ...(options.clock === undefined ? {} : { clock: options.clock }),
   });
   onTestFinished(async () => {
     await app.close();

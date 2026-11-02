@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { githubFields } from '../../src/server/config/env-fields.ts';
+import { githubFields } from '../../src/server/config/env-github.ts';
 import { PORT_MAX, PORT_MIN } from '../ci/lib/ports.ts';
 import {
   appEnvironment,
