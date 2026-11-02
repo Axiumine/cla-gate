@@ -106,6 +106,11 @@ test('the Vitest files the mutation run reads are part of the cache key too', ()
   expect(hashedFiles(key)).toEqual(expect.arrayContaining(['vitest.projects.ts', 'vitest.stryker.config.ts']));
 });
 
+test('the TypeScript projects the checker reads are part of the key: a tsconfig change alters which mutants fail to compile', () => {
+  const key = z.string().parse(step(CACHE).with?.['key']);
+  expect(hashedFiles(key)).toEqual(expect.arrayContaining(['tsconfig.base.json', 'tsconfig.server.json']));
+});
+
 /** A file name as `hashFiles` takes it: in single quotes. */
 function quoted(file: string): string {
   return `'${file}'`;
@@ -135,6 +140,7 @@ test('the scripts scope has its own incremental file and cache, keyed by what ma
       'vitest.config.ts',
       'vitest.projects.ts',
       'vitest.stryker-scripts.config.ts',
+      'tsconfig.base.json',
       'tsconfig.scripts.json',
     ]),
   );

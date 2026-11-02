@@ -594,14 +594,14 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: reports/stryker-incremental.json
-          key: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts') }}-${{ github.sha }}
-          restore-keys: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts') }}-
+          key: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-${{ github.sha }}
+          restore-keys: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-
       - name: Restore the Stryker incremental file (scripts scope)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: reports/stryker-incremental-scripts.json
-          key: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.scripts.json') }}-${{ github.sha }}
-          restore-keys: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.scripts.json') }}-
+          key: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-${{ github.sha }}
+          restore-keys: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-
       # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command.
       - name: Mutation tests
         env:
