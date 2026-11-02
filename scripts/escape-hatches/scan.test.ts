@@ -98,6 +98,8 @@ test('a finding names the file it was found in', () => {
 
 const NEEDS_PRESERVE = '"-- @preserve"';
 const NEEDS_REASON = 'a reason after "-- @preserve"';
+/** The end-of-range directive, spelled so that this file holds no range directive of its own (ranges.test.ts says why). */
+const STOP = ['v8', 'ignore', 'stop'].join(' ');
 
 test.each([
   ['a block comment with the marker and a reason', '/* v8 ignore next -- @preserve unreachable by construction */'],
@@ -108,6 +110,7 @@ test.each([
   ['the start of a range', '/* v8 ignore start -- @preserve generated table, no logic */'],
   ['the end of a range', '/* v8 ignore stop -- @preserve end of the generated table */'],
   ['the c8 spelling', '/* c8 ignore next -- @preserve unreachable by construction */'],
+  ['the istanbul spelling', '/* istanbul ignore next -- @preserve unreachable by construction */'],
   ['the node:coverage spelling', '/* node:coverage ignore next -- @preserve unreachable by construction */'],
   ['a comment that only mentions the directive', '// see the v8 ignore documentation'],
   ['a word that merely starts like the directive', '// v8 ignored lines are listed below'],
@@ -121,8 +124,10 @@ test.each([
   ['a marker but no reason', '/* v8 ignore next -- @preserve */', [NEEDS_REASON]],
   ['a marker and a short reason', '/* v8 ignore next -- @preserve nope */', [NEEDS_REASON]],
   ['a line comment without the marker', '// v8 ignore next', [NEEDS_PRESERVE]],
-  ['the end of a range without the marker', '/* v8 ignore stop */', [NEEDS_PRESERVE]],
+  ['the end of a range without the marker', `/* ${STOP} */`, [NEEDS_PRESERVE]],
   ['the c8 spelling without the marker', '/* c8 ignore next */', [NEEDS_PRESERVE]],
+  ['the istanbul spelling without the marker', '/* istanbul ignore next */', [NEEDS_PRESERVE]],
+  ['the istanbul spelling and a short reason', '/* istanbul ignore file -- @preserve nope */', [NEEDS_REASON]],
   ['the node:coverage spelling without the marker', '/* node:coverage disable */', [NEEDS_PRESERVE]],
 ])('v8 ignore with %s', (_what, comment, missing) => {
   expect(findings(['export const a = 1;', comment, 'export const b = 2;'])).toEqual(

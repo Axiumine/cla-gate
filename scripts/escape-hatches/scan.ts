@@ -2,19 +2,22 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import ts from 'typescript';
 import { commentsOf, type SourceComment } from './comments.ts';
+import { rangeDirectives, startsWithRange } from './ranges.ts';
 import { hasPreserve, hasReason, hasReasonAfterPreserve } from './reason.ts';
 import { type Finding, type Hatch, PRESERVE, REASON } from './types.ts';
 
 // E20-S16: finds the escape hatches that no linter checks for a written justification: an
-// explicit `any`, an `as` assertion other than `as const`, a coverage-ignore comment, a type-coverage ignore comment and
-// a Qodana `//noinspection <Name>` comment (E20-S08). ESLint (ban-ts-comment and eslint-comments) and Biome cover the other directives.
+// explicit `any`, an `as` assertion other than `as const`, a coverage-ignore comment or range line (ranges.ts), a
+// type-coverage ignore comment and a Qodana `//noinspection <Name>` comment (E20-S08). ESLint (ban-ts-comment and
+// eslint-comments) and Biome cover the other directives.
 
 interface Construct {
   readonly hatch: Hatch;
   readonly line: number;
 }
 
-const COVERAGE_IGNORE = /^(?:(?:v8|c8) ignore|node:coverage (?:ignore|disable))(?![\w-])/;
+// A comment that starts with one of these is a coverage hint (Vitest honours `istanbul`, `v8` and `c8` spellings alike).
+const COVERAGE_IGNORE = /^(?:(?:istanbul|v8|c8) ignore|node:coverage (?:ignore|disable))(?![\w-])/;
 const TYPE_COVERAGE_IGNORE = /type-coverage:ignore-(?:next-)?line/;
 const NOINSPECTION = /^noinspection(?![\w-])/;
 /** Directives that only need a reason in the same comment, after ` -- `. */
@@ -52,11 +55,8 @@ function isJustified(line: number, comments: readonly SourceComment[]): boolean 
   );
 }
 
-/** The elements a coverage-ignore comment lacks: the preserve marker, then a reason after it. */
-function coverageIgnoreMissing(body: string): string[] {
-  if (!COVERAGE_IGNORE.test(body)) {
-    return [];
-  }
+/** The elements a coverage-ignore directive lacks: the preserve marker, then a reason after it. */
+function preserveMissing(body: string): string[] {
   if (!hasPreserve(body)) {
     return [PRESERVE];
   }
@@ -64,7 +64,9 @@ function coverageIgnoreMissing(body: string): string[] {
 }
 
 function directiveFindings(file: string, comment: SourceComment): Finding[] {
-  const coverage = coverageIgnoreMissing(comment.body).map(
+  // A range directive is reported by the range pass, on the raw line Vitest reads it from.
+  const hint = COVERAGE_IGNORE.test(comment.body) && !startsWithRange(comment.body);
+  const coverage = (hint ? preserveMissing(comment.body) : []).map(
     (missing): Finding => ({ file, line: comment.line, hatch: 'v8 ignore', missing }),
   );
   const reasonless = REASON_DIRECTIVES.filter(
@@ -83,5 +85,8 @@ export function scanSource(file: string, text: string): Finding[] {
     .filter((construct) => !isJustified(construct.line, comments))
     .map((construct): Finding => ({ file, ...construct, missing: `${REASON} on this line or the line above` }));
   const directives = comments.flatMap((comment) => directiveFindings(file, comment));
-  return [...unjustified, ...directives].sort((a, b) => a.line - b.line);
+  const ranges = rangeDirectives(sourceFile, comments).flatMap((range) =>
+    preserveMissing(range.text).map((missing): Finding => ({ file, line: range.line, hatch: 'v8 ignore', missing })),
+  );
+  return [...unjustified, ...directives, ...ranges].sort((a, b) => a.line - b.line);
 }

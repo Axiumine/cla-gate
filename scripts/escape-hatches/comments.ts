@@ -15,6 +15,10 @@ export interface SourceComment {
   readonly endLine: number;
   /** True when only whitespace precedes the comment on its first line. */
   readonly ownLine: boolean;
+  /** Offset of the comment's first character (its opening delimiter) in the source text. */
+  readonly start: number;
+  /** Offset just past the comment's last character (its closing delimiter). */
+  readonly end: number;
 }
 
 /** The tokens of the tree in source order. JSDoc is itself a comment, so its inner nodes are not tokens. */
@@ -47,6 +51,8 @@ export function commentsOf(sourceFile: ts.SourceFile): SourceComment[] {
         line,
         endLine: lineOf(range.end),
         ownLine: text.slice(sourceFile.getPositionOfLineAndCharacter(line - 1, 0), range.pos).trim() === '',
+        start: range.pos,
+        end: range.end,
       };
     });
 }

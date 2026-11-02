@@ -24,6 +24,14 @@ export function commentBody(raw: string): string {
 }
 
 /**
+ * The text of a directive from its first word to the end of the comment (or line) that holds it, on one line, without
+ * the comment's closing delimiter or the leading `*` of a JSDoc line.
+ */
+export function directiveText(raw: string): string {
+  return collapse(raw.replace(/\*\/$/, '').replaceAll(/^[ \t]*\*+/gm, ' '));
+}
+
+/**
  * The text after the first ` -- ` of a comment body, or `undefined` when there is no separator.
  * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
  */
