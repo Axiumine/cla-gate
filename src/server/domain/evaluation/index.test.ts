@@ -10,6 +10,7 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'ADVISORY_CODES',
     'ALLOWLIST_KINDS',
     'ALLOWLIST_SCOPES',
+    'assessCoverage',
     'classifyAccount',
     'extractActors',
     'FAILURE_CODES',

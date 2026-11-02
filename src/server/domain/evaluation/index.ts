@@ -6,5 +6,7 @@ export * from './actor-types.ts';
 export * from './actors.ts';
 export * from './allowlist.ts';
 export * from './classify.ts';
+export * from './coverage.ts';
+export * from './coverage-types.ts';
 export * from './github-identities.ts';
 export * from './types.ts';

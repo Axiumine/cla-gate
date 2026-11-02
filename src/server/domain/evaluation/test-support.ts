@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { ActorExtraction } from './actor-types.ts';
+import type { ActorExtraction, ExtractedActor } from './actor-types.ts';
 import type {
   Account,
   AccountType,
@@ -10,6 +10,7 @@ import type {
   CommitFacts,
   EvaluationInput,
   Role,
+  SignatureFact,
 } from './types.ts';
 
 // Builders for the tests of src/server/domain/evaluation. They are plain data with sensible defaults, so a test names
@@ -47,6 +48,21 @@ export function allowlistEntry(
   scope: AllowlistScope = 'repository',
 ): AllowlistEntry {
   return { id, kind, githubId, scope };
+}
+
+/** A signature of `githubId` that covers the default policy of `evaluationInput` (document 1, major 1), not revoked. */
+export function signatureFact(id: number, githubId: number, overrides: Partial<SignatureFact> = {}): SignatureFact {
+  return { id, githubId, documentId: 1, versionId: 1000 + id, major: 1, revoked: false, ...overrides };
+}
+
+/** An actor as extraction would hand it over: one account with its roles and no commits unless the test names some. */
+export function extractedActor(
+  id: number,
+  type: AccountType = 'User',
+  roles: readonly Role[] = ['author'],
+  shas: readonly string[] = [],
+): ExtractedActor {
+  return { account: account(id, type), roles, shas };
 }
 
 /** Known organisation members: `membership([500, [10, 11]])` says users 10 and 11 belong to organisation 500. */

@@ -6,6 +6,7 @@ import type {
   ALLOWLIST_SCOPES,
   FAILURE_CODES,
   LISTING_STATES,
+  OUTCOMES,
   ROLES,
 } from '../../../shared/pr-evaluation-codes.ts';
 
@@ -42,6 +43,7 @@ export type AccountType = (typeof ACCOUNT_TYPES)[number];
 export type AllowlistKind = (typeof ALLOWLIST_KINDS)[number];
 export type AllowlistScope = (typeof ALLOWLIST_SCOPES)[number];
 export type ListingState = (typeof LISTING_STATES)[number];
+export type Outcome = (typeof OUTCOMES)[number];
 
 /**
  * A GitHub account as the engine sees it. `id` is the numeric GitHub id (a positive safe integer) and the only identity.
