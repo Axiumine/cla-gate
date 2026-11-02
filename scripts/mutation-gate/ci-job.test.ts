@@ -53,10 +53,11 @@ test('the job is named mutation, waits for static, runs on the shared self-hoste
   expect(job['timeout-minutes']).toBe(45);
 });
 
-test('the job asks for no more than contents: read, holds no secret and cannot be skipped or fail softly', () => {
+test('the job asks for no more than contents: read, holds no secret, stays off pull requests until it has a green run and cannot fail softly', () => {
   expect(job.permissions).toBeUndefined();
   expect(job.env).toBeUndefined();
-  expect(job.if).toBeUndefined();
+  // Not on pull requests (docs/epics/E20.md, E20-S04 Open line); every other event runs it.
+  expect(job.if).toContain("github.event_name != 'pull_request'");
   expect(job.steps.filter((each) => each['continue-on-error'] !== undefined)).toEqual([]);
   expect(ciText).toMatch(/^permissions:\n {2}contents: read\n/m);
   // The qodana job (E20-S08) holds a secret and runs on a GitHub-hosted machine: it is not part of this check.

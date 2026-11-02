@@ -529,6 +529,11 @@ jobs:
   mutation:
     name: mutation
     needs: static
+    # Not on pull requests (2026-11-02): the first cold run on the shared runners hit the 45-minute timeout and was cancelled,
+    # so no incremental file was saved, and a job that long on every push would hold one of the three shared runners that other
+    # repositories also use. It runs on pushes to main, tags, the nightly schedule and by hand, which is where the incremental
+    # cache is written. The condition is removed after the first green run (E20-S04, Open line).
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     steps:
