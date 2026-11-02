@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream';
 import helmetPlugin from '@fastify/helmet';
 import Fastify, { type FastifyBaseLogger, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { AppConfig } from '../../config/env.ts';
+import { isAuthUrl } from './auth-no-store.ts';
 import { errorBody, rejectRequest } from './errors.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './request-id.ts';
 import { securityHeaders } from './security.ts';
@@ -77,6 +78,9 @@ export async function frameworkErrorHandlers(config: Pick<AppConfig, 'publicBase
   return {
     frameworkErrors: (error: unknown, request: FastifyRequest, reply: FastifyReply): void => {
       reply.headers({ ...headers, [REQUEST_ID_HEADER]: request.id });
+      if (isAuthUrl(request.url)) {
+        reply.header('cache-control', 'no-store');
+      }
       rejectRequest(error, request, reply);
     },
     clientErrorHandler: (error: Error, socket: Duplex): void => {

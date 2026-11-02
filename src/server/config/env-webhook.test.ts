@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
+import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError, loadConfig } from './env.ts';
 import { MASK, Secret } from './secret.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
@@ -10,6 +11,7 @@ const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
 const CURRENT = 'current-webhook-secret-0001';
 const PREVIOUS = 'previous-webhook-secret-002';
 const PRODUCTION = {
+  ...AUTH_ENV,
   NODE_ENV: 'production',
   PUBLIC_BASE_URL: 'https://cla.example.org',
   GITHUB_APP_ID: '12345',

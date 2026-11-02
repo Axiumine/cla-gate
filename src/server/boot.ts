@@ -10,6 +10,7 @@ import { loadConfigOrReport } from './boot-config.ts';
 import type { InstallationWiring } from './boot-installations.ts';
 import { reconcileInBackground } from './boot-reconcile.ts';
 import { startGitHubAndDatabase } from './boot-services.ts';
+import { logAuth } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
 import { logGithubApp } from './config/github-app.ts';
 import type { Clock } from './services/ports/clock.ts';
@@ -62,6 +63,7 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
   }
   const logger = createLogger(config, options.logDestination);
   logGithubApp(logger, config.github);
+  logAuth(logger, config);
   const started = await startGitHubAndDatabase({
     config,
     logger,
@@ -74,7 +76,7 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
     return undefined;
   }
   const { db, github, ...wiring } = started;
-  const app = await buildApp({ config, db, logger });
+  const app = await buildApp({ config, db, logger, clock: options.clock, fetch: options.fetch });
   try {
     const address = await app.listen({ host: config.host, port: config.port });
     const timeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;

@@ -45,7 +45,8 @@ const webhookSecretField = z
 /**
  * The GitHub App settings. The App id, the key and the webhook secret are optional here and required in production by
  * {@link githubProblems}; the previous key and the previous webhook secret are the ones kept during a rotation
- * (E05-S02, E06-S01). The client id and secret stay placeholders for the slices that use them.
+ * (E05-S02, E06-S01). The client id and secret are the App's OAuth credentials for the login (E10-S05); production
+ * requires them through `authProblems` (auth-fields.ts), which also owns the session secret.
  */
 export const githubFields = {
   GITHUB_APP_ID: z

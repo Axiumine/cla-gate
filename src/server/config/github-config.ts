@@ -7,7 +7,7 @@ import type { Secret } from './secret.ts';
 
 /**
  * The GitHub App settings the server reads (see docs/configuration.md). The App id, key and webhook secret are required
- * in production; the client id and secret are placeholders for the slices that use them.
+ * in production; so are the client id and secret, which the login reads (E10-S05, required by `authProblems`).
  */
 export interface GithubConfig {
   readonly appId: string | undefined;
@@ -24,7 +24,9 @@ export interface GithubConfig {
   readonly webhookSecret: Secret | undefined;
   /** The secret kept during a rotation: a delivery signed with it is still accepted; never equal to {@link webhookSecret}. */
   readonly previousWebhookSecret: Secret | undefined;
+  /** The App's OAuth client id, for the login (E10-S05). */
   readonly clientId: string | undefined;
+  /** The App's OAuth client secret, for the login (E10-S05). */
   readonly clientSecret: Secret | undefined;
 }
 

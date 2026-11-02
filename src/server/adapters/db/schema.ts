@@ -14,6 +14,9 @@ type JsonObject<Default extends boolean = false> = ColumnType<
   string
 >;
 
+/** A jsonb column that holds an array with a default: read as an array (parse its elements), written as a JSON string. */
+type JsonArray = ColumnType<unknown[], string | undefined, string>;
+
 interface UsersTable {
   id: Generated<number>;
   github_id: number;
@@ -33,6 +36,8 @@ interface SessionsTable {
   last_seen_at: Generated<Date>;
   idle_expires_at: Date;
   absolute_expires_at: Date;
+  /** The verified addresses of the person at login, `[{ email, primary }]`, at most 20; personal data, gone with the row (migration 005, E10-S01). */
+  verified_emails: JsonArray;
 }
 
 interface InstallationsTable {

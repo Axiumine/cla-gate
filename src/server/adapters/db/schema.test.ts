@@ -18,6 +18,7 @@ const COLUMNS = {
     last_seen_at: true,
     idle_expires_at: true,
     absolute_expires_at: true,
+    verified_emails: true,
   },
   installations: {
     id: true,

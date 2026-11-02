@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import type * as FastifyModule from 'fastify';
+import { expect, test, vi } from 'vitest';
+import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
+import { testApp } from '../../test-support.ts';
+import { RATE_LIMIT_EXEMPT, rateLimitProblem } from './rate-limit.ts';
+
+// The route table of the real application (E10-S08): every route registered while the app is built, collected by an
+// `onRoute` hook that is added to the Fastify instance the moment it is created, before any route exists. It shows which
+// routes leave the global budget, and which have a budget of their own.
+
+interface SeenRoute {
+  readonly method: string | readonly string[];
+  readonly url: string;
+  readonly config: unknown;
+}
+
+const seen = vi.hoisted((): SeenRoute[] => []);
+
+vi.mock('fastify', async (importOriginal) => {
+  const actual = await importOriginal<typeof FastifyModule>();
+  const create = (options: FastifyModule.FastifyServerOptions) => {
+    const app = actual.default(options);
+    app.addHook('onRoute', (route) => {
+      seen.push({ method: route.method, url: route.url, config: route.config });
+    });
+    return app;
+  };
+  return { ...actual, default: create };
+});
+
+function names(route: SeenRoute): string[] {
+  return [route.method].flat().map((method) => `${method.toUpperCase()} ${route.url}`);
+}
+
+function limitOf(route: SeenRoute): unknown {
+  const { config } = route;
+  return typeof config === 'object' && config !== null && 'rateLimit' in config ? config.rateLimit : undefined;
+}
+
+async function tableOfTheApp(): Promise<SeenRoute[]> {
+  seen.length = 0;
+  await testApp({ env: AUTH_ENV });
+  return [...seen];
+}
+
+test('the table is collected: the application registers its routes with the login configured', async () => {
+  const table = await tableOfTheApp();
+  expect(table.flatMap(names)).toContain('GET /api/auth/session');
+  expect(table.flatMap(names)).toContain('GET /healthz');
+});
+
+// The webhook route (E06-S01) is in the table, so the routes switched off are exactly the list.
+test('every route of the table that switches the limit off is on the RATE_LIMIT_EXEMPT list, and the list is all of them', async () => {
+  const table = await tableOfTheApp();
+  const off = table.filter((route) => limitOf(route) === false).flatMap(names);
+  expect(off).toEqual(RATE_LIMIT_EXEMPT);
+  expect(table.flatMap((route) => rateLimitProblem(route.method, route.url, route.config) ?? [])).toEqual([]);
+});
+
+test('the routes with a budget of their own are the four of the story, each with the key cap, and none answers HEAD', async () => {
+  const table = await tableOfTheApp();
+  const own = table.filter((route) => typeof limitOf(route) === 'object');
+  expect(Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])))).toEqual({
+    'GET /api/auth/login': { max: 20, timeWindow: 60_000, cache: 10_000 },
+    'GET /api/auth/callback': { max: 20, timeWindow: 60_000, cache: 10_000 },
+    'POST /api/auth/logout': { max: 20, timeWindow: 60_000, cache: 10_000 },
+    'GET /api/auth/session': { max: 120, timeWindow: 60_000, cache: 10_000 },
+  });
+});

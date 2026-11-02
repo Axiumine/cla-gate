@@ -8,6 +8,7 @@ import { notWiredEnqueuer } from '../../services/jobs-not-wired.ts';
 import { systemClock } from '../../services/ports/clock.ts';
 import { FakeClock } from '../../services/test-support.ts';
 import { auditProblem } from './audit-routes.ts';
+import { authWorld } from './auth-fixture/test-support.ts';
 import {
   deliveryHeaders,
   GITHUB_EXAMPLE,
@@ -226,14 +227,16 @@ test('the route needs no session, cookie, CSRF token or Origin header, and ignor
 });
 
 test('the raw body belongs to this route only: another route still gets its JSON parsed', async () => {
-  const { app } = await webhookTestApp({ env: ENV });
+  // A state-changing route is behind the login's guards (E10-S03), so the caller is a person who is logged in.
+  const { app, login } = await authWorld(ENV);
   app.post('/elsewhere', (request) => ({ body: request.body, raw: request.rawBody ?? null }));
-  const response = await app.inject({ method: 'POST', url: '/elsewhere', payload: { a: 1 } });
+  const alice = await login(1001);
+  const response = await app.inject({ method: 'POST', url: '/elsewhere', headers: alice.headers, payload: { a: 1 } });
   expect(response.json()).toEqual({ body: { a: 1 }, raw: null });
   const broken = await app.inject({
     method: 'POST',
     url: '/elsewhere',
-    headers: { 'content-type': 'application/json' },
+    headers: { ...alice.headers, 'content-type': 'application/json' },
     payload: '{',
   });
   expect(broken.statusCode).toBe(400);

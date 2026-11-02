@@ -2,14 +2,17 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
-import { ConfigError, loadConfig, loadMigrateConfig } from './env.ts';
+import { AUTH_ENV } from './auth-fixture/test-support.ts';
+import { ConfigError, loadConfig } from './env.ts';
+import { loadMigrateConfig } from './migrate-config.ts';
 import { MASK, Secret } from './secret.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 const KEY = testRsaKey();
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
-/** Production with the GitHub App settings it requires (E05-S01, E06-S01), so a row is about one variable only. */
+/** Production with the GitHub App and login settings it requires (E05-S01, E06-S01, E10-S01), so a row is about one variable only. */
 const PRODUCTION = {
+  ...AUTH_ENV,
   NODE_ENV: 'production',
   GITHUB_APP_ID: '12345',
   GITHUB_APP_PRIVATE_KEY: KEY.pkcs8,
