@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { GitHubCommitPage, GitHubPullRequest } from '../../services/ports/github.ts';
+import type { GitHubCommitPage, GitHubPullRequest, GitHubPullRequestPage } from '../../services/ports/github.ts';
 import { checked, PER_PAGE, repositoryOf } from './octokit-names.ts';
 import { type Channel, parseOne, type RequestHeaders, readOrNull } from './octokit-request.ts';
 import { hasNextPage } from './pagination.ts';
-import { commitPageSchema, comparisonSchema, pullRequestSchema } from './schemas.ts';
+import { commitPageSchema, comparisonSchema, pullRequestRefPageSchema, pullRequestSchema } from './schemas.ts';
 
 // The requests of the evaluation job (E07-S10): a pull request, its commits, the commits behind a head and the merge base
 // of two commits. They are made with an installation's token, so `headers` carry it. Everything that becomes a part of a
@@ -28,6 +28,31 @@ export function fetchPullRequest(
     () => channel.octokit.request(route, { ...name, pull_number: prNumber, headers }),
     pullRequestSchema,
   );
+}
+
+/**
+ * One page of `GET /repos/{owner}/{repo}/pulls?state=open` (E07-S08), newest first: the number, state and head SHA of each
+ * open pull request and nothing else.
+ */
+export async function fetchOpenPullRequests(
+  channel: Channel,
+  headers: RequestHeaders,
+  listing: { readonly fullName: string; readonly page: number },
+): Promise<GitHubPullRequestPage> {
+  const route = 'GET /repos/{owner}/{repo}/pulls';
+  const name = checked(route, listing.fullName);
+  const answer = await channel.send(route, () =>
+    channel.octokit.request(route, {
+      ...name,
+      state: 'open',
+      sort: 'created',
+      direction: 'desc',
+      per_page: PER_PAGE,
+      page: listing.page,
+      headers,
+    }),
+  );
+  return { pulls: parseOne(route, pullRequestRefPageSchema, answer.data), last: !hasNextPage(answer.link) };
 }
 
 /** One page of the commits of a pull request. */

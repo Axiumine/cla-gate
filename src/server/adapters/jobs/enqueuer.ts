@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Transaction } from 'kysely';
 import { type Db, fromKysely, type SendOptions } from 'pg-boss';
-import type { Job } from '../../domain/jobs.ts';
-import type { EnqueueOptions, EnqueueOutcome, JobEnqueuer } from '../../services/ports/jobs.ts';
+import type { EnqueueOptions, EnqueueOutcome, JobEnqueuer, QueuedJob } from '../../services/ports/jobs.ts';
 import type { Database } from '../db/schema.ts';
 import type { Boss } from './boss.ts';
 import { jobIdFor } from './job-id.ts';
@@ -52,7 +51,7 @@ export class PgBossEnqueuer implements JobEnqueuer {
    * sent again, so a delivery GitHub redelivers after its job died is not lost; with no such job a throttle window (or
    * a policy of the queue) dropped the send, which is `deduplicated`. `already_queued` is therefore answered first.
    */
-  async enqueue(tx: Transaction<Database>, job: Job, options: EnqueueOptions): Promise<EnqueueOutcome> {
+  async enqueue(tx: Transaction<Database>, job: QueuedJob, options: EnqueueOptions): Promise<EnqueueOutcome> {
     const queue: QueueName = job.type;
     const id = jobIdFor(options.idempotencyKey);
     const db = fromKysely(tx);

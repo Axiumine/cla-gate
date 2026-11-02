@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { Job } from '../../domain/jobs.ts';
+import type { QueuedJob } from '../../services/ports/jobs.ts';
 
 // The serialisation key of a job (E07-S02): the jobs of one queue that share it never run at the same time, and a job
 // with another key runs in parallel. It is pg-boss's `singletonKey`, which the queues whose policy is `singleton`
@@ -11,6 +11,6 @@ import type { Job } from '../../domain/jobs.ts';
  * pull requests do (a pull request number is unique per repository only, hence both ids). `undefined` for a job of a
  * type that is not serialised. E07-S09 adds `finalise-check`, keyed the same way.
  */
-export function serialisationKey(job: Job): string | undefined {
+export function serialisationKey(job: QueuedJob): string | undefined {
   return job.type === 'evaluate-pr' ? `${job.githubRepoId}:${job.prNumber}` : undefined;
 }

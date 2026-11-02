@@ -19,12 +19,15 @@ import {
   HEAD_JOB,
   INSTALLATION,
   PR_NUMBER,
+  REPOSITORY,
   recheckWorld,
 } from './recheck/test-support.ts';
+import type { SweepDeps } from './sweep/sweep.ts';
+import { sweepWorld } from './sweep/test-support.ts';
 
 // The handlers `registerHandlers` binds (E07-S03): the five of the deliveries and the two of the scheduler, with the
 // sync of an installation wired to E05-S08, the evaluation, the close and the manual re-evaluation (E07-S04, E07-S06, E07-S07)
-// wired to their code, and the others failing their jobs until their stories land.
+// wired to their code, and the scheduled sweep (E07-S08); a handler whose consumer is not available fails its jobs.
 
 const DELIVERY_DRIVEN = ['evaluate-pr', 'evaluate-head-sha', 'close-pr', 'recheck-comment', 'sync-installation'];
 const SYNCED: SyncOutcome = {
@@ -293,21 +296,84 @@ test.each([
   },
 );
 
-const NOT_BUILT = [
-  ['sweep', { type: 'sweep' }, 'E07-S08'],
-  ['sweep-installation', { type: 'sweep-installation', githubInstallationId: IDS.installation }, 'E07-S08'],
+const SWEEP_JOBS = [
+  ['sweep', { type: 'sweep' }, 'no GitHub App is configured'],
+  [
+    'sweep-installation',
+    { type: 'sweep-installation', githubInstallationId: IDS.installation },
+    'no GitHub App or no evaluation reporter (E09) is configured',
+  ],
 ] as const;
 
-test.each(NOT_BUILT)(
-  'a %s job fails until its story is built (%s... names it) and never completes with nothing done, so no delivery is lost',
-  async (type, data, story) => {
+test.each(SWEEP_JOBS)(
+  'a %s job fails without what it runs on and never completes with nothing done (E07-S08)',
+  async (type, data, reason) => {
     const { deps, marked } = runWorld((registry) => {
       registerHandlers(registry, { syncInstallation: undefined, evaluatePr: undefined });
     });
-    const error = await runJob(type, queuedJob(data), deps).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(HandlerUnavailableError);
-    expect(error).toMatchObject({ type });
-    expect(String(error)).toContain(story);
+    await expect(runJob(type, queuedJob(data), deps)).rejects.toThrow(new HandlerUnavailableError(type, reason));
     expect(marked).toEqual([]);
   },
 );
+
+test('a sweep fails without the sweep dependency also where the evaluation ports are there: the two jobs are bound separately', async () => {
+  const world = await sweepWorld();
+  const { deps } = runWorld((registry) => {
+    registerHandlers(registry, {
+      syncInstallation: undefined,
+      evaluatePr: () => world.evaluatePorts,
+      sweep: undefined,
+    });
+  });
+  await expect(runJob('sweep', queuedJob({ type: 'sweep' }), deps)).rejects.toBeInstanceOf(HandlerUnavailableError);
+});
+
+test('sweep reconciles the installations with the signal of the job, sends a sweep-installation job for each served one on the queue the job runs on, and completes', async () => {
+  const world = await sweepWorld();
+  const reconcileInstallations = vi.fn<SweepDeps['reconcileInstallations']>(() =>
+    Promise.resolve({ synced: 1, failed: 0 }),
+  );
+  const { deps } = runWorld((registry) => {
+    registerHandlers(registry, {
+      syncInstallation: undefined,
+      evaluatePr: undefined,
+      sweep: { db: world.db, reconcileInstallations },
+    });
+  });
+  const signal = new AbortController().signal;
+  const verdict = await runJob('sweep', queuedJob({ type: 'sweep' }, { id: 'job-4', signal }), {
+    ...deps,
+    enqueuer: world.enqueuer,
+  });
+  expect(verdict).toEqual({ status: 'completed', output: { outcome: 'fanned_out' } });
+  expect(reconcileInstallations).toHaveBeenCalledExactlyOnceWith(signal);
+  expect((await world.queued()).map((sent) => [sent.idempotencyKey, sent.job.type])).toEqual([
+    [`sweep:job-4:${String(INSTALLATION)}`, 'sweep-installation'],
+  ]);
+});
+
+test('sweep-installation sweeps with the ports it is given for the signal of the job, sends the evaluations on the queue the job runs on, and completes', async () => {
+  const world = await sweepWorld();
+  const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>(() => world.evaluatePorts);
+  const { deps } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+  });
+  const signal = new AbortController().signal;
+  const job = queuedJob({ type: 'sweep-installation', githubInstallationId: INSTALLATION }, { id: 'job-5', signal });
+  const verdict = await runJob('sweep-installation', job, { ...deps, enqueuer: world.enqueuer });
+  expect(verdict).toEqual({ status: 'completed', output: { outcome: 'swept' } });
+  expect(evaluatePorts).toHaveBeenCalledExactlyOnceWith(signal);
+  expect((await world.queued()).map((sent) => [sent.idempotencyKey, sent.job.type])).toEqual([
+    [`sweep:job-5:${String(REPOSITORY)}:${String(PR_NUMBER)}`, 'evaluate-pr'],
+  ]);
+});
+
+test('a sweep-installation job whose payload is not an envelope is dead-lettered before the ports are asked for anything', async () => {
+  const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>();
+  const { deps } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+  });
+  const data = { type: 'sweep-installation', githubInstallationId: 'five thousand' };
+  expect((await runJob('sweep-installation', queuedJob(data), deps)).status).toBe('deadletter');
+  expect(evaluatePorts).not.toHaveBeenCalled();
+});

@@ -3,6 +3,7 @@
 import type { Transaction } from 'kysely';
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
+import type { EnvelopeOf } from '../../domain/job-envelope.ts';
 import type { Job } from '../../domain/jobs.ts';
 
 // Where the webhook intake hands a job (E06-S06). The queue itself (pg-boss) is E07: the port is what the intake needs
@@ -32,13 +33,19 @@ export type EnqueueOptions = { readonly idempotencyKey: string } & (
   | { readonly dedupeKey: string; readonly dedupeWindowSeconds: number }
 );
 
+/**
+ * A job the platform itself puts on the queue (E07-S08): every job of the catalogue a webhook can start, and the
+ * `sweep-installation` job the scheduled sweep fans out. The `sweep` job is not in it: only the scheduler sends it.
+ */
+export type QueuedJob = Job | EnvelopeOf<'sweep-installation'>;
+
 export interface JobEnqueuer {
   /**
    * Sends `job` on the connection of `tx`, so the job commits or rolls back with everything else the transaction wrote:
    * a delivery recorded without its job, or a job without its delivery, cannot exist. Resolves `'already_queued'` or
    * `'deduplicated'` when nothing was sent because of `options`; rejects when the send failed, and the caller rolls back.
    */
-  enqueue(tx: Transaction<Database>, job: Job, options: EnqueueOptions): Promise<EnqueueOutcome>;
+  enqueue(tx: Transaction<Database>, job: QueuedJob, options: EnqueueOptions): Promise<EnqueueOutcome>;
 }
 
 /**

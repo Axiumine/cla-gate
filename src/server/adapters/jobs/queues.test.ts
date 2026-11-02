@@ -8,6 +8,8 @@ import {
   QUEUE_DEFINITIONS,
   QUEUES,
   queueSettings,
+  SCHEDULER_QUEUE,
+  schedulerQueueSettings,
 } from './queues.ts';
 import { EXPECTED_BOUNDS } from './test-support.ts';
 
@@ -18,17 +20,26 @@ test('the queues are the names of the definitions, in their order, each once', (
   expect(new Set(QUEUES).size).toBe(QUEUES.length);
 });
 
-test('evaluate-pr is the one singleton queue: any number wait, one per key runs. The others are standard', () => {
+test('evaluate-pr is the one singleton queue (any number wait, one per key runs) and sweep the one exclusive queue (E07-S08). The others are standard', () => {
   expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'singleton')).toEqual([
     { name: 'evaluate-pr', policy: 'singleton' },
   ]);
-  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy !== 'singleton')).toHaveLength(QUEUES.length - 1);
-  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 1);
+  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'exclusive')).toEqual([
+    { name: 'sweep', policy: 'exclusive' },
+  ]);
+  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 2);
+});
+
+test("pg-boss's queue of scheduled occurrences is not one of ours: no entry of QUEUES, the bounds of the others and no dead-letter queue (E07-S08)", () => {
+  expect(SCHEDULER_QUEUE).toBe('__pgboss__send-it');
+  expect(QUEUES).not.toContain(SCHEDULER_QUEUE);
+  expect(schedulerQueueSettings()).toEqual({ policy: 'standard', ...EXPECTED_BOUNDS });
+  expect(schedulerQueueSettings()).not.toHaveProperty('deadLetter');
 });
 
 test('a job that always fails runs six times: one run and five retries, 30 seconds apart at first and doubling (E07-S05)', () => {
   expect(RETRY_LIMIT).toBe(5);
-  expect(queueSettings({ name: 'sweep', policy: 'standard' })).toMatchObject(EXPECTED_BOUNDS);
+  expect(queueSettings({ name: 'sweep', policy: 'exclusive' })).toMatchObject(EXPECTED_BOUNDS);
 });
 
 test('the dead-letter queue is job-dead-letter, one of the queues', () => {

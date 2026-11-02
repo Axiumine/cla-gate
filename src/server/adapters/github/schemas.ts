@@ -204,7 +204,10 @@ export const issueCommentSchema = z
     issueNumber: Number(issue_url.slice(issue_url.lastIndexOf('/') + 1)),
   }));
 
-/** `GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls` (E07-S07): one page, as the pull requests' number, state and head SHA. */
+/**
+ * `GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls` (E07-S07) and `GET /repos/{owner}/{repo}/pulls` (E07-S08): one page,
+ * as the pull requests' number, state and head SHA.
+ */
 export const pullRequestRefPageSchema = z.array(
   z
     .object({

@@ -10,7 +10,7 @@ import { RETRY_LIMIT } from '../../domain/job-retry.ts';
 export const PGBOSS_SCHEMA = 'pgboss';
 
 /** The pg-boss queue policies this application uses. */
-export type QueuePolicy = 'standard' | 'singleton';
+export type QueuePolicy = 'standard' | 'singleton' | 'exclusive';
 
 /**
  * Every queue with its policy (E07-S02), one name per job type of the catalogue (`domain/jobs.ts`) plus the sweep queues
@@ -25,6 +25,10 @@ export type QueuePolicy = 'standard' | 'singleton';
  * that exists: the migrate step and the start-up check refuse a queue whose policy differs from this list. Why
  * `singleton`, and why not the other policies of the pg-boss documentation, is decided by `serialisation-real.test.ts`
  * and `serialisation-interleavings.test.ts`.
+ *
+ * `sweep` is `exclusive` (E07-S08): at most one job in `created`, `retry` or `active` at a time, so a sweep that is still
+ * running (or waiting to be retried) when the scheduler's next tick comes makes that tick send nothing, and two sweeps never
+ * reconcile the installations at once. A job that ended (completed, failed, cancelled) no longer counts.
  */
 export const QUEUE_DEFINITIONS = [
   { name: 'evaluate-pr', policy: 'singleton' },
@@ -33,7 +37,7 @@ export const QUEUE_DEFINITIONS = [
   { name: 'recheck-comment', policy: 'standard' },
   { name: 'sync-installation', policy: 'standard' },
   { name: 'revoke-user-sessions', policy: 'standard' },
-  { name: 'sweep', policy: 'standard' },
+  { name: 'sweep', policy: 'exclusive' },
   { name: 'sweep-installation', policy: 'standard' },
   { name: 'job-dead-letter', policy: 'standard' },
 ] as const satisfies readonly { readonly name: string; readonly policy: QueuePolicy }[];
@@ -42,6 +46,14 @@ export type QueueName = (typeof QUEUE_DEFINITIONS)[number]['name'];
 
 /** The names of {@link QUEUE_DEFINITIONS}, in the same order. */
 export const QUEUES: readonly QueueName[] = QUEUE_DEFINITIONS.map(({ name }) => name);
+
+/**
+ * pg-boss's own queue for the occurrences of a schedule (E07-S08): the scheduler files each due occurrence of `sweep` here
+ * and a worker of pg-boss forwards it to the queue it names. It is not one of ours, so it is not in {@link QUEUES} and has no
+ * dead-letter queue (a lost tick is made up by the next one); the migrate step creates it so the runtime role does not
+ * have to (`createQueue` of a queue that is not partitioned is a plain `INSERT`, but only the owner creates queues).
+ */
+export const SCHEDULER_QUEUE = '__pgboss__send-it';
 
 /** The queue that takes the jobs whose retries are spent (E07-S05), and the one every other queue names as its dead-letter queue. */
 export const DEAD_LETTER_QUEUE: QueueName = 'job-dead-letter';
@@ -93,6 +105,11 @@ export function queueSettings({ name, policy }: (typeof QUEUE_DEFINITIONS)[numbe
   return name === DEAD_LETTER_QUEUE
     ? { policy, ...QUEUE_BOUNDS }
     : { policy, ...QUEUE_BOUNDS, deadLetter: DEAD_LETTER_QUEUE };
+}
+
+/** What {@link SCHEDULER_QUEUE} is created with: the bounds of every queue, a standard policy and no dead-letter queue. */
+export function schedulerQueueSettings(): QueueSettings {
+  return { policy: 'standard', ...QUEUE_BOUNDS };
 }
 
 /** The definitions in the order the queues are created: pg-boss wants a dead-letter queue to exist before a queue can name it. */

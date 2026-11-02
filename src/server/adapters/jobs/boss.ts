@@ -80,6 +80,14 @@ export interface Boss {
    * `cancelled`, a running one included, so the caller selects what it cancels (E07-S06).
    */
   cancel(name: string, ids: string[]): Promise<unknown>;
+  /**
+   * Puts the recurring job `name` on the cron expression `cron` (UTC), to be sent with `data` at every occurrence (E07-S08). A
+   * second call for the same name replaces the schedule, so calling it at every start is safe. The occurrences are sent by
+   * the timekeeper of a pg-boss that was started with `schedule: true`.
+   */
+  schedule(name: string, cron: string, data: object): Promise<void>;
+  /** Removes the schedule of `name` (E07-S08); there is no error when it has none. */
+  unschedule(name: string): Promise<void>;
 }
 
 /** The size of pg-boss's own connection pool: it is separate from the application's, so the workers never starve a request. */
@@ -87,18 +95,19 @@ const BOSS_POOL_SIZE = 10;
 
 /**
  * How the application runs pg-boss, as the runtime role `cla_app` which owns nothing: the schema is neither created nor
- * migrated (the check at start fails when it is missing or out of date), the cron timekeeper is off (it would create a
- * queue of its own, E07-S08) and so is the index rebuild (`REINDEX` needs the table owner). The maintenance that expires
- * stuck jobs and deletes old ones is plain DML and stays on.
+ * migrated (the check at start fails when it is missing or out of date) and the index rebuild is off (`REINDEX` needs the
+ * table owner). The maintenance that expires stuck jobs and deletes old ones is plain DML and stays on. The cron
+ * timekeeper is on only when `scheduler` says so, which is when a sweep is scheduled (E07-S08): it reads and writes the
+ * `schedule` table and the queue of scheduled occurrences, which are rows, and creates nothing (the migrate step created the queue).
  */
-export function runtimeBossOptions(connectionString: string): ConstructorOptions {
+export function runtimeBossOptions(connectionString: string, scheduler = false): ConstructorOptions {
   return {
     connectionString,
     schema: PGBOSS_SCHEMA,
     max: BOSS_POOL_SIZE,
     migrate: false,
     createSchema: false,
-    schedule: false,
+    schedule: scheduler,
     reindex: false,
   };
 }

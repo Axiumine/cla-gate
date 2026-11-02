@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../../shared/github-id.ts';
-import type { GitHubCommit, GitHubCommitPage } from '../ports/github.ts';
+import type {
+  GitHubCommit,
+  GitHubCommitPage,
+  GitHubPullRequest,
+  GitHubPullRequestPage,
+  GitHubRepository,
+} from '../ports/github.ts';
 import { GitHubNotFoundError } from '../ports/github-errors.ts';
 
 // What `FakeGitHub` (../test-support.ts) is built from, kept apart so that neither file outgrows the caps: waiting for a
@@ -47,6 +53,36 @@ export function pageOf(commits: readonly GitHubCommit[] | undefined, page: numbe
   }
   const from = (page - 1) * COMMITS_PER_PAGE;
   return { commits: commits.slice(from, from + COMMITS_PER_PAGE), last: from + COMMITS_PER_PAGE >= commits.length };
+}
+
+/** Page `page` (1-based, 100) of the open pull requests of `fullName` among `pulls`, newest (highest number) first, as `GET .../pulls?state=open` lists them. */
+function openPage(pulls: readonly GitHubPullRequest[], page: number): GitHubPullRequestPage {
+  const open = pulls
+    .filter((pull) => pull.state === 'open')
+    .toSorted((a, b) => b.number - a.number)
+    .map(({ number, state, headSha }) => ({ number, state, headSha }));
+  const from = (page - 1) * COMMITS_PER_PAGE;
+  return { pulls: open.slice(from, from + COMMITS_PER_PAGE), last: from + COMMITS_PER_PAGE >= open.length };
+}
+
+/**
+ * The listing of the open pull requests of `fullName` in the world, for the installation `entry` stands for (E07-S08): a
+ * repository the installation does not reach is a 404, as it is for GitHub. Names are compared without regard to case.
+ */
+export function openPullsPage(
+  state: { readonly pullRequests: ReadonlyMap<string, GitHubPullRequest> },
+  entry: { readonly installation: { readonly id: GithubId }; readonly repositories: readonly GitHubRepository[] },
+  fullName: string,
+  page: number,
+): GitHubPullRequestPage {
+  if (!entry.repositories.some((repository) => repository.fullName.toLowerCase() === fullName.toLowerCase())) {
+    throw new GitHubNotFoundError('GET /repos/{owner}/{repo}/pulls');
+  }
+  const prefix = `${repositoryKey(entry.installation.id, fullName)}#`;
+  return openPage(
+    [...state.pullRequests].filter(([key]) => key.startsWith(prefix)).map(([, pull]) => pull),
+    page,
+  );
 }
 
 /** GitHub compares repository names without regard to case too. */

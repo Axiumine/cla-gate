@@ -197,3 +197,21 @@ test('a failing send is thrown to the caller, which rolls back', async () => {
   boss.send.mockRejectedValueOnce(failure);
   await expect(inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, KEY))).rejects.toBe(failure);
 });
+
+test('a sweep-installation job of the scheduled sweep goes to its own queue, throttled by its dedupe key and not serialised (E07-S08)', async () => {
+  const boss = fakeBoss();
+  const sweepJob = { type: 'sweep-installation', githubInstallationId: parseGithubId(70_001) } as const;
+  const options = {
+    idempotencyKey: 'sweep:job-1:70001',
+    dedupeKey: 'sweep-installation:70001',
+    dedupeWindowSeconds: 60,
+  };
+  expect(await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, sweepJob, options))).toBe('queued');
+  expect(boss.send).toHaveBeenCalledExactlyOnceWith('sweep-installation', sweepJob, {
+    id: jobIdFor('sweep:job-1:70001'),
+    db: SOME_CONNECTION,
+    singletonKey: 'sweep-installation:70001',
+    singletonSeconds: 60,
+  });
+  expect(QUEUES).toContain('sweep-installation');
+});

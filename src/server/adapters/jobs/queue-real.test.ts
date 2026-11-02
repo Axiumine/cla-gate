@@ -20,7 +20,7 @@ import {
 import { runtimeBossOptions } from './boss.ts';
 import { migrateJobQueues } from './migrate-queues.ts';
 import { MissingQueuesError } from './queue-check.ts';
-import { QUEUES } from './queues.ts';
+import { QUEUES, SCHEDULER_QUEUE } from './queues.ts';
 import { startJobQueue } from './runtime.ts';
 
 // The pg-boss runtime and the migrate step on a real PostgreSQL (E07-S01): what the owner's step installs, what the
@@ -33,7 +33,8 @@ const DENIED = { code: '42501' };
 /** A failed job stays failed: with retries left it would wait to run again and count as live. */
 const NO_RETRY = { retryLimit: 0 };
 /** The queues the migrate step creates on an empty schema, in the order it creates them: the dead-letter queue first (E07-S05). */
-const CREATED = ['job-dead-letter', ...QUEUES.filter((name) => name !== 'job-dead-letter')];
+// the scheduler's own queue (E07-S08) is made last, after the queues of the application
+const CREATED = ['job-dead-letter', ...QUEUES.filter((name) => name !== 'job-dead-letter'), SCHEDULER_QUEUE];
 const DELIVERY = deliveryIdSchema.parse('5b8f2c1e-3d4a-4f6b-9a7c-0e1d2f3a4b5c');
 const SYNC: Job = { type: 'sync-installation', githubInstallationId: parseGithubId(32_001), deliveryId: DELIVERY };
 const SUBJECT = { deliveryId: DELIVERY, event: 'installation', action: 'created' };
@@ -88,7 +89,7 @@ realPostgresRolesOnly(
     expect(first).toEqual({ created: CREATED, updated: [], grants: 'granted' });
     const names = await sql<{ name: string }>`select name from pgboss.queue`.execute(owner);
     const byName = (a: string, b: string): number => a.localeCompare(b);
-    expect(names.rows.map((row) => row.name).toSorted(byName)).toEqual(QUEUES.toSorted(byName));
+    expect(names.rows.map((row) => row.name).toSorted(byName)).toEqual([...QUEUES, SCHEDULER_QUEUE].toSorted(byName));
     const second = await migrateJobQueues({ connectionString: ownerUrl(), db: owner, onError: () => undefined });
     expect(second).toEqual({ created: [], updated: [], grants: 'granted' });
   },
@@ -148,7 +149,7 @@ for (const [operation, statement] of STRUCTURE) {
     const owner = await withPgboss();
     await expect(statement.execute(runtimeDatabase())).rejects.toMatchObject(DENIED);
     const intact = await sql<{ n: number }>`select count(*)::int as n from pgboss.queue`.execute(owner);
-    expect(intact.rows).toEqual([{ n: QUEUES.length }]);
+    expect(intact.rows).toEqual([{ n: QUEUES.length + 1 }]);
   });
 }
 
@@ -207,20 +208,20 @@ realPostgresRolesOnly(
       expect(errors).toEqual([]);
     });
     const [done, failed, cancelled] = [
-      await boss.send('sweep', { n: 1 }, NO_RETRY),
-      await boss.send('sweep', { n: 2 }, NO_RETRY),
-      await boss.send('sweep', { n: 3 }, NO_RETRY),
+      await boss.send('sync-installation', { n: 1 }, NO_RETRY),
+      await boss.send('sync-installation', { n: 2 }, NO_RETRY),
+      await boss.send('sync-installation', { n: 3 }, NO_RETRY),
     ];
     expect([done, failed, cancelled].every((id) => typeof id === 'string')).toBe(true);
-    const fetched = await boss.fetch('sweep', { batchSize: 2 });
+    const fetched = await boss.fetch('sync-installation', { batchSize: 2 });
     expect(fetched).toHaveLength(2);
-    await boss.complete('sweep', fetched.map((job) => job.id).slice(0, 1));
-    await boss.fail('sweep', fetched.map((job) => job.id).slice(1));
-    await boss.cancel('sweep', cancelled ?? '');
-    await boss.supervise('sweep');
-    const states = await sql<{ n: number }>`select count(*)::int as n from pgboss.job where name = 'sweep'`.execute(
-      owner,
-    );
+    await boss.complete('sync-installation', fetched.map((job) => job.id).slice(0, 1));
+    await boss.fail('sync-installation', fetched.map((job) => job.id).slice(1));
+    await boss.cancel('sync-installation', cancelled ?? '');
+    await boss.supervise('sync-installation');
+    const states = await sql<{
+      n: number;
+    }>`select count(*)::int as n from pgboss.job where name = 'sync-installation'`.execute(owner);
     expect(states.rows).toEqual([{ n: 3 }]);
     // The job that failed with no retry left was moved to the dead-letter queue by the runtime role (E07-S05).
     const live = await sql<{ name: string }>`

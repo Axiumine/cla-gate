@@ -10,6 +10,7 @@ import {
   commitKey,
   membershipKey,
   mergeKey,
+  openPullsPage,
   pageOf,
   permissionKey,
   pullKey,
@@ -26,6 +27,7 @@ import type {
   GitHubIssueComment,
   GitHubOrgMembership,
   GitHubPullRequest,
+  GitHubPullRequestPage,
   GitHubPullRequestRef,
   GitHubRepository,
   GitHubRepositoryPermission,
@@ -107,7 +109,8 @@ export type GitHubMethod =
   | 'listRepositoryCommits'
   | 'compareCommits'
   | 'getIssueComment'
-  | 'listPullRequestsForCommit';
+  | 'listPullRequestsForCommit'
+  | 'listOpenPullRequests';
 
 /** One call the fake served: the method and the installation id it was made for (undefined: not about one). */
 export interface RecordedCall {
@@ -368,6 +371,10 @@ export class FakeGitHub implements GitHubClient {
       githubInstallationId,
       () => this.#state.pullRequests.get(pullKey(githubInstallationId, fullName, prNumber)) ?? null,
     );
+  }
+
+  listOpenPullRequests(id: GithubId, name: string, page: number): Promise<GitHubPullRequestPage> {
+    return this.#serveInstallation('listOpenPullRequests', id, (e) => openPullsPage(this.#state, e, name, page));
   }
 
   listPullRequestCommits(

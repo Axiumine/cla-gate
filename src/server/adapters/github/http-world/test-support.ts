@@ -145,7 +145,7 @@ function commentBody(comment: GitHubIssueComment, repository: string): Record<st
   };
 }
 
-/** A pull request of a commit's listing, whose head lives in a fork: the listing does not care where the head is. */
+/** A pull request of a listing (a commit's, or a repository's open ones), whose head lives in a fork: a listing does not care where the head is. */
 function pullRefBody(pull: GitHubPullRequestRef): Record<string, unknown> {
   return {
     number: pull.number,
@@ -288,6 +288,29 @@ function repositoryOf(state: State, request: Request, params: Record<string, unk
   return repositoryKey(installationOf(state, request)?.installation.id, owner, repo);
 }
 
+/**
+ * `GET /repos/{owner}/{repo}/pulls?state=open` (E07-S08): the open pull requests scripted for the repository, newest first,
+ * and a 404 for a repository the installation of the token does not reach.
+ */
+function openPullsRoute(state: State) {
+  return http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/pulls`, ({ request, params }) => {
+    const name = `${String(params['owner'])}/${String(params['repo'])}`.toLowerCase();
+    const reached = installationOf(state, request)?.repositories.some(
+      (repository) => repository.fullName.toLowerCase() === name,
+    );
+    if (reached !== true) {
+      return notFound();
+    }
+    const prefix = `${repositoryOf(state, request, params)}#`;
+    const open = [...state.pullRequests]
+      .filter(([key, pull]) => key.startsWith(prefix) && pull.state === 'open')
+      .map(([, pull]) => pull)
+      .toSorted((a, b) => b.number - a.number);
+    const { items, link } = pageOf(new URL(request.url), open);
+    return HttpResponse.json(items.map(pullRefBody), { headers: link });
+  });
+}
+
 /** The routes of the evaluation job (E07-S10): a pull request, its commits, the history behind a head, a comparison. */
 function pullRoutes(state: State) {
   const commitsOf = (store: Map<string, readonly GitHubCommit[]>, key: string, request: Request) => {
@@ -308,6 +331,7 @@ function pullRoutes(state: State) {
       const found = state.pullRequests.get(`${repository}#${String(params['number'])}`);
       return found ? HttpResponse.json(pullRequestBody(found)) : notFound();
     }),
+    openPullsRoute(state),
     http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/commits`, ({ request, params }) =>
       commitsOf(state.repositoryCommits, repositoryOf(state, request, params), request),
     ),

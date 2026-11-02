@@ -7,7 +7,14 @@ import { openPgliteDatabase } from '../db/pglite.ts';
 import { emptyTestDatabase, ensureRuntimeRole } from '../db/test-support.ts';
 import { migrateJobQueues } from './migrate-queues.ts';
 import { QueuePolicyError } from './queue-policy.ts';
-import { DEFINITIONS_IN_CREATION_ORDER, QUEUE_DEFINITIONS, QUEUES, queueSettings } from './queues.ts';
+import {
+  DEFINITIONS_IN_CREATION_ORDER,
+  QUEUE_DEFINITIONS,
+  QUEUES,
+  queueSettings,
+  SCHEDULER_QUEUE,
+  schedulerQueueSettings,
+} from './queues.ts';
 import { fakeBoss } from './test-support.ts';
 
 // The queue step of `yarn db:migrate` with a pg-boss that is only a script, on PGlite for the grants (E07-S01). Against a
@@ -58,17 +65,19 @@ test('it starts pg-boss with the options of the owner and creates every queue th
   expect(createBoss).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ connectionString: OWNER_URL, migrate: true, createSchema: true, supervise: false }),
   );
-  expect(boss.createQueue.mock.calls.map(([name]) => name)).toEqual(['job-dead-letter', ...QUEUES.slice(0, -1)]);
-  expect(result.created).toEqual(['job-dead-letter', ...QUEUES.slice(0, -1)]);
+  const created = ['job-dead-letter', ...QUEUES.slice(0, -1), SCHEDULER_QUEUE];
+  expect(boss.createQueue.mock.calls.map(([name]) => name)).toEqual(created);
+  expect(result.created).toEqual(created);
 });
 
 test('every queue is created with its policy and the bounds of E07-S05: 5 retries, 30 s doubling, 300 s expiry, retention windows, job-dead-letter', async () => {
   const boss = fakeBoss();
   boss.getQueues.mockResolvedValueOnce([]);
   await migrateWith(boss);
-  expect(boss.createQueue.mock.calls).toEqual(
-    DEFINITIONS_IN_CREATION_ORDER.map((definition) => [definition.name, queueSettings(definition)]),
-  );
+  expect(boss.createQueue.mock.calls).toEqual([
+    ...DEFINITIONS_IN_CREATION_ORDER.map((definition) => [definition.name, queueSettings(definition)]),
+    [SCHEDULER_QUEUE, schedulerQueueSettings()],
+  ]);
   expect(boss.createQueue).toHaveBeenCalledWith('evaluate-pr', {
     policy: 'singleton',
     retryLimit: 5,
@@ -79,6 +88,37 @@ test('every queue is created with its policy and the bounds of E07-S05: 5 retrie
     deleteAfterSeconds: 604_800,
     deadLetter: 'job-dead-letter',
   });
+});
+
+test('the queue pg-boss files scheduled occurrences in is created last, with the bounds of the others and no dead-letter queue, so the runtime role creates none (E07-S08)', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce([]);
+  await migrateWith(boss);
+  const [name, settings] = boss.createQueue.mock.calls.at(-1) ?? [];
+  expect(name).toBe('__pgboss__send-it');
+  expect(settings).toEqual({
+    policy: 'standard',
+    retryLimit: 5,
+    retryDelay: 30,
+    retryBackoff: true,
+    expireInSeconds: 300,
+    retentionSeconds: 1_209_600,
+    deleteAfterSeconds: 604_800,
+  });
+  expect(settings).not.toHaveProperty('deadLetter');
+});
+
+test('the scheduler queue is asked for with the others in one read, and one that exists is left alone, even with other bounds', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce([
+    ...QUEUE_DEFINITIONS.map((definition) => ({ name: definition.name, ...queueSettings(definition) })),
+    { name: SCHEDULER_QUEUE, policy: 'standard', retryLimit: 2, retryDelay: 0 },
+  ]);
+  const { result } = await migrateWith(boss);
+  expect(boss.getQueues).toHaveBeenCalledExactlyOnceWith([...QUEUES, SCHEDULER_QUEUE]);
+  expect(boss.createQueue).not.toHaveBeenCalled();
+  expect(boss.updateQueue).not.toHaveBeenCalled();
+  expect(result).toMatchObject({ created: [], updated: [] });
 });
 
 test('the dead-letter queue is created with the same bounds and no dead-letter queue of its own', async () => {
@@ -124,7 +164,7 @@ test('with some queues present it creates the others and leaves the ones in line
   );
   const { result } = await migrateWith(boss);
   expect(result.created).not.toContain('sweep');
-  expect(result.created).toHaveLength(QUEUES.length - 2);
+  expect(result.created).toHaveLength(QUEUES.length - 2 + 1);
   expect(result.updated).toEqual([]);
   expect(boss.createQueue).not.toHaveBeenCalledWith('evaluate-pr', expect.anything());
   expect(boss.updateQueue).not.toHaveBeenCalled();
@@ -136,8 +176,8 @@ test('a queue an older build created with default bounds is brought in line, onc
     QUEUE_DEFINITIONS.map(({ name, policy }) => ({ name, policy, expireInSeconds: 300, retryLimit: 2, retryDelay: 0 })),
   );
   const { result } = await migrateWith(boss);
-  expect(boss.createQueue).not.toHaveBeenCalled();
-  expect(result.created).toEqual([]);
+  expect(boss.createQueue.mock.calls.map(([name]) => name)).toEqual([SCHEDULER_QUEUE]);
+  expect(result.created).toEqual([SCHEDULER_QUEUE]);
   expect(result.updated).toEqual(['job-dead-letter', ...QUEUES.slice(0, -1)]);
   expect(boss.updateQueue.mock.calls[0]).toEqual([
     'job-dead-letter',

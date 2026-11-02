@@ -6,6 +6,7 @@ import type { JobQueue, StopOutcome } from '../../services/ports/jobs.ts';
 import { type Boss, createPgBoss, runtimeBossOptions } from './boss.ts';
 import { PgBossEnqueuer } from './enqueuer.ts';
 import { assertQueues, missingQueues } from './queue-check.ts';
+import { applySweepSchedule } from './sweep-schedule.ts';
 import { Workers, type WorkerWiring } from './workers.ts';
 
 // The job queue at run time (E07-S01): pg-boss started as the runtime role, which neither creates nor migrates the
@@ -40,7 +41,8 @@ async function queuesAnswer(boss: Boss): Promise<boolean> {
 }
 
 /**
- * Starts pg-boss, checks the queues and starts the workers. A `error` event of pg-boss is logged (`jobs.queue_error`) and
+ * Starts pg-boss, checks the queues, starts the workers and puts the schedule of the sweep in line with the configuration
+ * (E07-S08: pg-boss's timekeeper runs only when a sweep is scheduled). A `error` event of pg-boss is logged (`jobs.queue_error`) and
  * makes the queue not ready until a read of the queues succeeds again; a stopped queue is never ready, and neither is one
  * that lacks a queue of the application (E07-S03).
  * @throws MissingQueuesError naming the queues the database lacks, QueuePolicyError naming those of the wrong policy
@@ -49,7 +51,8 @@ async function queuesAnswer(boss: Boss): Promise<boolean> {
  */
 export async function startJobQueue(options: StartJobQueueOptions): Promise<JobQueue> {
   const { logger } = options;
-  const boss = (options.createBoss ?? createPgBoss)(runtimeBossOptions(options.connectionString));
+  const sweepMinutes = options.workers?.sweepIntervalMinutes ?? 0;
+  const boss = (options.createBoss ?? createPgBoss)(runtimeBossOptions(options.connectionString, sweepMinutes !== 0));
   const workers = options.workers === undefined ? undefined : new Workers({ ...options.workers, logger });
   let errors = 0;
   let recovered = 0;
@@ -62,6 +65,9 @@ export async function startJobQueue(options: StartJobQueueOptions): Promise<JobQ
     await boss.start();
     await assertQueues(boss);
     await workers?.start(boss);
+    if (workers !== undefined) {
+      logger.info({ sweep: await applySweepSchedule(boss, sweepMinutes) }, 'jobs.sweep_schedule');
+    }
   } catch (error) {
     await boss.stop().catch(() => undefined);
     throw error;

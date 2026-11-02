@@ -60,12 +60,19 @@ export function jobWorkers(options: JobWorkersOptions): WorkerWiring {
               evaluate: evaluatePullRequest,
             };
           },
+    sweep:
+      syncFor === undefined
+        ? undefined
+        : { db, reconcileInstallations: (signal) => syncFor(signal).reconcileInstallations() },
   });
   return {
     registry,
     markDeliveryProcessed: (deliveryId) => markDeliveryProcessed(db, deliveryId),
     clock,
     concurrency: config.workerConcurrency,
+    // The sweep is scheduled only when both of its jobs can run: the one that fans out needs the sync, the one that sweeps an
+    // installation needs the evaluation ports (E07-S08). 0 leaves the scheduler off and removes a schedule a former run set.
+    sweepIntervalMinutes: syncFor !== undefined && evaluation !== undefined ? config.sweepIntervalMinutes : 0,
     deadLetter: {
       db,
       evaluation:

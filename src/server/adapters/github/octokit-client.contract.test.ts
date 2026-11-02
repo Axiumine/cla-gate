@@ -4,11 +4,15 @@ import { test } from 'vitest';
 import { testGitHubKey } from '../../config/test-support.ts';
 import { COMMENT_CASES } from '../../services/github-comment-contract/test-support.ts';
 import { CONTRACT_CASES } from '../../services/github-contract/test-support.ts';
+import { OPEN_PULL_CASES } from '../../services/github-open-pulls-contract/test-support.ts';
 import { PULL_CASES } from '../../services/github-pull-contract/test-support.ts';
 import { httpWorld } from './http-world/test-support.ts';
 
 const signer = testGitHubKey();
 
-test.each([...CONTRACT_CASES, ...PULL_CASES, ...COMMENT_CASES])('Octokit adapter: %s', async (_name, run) => {
-  await run(await httpWorld(signer));
-});
+test.each([...CONTRACT_CASES, ...PULL_CASES, ...COMMENT_CASES, ...OPEN_PULL_CASES])(
+  'Octokit adapter: %s',
+  async (_name, run) => {
+    await run(await httpWorld(signer));
+  },
+);

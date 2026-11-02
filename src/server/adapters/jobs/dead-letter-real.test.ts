@@ -27,7 +27,7 @@ import {
 import { createLogger } from '../http/logger.ts';
 import { runtimeBossOptions } from './boss.ts';
 import { migrateJobQueues } from './migrate-queues.ts';
-import { QUEUES } from './queues.ts';
+import { QUEUES, SCHEDULER_QUEUE } from './queues.ts';
 import { startJobQueue } from './runtime.ts';
 
 // Bounded retries and the dead-letter handler on a real PostgreSQL (E07-S05): the queues carry the bounds, a handler that
@@ -188,7 +188,8 @@ realPostgresRolesOnly(
       dead_letter: string | null;
     }>`select name, retry_limit, retry_delay, retry_backoff, expire_seconds, retention_seconds, deletion_seconds,
          dead_letter from pgboss.queue order by name`.execute(w.owner);
-    expect(rows.map((row) => row.name)).toEqual(QUEUES.toSorted((a, b) => a.localeCompare(b)));
+    const byName = (a: string, b: string): number => a.localeCompare(b);
+    expect(rows.map((row) => row.name).toSorted(byName)).toEqual([...QUEUES, SCHEDULER_QUEUE].toSorted(byName));
     for (const row of rows) {
       expect(row).toEqual({
         name: row.name,
@@ -198,7 +199,7 @@ realPostgresRolesOnly(
         expire_seconds: 300,
         retention_seconds: 14 * 86_400,
         deletion_seconds: 7 * 86_400,
-        dead_letter: row.name === 'job-dead-letter' ? null : 'job-dead-letter',
+        dead_letter: row.name === 'job-dead-letter' || row.name === SCHEDULER_QUEUE ? null : 'job-dead-letter',
       });
     }
   },
@@ -231,19 +232,19 @@ realPostgresRolesOnly(
   async () => {
     const w = await world();
     for (const n of [1, 2, 3, 4]) {
-      await w.raw.send('sweep', { n });
+      await w.raw.send('sync-installation', { n });
     }
     // Which two jobs the fetch takes is the queue's business (the sends can share a millisecond): the test reads it back.
-    const fetched = await w.raw.fetch<{ n: number }>('sweep', { batchSize: 2 });
+    const fetched = await w.raw.fetch<{ n: number }>('sync-installation', { batchSize: 2 });
     const finished = fetched.map(({ id, data }) => ({ id, n: data.n }));
     await w.raw.complete(
-      'sweep',
+      'sync-installation',
       finished.map(({ id }) => id),
     );
     const waiting = [1, 2, 3, 4].filter((n) => !finished.some((job) => job.n === n));
     const windows = await sql<{ deletion: number; waiting: number }>`
       select distinct deletion_seconds as deletion, extract(epoch from keep_until - start_after)::int as waiting
-      from pgboss.job where name = 'sweep'`.execute(w.owner);
+      from pgboss.job where name = 'sync-installation'`.execute(w.owner);
     expect(windows.rows).toEqual([{ deletion: 7 * 86_400, waiting: 14 * 86_400 }]);
     // Time passes: the first finished job is 8 days old and the second 6; the first waiting job is 15 days old, the other new.
     for (const [index, { id }] of finished.entries()) {
@@ -252,11 +253,13 @@ realPostgresRolesOnly(
     }
     for (const n of waiting.slice(0, 1)) {
       await sql`update pgboss.job set start_after = start_after - interval '15 days', keep_until = keep_until - interval '15 days'
-        where name = 'sweep' and state = 'created' and (data->>'n')::int = ${n}`.execute(w.owner);
+        where name = 'sync-installation' and state = 'created' and (data->>'n')::int = ${n}`.execute(w.owner);
     }
-    await w.raw.supervise('sweep');
+    await w.raw.supervise('sync-installation');
     const left = await sql<{ n: number; state: string }>`
-      select (data->>'n')::int as n, state from pgboss.job where name = 'sweep' order by 1`.execute(w.owner);
+      select (data->>'n')::int as n, state from pgboss.job where name = 'sync-installation' order by 1`.execute(
+      w.owner,
+    );
     const kept = [
       ...finished.slice(1).map(({ n }) => ({ n, state: 'completed' })),
       ...waiting.slice(1).map((n) => ({ n, state: 'created' })),

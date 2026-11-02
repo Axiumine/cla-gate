@@ -4,6 +4,7 @@ import { type Kysely, sql } from 'kysely';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
+import { installationEligibility } from '../domain/eligibility.ts';
 import { type InstallationRow, type InstallationUpsert, stateColumns } from './installation-state.ts';
 
 /**
@@ -54,6 +55,30 @@ export async function listLiveInstallationIds(db: Kysely<Database>): Promise<Git
     .orderBy('github_installation_id')
     .execute();
   return rows.map((row) => parseGithubId(row.github_installation_id));
+}
+
+/**
+ * The GitHub installation ids of the installations the instance serves (admitted, not uninstalled, not suspended), in id
+ * order: the scheduled sweep (E07-S08) starts one job for each. The test is {@link installationEligibility}, the same
+ * one the gate and the evaluation use, so the sweep skips an installation for the reasons they do. Like
+ * {@link listLiveInstallationIds} this reads across tenants by design and returns ids only.
+ */
+export async function listServedInstallationIds(db: Kysely<Database>): Promise<GithubId[]> {
+  const rows = await db
+    .selectFrom('installations')
+    .select(['github_installation_id', 'admission_status', 'deleted_at', 'suspended_at'])
+    .orderBy('github_installation_id')
+    .execute();
+  return rows
+    .filter(
+      (row) =>
+        installationEligibility({
+          admissionStatus: row.admission_status,
+          deletedAt: row.deleted_at,
+          suspendedAt: row.suspended_at,
+        }).eligible,
+    )
+    .map((row) => parseGithubId(row.github_installation_id));
 }
 
 /** Records that a sync wrote this installation's state at `at`. Touches the one row `installationId` names (`installations.id`). */

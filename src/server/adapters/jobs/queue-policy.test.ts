@@ -18,13 +18,21 @@ test('a queue of the wrong policy is a mismatch that says what it is and what it
   );
   expect(policyMismatches(existing)).toEqual([
     { queue: 'evaluate-pr', found: 'short', expected: 'singleton' },
-    { queue: 'sweep', found: 'short', expected: 'standard' },
+    { queue: 'sweep', found: 'short', expected: 'exclusive' },
   ]);
 });
 
-test('a queue that pg-boss reports with no policy is a standard one', () => {
+test('a queue that pg-boss reports with no policy is a standard one: that is a mismatch for the two queues that are not standard', () => {
   const existing = EXISTING.map(({ name }) => ({ name }));
-  expect(policyMismatches(existing)).toEqual([{ queue: 'evaluate-pr', found: 'standard', expected: 'singleton' }]);
+  expect(policyMismatches(existing)).toEqual([
+    { queue: 'evaluate-pr', found: 'standard', expected: 'singleton' },
+    { queue: 'sweep', found: 'standard', expected: 'exclusive' },
+  ]);
+});
+
+test('a sweep queue an earlier build created as a standard one is refused (E07-S08): at most one sweep job can exist only on an exclusive queue', () => {
+  const existing = EXISTING.map((queue) => (queue.name === 'sweep' ? { ...queue, policy: 'standard' } : queue));
+  expect(policyMismatches(existing)).toEqual([{ queue: 'sweep', found: 'standard', expected: 'exclusive' }]);
 });
 
 test('a queue that is absent or not ours is no mismatch: that is the business of the missing check', () => {

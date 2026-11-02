@@ -19,6 +19,14 @@ test('the runtime role starts pg-boss without creating or migrating the schema, 
   });
 });
 
+test('the timekeeper is on in the runtime options only when a sweep is scheduled, and nothing else about them changes (E07-S08)', () => {
+  expect(runtimeBossOptions(URL_WITH_PASSWORD, true)).toEqual({
+    ...runtimeBossOptions(URL_WITH_PASSWORD),
+    schedule: true,
+  });
+  expect(runtimeBossOptions(URL_WITH_PASSWORD, false)).toEqual(runtimeBossOptions(URL_WITH_PASSWORD));
+});
+
 test('the runtime options leave the maintenance on: it expires stuck jobs and deletes old ones', () => {
   expect(runtimeBossOptions(URL_WITH_PASSWORD)).not.toHaveProperty('supervise');
 });

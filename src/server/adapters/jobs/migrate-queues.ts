@@ -7,7 +7,14 @@ import { type Boss, createPgBoss, ownerBossOptions } from './boss.ts';
 import { DEFAULT_INDEX_BUILD_WAIT, type IndexBuildWait, waitForIndexBuilds } from './index-builds.ts';
 import { boundsDrifted, updateFor } from './queue-options.ts';
 import { policyMismatches, QueuePolicyError } from './queue-policy.ts';
-import { DEFINITIONS_IN_CREATION_ORDER, QUEUES, type QueueName, queueSettings } from './queues.ts';
+import {
+  DEFINITIONS_IN_CREATION_ORDER,
+  QUEUES,
+  type QueueName,
+  queueSettings,
+  SCHEDULER_QUEUE,
+  schedulerQueueSettings,
+} from './queues.ts';
 import { grantRuntimeAccess } from './runtime-grants.ts';
 
 // The second step of `yarn db:migrate` (E07-S01), after the SQL files: pg-boss's own schema, the queues and the grants
@@ -29,8 +36,11 @@ export interface QueueMigrationOptions {
 }
 
 export interface QueueMigration {
-  /** The queues this run created, dead-letter queue first; empty when they all existed. */
-  readonly created: readonly QueueName[];
+  /**
+   * The queues this run created, dead-letter queue first and pg-boss's queue of scheduled occurrences (E07-S08) last; empty
+   * when they all existed.
+   */
+  readonly created: readonly (QueueName | typeof SCHEDULER_QUEUE)[];
   /** The queues that existed with other bounds or another dead-letter queue than the definitions give (E07-S05) and were brought in line. */
   readonly updated: readonly QueueName[];
   /** `skipped` when the role `cla_app` does not exist. */
@@ -39,17 +49,20 @@ export interface QueueMigration {
 
 /**
  * Creates the queues that do not exist yet, each with its policy (E07-S02), its retry, expiry and retention bounds and its
- * dead-letter queue (E07-S05), the dead-letter queue first. Idempotent: an existing queue keeps its policy, and its bounds
- * are brought in line when an older build created it with others. A queue that exists with another policy than the table
- * gives it is an error, because a policy cannot be changed.
+ * dead-letter queue (E07-S05), the dead-letter queue first, and then the queue pg-boss's scheduler files its occurrences in
+ * (E07-S08), which the runtime role would otherwise have to create. Idempotent: an existing queue keeps its policy, and its
+ * bounds are brought in line when an older build created it with others. A queue that exists with another policy than the
+ * table gives it is an error, because a policy cannot be changed.
  */
-async function createMissingQueues(boss: Boss): Promise<{ created: QueueName[]; updated: QueueName[] }> {
-  const found = await boss.getQueues([...QUEUES]);
+async function createMissingQueues(
+  boss: Boss,
+): Promise<{ created: QueueMigration['created'][number][]; updated: QueueName[] }> {
+  const found = await boss.getQueues([...QUEUES, SCHEDULER_QUEUE]);
   const mismatches = policyMismatches(found);
   if (mismatches.length > 0) {
     throw new QueuePolicyError(mismatches);
   }
-  const created: QueueName[] = [];
+  const created: QueueMigration['created'][number][] = [];
   const updated: QueueName[] = [];
   for (const definition of DEFINITIONS_IN_CREATION_ORDER) {
     const settings = queueSettings(definition);
@@ -61,6 +74,10 @@ async function createMissingQueues(boss: Boss): Promise<{ created: QueueName[]; 
       await boss.updateQueue(definition.name, updateFor(settings));
       updated.push(definition.name);
     }
+  }
+  if (!found.some((queue) => queue.name === SCHEDULER_QUEUE)) {
+    await boss.createQueue(SCHEDULER_QUEUE, schedulerQueueSettings());
+    created.push(SCHEDULER_QUEUE);
   }
   return { created, updated };
 }

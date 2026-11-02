@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../../shared/github-id.ts';
-import type { Job } from '../../domain/jobs.ts';
+import type { QueuedJob } from '../../services/ports/jobs.ts';
 import { QUEUE_DEFINITIONS } from './queues.ts';
 import { serialisationKey } from './serialisation.ts';
 
@@ -13,7 +13,7 @@ const INSTALLATION = parseGithubId(70_001);
 const GUID = '5b8f2c1e-3d4a-4f6b-9a7c-0e1d2f3a4b5c';
 const SHA = 'a'.repeat(40);
 
-function evaluation(overrides: Partial<Extract<Job, { type: 'evaluate-pr' }>> = {}): Job {
+function evaluation(overrides: Partial<Extract<QueuedJob, { type: 'evaluate-pr' }>> = {}): QueuedJob {
   return {
     type: 'evaluate-pr',
     githubInstallationId: INSTALLATION,
@@ -25,7 +25,7 @@ function evaluation(overrides: Partial<Extract<Job, { type: 'evaluate-pr' }>> = 
 }
 
 /** One job of every type of the catalogue. */
-const SAMPLES: readonly Job[] = [
+const SAMPLES: readonly QueuedJob[] = [
   evaluation(),
   { type: 'evaluate-head-sha', githubInstallationId: INSTALLATION, githubRepoId: parseGithubId(9001), headSha: SHA },
   { type: 'close-pr', githubInstallationId: INSTALLATION, githubRepoId: parseGithubId(9001), prNumber: 42 },
@@ -38,6 +38,7 @@ const SAMPLES: readonly Job[] = [
   },
   { type: 'sync-installation', githubInstallationId: INSTALLATION },
   { type: 'revoke-user-sessions', githubUserId: parseGithubId(31_337) },
+  { type: 'sweep-installation', githubInstallationId: INSTALLATION },
 ];
 
 test('the key of an evaluate-pr job is the repository id and the pull request number', () => {
@@ -66,6 +67,7 @@ test.each([
 
 test('a job of a type that is not serialised has no key', () => {
   expect(SAMPLES.filter((job) => job.type !== 'evaluate-pr').map(serialisationKey)).toEqual([
+    undefined,
     undefined,
     undefined,
     undefined,

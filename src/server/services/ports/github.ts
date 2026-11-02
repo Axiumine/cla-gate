@@ -147,6 +147,12 @@ export interface GitHubCommit {
   readonly rawCommitter: { readonly name: string; readonly email: string };
 }
 
+/** One page of a listing of open pull requests (E07-S08), 100 at most, newest first. `last` is true when GitHub names no next page. */
+export interface GitHubPullRequestPage {
+  readonly pulls: readonly GitHubPullRequestRef[];
+  readonly last: boolean;
+}
+
 /** One page of a commit listing, 100 commits at most. `last` is true when GitHub names no next page. */
 export interface GitHubCommitPage {
   readonly commits: readonly GitHubCommit[];
@@ -227,6 +233,15 @@ export interface GitHubClient {
     fullName: string,
     headSha: string,
   ): Promise<GitHubPullRequestRef[]>;
+
+  /**
+   * One page (1-based, 100 pull requests) of `GET /repos/{owner}/{repo}/pulls?state=open` with the installation's token
+   * (E07-S08): the open pull requests of a repository, newest first, each with its number, state and head SHA. The sweep
+   * reads at most ten pages of a repository per run.
+   * @throws GitHubNotFoundError for a repository GitHub does not have, one the installation does not reach and a name GitHub
+   * cannot hold; GitHubForbiddenError when GitHub refuses the read (a blocked repository).
+   */
+  listOpenPullRequests(githubInstallationId: GithubId, fullName: string, page: number): Promise<GitHubPullRequestPage>;
 
   /**
    * One page (1-based, 100 commits) of `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits`: the commits of the pull

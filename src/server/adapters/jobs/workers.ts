@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { JobType } from '../../domain/job-envelope.ts';
+import type { SweepInterval } from '../../domain/sweep.ts';
 import { type DeadLetterPorts, deadLetterRegistry } from '../../services/dead-letter/dead-letter-registry.ts';
 import { runDeadLetter } from '../../services/dead-letter/dead-letter-run.ts';
 import { type JobRunDeps, type JobVerdict, runJob } from '../../services/job-run.ts';
@@ -21,6 +22,11 @@ export interface WorkersOptions extends Omit<JobRunDeps, 'pending' | 'enqueuer'>
   readonly concurrency: number;
   /** Seconds between two looks at an empty queue. Defaults to pg-boss's own, 2; a test shortens it. */
   readonly pollingIntervalSeconds?: number | undefined;
+  /**
+   * Minutes between two reconciliation sweeps the queue schedules (E07-S08); 0 or absent for none. The workers do not read it:
+   * the queue that starts them does, because a sweep is scheduled only where its handlers can run.
+   */
+  readonly sweepIntervalMinutes?: SweepInterval | undefined;
   /** What the handlers of the dead-letter queue run on (E07-S05). Without it the queue is not worked and keeps the jobs the others gave up. */
   readonly deadLetter?: DeadLetterPorts | undefined;
 }

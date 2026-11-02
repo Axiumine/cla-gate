@@ -9,6 +9,8 @@ import type { SyncOutcome } from './installation-sync-model.ts';
 import type { HandlerRegistry, JobHandler } from './job-registry.ts';
 import { recheckComment } from './recheck/recheck-comment.ts';
 import { rerunHeadSha } from './recheck/rerun-head-sha.ts';
+import type { SweepDeps } from './sweep/sweep.ts';
+import { sweepHandler, sweepInstallationHandler } from './sweep/sweep-handlers.ts';
 
 // The handlers the job queue binds (E07-S03). `registerHandlers` is the one list of what runs which job: a story that
 // builds a handler replaces its line here. `revoke-user-sessions` is not in it, its consumer comes with E10-S07, which
@@ -45,6 +47,12 @@ export interface HandlerDeps {
    * is E09): the handlers then fail every job and keep its delivery for a redelivery.
    */
   readonly evaluatePr: ((signal: AbortSignal) => EvaluatePrPorts) | undefined;
+  /**
+   * What the `sweep` job needs (E07-S08): the database and the reconciliation of the installations. Undefined (or left out)
+   * when no GitHub App is configured: the job then fails every run. The `sweep-installation` job it starts runs on
+   * `evaluatePr`.
+   */
+  readonly sweep?: SweepDeps | undefined;
 }
 
 /**
@@ -83,8 +91,8 @@ function evaluateHeadShaHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): 
 
 /**
  * Binds the handlers of the delivery-driven jobs (`evaluate-pr`, `evaluate-head-sha`, `close-pr`, `recheck-comment`,
- * `sync-installation`) and of the two the scheduler starts (`sweep`, `sweep-installation`). The ones whose story is not
- * built yet fail their jobs (see {@link HandlerUnavailableError}) instead of completing them.
+ * `sync-installation`) and of the two the scheduler starts (`sweep`, `sweep-installation`, E07-S08). The ones whose consumer
+ * is not available fail their jobs (see {@link HandlerUnavailableError}) instead of completing them.
  * @throws HandlerRegisteredError when a type already has a handler.
  */
 export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): void {
@@ -118,6 +126,14 @@ export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): 
       ? unavailable('recheck-comment', 'no GitHub App or no evaluation reporter (E09) is configured')
       : recheckCommentHandler(deps.evaluatePr),
   );
-  registry.register('sweep', unavailable('sweep', 'its handler is built by E07-S08'));
-  registry.register('sweep-installation', unavailable('sweep-installation', 'its handler is built by E07-S08'));
+  registry.register(
+    'sweep',
+    deps.sweep === undefined ? unavailable('sweep', 'no GitHub App is configured') : sweepHandler(deps.sweep),
+  );
+  registry.register(
+    'sweep-installation',
+    deps.evaluatePr === undefined
+      ? unavailable('sweep-installation', 'no GitHub App or no evaluation reporter (E09) is configured')
+      : sweepInstallationHandler(deps.evaluatePr),
+  );
 }

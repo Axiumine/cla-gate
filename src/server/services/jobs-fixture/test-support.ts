@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql, type Transaction } from 'kysely';
 import type { Database } from '../../adapters/db/schema.ts';
-import { type Job, jobSchema } from '../../domain/jobs.ts';
+import { type JobEnvelope, jobEnvelopeSchema } from '../../domain/job-envelope.ts';
 import { type Clock, systemClock } from '../ports/clock.ts';
-import type { EnqueueOptions, EnqueueOutcome, JobEnqueuer } from '../ports/jobs.ts';
+import type { EnqueueOptions, EnqueueOutcome, JobEnqueuer, QueuedJob } from '../ports/jobs.ts';
 
 // The enqueuer the tests of the webhook intake use until the pg-boss one exists (E06-S06, E07-S01): a real
 // implementation of the `JobEnqueuer` port that writes into a table of the test database on the transaction it is given,
@@ -27,7 +27,7 @@ export async function createJobsTable(db: Kysely<Database>): Promise<void> {
 export interface SentJob {
   readonly idempotencyKey: string;
   readonly dedupeKey: string | null;
-  readonly job: Job;
+  readonly job: JobEnvelope;
 }
 
 /** Every job sent and committed so far, in the order sent. */
@@ -40,7 +40,7 @@ export async function sentJobs(db: Kysely<Database>): Promise<SentJob[]> {
   return rows.map((row) => ({
     idempotencyKey: row.idempotency_key,
     dedupeKey: row.dedupe_key,
-    job: jobSchema.parse(row.job),
+    job: jobEnvelopeSchema.parse(row.job),
   }));
 }
 
@@ -68,7 +68,7 @@ export function deliveryRows(db: Kysely<Database>) {
 
 /** A call to `enqueue`, kept in the order made. */
 interface EnqueueCall {
-  readonly job: Job;
+  readonly job: QueuedJob;
   readonly options: EnqueueOptions;
 }
 

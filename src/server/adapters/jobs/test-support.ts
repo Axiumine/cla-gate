@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Mock, vi } from 'vitest';
 import type { Boss } from './boss.ts';
-import { QUEUE_DEFINITIONS, queueSettings } from './queues.ts';
+import { QUEUE_DEFINITIONS, queueSettings, SCHEDULER_QUEUE, schedulerQueueSettings } from './queues.ts';
 
 // A pg-boss that is only a script (E07-S01): every method is a mock with a harmless answer, so a test overrides the ones it
 // is about and reads what the code under test asked. pg-boss itself needs a real PostgreSQL (see enqueuer-contract.test.ts).
@@ -22,7 +22,7 @@ export type FakeBoss = { readonly [Method in keyof Boss]: Mock<Boss[Method]> } &
   readonly emitError: (error: Error) => void;
 };
 
-/** A pg-boss in which every queue exists with its policy and bounds (E07-S05), nothing is queued and every call succeeds. */
+/** A pg-boss in which every queue exists with its policy and bounds (E07-S05) and so does the scheduler's (E07-S08), nothing is queued and every call succeeds. */
 export function fakeBoss(): FakeBoss {
   const listeners: ((error: Error) => void)[] = [];
   return {
@@ -35,18 +35,21 @@ export function fakeBoss(): FakeBoss {
     createQueue: vi.fn<Boss['createQueue']>(() => Promise.resolve()),
     updateQueue: vi.fn<Boss['updateQueue']>(() => Promise.resolve()),
     getQueues: vi.fn<Boss['getQueues']>((names) =>
-      Promise.resolve(
-        QUEUE_DEFINITIONS.filter(({ name }) => names.includes(name)).map((definition) => ({
+      Promise.resolve([
+        ...QUEUE_DEFINITIONS.filter(({ name }) => names.includes(name)).map((definition) => ({
           name: definition.name,
           ...queueSettings(definition),
         })),
-      ),
+        ...(names.includes(SCHEDULER_QUEUE) ? [{ name: SCHEDULER_QUEUE, ...schedulerQueueSettings() }] : []),
+      ]),
     ),
     getBamStatus: vi.fn<Boss['getBamStatus']>(() => Promise.resolve([])),
     send: vi.fn<Boss['send']>(() => Promise.resolve('job-id')),
     findJobs: vi.fn<Boss['findJobs']>(() => Promise.resolve([])),
     deleteJob: vi.fn<Boss['deleteJob']>(() => Promise.resolve(undefined)),
     cancel: vi.fn<Boss['cancel']>(() => Promise.resolve(undefined)),
+    schedule: vi.fn<Boss['schedule']>(() => Promise.resolve()),
+    unschedule: vi.fn<Boss['unschedule']>(() => Promise.resolve()),
     emitError: (error) => {
       for (const listener of listeners) {
         listener(error);

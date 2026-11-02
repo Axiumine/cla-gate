@@ -119,6 +119,25 @@ export async function listActiveRepositoryIds(
 }
 
 /**
+ * The installation's repositories that are evaluated (enforcement on, not removed), in id order: the ones the scheduled sweep
+ * (E07-S08) reads the open pull requests of. It is the repository half of `evaluationEligibility`, in the statement. Another
+ * tenant's repositories are never in it.
+ */
+export function listEnabledRepositories(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+): Promise<RepositoryRow[]> {
+  return db
+    .selectFrom('repositories')
+    .selectAll()
+    .where('installation_id', '=', installationId)
+    .where('enabled', '=', true)
+    .where('removed_at', 'is', null)
+    .orderBy('id')
+    .execute();
+}
+
+/**
  * Whether the repository GitHub knows by `githubRepoId` is stored as active under an installation other than
  * `installationId` (a transfer whose state has not caught up, E06-S05). The statement excludes the caller's own tenant and
  * returns existence only, never a row: the one place two tenants meet is the partial unique index, and nothing of the
