@@ -23,3 +23,24 @@ export const sessionResponseSchema = z.object({
    */
   csrfToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
 });
+
+/**
+ * Why a login ended at `/login/failed` (E10-S05). The server redirects with `?reason=<one of these>`; the screen (E17)
+ * reads the same list, so a code added on one side cannot be missed on the other.
+ * @internal Exported for the unit tests and for the login-failed screen (E17); Knip ignores `@internal` exports in production mode until that story imports it.
+ */
+export const loginFailureReasonSchema = z.enum([
+  'state_mismatch',
+  'access_denied',
+  'exchange_failed',
+  'github_unavailable',
+  'unsupported_account',
+  'bad_request',
+]);
+
+export type LoginFailureReason = z.infer<typeof loginFailureReasonSchema>;
+
+/** The path of the login-failed screen (E17) that the login callback redirects to. */
+export function loginFailedPath(reason: LoginFailureReason): string {
+  return `/login/failed?reason=${reason}`;
+}

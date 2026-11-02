@@ -31,6 +31,10 @@ export interface AppOptions {
   readonly readinessTimeoutMs?: number;
   /** Where the session lifetimes take "now" from (E10-S02). Defaults to the wall clock. */
   readonly clock?: Clock | undefined;
+  /** How the login reaches GitHub (E10-S05). Defaults to the global `fetch`; tests intercept it with MSW. */
+  readonly fetch?: typeof fetch | undefined;
+  /** The ceiling of each call to GitHub during the login (E10-S05). Defaults to 10 seconds. */
+  readonly githubTimeoutMs?: number | undefined;
 }
 
 /**
@@ -64,7 +68,13 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const loginSettings = authSettings(config);
   registerRequestGuards(app, { publicBaseUrl: config.publicBaseUrl, sessionSecret: loginSettings?.sessionSecret });
   if (loginSettings !== undefined) {
-    await registerAuth(app, { db, settings: loginSettings, clock: options.clock ?? systemClock });
+    await registerAuth(app, {
+      db,
+      settings: loginSettings,
+      clock: options.clock ?? systemClock,
+      fetch: options.fetch,
+      githubTimeoutMs: options.githubTimeoutMs,
+    });
   }
   await app.register(healthRoutes, {
     db,

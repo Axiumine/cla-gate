@@ -64,6 +64,8 @@ export interface SessionStore {
   touch(session: LiveSession, now: Date): Promise<LiveSession>;
   /** The verified addresses stored with the session at login (for the signing page, E13). */
   verifiedEmails(rowId: number): Promise<readonly VerifiedEmail[]>;
+  /** Deletes the session with this `sessions.id`; the login callback ends the session it was presented with (E10-S05). */
+  remove(rowId: number): Promise<void>;
 }
 
 /** The id and the CSRF secret are 32 random bytes, 43 characters in base64url. */

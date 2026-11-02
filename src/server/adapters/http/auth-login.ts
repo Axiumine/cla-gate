@@ -3,6 +3,7 @@
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { safeReturnTo } from '../../domain/return-to.ts';
+import type { Clock } from '../../services/ports/clock.ts';
 import { authorizeUrl, newLoginAttempt } from './oauth-attempt.ts';
 import { setOauthCookie } from './oauth-cookie.ts';
 
@@ -11,6 +12,8 @@ interface LoginRoutesOptions {
   readonly clientId: string;
   /** `callbackUrl(config)`: the `redirect_uri` of the authorize request. */
   readonly callbackUrl: string;
+  /** Where the attempt cookie takes its start time from. */
+  readonly clock: Clock;
 }
 
 /**
@@ -31,7 +34,7 @@ export const loginRoutes: FastifyPluginCallbackZod<LoginRoutesOptions> = (app, o
       return reply.redirect(returnTo);
     }
     const attempt = newLoginAttempt();
-    setOauthCookie(reply, { s: attempt.state, v: attempt.verifier, r: returnTo });
+    setOauthCookie(reply, { s: attempt.state, v: attempt.verifier, r: returnTo }, options.clock.now());
     return reply.redirect(
       authorizeUrl({
         clientId: options.clientId,

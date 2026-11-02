@@ -76,7 +76,7 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
     return undefined;
   }
   const { db, github, ...wiring } = started;
-  const app = await buildApp({ config, db, logger, clock: options.clock });
+  const app = await buildApp({ config, db, logger, clock: options.clock, fetch: options.fetch });
   try {
     const address = await app.listen({ host: config.host, port: config.port });
     const timeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;

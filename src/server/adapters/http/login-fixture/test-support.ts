@@ -13,13 +13,13 @@ export const OAUTH_COOKIE_NAME = '__Host-cla_oauth';
 /** The attributes the story fixes for the cookie, after its value. */
 export const OAUTH_COOKIE_ATTRIBUTES = 'Max-Age=600; Path=/; HttpOnly; Secure; SameSite=Lax';
 
-const attemptSchema = z.strictObject({ s: z.string(), v: z.string(), r: z.string() });
+const attemptSchema = z.strictObject({ s: z.string(), v: z.string(), r: z.string(), t: z.number() });
 
 /** The cookie a login start set, taken apart. */
 export interface SentAttempt {
   /** The whole `Set-Cookie` header. */
   readonly header: string;
-  /** `{ s, v, r }`: state, verifier and the checked return path. */
+  /** `{ s, v, r, t }`: state, verifier, the checked return path and when the attempt began (E10-S05 refuses an old one). */
   readonly attempt: z.infer<typeof attemptSchema>;
   /** Whether the signature is the HMAC-SHA256 of the value under the session secret. */
   readonly signedBySessionSecret: boolean;

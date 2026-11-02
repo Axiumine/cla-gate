@@ -80,7 +80,8 @@ test('the cookie is __Host-cla_oauth, HttpOnly, Secure, SameSite=Lax, Path=/, Ma
   expect(sent.header).not.toMatch(/domain/i);
   expect(sent.signedBySessionSecret).toBe(true);
   expect(app.unsignCookie(decodeURIComponent(sent.cookie.slice(OAUTH_COOKIE_NAME.length + 1))).valid).toBe(true);
-  expect(Object.keys(sent.attempt)).toEqual(['s', 'v', 'r']);
+  expect(Object.keys(sent.attempt)).toEqual(['s', 'v', 'r', 't']);
+  expect(sent.attempt.t).toBe(Date.parse('2026-11-02T10:00:00.000Z'));
 });
 
 test.each([

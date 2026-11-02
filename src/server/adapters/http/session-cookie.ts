@@ -17,7 +17,7 @@ const ATTRIBUTES = { path: '/', httpOnly: true, secure: true, sameSite: 'lax' } 
 /**
  * Sets the session cookie for a freshly created session. `Max-Age` is the absolute lifetime: the browser drops the cookie
  * when the session can no longer be alive, whatever the idle expiry did.
- * @internal Exported for the unit tests and for the login callback (E10-S05); Knip ignores `@internal` exports in production mode until that route imports it.
+ * Called by the login callback (E10-S05) for the session it just created.
  */
 export function setSessionCookie(reply: FastifyReply, id: string, absoluteSeconds: number): void {
   reply.setCookie(SESSION_COOKIE, id, { ...ATTRIBUTES, maxAge: absoluteSeconds });

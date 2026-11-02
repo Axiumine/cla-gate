@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Kysely } from 'kysely';
 import { AUTH_ENV, TEST_SESSION_SECRET } from '../../../config/auth-fixture/test-support.ts';
 import { FakeClock } from '../../../services/test-support.ts';
-import { type LogCapture, testApp, testConfig } from '../../../test-support.ts';
+import { type LogCapture, type TestAppOptions, testApp, testConfig } from '../../../test-support.ts';
 import { loadMigrationFiles } from '../../db/migration-files.ts';
 import { migrate } from '../../db/migrator.ts';
 import { openPgliteDatabase } from '../../db/pglite.ts';
@@ -117,7 +117,10 @@ async function loginAs(
 }
 
 /** The real app over a migrated PGlite. `env` adds to the login settings (the lifetimes, for instance). */
-export async function authWorld(env: Readonly<Record<string, string>> = {}): Promise<AuthWorld> {
+export async function authWorld(
+  env: Readonly<Record<string, string>> = {},
+  github: Pick<TestAppOptions, 'githubTimeoutMs'> = {},
+): Promise<AuthWorld> {
   const base = await openPgliteDatabase();
   await migrate(base, await loadMigrationFiles(MIGRATIONS_DIRECTORY));
   const queries: string[] = [];
@@ -130,7 +133,7 @@ export async function authWorld(env: Readonly<Record<string, string>> = {}): Pro
   });
   const clock = new FakeClock(T0);
   const allEnv = { ...AUTH_ENV, ...env };
-  const { app, logs } = await testApp({ env: allEnv, db, clock });
+  const { app, logs } = await testApp({ env: allEnv, db, clock, ...github });
   const config = testConfig(allEnv);
   addProbeRoutes(app, config.session.absoluteSeconds);
   const store = createSessionStore(base, config.session);

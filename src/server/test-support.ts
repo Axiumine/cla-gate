@@ -70,6 +70,10 @@ export interface TestAppOptions {
   readonly readinessTimeoutMs?: number;
   /** Where the session lifetimes take "now" from; defaults to the wall clock. */
   readonly clock?: Clock;
+  /** How the login reaches GitHub (E10-S05); defaults to the global `fetch`. */
+  readonly fetch?: typeof fetch;
+  /** The ceiling of each call to GitHub during the login (E10-S05); defaults to 10 seconds. */
+  readonly githubTimeoutMs?: number;
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */
@@ -83,6 +87,8 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
     logger: createLogger(config, logs.destination),
     ...(options.readinessTimeoutMs === undefined ? {} : { readinessTimeoutMs: options.readinessTimeoutMs }),
     ...(options.clock === undefined ? {} : { clock: options.clock }),
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    ...(options.githubTimeoutMs === undefined ? {} : { githubTimeoutMs: options.githubTimeoutMs }),
   });
   onTestFinished(async () => {
     await app.close();

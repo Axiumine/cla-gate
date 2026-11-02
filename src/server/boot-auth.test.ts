@@ -14,7 +14,7 @@ class FakeProcess extends EventEmitter {
   exitCode: number | string | null | undefined;
 }
 
-async function start(env: Record<string, string>) {
+async function start(env: Record<string, string>, github?: typeof fetch) {
   const logs = captureLogs();
   const db = await openPgliteDatabase();
   const server = await boot({
@@ -29,6 +29,7 @@ async function start(env: Record<string, string>) {
     createDb: () => db,
     logDestination: logs.destination,
     reconcileOnStart: false,
+    ...(github === undefined ? {} : { fetch: github }),
   });
   onTestFinished(async () => {
     await server?.close();
@@ -76,4 +77,23 @@ test('an invalid lifetime stops the start by name, with nothing opened', async (
   expect(signals.exitCode).toBe(1);
   expect(opened).toBe(false);
   expect(errors).toEqual(['ConfigError: Invalid environment configuration: SESSION_IDLE_SECONDS']);
+});
+
+test('the login reaches GitHub through the fetch that boot was given (E10-S05)', async () => {
+  const called: string[] = [];
+  const github: typeof fetch = (input) => {
+    called.push(new Request(input).url);
+    return Promise.resolve(new Response('{}', { status: 500 }));
+  };
+  const { server } = await start(AUTH_ENV, github);
+  const address = server?.address ?? '';
+  const login = await fetch(`${address}/api/auth/login`, { redirect: 'manual' });
+  const cookie = (login.headers.getSetCookie()[0] ?? '').split(';')[0] ?? '';
+  const state = new URL(login.headers.get('location') ?? '').searchParams.get('state') ?? '';
+  const callback = await fetch(`${address}/api/auth/callback?code=made-up&state=${state}`, {
+    redirect: 'manual',
+    headers: { cookie },
+  });
+  expect(callback.headers.get('location')).toBe('/login/failed?reason=github_unavailable');
+  expect(called).toEqual(['https://github.com/login/oauth/access_token']);
 });

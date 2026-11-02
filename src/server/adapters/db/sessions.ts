@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import type { SessionLimits } from '../../domain/session.ts';
 import type { Database } from './schema.ts';
 import { createSession } from './sessions-create.ts';
+import { deleteSession } from './sessions-delete.ts';
 import type { SessionStore } from './sessions-model.ts';
 import { findLiveSession, readVerifiedEmails } from './sessions-read.ts';
 import { touchSession } from './sessions-touch.ts';
@@ -33,5 +34,6 @@ export function createSessionStore(db: Kysely<Database>, limits: SessionLimits):
     findLive: (id, now) => findLiveSession(db, id, now),
     touch: (session, now) => touchSession(db, limits, session, now),
     verifiedEmails: (rowId) => readVerifiedEmails(db, rowId),
+    remove: (rowId) => deleteSession(db, rowId),
   };
 }
