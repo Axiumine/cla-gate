@@ -10,11 +10,12 @@ import type { HandlerRegistry, JobHandler } from './job-registry.ts';
 import { recheckComment } from './recheck/recheck-comment.ts';
 import { rerunHeadSha } from './recheck/rerun-head-sha.ts';
 import type { SweepDeps } from './sweep/sweep.ts';
-import { sweepHandler, sweepInstallationHandler } from './sweep/sweep-handlers.ts';
+import { sweepHandler, sweepInstallationHandler, sweepRepositoryHandler } from './sweep/sweep-handlers.ts';
 
 // The handlers the job queue binds (E07-S03). `registerHandlers` is the one list of what runs which job: a story that
 // builds a handler replaces its line here. `revoke-user-sessions` is not in it, its consumer comes with E10-S07, which
-// registers it through the registry from its own code; until then its queue keeps the jobs.
+// registers it through the registry from its own code; until then its queue keeps the jobs. Nor are `finalise-repository` and
+// `finalise-check` (E07-S09): E14-S04 registers them the same way.
 
 /**
  * Thrown by the handler of a job type whose consumer is not available: the job fails (it is retried, then dead-lettered)
@@ -41,9 +42,10 @@ export interface HandlerDeps {
     | ((githubInstallationId: GithubId, signal: AbortSignal) => Promise<SyncOutcome>)
     | undefined;
   /**
-   * What the `evaluate-pr` job runs on, for one job (E07-S04), and the `close-pr` job (E07-S06) and the two jobs of the manual
-   * re-evaluation, `recheck-comment` and `evaluate-head-sha` (E07-S07), as well (they use the part of it that is not the engine): its GitHub client is bound to the `signal` of the job, so a job that is being shut down
-   * does not hold the process on a request. Undefined when the application has no GitHub App or no reporter (the reporter
+   * What the `evaluate-pr` job runs on, for one job (E07-S04), and the `close-pr` job (E07-S06), the two jobs of the manual
+   * re-evaluation, `recheck-comment` and `evaluate-head-sha` (E07-S07), and the `sweep-repository` job (E07-S09) as well
+   * (they use the part of it that is not the engine): its GitHub client is bound to the `signal` of the job, so a job that
+   * is being shut down does not hold the process on a request. Undefined when the application has no GitHub App or no reporter (the reporter
    * is E09): the handlers then fail every job and keep its delivery for a redelivery.
    */
   readonly evaluatePr: ((signal: AbortSignal) => EvaluatePrPorts) | undefined;
@@ -91,8 +93,9 @@ function evaluateHeadShaHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): 
 
 /**
  * Binds the handlers of the delivery-driven jobs (`evaluate-pr`, `evaluate-head-sha`, `close-pr`, `recheck-comment`,
- * `sync-installation`) and of the two the scheduler starts (`sweep`, `sweep-installation`, E07-S08). The ones whose consumer
- * is not available fail their jobs (see {@link HandlerUnavailableError}) instead of completing them.
+ * `sync-installation`), of the two the scheduler starts (`sweep`, `sweep-installation`, E07-S08) and of the one a change of
+ * policy starts (`sweep-repository`, E07-S09). The ones whose consumer is not available fail their jobs (see
+ * {@link HandlerUnavailableError}) instead of completing them.
  * @throws HandlerRegisteredError when a type already has a handler.
  */
 export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): void {
@@ -135,5 +138,11 @@ export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): 
     deps.evaluatePr === undefined
       ? unavailable('sweep-installation', 'no GitHub App or no evaluation reporter (E09) is configured')
       : sweepInstallationHandler(deps.evaluatePr),
+  );
+  registry.register(
+    'sweep-repository',
+    deps.evaluatePr === undefined
+      ? unavailable('sweep-repository', 'no GitHub App or no evaluation reporter (E09) is configured')
+      : sweepRepositoryHandler(deps.evaluatePr),
   );
 }

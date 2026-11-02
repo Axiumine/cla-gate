@@ -17,7 +17,8 @@
     "src/server/adapters/db/tenant-scope.ts!",
     "src/server/adapters/http/tenant-resolvers.ts!",
     "src/server/services/installation-store.ts!",
-    "src/server/services/revoke-user-sessions.ts!"
+    "src/server/services/revoke-user-sessions.ts!",
+    "src/server/services/repository-job-enqueue.ts!"
   ],
   "project": [
     "scripts/**/*.ts!",

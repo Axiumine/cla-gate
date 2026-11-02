@@ -13,7 +13,7 @@ import { deadSyncInstallation } from './dead-letter-sync.ts';
 
 // What a job that died does, by job type (E07-S05): the dead-letter table. It is a handler registry like the one of the
 // workers, so a job type without a row is a compile-time hole in `JobHandler` and a test (`dead-letter-registry.test.ts`)
-// fails until a type the catalogue gains has its row (E07-S09 adds its three).
+// fails until a type the catalogue gains has its row (E07-S09 added its three).
 
 /** What the dead-letter handlers run on, besides the clock: the database, and the GitHub-facing ports of a job. */
 export interface DeadLetterPorts {
@@ -41,8 +41,9 @@ function failurePortsFor(ports: DeadLetterPorts, clock: Clock): FailurePortsFor 
 
 /**
  * The dead-letter table: `evaluate-pr` and `evaluate-head-sha` complete their Check Run as `failure` (and set the row),
- * `sync-installation` leaves an audit row, and `recheck-comment`, `close-pr`, `sweep`, `sweep-installation` and
- * `revoke-user-sessions` are only logged at error: the next `/recheck`, close, sweep or revocation repeats the work.
+ * `sync-installation` leaves an audit row, and `recheck-comment`, `close-pr`, `sweep`, `sweep-installation`,
+ * `revoke-user-sessions` and (E07-S09) `sweep-repository`, `finalise-repository` and `finalise-check` are only logged at
+ * error: the next `/recheck`, close, sweep, revocation, re-enabling or disabling repeats the work.
  */
 export function deadLetterRegistry(ports: DeadLetterPorts, clock: Clock): HandlerRegistry {
   const registry = new HandlerRegistry();
@@ -55,5 +56,8 @@ export function deadLetterRegistry(ports: DeadLetterPorts, clock: Clock): Handle
   registry.register('sweep', loggedOnly);
   registry.register('sweep-installation', loggedOnly);
   registry.register('revoke-user-sessions', loggedOnly);
+  registry.register('sweep-repository', loggedOnly);
+  registry.register('finalise-repository', loggedOnly);
+  registry.register('finalise-check', loggedOnly);
   return registry;
 }

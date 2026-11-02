@@ -124,6 +124,9 @@ test('the queue is given the handlers, the delivery marker, the clock and the co
   expect(workers?.concurrency).toBe(6);
   expect(workers?.registry.types()).toContain('sync-installation');
   expect(workers?.registry.types()).not.toContain('revoke-user-sessions');
+  expect(workers?.registry.types()).toContain('sweep-repository');
+  expect(workers?.registry.types()).not.toContain('finalise-repository');
+  expect(workers?.registry.types()).not.toContain('finalise-check');
   expect(typeof workers?.markDeliveryProcessed).toBe('function');
   expect(workers?.clock.now()).toBeInstanceOf(Date);
 });

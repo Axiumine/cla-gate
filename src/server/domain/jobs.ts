@@ -22,7 +22,7 @@ const installationField = { githubInstallationId: githubIdSchema, ...deliveryIdF
 const repositoryFields = { githubRepoId: githubIdSchema, ...installationField };
 
 /** A pull request number: a positive safe integer, not a GitHub id (it is unique per repository only). */
-const prNumberField = { prNumber: z.int().positive() };
+export const prNumberField = { prNumber: z.int().positive() };
 
 /**
  * Why an `evaluate-pr` job exists. A webhook only ever starts `pull_request`; the other values are the callers E07 and

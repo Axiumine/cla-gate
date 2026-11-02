@@ -6,7 +6,7 @@ import type { Tenant } from '../evaluate-pr/evaluation-facts.ts';
 import type { GitHubPullRequestRef } from '../ports/github.ts';
 import { listOpenPulls } from './open-pulls.ts';
 import { cancelSuperseded, resolveUnlisted } from './reaper.ts';
-import { enqueueEvaluations, type SendCounts } from './sweep-enqueue.ts';
+import { enqueueEvaluations, type SendCounts, SWEEP_REQUEST } from './sweep-enqueue.ts';
 import type { SweepContext, SweepPorts } from './sweep-ports.ts';
 import { evaluationKey, evaluationStates, staleEvaluations } from './sweep-rows.ts';
 
@@ -57,8 +57,12 @@ export async function sweepRepository(
   const sent = await enqueueEvaluations(
     ports,
     context,
-    { githubInstallationId, githubRepoId: parseGithubId(repository.github_repo_id) },
-    wanted.map((pull) => pull.number),
+    {
+      githubInstallationId,
+      githubRepoId: parseGithubId(repository.github_repo_id),
+      prNumbers: wanted.map((pull) => pull.number),
+    },
+    SWEEP_REQUEST,
   );
   const superseded = await cancelSuperseded(ports, tenant, { stale, open });
   return { ...sent, listed: listing.pulls.length, truncated: listing.truncated, closed: resolved.closed, superseded };

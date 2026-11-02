@@ -20,14 +20,16 @@ test('the queues are the names of the definitions, in their order, each once', (
   expect(new Set(QUEUES).size).toBe(QUEUES.length);
 });
 
-test('evaluate-pr is the one singleton queue (any number wait, one per key runs) and sweep the one exclusive queue (E07-S08). The others are standard', () => {
+test('evaluate-pr and the two finalise queues are singleton (any number wait, one per key runs) and sweep is the one exclusive queue (E07-S08, E07-S09). The others are standard', () => {
   expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'singleton')).toEqual([
     { name: 'evaluate-pr', policy: 'singleton' },
+    { name: 'finalise-repository', policy: 'singleton' },
+    { name: 'finalise-check', policy: 'singleton' },
   ]);
   expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'exclusive')).toEqual([
     { name: 'sweep', policy: 'exclusive' },
   ]);
-  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 2);
+  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 4);
 });
 
 test("pg-boss's queue of scheduled occurrences is not one of ours: no entry of QUEUES, the bounds of the others and no dead-letter queue (E07-S08)", () => {
@@ -70,4 +72,18 @@ test('the queues are created dead-letter queue first, then the others in the ord
     ...QUEUES.filter((name) => name !== 'job-dead-letter'),
   ]);
   expect(DEFINITIONS_IN_CREATION_ORDER).toHaveLength(QUEUE_DEFINITIONS.length);
+});
+
+test('the repository-level jobs have their queues, the bounds of the others and job-dead-letter as theirs (E07-S09)', () => {
+  const names = ['sweep-repository', 'finalise-repository', 'finalise-check'];
+  const definitions = QUEUE_DEFINITIONS.filter(({ name }) => names.includes(name));
+  expect(definitions.map(({ name }) => name)).toEqual(names);
+  for (const definition of definitions) {
+    expect(QUEUES).toContain(definition.name);
+    expect(queueSettings(definition)).toEqual({
+      policy: definition.policy,
+      ...EXPECTED_BOUNDS,
+      deadLetter: 'job-dead-letter',
+    });
+  }
 });

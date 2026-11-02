@@ -55,9 +55,11 @@ async function wiring(syncFor: InstallationWiring['syncFor'], env: Record<string
   };
 }
 
-test('the registry binds the seven handlers of the application, and the concurrency is the one of the configuration', async () => {
+test('the registry binds the eight handlers of the application, the three types whose consumers come later have none, and the concurrency is the one of the configuration', async () => {
   const { workers } = await wiring(undefined, { WORKER_CONCURRENCY: '7' });
-  expect(workers.registry.types()).toEqual(JOB_TYPES.filter((type) => type !== 'revoke-user-sessions'));
+  const later = ['revoke-user-sessions', 'finalise-repository', 'finalise-check'];
+  expect(workers.registry.types()).toEqual(JOB_TYPES.filter((type) => !later.includes(type)));
+  expect(workers.registry.types()).toHaveLength(8);
   expect(workers.concurrency).toBe(7);
 });
 

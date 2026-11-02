@@ -15,7 +15,7 @@ import {
   SCHEDULER_QUEUE,
   schedulerQueueSettings,
 } from './queues.ts';
-import { fakeBoss } from './test-support.ts';
+import { EXPECTED_BOUNDS, fakeBoss } from './test-support.ts';
 
 // The queue step of `yarn db:migrate` with a pg-boss that is only a script, on PGlite for the grants (E07-S01). Against a
 // real server: queue-real.test.ts.
@@ -167,6 +167,27 @@ test('with some queues present it creates the others and leaves the ones in line
   expect(result.created).toHaveLength(QUEUES.length - 2 + 1);
   expect(result.updated).toEqual([]);
   expect(boss.createQueue).not.toHaveBeenCalledWith('evaluate-pr', expect.anything());
+  expect(boss.updateQueue).not.toHaveBeenCalled();
+});
+
+test('a database of a build before E07-S09 gets the three queues of the repository-level jobs, with their policies and bounds, and nothing else is touched', async () => {
+  const boss = fakeBoss();
+  const later = ['sweep-repository', 'finalise-repository', 'finalise-check'];
+  boss.getQueues.mockResolvedValueOnce([
+    ...QUEUE_DEFINITIONS.filter(({ name }) => !later.includes(name)).map((definition) => ({
+      name: definition.name,
+      ...queueSettings(definition),
+    })),
+    { name: SCHEDULER_QUEUE, ...schedulerQueueSettings() },
+  ]);
+  const { result } = await migrateWith(boss);
+  expect(result.created).toEqual(later);
+  expect(result.updated).toEqual([]);
+  expect(boss.createQueue.mock.calls).toEqual([
+    ['sweep-repository', { policy: 'standard', ...EXPECTED_BOUNDS, deadLetter: 'job-dead-letter' }],
+    ['finalise-repository', { policy: 'singleton', ...EXPECTED_BOUNDS, deadLetter: 'job-dead-letter' }],
+    ['finalise-check', { policy: 'singleton', ...EXPECTED_BOUNDS, deadLetter: 'job-dead-letter' }],
+  ]);
   expect(boss.updateQueue).not.toHaveBeenCalled();
 });
 

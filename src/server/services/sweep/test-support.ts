@@ -24,6 +24,7 @@ import {
   sentJobs,
 } from '../jobs-fixture/test-support.ts';
 import { FakeClock } from '../test-support.ts';
+import { sweepPolicyChange } from './policy-sweep.ts';
 import { sweepInstallation } from './sweep-installation.ts';
 import type { SweepContext, SweepPorts } from './sweep-ports.ts';
 
@@ -38,6 +39,14 @@ export { FULL_NAME, INSTALLATION, PR_NUMBER, REPOSITORY };
 export const SWEEP_JOB: EnvelopeOf<'sweep-installation'> = {
   type: 'sweep-installation',
   githubInstallationId: INSTALLATION,
+};
+
+/** The job that evaluates the open pull requests of the repository of the tenant again after a change of policy (E07-S09). */
+export const POLICY_JOB: EnvelopeOf<'sweep-repository'> = {
+  type: 'sweep-repository',
+  githubInstallationId: INSTALLATION,
+  githubRepoId: REPOSITORY,
+  reason: 'allowlist_changed',
 };
 
 /** The head SHA of pull request 7, and another one. */
@@ -58,6 +67,8 @@ export interface SweepWorld extends EvaluateWorld {
   readonly context: (jobId?: string) => SweepContext;
   /** Runs the job (the one of this world unless given another) as the run `jobId` (`sweep-1` unless given another). */
   readonly runSweep: (job?: EnvelopeOf<'sweep-installation'>, jobId?: string) => Promise<JobOutcome>;
+  /** Runs the `sweep-repository` job (the one of this world unless given another) as the run `jobId` (`policy-1` unless given another). */
+  readonly runPolicySweep: (job?: EnvelopeOf<'sweep-repository'>, jobId?: string) => Promise<JobOutcome>;
   /** The jobs the queue holds, oldest first. */
   readonly queued: () => Promise<SentJob[]>;
   /** The numbers of the pull requests an `evaluate-pr` job is queued for, in the order queued. */
@@ -81,15 +92,17 @@ export async function sweepWorld(options: Parameters<typeof evaluateWorld>[0] = 
     signal: new AbortController().signal,
   });
   const queued = (): Promise<SentJob[]> => sentJobs(world.raw);
+  const evaluatePorts: EvaluatePrPorts = { ...world.ports, clock };
   return {
     ...world,
     clock,
     enqueuer,
     pending,
     sweepPorts,
-    evaluatePorts: { ...world.ports, clock },
+    evaluatePorts,
     context,
     runSweep: (job = SWEEP_JOB, jobId = 'sweep-1') => sweepInstallation(sweepPorts, job, context(jobId)),
+    runPolicySweep: (job = POLICY_JOB, jobId = 'policy-1') => sweepPolicyChange(evaluatePorts, job, context(jobId)),
     queued,
     queuedPulls: async () => (await queued()).flatMap(({ job }) => (job.type === 'evaluate-pr' ? [job.prNumber] : [])),
   };

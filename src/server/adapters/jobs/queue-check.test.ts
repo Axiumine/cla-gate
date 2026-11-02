@@ -22,6 +22,9 @@ test('the missing queues come back in the order of the constant', async () => {
     'sync-installation',
     'revoke-user-sessions',
     'sweep-installation',
+    'sweep-repository',
+    'finalise-repository',
+    'finalise-check',
     'job-dead-letter',
   ]);
 });
@@ -64,4 +67,19 @@ test('the check refuses a queue of the wrong policy', async () => {
   const error = await assertQueues(boss).catch((caught: unknown) => caught);
   expect(error).toBeInstanceOf(QueuePolicyError);
   expect(error).toMatchObject({ mismatches: [{ queue: 'evaluate-pr', found: 'standard', expected: 'singleton' }] });
+});
+
+test('a database made by a build before E07-S09 lacks the three queues of the repository-level jobs, and the start-up check names them', async () => {
+  const boss = fakeBoss();
+  const later = ['sweep-repository', 'finalise-repository', 'finalise-check'];
+  boss.getQueues.mockResolvedValueOnce(
+    QUEUE_DEFINITIONS.filter(({ name }) => !later.includes(name)).map(({ name, policy }) => ({ name, policy })),
+  );
+  const failure = await assertQueues(boss).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(MissingQueuesError);
+  expect(failure).toMatchObject({ queues: later });
+  expect(failure).toHaveProperty(
+    'message',
+    'Job queues are missing: sweep-repository, finalise-repository, finalise-check',
+  );
 });

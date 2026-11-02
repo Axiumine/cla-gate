@@ -39,6 +39,14 @@ const SAMPLES: readonly QueuedJob[] = [
   { type: 'sync-installation', githubInstallationId: INSTALLATION },
   { type: 'revoke-user-sessions', githubUserId: parseGithubId(31_337) },
   { type: 'sweep-installation', githubInstallationId: INSTALLATION },
+  {
+    type: 'sweep-repository',
+    githubInstallationId: INSTALLATION,
+    githubRepoId: parseGithubId(9001),
+    reason: 'allowlist_changed',
+  },
+  { type: 'finalise-repository', githubInstallationId: INSTALLATION, githubRepoId: parseGithubId(9001) },
+  { type: 'finalise-check', githubInstallationId: INSTALLATION, githubRepoId: parseGithubId(9001), prNumber: 42 },
 ];
 
 test('the key of an evaluate-pr job is the repository id and the pull request number', () => {
@@ -65,15 +73,42 @@ test.each([
   expect(serialisationKey(job)).not.toBe(serialisationKey(evaluation()));
 });
 
+test('a finalise-check has the key of the evaluate-pr of the same pull request, and of no other (E07-S09)', () => {
+  const finalise = (githubRepoId: number, prNumber: number): QueuedJob => ({
+    type: 'finalise-check',
+    githubInstallationId: INSTALLATION,
+    githubRepoId: parseGithubId(githubRepoId),
+    prNumber,
+  });
+  expect(serialisationKey(finalise(9001, 42))).toBe(serialisationKey(evaluation()));
+  expect(serialisationKey(finalise(9001, 42))).toBe('9001:42');
+  expect(serialisationKey(finalise(9002, 42))).toBe('9002:42');
+  expect(serialisationKey(finalise(9001, 43))).toBe('9001:43');
+});
+
+test('a finalise-repository has the key of its repository: another repository is another key, and no pull request is part of it (E07-S09)', () => {
+  const finalise = (githubRepoId: number): QueuedJob => ({
+    type: 'finalise-repository',
+    githubInstallationId: INSTALLATION,
+    githubRepoId: parseGithubId(githubRepoId),
+  });
+  expect(serialisationKey(finalise(9001))).toBe('9001');
+  expect(serialisationKey(finalise(9002))).toBe('9002');
+});
+
 test('a job of a type that is not serialised has no key', () => {
-  expect(SAMPLES.filter((job) => job.type !== 'evaluate-pr').map(serialisationKey)).toEqual([
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
+  const serialised = new Set(['evaluate-pr', 'finalise-check', 'finalise-repository']);
+  const others = SAMPLES.filter((job) => !serialised.has(job.type));
+  expect(others.map(({ type }) => type)).toEqual([
+    'evaluate-head-sha',
+    'close-pr',
+    'recheck-comment',
+    'sync-installation',
+    'revoke-user-sessions',
+    'sweep-installation',
+    'sweep-repository',
   ]);
+  expect(others.map(serialisationKey)).toEqual(others.map(() => undefined));
 });
 
 test('a queue has the singleton policy exactly when its jobs have a serialisation key', () => {

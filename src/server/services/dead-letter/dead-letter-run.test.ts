@@ -15,6 +15,12 @@ test.each([
   ['revoke-user-sessions', JOBS.revokeUserSessions],
   ['sweep', { type: 'sweep' }],
   ['sweep-installation', { type: 'sweep-installation', githubInstallationId: 5000 }],
+  [
+    'sweep-repository',
+    { type: 'sweep-repository', githubInstallationId: 5000, githubRepoId: 9000, reason: 'allowlist_changed' },
+  ],
+  ['finalise-repository', { type: 'finalise-repository', githubInstallationId: 5000, githubRepoId: 9000 }],
+  ['finalise-check', { type: 'finalise-check', githubInstallationId: 5000, githubRepoId: 9000, prNumber: 7 }],
 ])('a dead %s is logged at error and nothing else is done: no GitHub call, no row, no report', async (type, job) => {
   const world = await deadWorld();
   expect(await world.runDead(job)).toEqual({ outcome: 'logged' });
@@ -23,6 +29,19 @@ test.each([
   expect(await world.rows()).toEqual([]);
   expect(world.reporter.failures).toEqual([]);
   expect(world.timeline.filter((step) => !step.startsWith('db:select'))).toEqual([]);
+});
+
+test('the log of a dead sweep-repository carries its ids and its reason, the closed field that says why it exists (E07-S09)', async () => {
+  const world = await deadWorld();
+  await world.runDead({
+    type: 'sweep-repository',
+    githubInstallationId: 5000,
+    githubRepoId: 9000,
+    reason: 'signatures_invalidated',
+  });
+  expect(logged(world, 'job.dead_lettered')).toMatchObject([
+    { githubInstallationId: 5000, githubRepoId: 9000, reason: 'signatures_invalidated' },
+  ]);
 });
 
 test('the log of a dead job carries the numeric ids and the delivery and nothing from the data that is not a closed field', async () => {

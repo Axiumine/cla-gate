@@ -14,9 +14,9 @@ export type QueuePolicy = 'standard' | 'singleton' | 'exclusive';
 
 /**
  * Every queue with its policy (E07-S02), one name per job type of the catalogue (`domain/jobs.ts`) plus the sweep queues
- * (E07-S08) and the dead-letter queue (E07-S05). A later epic that adds a job adds its queue here in the change that adds
- * the job (E07-S09, E16-S05, E22-S04): the migrate step creates what is missing, and the start-up check refuses a
- * database that lacks one.
+ * (E07-S08), the queues of the repository-level jobs (E07-S09) and the dead-letter queue (E07-S05). A later epic that adds
+ * a job adds its queue here in the change that adds the job (E16-S05, E22-S04): the migrate step creates what is missing,
+ * and the start-up check refuses a database that lacks one.
  *
  * `evaluate-pr` is `singleton`: any number of jobs may wait, one per key runs at a time, so the evaluations of one pull
  * request never overlap and no send is dropped. pg-boss enforces it with a unique index over the active jobs of
@@ -25,6 +25,13 @@ export type QueuePolicy = 'standard' | 'singleton' | 'exclusive';
  * that exists: the migrate step and the start-up check refuse a queue whose policy differs from this list. Why
  * `singleton`, and why not the other policies of the pg-boss documentation, is decided by `serialisation-real.test.ts`
  * and `serialisation-interleavings.test.ts`.
+ *
+ * `finalise-repository` and `finalise-check` are `singleton` as well (E07-S09), with the same kind of key: one run per
+ * repository, and one per (repository, pull request) as for `evaluate-pr`, so two finalisations of one pull request never
+ * overlap. The policy holds within one queue only, so a finalisation does not wait for an `evaluate-pr` that is in
+ * flight; how that is closed is E14-S04's (the evaluation re-reads whether enforcement is on in its last step, before it
+ * writes anything). `sweep-repository` is `standard`: its jobs are throttled per repository by a dedupe key
+ * (`domain/repository-jobs.ts`), and a run only sends `evaluate-pr` jobs, which the queue of `evaluate-pr` serialises.
  *
  * `sweep` is `exclusive` (E07-S08): at most one job in `created`, `retry` or `active` at a time, so a sweep that is still
  * running (or waiting to be retried) when the scheduler's next tick comes makes that tick send nothing, and two sweeps never
@@ -39,6 +46,9 @@ export const QUEUE_DEFINITIONS = [
   { name: 'revoke-user-sessions', policy: 'standard' },
   { name: 'sweep', policy: 'exclusive' },
   { name: 'sweep-installation', policy: 'standard' },
+  { name: 'sweep-repository', policy: 'standard' },
+  { name: 'finalise-repository', policy: 'singleton' },
+  { name: 'finalise-check', policy: 'singleton' },
   { name: 'job-dead-letter', policy: 'standard' },
 ] as const satisfies readonly { readonly name: string; readonly policy: QueuePolicy }[];
 

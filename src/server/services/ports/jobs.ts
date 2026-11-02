@@ -34,10 +34,13 @@ export type EnqueueOptions = { readonly idempotencyKey: string } & (
 );
 
 /**
- * A job the platform itself puts on the queue (E07-S08): every job of the catalogue a webhook can start, and the
- * `sweep-installation` job the scheduled sweep fans out. The `sweep` job is not in it: only the scheduler sends it.
+ * A job the platform itself puts on the queue (E07-S08, E07-S09): every job of the catalogue a webhook can start, the
+ * `sweep-installation` job the scheduled sweep fans out, and the three repository-level jobs a change of policy sends
+ * (`sweep-repository`, `finalise-repository`, `finalise-check`). The `sweep` job is not in it: only the scheduler sends it.
  */
-export type QueuedJob = Job | EnvelopeOf<'sweep-installation'>;
+export type QueuedJob =
+  | Job
+  | EnvelopeOf<'sweep-installation' | 'sweep-repository' | 'finalise-repository' | 'finalise-check'>;
 
 export interface JobEnqueuer {
   /**

@@ -6,6 +6,7 @@ import { parseGithubId } from '../../../shared/github-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import type { Job } from '../../domain/jobs.ts';
 import type { JobEnqueuer } from '../ports/jobs.ts';
+import { enqueueFinaliseCheck, enqueueSweepRepository } from '../repository-job-enqueue.ts';
 
 // The contract of the job enqueuer port (E06-S06): what every implementation does, written once. It runs against the
 // fake the webhook intake is tested with (services/jobs-contract/fake.test.ts) and, on a real Postgres, against the
@@ -102,6 +103,39 @@ async function rolledBackSendDoesNotStartAWindow(world: JobsWorld): Promise<void
   expect(await world.liveJobs()).toBe(1);
 }
 
+async function sweepRepositoryWindowIsPerRepository(world: JobsWorld): Promise<void> {
+  const send = (githubRepoId: number, idempotencyKey: string) =>
+    world.db.transaction().execute((tx) =>
+      enqueueSweepRepository(tx, world.enqueuer, {
+        githubInstallationId: parseGithubId(70_001),
+        githubRepoId: parseGithubId(githubRepoId),
+        idempotencyKey,
+        reason: 'allowlist_changed',
+      }),
+    );
+  expect(await send(9000, 'change-1')).toBe('queued');
+  expect(await send(9000, 'change-2')).toBe('deduplicated');
+  expect(await send(9001, 'change-3')).toBe('queued');
+  expect(await world.liveJobs()).toBe(2);
+}
+
+async function finaliseChecksHaveNoWindow(world: JobsWorld): Promise<void> {
+  const send = (prNumber: number, idempotencyKey: string) =>
+    world.db.transaction().execute((tx) =>
+      enqueueFinaliseCheck(tx, world.enqueuer, {
+        githubInstallationId: parseGithubId(70_001),
+        githubRepoId: parseGithubId(9000),
+        prNumber,
+        idempotencyKey,
+      }),
+    );
+  expect(await send(7, 'finalise-1')).toBe('queued');
+  expect(await send(7, 'finalise-2')).toBe('queued');
+  expect(await send(7, 'finalise-2')).toBe('already_queued');
+  expect(await send(8, 'finalise-3')).toBe('queued');
+  expect(await world.liveJobs()).toBe(3);
+}
+
 /** Each case is `[name, run]`, to be given a fresh world: the world holds no job when it starts. */
 export const CONTRACT_CASES: readonly (readonly [string, (world: JobsWorld) => Promise<void>])[] = [
   ['a committed send leaves exactly one job', commitsExactlyOne],
@@ -113,4 +147,6 @@ export const CONTRACT_CASES: readonly (readonly [string, (world: JobsWorld) => P
   ['a live idempotency key answers already_queued even inside its dedupe window', liveKeyWinsOverTheWindow],
   ['other dedupe keys are other windows', dedupeKeysAreIndependent],
   ['a rolled-back send starts no dedupe window', rolledBackSendDoesNotStartAWindow],
+  ['a sweep-repository window is per repository (E07-S09)', sweepRepositoryWindowIsPerRepository],
+  ['finalisations of a pull request are all queued, with no window (E07-S09)', finaliseChecksHaveNoWindow],
 ];

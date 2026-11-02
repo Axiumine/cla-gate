@@ -7,10 +7,16 @@ import type { QueuedJob } from '../../services/ports/jobs.ts';
 // (`QUEUE_DEFINITIONS`) read.
 
 /**
- * `${githubRepoId}:${prNumber}` for an `evaluate-pr` job, so two evaluations of one pull request never overlap and two
- * pull requests do (a pull request number is unique per repository only, hence both ids). `undefined` for a job of a
- * type that is not serialised. E07-S09 adds `finalise-check`, keyed the same way.
+ * The key of a job whose queue serialises, or `undefined` for a type that is not serialised.
+ * - `${githubRepoId}:${prNumber}` for `evaluate-pr` and for `finalise-check` (E07-S09): the same key, so two evaluations of
+ *   one pull request never overlap, nor do two finalisations of it, and two pull requests do (a pull request number is
+ *   unique per repository only, hence both ids). The two are in different queues, and a pg-boss policy holds within one
+ *   queue only: a finalisation does not wait for an evaluation that is in flight (see `finalise-check` in `queues.ts`).
+ * - `${githubRepoId}` for `finalise-repository` (E07-S09): the finalisations of one repository never overlap.
  */
 export function serialisationKey(job: QueuedJob): string | undefined {
-  return job.type === 'evaluate-pr' ? `${job.githubRepoId}:${job.prNumber}` : undefined;
+  if (job.type === 'evaluate-pr' || job.type === 'finalise-check') {
+    return `${job.githubRepoId}:${job.prNumber}`;
+  }
+  return job.type === 'finalise-repository' ? `${job.githubRepoId}` : undefined;
 }

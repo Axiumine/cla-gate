@@ -25,9 +25,10 @@ import {
 import type { SweepDeps } from './sweep/sweep.ts';
 import { sweepWorld } from './sweep/test-support.ts';
 
-// The handlers `registerHandlers` binds (E07-S03): the five of the deliveries and the two of the scheduler, with the
-// sync of an installation wired to E05-S08, the evaluation, the close and the manual re-evaluation (E07-S04, E07-S06, E07-S07)
-// wired to their code, and the scheduled sweep (E07-S08); a handler whose consumer is not available fails its jobs.
+// The handlers `registerHandlers` binds (E07-S03): the five of the deliveries, the two of the scheduler and the one of a change of
+// policy, with the sync of an installation wired to E05-S08, the evaluation, the close and the manual re-evaluation (E07-S04,
+// E07-S06, E07-S07) wired to their code, the scheduled sweep (E07-S08) and the sweep of a repository (E07-S09); a handler whose
+// consumer is not available fails its jobs.
 
 const DELIVERY_DRIVEN = ['evaluate-pr', 'evaluate-head-sha', 'close-pr', 'recheck-comment', 'sync-installation'];
 const SYNCED: SyncOutcome = {
@@ -44,7 +45,7 @@ function registered(
   return registry;
 }
 
-test('the registry binds the five delivery-driven handlers and the two of the scheduler, all of them job types of the catalogue', () => {
+test('the registry binds the five delivery-driven handlers, the two of the scheduler and sweep-repository, all of them job types of the catalogue', () => {
   const types = registered().types();
   expect(types).toEqual(expect.arrayContaining(DELIVERY_DRIVEN));
   expect(types).toEqual([
@@ -55,6 +56,7 @@ test('the registry binds the five delivery-driven handlers and the two of the sc
     'sync-installation',
     'sweep',
     'sweep-installation',
+    'sweep-repository',
   ]);
   for (const type of types) {
     expect(JOB_TYPES).toContain(type);
@@ -69,6 +71,18 @@ test('revoke-user-sessions has no consumer until E10 registers one, and a later 
   expect(registry.types()).toContain('revoke-user-sessions');
   expect(() => {
     registry.register('revoke-user-sessions', completing());
+  }).toThrow(HandlerRegisteredError);
+});
+
+test('finalise-repository and finalise-check have no consumer until E14-S04 registers them, and a later registration needs no change here (E07-S09)', () => {
+  const registry = registered();
+  expect(registry.types()).not.toContain('finalise-repository');
+  expect(registry.types()).not.toContain('finalise-check');
+  registry.register('finalise-repository', completing('finalised'));
+  registry.register('finalise-check', completing('finalised'));
+  expect(registry.types()).toEqual(expect.arrayContaining(['finalise-repository', 'finalise-check']));
+  expect(() => {
+    registry.register('finalise-check', completing());
   }).toThrow(HandlerRegisteredError);
 });
 
@@ -303,10 +317,20 @@ const SWEEP_JOBS = [
     { type: 'sweep-installation', githubInstallationId: IDS.installation },
     'no GitHub App or no evaluation reporter (E09) is configured',
   ],
+  [
+    'sweep-repository',
+    {
+      type: 'sweep-repository',
+      githubInstallationId: IDS.installation,
+      githubRepoId: IDS.repository,
+      reason: 'override_changed',
+    },
+    'no GitHub App or no evaluation reporter (E09) is configured',
+  ],
 ] as const;
 
 test.each(SWEEP_JOBS)(
-  'a %s job fails without what it runs on and never completes with nothing done (E07-S08)',
+  'a %s job fails without what it runs on and never completes with nothing done (E07-S08, E07-S09)',
   async (type, data, reason) => {
     const { deps, marked } = runWorld((registry) => {
       registerHandlers(registry, { syncInstallation: undefined, evaluatePr: undefined });
@@ -377,3 +401,55 @@ test('a sweep-installation job whose payload is not an envelope is dead-lettered
   expect((await runJob('sweep-installation', queuedJob(data), deps)).status).toBe('deadletter');
   expect(evaluatePorts).not.toHaveBeenCalled();
 });
+
+test('sweep-repository sweeps with the ports it is given for the signal of the job, sends the evaluations on the queue the job runs on, and completes (E07-S09)', async () => {
+  const world = await sweepWorld();
+  const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>(() => world.evaluatePorts);
+  const { deps } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+  });
+  const signal = new AbortController().signal;
+  const data = {
+    type: 'sweep-repository',
+    githubInstallationId: INSTALLATION,
+    githubRepoId: REPOSITORY,
+    reason: 'repository_enabled',
+  };
+  const verdict = await runJob('sweep-repository', queuedJob(data, { id: 'job-6', signal }), {
+    ...deps,
+    enqueuer: world.enqueuer,
+  });
+  expect(verdict).toEqual({ status: 'completed', output: { outcome: 'swept' } });
+  expect(evaluatePorts).toHaveBeenCalledExactlyOnceWith(signal);
+  expect((await world.queued()).map((sent) => [sent.idempotencyKey, sent.dedupeKey, sent.job.type])).toEqual([
+    [
+      `sweep-repository:job-6:${String(REPOSITORY)}:${String(PR_NUMBER)}`,
+      `policy_change:${String(REPOSITORY)}:${String(PR_NUMBER)}`,
+      'evaluate-pr',
+    ],
+  ]);
+});
+
+test.each([
+  ['an unknown reason', { reason: 'policy_changed' }],
+  ['no reason', { reason: undefined }],
+  ['a string for the repository id', { githubRepoId: '9000' }],
+  ['a field the envelope does not declare', { prNumber: 7 }],
+])(
+  'a sweep-repository job with %s is dead-lettered before the ports are asked for anything (E07-S09)',
+  async (_what, change) => {
+    const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>();
+    const { deps } = runWorld((registry) => {
+      registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+    });
+    const data = {
+      type: 'sweep-repository',
+      githubInstallationId: INSTALLATION,
+      githubRepoId: REPOSITORY,
+      reason: 'repository_enabled',
+      ...change,
+    };
+    expect((await runJob('sweep-repository', queuedJob(data), deps)).status).toBe('deadletter');
+    expect(evaluatePorts).not.toHaveBeenCalled();
+  },
+);
