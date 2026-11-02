@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
+import type { GithubId } from '../../../shared/github-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import { evaluationEligibility } from '../../domain/eligibility.ts';
-import type { EnvelopeOf } from '../../domain/job-envelope.ts';
 import { findInstallationByGithubId } from '../installation-queries.ts';
 import { findRepositoryByGithubId } from '../repository-queries.ts';
 import { refreshRepositorySnapshot, type SnapshotContext } from '../repository-refresh.ts';
@@ -12,7 +12,11 @@ import type { Tenant } from './evaluation-facts.ts';
 // What the job settles before it asks GitHub about the pull request (E07-S04): which stored installation and repository it
 // is for, whether they are evaluated at all, and the name GitHub gives the repository now.
 
-type Job = EnvelopeOf<'evaluate-pr'>;
+/** The two ids of a job that evaluates something of a repository: `evaluate-pr`, and (E07-S05) `evaluate-head-sha`. */
+interface Job {
+  readonly githubInstallationId: GithubId;
+  readonly githubRepoId: GithubId;
+}
 
 /** What step 1 settles: the repository as GitHub names it now, with the stored tenant. */
 export interface Resolved {

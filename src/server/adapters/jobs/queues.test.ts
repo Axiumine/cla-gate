@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { EXPIRE_IN_SECONDS, QUEUE_DEFINITIONS, QUEUES } from './queues.ts';
+import { RETRY_LIMIT } from '../../domain/job-retry.ts';
+import {
+  DEAD_LETTER_QUEUE,
+  DEFINITIONS_IN_CREATION_ORDER,
+  QUEUE_DEFINITIONS,
+  QUEUES,
+  queueSettings,
+} from './queues.ts';
+import { EXPECTED_BOUNDS } from './test-support.ts';
 
 // The queue definitions (E07-S01, E07-S02): which policy each queue is created with.
 
@@ -18,6 +26,37 @@ test('evaluate-pr is the one singleton queue: any number wait, one per key runs.
   expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 1);
 });
 
-test('a job that a dead worker holds is taken back after 300 seconds', () => {
-  expect(EXPIRE_IN_SECONDS).toBe(300);
+test('a job that always fails runs six times: one run and five retries, 30 seconds apart at first and doubling (E07-S05)', () => {
+  expect(RETRY_LIMIT).toBe(5);
+  expect(queueSettings({ name: 'sweep', policy: 'standard' })).toMatchObject(EXPECTED_BOUNDS);
+});
+
+test('the dead-letter queue is job-dead-letter, one of the queues', () => {
+  expect(DEAD_LETTER_QUEUE).toBe('job-dead-letter');
+  expect(QUEUES).toContain(DEAD_LETTER_QUEUE);
+});
+
+test.each(QUEUE_DEFINITIONS.filter(({ name }) => name !== 'job-dead-letter'))(
+  '$name has its policy, the bounds and job-dead-letter as its dead-letter queue',
+  (definition) => {
+    expect(queueSettings(definition)).toEqual({
+      policy: definition.policy,
+      ...EXPECTED_BOUNDS,
+      deadLetter: 'job-dead-letter',
+    });
+  },
+);
+
+test('job-dead-letter has the same bounds and no dead-letter queue, so a dead job of it ends failed and the chain stops', () => {
+  const settings = queueSettings({ name: 'job-dead-letter', policy: 'standard' });
+  expect(settings).toEqual({ policy: 'standard', ...EXPECTED_BOUNDS });
+  expect(settings).not.toHaveProperty('deadLetter');
+});
+
+test('the queues are created dead-letter queue first, then the others in the order of the definitions, each once', () => {
+  expect(DEFINITIONS_IN_CREATION_ORDER.map(({ name }) => name)).toEqual([
+    'job-dead-letter',
+    ...QUEUES.filter((name) => name !== 'job-dead-letter'),
+  ]);
+  expect(DEFINITIONS_IN_CREATION_ORDER).toHaveLength(QUEUE_DEFINITIONS.length);
 });

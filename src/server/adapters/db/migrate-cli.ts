@@ -38,8 +38,11 @@ function describe(error: unknown): string {
 }
 
 function queueLines(result: QueueMigration): string[] {
+  const unchanged = result.created.length === 0 && result.updated.length === 0;
   return [
-    result.created.length === 0 ? 'job queues: up to date' : `job queues created: ${result.created.join(', ')}`,
+    ...(unchanged ? ['job queues: up to date'] : []),
+    ...(result.created.length === 0 ? [] : [`job queues created: ${result.created.join(', ')}`]),
+    ...(result.updated.length === 0 ? [] : [`job queues updated: ${result.updated.join(', ')}`]),
     ...(result.grants === 'skipped' ? ['role cla_app does not exist: pgboss runtime grants skipped'] : []),
   ];
 }

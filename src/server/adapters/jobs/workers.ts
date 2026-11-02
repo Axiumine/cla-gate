@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { JobType } from '../../domain/job-envelope.ts';
-import { type JobRunDeps, runJob } from '../../services/job-run.ts';
+import { type DeadLetterPorts, deadLetterRegistry } from '../../services/dead-letter/dead-letter-registry.ts';
+import { runDeadLetter } from '../../services/dead-letter/dead-letter-run.ts';
+import { type JobRunDeps, type JobVerdict, runJob } from '../../services/job-run.ts';
 import type { StopOutcome } from '../../services/ports/jobs.ts';
 import type { Boss, WorkerJob, WorkerOptions, WorkerResult } from './boss.ts';
+import { DEAD_LETTER_QUEUE } from './queues.ts';
 
 // The workers of the job queue (E07-S03): one pg-boss worker pool per job type that has a handler, each job run through
-// `runJob` (validation, logs, delivery marking) and settled with its verdict. A queue whose type has no handler gets no
-// worker and keeps its jobs. `localConcurrency` is how many jobs of one queue run at once in this process; the
+// `runJob` (validation, logs, delivery marking) and settled with its verdict, and (E07-S05) one for the dead-letter queue.
+// A queue whose type has no handler gets no worker and keeps its jobs. `localConcurrency` is how many jobs of one queue run at once in this process; the
 // serialisation of one pull request's evaluations is the queue's own policy (E07-S02), not the workers'.
 
 /** How the workers are started. */
@@ -16,10 +19,17 @@ export interface WorkersOptions extends JobRunDeps {
   readonly concurrency: number;
   /** Seconds between two looks at an empty queue. Defaults to pg-boss's own, 2; a test shortens it. */
   readonly pollingIntervalSeconds?: number | undefined;
+  /** What the handlers of the dead-letter queue run on (E07-S05). Without it the queue is not worked and keeps the jobs the others gave up. */
+  readonly deadLetter?: DeadLetterPorts | undefined;
 }
 
 /** What boot hands the queue to run jobs: {@link WorkersOptions} without the logger, which the queue brings. */
 export type WorkerWiring = Omit<WorkersOptions, 'logger'>;
+
+/** The data of a rejected job as the copy in the dead-letter queue holds it: the object as it was, or an empty one for data that is no object. */
+function copyOf(data: unknown): object {
+  return typeof data === 'object' && data !== null && !Array.isArray(data) ? data : {};
+}
 
 export class Workers {
   readonly #options: WorkersOptions;
@@ -31,9 +41,9 @@ export class Workers {
     this.#options = options;
   }
 
-  /** Starts working the queue of every type that has a handler. */
+  /** Starts working the queue of every type that has a handler, and the dead-letter queue when it has ports. */
   async start(boss: Boss): Promise<void> {
-    const { concurrency, pollingIntervalSeconds } = this.#options;
+    const { concurrency, pollingIntervalSeconds, deadLetter } = this.#options;
     const options: WorkerOptions = {
       localConcurrency: concurrency,
       batchSize: 1,
@@ -41,7 +51,16 @@ export class Workers {
       ...(pollingIntervalSeconds === undefined ? {} : { pollingIntervalSeconds }),
     };
     for (const type of this.#options.registry.types()) {
-      await boss.work(type, options, (jobs) => this.#handle(type, jobs));
+      await boss.work(type, options, (jobs) => this.#settle(jobs, (job) => this.#run(boss, type, job)));
+    }
+    if (deadLetter !== undefined) {
+      const run = { registry: deadLetterRegistry(deadLetter, this.#options.clock), logger: this.#options.logger };
+      await boss.work(DEAD_LETTER_QUEUE, options, (jobs) =>
+        this.#settle(jobs, async (job) => ({
+          status: 'completed',
+          output: { outcome: (await runDeadLetter(job, run)).outcome },
+        })),
+      );
     }
   }
 
@@ -58,10 +77,25 @@ export class Workers {
     return this.#running > 0 || this.#abortedAtStop > 0 ? 'aborted' : 'drained';
   }
 
-  async #handle(type: JobType, jobs: readonly WorkerJob[]): Promise<WorkerResult[]> {
+  /**
+   * Runs one job of the queue `type`. Data that is not the job's envelope is rejected without a retry (E07-S05): the job is
+   * completed with `{ rejected: 'invalid_payload' }` and a copy of its data goes to the dead-letter queue under the same id,
+   * so a run that sends the copy and dies before it settles the job sends nothing twice.
+   */
+  async #run(boss: Boss, type: JobType, job: WorkerJob): Promise<JobVerdict> {
+    const verdict = await runJob(type, job, this.#options);
+    if (verdict.status === 'completed') {
+      return verdict;
+    }
+    await boss.send(DEAD_LETTER_QUEUE, copyOf(job.data), { id: job.id });
+    return { status: 'completed', output: { rejected: 'invalid_payload' } };
+  }
+
+  /** Settles each job of a batch with the verdict `run` gives it, counting the batch while it runs (for the shutdown). */
+  async #settle(jobs: readonly WorkerJob[], run: (job: WorkerJob) => Promise<JobVerdict>): Promise<WorkerResult[]> {
     this.#running += 1;
     try {
-      return await Promise.all(jobs.map(async (job) => ({ id: job.id, ...(await runJob(type, job, this.#options)) })));
+      return await Promise.all(jobs.map(async (job) => ({ id: job.id, ...(await run(job)) })));
     } catch (error) {
       if (this.#stopping && jobs.some((job) => job.signal.aborted)) {
         this.#abortedAtStop += 1;

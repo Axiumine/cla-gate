@@ -32,6 +32,8 @@ const SILENT = pino({ level: 'silent' });
 const DENIED = { code: '42501' };
 /** A failed job stays failed: with retries left it would wait to run again and count as live. */
 const NO_RETRY = { retryLimit: 0 };
+/** The queues the migrate step creates on an empty schema, in the order it creates them: the dead-letter queue first (E07-S05). */
+const CREATED = ['job-dead-letter', ...QUEUES.filter((name) => name !== 'job-dead-letter')];
 const DELIVERY = deliveryIdSchema.parse('5b8f2c1e-3d4a-4f6b-9a7c-0e1d2f3a4b5c');
 const SYNC: Job = { type: 'sync-installation', githubInstallationId: parseGithubId(32_001), deliveryId: DELIVERY };
 const SUBJECT = { deliveryId: DELIVERY, event: 'installation', action: 'created' };
@@ -83,12 +85,12 @@ realPostgresRolesOnly(
   async () => {
     const owner = await withoutPgboss();
     const first = await migrateJobQueues({ connectionString: ownerUrl(), db: owner, onError: () => undefined });
-    expect(first).toEqual({ created: [...QUEUES], grants: 'granted' });
+    expect(first).toEqual({ created: CREATED, updated: [], grants: 'granted' });
     const names = await sql<{ name: string }>`select name from pgboss.queue`.execute(owner);
     const byName = (a: string, b: string): number => a.localeCompare(b);
     expect(names.rows.map((row) => row.name).toSorted(byName)).toEqual(QUEUES.toSorted(byName));
     const second = await migrateJobQueues({ connectionString: ownerUrl(), db: owner, onError: () => undefined });
-    expect(second).toEqual({ created: [], grants: 'granted' });
+    expect(second).toEqual({ created: [], updated: [], grants: 'granted' });
   },
 );
 
@@ -102,7 +104,7 @@ realPostgresRolesOnly('yarn db:migrate runs the queue step after the SQL files a
   expect(
     await runMigrateCli({ env, directory: MIGRATIONS_DIRECTORY, out: (l) => out.push(l), err: (l) => err.push(l) }),
   ).toBe(0);
-  expect(out.at(-1)).toBe(`job queues created: ${QUEUES.join(', ')}`);
+  expect(out.at(-1)).toBe(`job queues created: ${CREATED.join(', ')}`);
   expect(
     await runMigrateCli({ env, directory: MIGRATIONS_DIRECTORY, out: (l) => out.push(l), err: (l) => err.push(l) }),
   ).toBe(0);
@@ -220,7 +222,10 @@ realPostgresRolesOnly(
       owner,
     );
     expect(states.rows).toEqual([{ n: 3 }]);
-    expect(await liveJobs(owner)).toBe(0);
+    // The job that failed with no retry left was moved to the dead-letter queue by the runtime role (E07-S05).
+    const live = await sql<{ name: string }>`
+      select name from pgboss.job where state in ('created', 'retry', 'active')`.execute(owner);
+    expect(live.rows).toEqual([{ name: 'job-dead-letter' }]);
   },
 );
 

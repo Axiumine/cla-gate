@@ -23,6 +23,9 @@ import { FakeClock, FakeGate, FakeGitHub } from '../test-support.ts';
 import { evaluatePr } from './evaluate-pr.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
 
+/** Why a failure is reported (E07-S05): the code of `EvaluationReporter.failed`. */
+type ReportFailureCode = Parameters<EvaluationReporter['failed']>[1];
+
 // The world of the tests of the `evaluate-pr` job (E07-S04): a migrated database with one tenant, a FakeGitHub that serves
 // its installation, repository, pull request and commits, a FakeReporter, an evaluator that is a stub unless a test brings the
 // real one, and a timeline in which the calls to GitHub, the statements on the database and the steps of the job fall in
@@ -83,12 +86,15 @@ function timedDatabase(db: Kysely<Database>, timeline: string[]): Kysely<Databas
 export interface ReporterHooks {
   started?: ((target: ReportTarget) => Promise<void>) | undefined;
   publish?: ((target: ReportTarget, evaluation: Evaluation) => Promise<void>) | undefined;
+  failed?: ((target: ReportTarget, code: ReportFailureCode) => Promise<void>) | undefined;
 }
 
 /** The reporter in memory: every report it was given, in order, and an optional behaviour for each method (E07-S04). */
 export class FakeReporter implements EvaluationReporter {
   readonly startedTargets: ReportTarget[] = [];
   readonly published: { readonly target: ReportTarget; readonly evaluation: Evaluation }[] = [];
+  /** The failures reported (E07-S05), in order. */
+  readonly failures: { readonly target: ReportTarget; readonly code: ReportFailureCode }[] = [];
   readonly hooks: ReporterHooks = {};
   readonly #timeline: string[];
 
@@ -106,6 +112,12 @@ export class FakeReporter implements EvaluationReporter {
     this.#timeline.push('reporter.publish');
     this.published.push({ target, evaluation });
     await this.hooks.publish?.(target, evaluation);
+  }
+
+  async failed(target: ReportTarget, code: ReportFailureCode): Promise<void> {
+    this.#timeline.push('reporter.failed');
+    this.failures.push({ target, code });
+    await this.hooks.failed?.(target, code);
   }
 }
 

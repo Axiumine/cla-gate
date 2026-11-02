@@ -57,6 +57,7 @@ interface JobRow {
   readonly state: string;
   readonly retry_count: number;
   readonly output: Record<string, unknown> | null;
+  readonly data: Record<string, unknown>;
 }
 
 interface World {
@@ -74,6 +75,8 @@ interface World {
   readonly processedAt: (deliveryId: DeliveryId) => Promise<Date | null>;
   /** Deletes the row of `queue`, as a migration that went wrong would. */
   readonly dropQueue: (queue: string) => Promise<void>;
+  /** Makes every job of `queue` that waits for its retry due now: the backoff of the queue (30 s or more, E07-S05), passed. */
+  readonly fastForward: (queue: string) => Promise<void>;
 }
 
 /** A fresh pgboss schema made by the migrate step; connections and the sending queue are closed after the test. */
@@ -106,7 +109,7 @@ async function world(): Promise<World> {
     jobs: async (queue) =>
       (
         await sql<JobRow>`
-          select state, retry_count, output from pgboss.job where name = ${queue} order by created_on, id`.execute(
+          select state, retry_count, output, data from pgboss.job where name = ${queue} order by created_on, id`.execute(
           owner,
         )
       ).rows,
@@ -120,6 +123,9 @@ async function world(): Promise<World> {
       ).processed_at,
     dropQueue: async (queue) => {
       await sql`delete from pgboss.queue where name = ${queue}`.execute(owner);
+    },
+    fastForward: async (queue) => {
+      await sql`update pgboss.job set start_after = now() where name = ${queue} and state = 'retry'`.execute(owner);
     },
   };
 }
@@ -258,6 +264,7 @@ realPostgresRolesOnly(
     ]);
     expect(await statesOf(w, 'sync-installation')).toEqual(['retry']);
     expect(await w.processedAt(DELIVERY)).toBeNull();
+    await w.fastForward('sync-installation');
     const runs: string[] = [];
     await startWorkers(
       w,
@@ -299,12 +306,17 @@ realPostgresRolesOnly('a handler that rejects fails its job and the process goes
     }),
   );
   await eventually(async () => {
-    expect(new Set(await statesOf(w, 'sync-installation'))).toEqual(new Set(['failed', 'completed']));
+    expect(new Set(await statesOf(w, 'sync-installation'))).toEqual(new Set(['retry', 'completed']));
   });
   const [bad, good] = await w.jobs('sync-installation');
-  expect(bad).toMatchObject({ state: 'failed', retry_count: 2, output: { message: 'the handler rejected' } });
+  expect(bad).toMatchObject({ state: 'retry', retry_count: 0, output: { message: 'the handler rejected' } });
   expect(good).toMatchObject({ state: 'completed' });
-  expect(attempts).toEqual([0, 1, 2]);
+  expect(attempts).toEqual([0]);
+  // The retry comes after the backoff of the queue (E07-S05); once that time has passed it runs again, and the process is still up.
+  await w.fastForward('sync-installation');
+  await eventually(() => {
+    expect(attempts).toEqual([0, 1]);
+  });
   expect(unhandled).toEqual([]);
 });
 
@@ -333,21 +345,24 @@ realPostgresRolesOnly('the concurrency is a cap: six waiting jobs run three at a
 });
 
 realPostgresRolesOnly(
-  'a payload that fails its schema is failed for good, never reaches the handler and leaves its delivery open',
+  'a payload that fails its schema is rejected without a retry, never reaches the handler and leaves its delivery open',
   async () => {
     const w = await world();
     await w.db
       .insertInto('webhook_deliveries')
       .values({ delivery_id: DELIVERY, event: 'installation', action: 'created' })
       .execute();
-    await w.sendRaw('sync-installation', { type: 'sync-installation', githubInstallationId: -1, deliveryId: DELIVERY });
+    const data = { type: 'sync-installation', githubInstallationId: -1, deliveryId: DELIVERY };
+    await w.sendRaw('sync-installation', data);
     const handler = vi.fn<JobHandler<'sync-installation'>>(() => Promise.resolve(DONE));
     await startWorkers(w, syncRegistry(handler));
     await eventually(async () => {
-      expect(await statesOf(w, 'sync-installation')).toEqual(['failed']);
+      expect(await statesOf(w, 'sync-installation')).toEqual(['completed']);
     });
     const [row] = await w.jobs('sync-installation');
-    expect(row).toMatchObject({ retry_count: 0, output: { code: 'job_payload_invalid' } });
+    expect(row).toMatchObject({ retry_count: 0, output: { rejected: 'invalid_payload' } });
+    // The copy waits in the dead-letter queue, which these tests do not work (dead-letter-real.test.ts does).
+    expect(await w.jobs('job-dead-letter')).toMatchObject([{ state: 'created', data }]);
     expect(handler).not.toHaveBeenCalled();
     expect(await w.processedAt(DELIVERY)).toBeNull();
   },

@@ -7,7 +7,7 @@ import type { JobEnvelope } from '../../domain/job-envelope.ts';
 // What the evaluation job (E07-S04) needs of the code that writes the Check Run and the pull request comment. The reporter
 // is E09: this file is the port the job calls, `FakeReporter` (`services/evaluate-pr/test-support.ts`) the double the job is
 // tested with, and E09-S05 the implementation the composition root binds. A later story adds its method here with its row
-// in the fake (`failed` for E07-S05, `cancelled` for E07-S06).
+// in the fake (`cancelled` for E07-S06).
 
 /** Why an `evaluate-pr` job runs: the closed set of its envelope. */
 type EvaluationTrigger = Extract<JobEnvelope, { type: 'evaluate-pr' }>['trigger'];
@@ -28,6 +28,9 @@ export interface ReportTarget {
   readonly evaluationId: number;
 }
 
+/** Why an evaluation could not complete: the closed set E09 renders (`evaluation_failed`: the retries of the job are spent). */
+type ReportFailureCode = 'evaluation_failed';
+
 export interface EvaluationReporter {
   /** The evaluation of `target` began: its Check Run is `in_progress`. Safe to call again after a crash. */
   started(target: ReportTarget): Promise<void>;
@@ -37,4 +40,11 @@ export interface EvaluationReporter {
    * of the job calls it again, so it must be idempotent.
    */
   publish(target: ReportTarget, evaluation: Evaluation): Promise<void>;
+
+  /**
+   * The evaluation of `target` could not be completed and will not be retried by the queue (E07-S05): the Check Run of its
+   * head SHA ends `failure`, with a summary that tells the contributor to comment `/recheck`. Writes no comment and no
+   * `pr_evaluations` column; the job sets the row. Called again when the dead-letter handler is retried, so it must be idempotent.
+   */
+  failed(target: ReportTarget, code: ReportFailureCode): Promise<void>;
 }

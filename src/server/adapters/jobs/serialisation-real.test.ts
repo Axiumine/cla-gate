@@ -304,6 +304,8 @@ realPostgresRolesOnly(
     expect(await boss.fetch('evaluate-pr')).toEqual([]);
     // Past 300 seconds pg-boss takes it back, and the key runs again: the reclaimed job, then the next send.
     await superviseAfter(owner, boss, 301);
+    // The reclaimed job is retried after the backoff of the queue (30 s or more, E07-S05): let that time pass.
+    await sql`update pgboss.job set start_after = now() where name = 'evaluate-pr' and state = 'retry'`.execute(owner);
     const ran: string[] = [];
     for (let i = 0; i < 2; i++) {
       const [job] = await boss.fetch<Job>('evaluate-pr');

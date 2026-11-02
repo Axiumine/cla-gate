@@ -27,7 +27,7 @@ function workerOf(boss: ReturnType<typeof fakeBoss>, name: string) {
   return { options: call[1], handler: call[2] };
 }
 
-const job = (data: object, overrides: Partial<WorkerJob> = {}): WorkerJob => ({
+const job = (data: unknown, overrides: Partial<WorkerJob> = {}): WorkerJob => ({
   id: 'job-1',
   data,
   retryCount: 0,
@@ -103,16 +103,54 @@ test('a job that completes is settled completed with the outcome of its handler,
   expect(marked).toHaveLength(1);
 });
 
-test('a job whose data is invalid is settled deadletter: it fails for good with job_payload_invalid and is not retried', async () => {
+test('a job whose data is invalid is rejected, not retried: completed as rejected, and a copy of its data goes to the dead-letter queue under its id (E07-S05)', async () => {
   const { workers, boss, marked } = world((registry) => {
     registry.register('sync-installation', completing());
   });
   await workers.start(boss);
-  const results = await workerOf(boss, 'sync-installation').handler([
-    job({ type: 'sync-installation' }, { id: 'job-9' }),
-  ]);
-  expect(results).toMatchObject([{ id: 'job-9', status: 'deadletter', output: { code: 'job_payload_invalid' } }]);
+  const data = { type: 'sync-installation' };
+  const results = await workerOf(boss, 'sync-installation').handler([job(data, { id: 'job-9' })]);
+  expect(results).toEqual([{ id: 'job-9', status: 'completed', output: { rejected: 'invalid_payload' } }]);
+  expect(boss.send).toHaveBeenCalledExactlyOnceWith('job-dead-letter', data, { id: 'job-9' });
   expect(marked).toEqual([]);
+});
+
+test.each([
+  ['null', null],
+  ['a string', 'sync-installation'],
+  ['a number', 7],
+  ['an array', [{ type: 'sync-installation' }]],
+])(
+  'data that is %s cannot be copied as it is: the copy is an empty object, the job is rejected all the same',
+  async (_name, data) => {
+    const { workers, boss } = world((registry) => {
+      registry.register('sync-installation', completing());
+    });
+    await workers.start(boss);
+    const results = await workerOf(boss, 'sync-installation').handler([job(data, { id: 'job-9' })]);
+    expect(results).toMatchObject([{ id: 'job-9', status: 'completed', output: { rejected: 'invalid_payload' } }]);
+    expect(boss.send).toHaveBeenCalledExactlyOnceWith('job-dead-letter', {}, { id: 'job-9' });
+  },
+);
+
+test('a rejection whose copy cannot be sent fails the batch, so the job is retried and rejected again', async () => {
+  const { workers, boss } = world((registry) => {
+    registry.register('sync-installation', completing());
+  });
+  boss.send.mockRejectedValueOnce(new Error('the database went away'));
+  await workers.start(boss);
+  await expect(
+    workerOf(boss, 'sync-installation').handler([job({ type: 'sync-installation' }, { id: 'job-9' })]),
+  ).rejects.toThrow('the database went away');
+});
+
+test('a job that is valid sends no copy anywhere', async () => {
+  const { workers, boss } = world((registry) => {
+    registry.register('sync-installation', completing());
+  });
+  await workers.start(boss);
+  await workerOf(boss, 'sync-installation').handler([job(JOBS.syncInstallation)]);
+  expect(boss.send).not.toHaveBeenCalled();
 });
 
 test('a handler that throws makes the worker reject, so pg-boss fails the job and retries it', async () => {

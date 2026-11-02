@@ -7,7 +7,7 @@ import { openPgliteDatabase } from '../db/pglite.ts';
 import { emptyTestDatabase, ensureRuntimeRole } from '../db/test-support.ts';
 import { migrateJobQueues } from './migrate-queues.ts';
 import { QueuePolicyError } from './queue-policy.ts';
-import { EXPIRE_IN_SECONDS, QUEUE_DEFINITIONS, QUEUES } from './queues.ts';
+import { DEFINITIONS_IN_CREATION_ORDER, QUEUE_DEFINITIONS, QUEUES, queueSettings } from './queues.ts';
 import { fakeBoss } from './test-support.ts';
 
 // The queue step of `yarn db:migrate` with a pg-boss that is only a script, on PGlite for the grants (E07-S01). Against a
@@ -51,25 +51,52 @@ async function migrateWith(boss = fakeBoss(), runtimeRole = true) {
   return { result, db, onError, createBoss, boss };
 }
 
-test('it starts pg-boss with the options of the owner and creates every queue that is missing, in the order of the constant', async () => {
+test('it starts pg-boss with the options of the owner and creates every queue that is missing, the dead-letter queue first', async () => {
   const boss = fakeBoss();
   boss.getQueues.mockResolvedValueOnce([]);
   const { result, createBoss } = await migrateWith(boss);
   expect(createBoss).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ connectionString: OWNER_URL, migrate: true, createSchema: true, supervise: false }),
   );
-  expect(boss.createQueue.mock.calls.map(([name]) => name)).toEqual([...QUEUES]);
-  expect(result.created).toEqual([...QUEUES]);
+  expect(boss.createQueue.mock.calls.map(([name]) => name)).toEqual(['job-dead-letter', ...QUEUES.slice(0, -1)]);
+  expect(result.created).toEqual(['job-dead-letter', ...QUEUES.slice(0, -1)]);
 });
 
-test('every queue is created with the policy of the table and the expiry of a job that a dead worker holds (E07-S02)', async () => {
+test('every queue is created with its policy and the bounds of E07-S05: 5 retries, 30 s doubling, 300 s expiry, retention windows, job-dead-letter', async () => {
   const boss = fakeBoss();
   boss.getQueues.mockResolvedValueOnce([]);
   await migrateWith(boss);
   expect(boss.createQueue.mock.calls).toEqual(
-    QUEUE_DEFINITIONS.map(({ name, policy }) => [name, { policy, expireInSeconds: EXPIRE_IN_SECONDS }]),
+    DEFINITIONS_IN_CREATION_ORDER.map((definition) => [definition.name, queueSettings(definition)]),
   );
-  expect(boss.createQueue).toHaveBeenCalledWith('evaluate-pr', { policy: 'singleton', expireInSeconds: 300 });
+  expect(boss.createQueue).toHaveBeenCalledWith('evaluate-pr', {
+    policy: 'singleton',
+    retryLimit: 5,
+    retryDelay: 30,
+    retryBackoff: true,
+    expireInSeconds: 300,
+    retentionSeconds: 1_209_600,
+    deleteAfterSeconds: 604_800,
+    deadLetter: 'job-dead-letter',
+  });
+});
+
+test('the dead-letter queue is created with the same bounds and no dead-letter queue of its own', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce([]);
+  await migrateWith(boss);
+  const [name, settings] = boss.createQueue.mock.calls[0] ?? [];
+  expect(name).toBe('job-dead-letter');
+  expect(settings).toEqual({
+    policy: 'standard',
+    retryLimit: 5,
+    retryDelay: 30,
+    retryBackoff: true,
+    expireInSeconds: 300,
+    retentionSeconds: 1_209_600,
+    deleteAfterSeconds: 604_800,
+  });
+  expect(settings).not.toHaveProperty('deadLetter');
 });
 
 test('a queue that exists with another policy fails the step before anything is created, and pg-boss is stopped', async () => {
@@ -89,16 +116,81 @@ test('it creates only the queues that do not exist: a run on a migrated database
   expect(result.created).toEqual([]);
 });
 
-test('with some queues present it creates the others', async () => {
+test('with some queues present it creates the others and leaves the ones in line alone', async () => {
   const boss = fakeBoss();
-  boss.getQueues.mockResolvedValueOnce([
-    { name: 'evaluate-pr', policy: 'singleton' },
-    { name: 'sweep', policy: 'standard' },
-  ]);
+  const present = QUEUE_DEFINITIONS.filter(({ name }) => name === 'evaluate-pr' || name === 'sweep');
+  boss.getQueues.mockResolvedValueOnce(
+    present.map((definition) => ({ name: definition.name, ...queueSettings(definition) })),
+  );
   const { result } = await migrateWith(boss);
   expect(result.created).not.toContain('sweep');
   expect(result.created).toHaveLength(QUEUES.length - 2);
+  expect(result.updated).toEqual([]);
   expect(boss.createQueue).not.toHaveBeenCalledWith('evaluate-pr', expect.anything());
+  expect(boss.updateQueue).not.toHaveBeenCalled();
+});
+
+test('a queue an older build created with default bounds is brought in line, once, with the bounds and the dead-letter queue', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce(
+    QUEUE_DEFINITIONS.map(({ name, policy }) => ({ name, policy, expireInSeconds: 300, retryLimit: 2, retryDelay: 0 })),
+  );
+  const { result } = await migrateWith(boss);
+  expect(boss.createQueue).not.toHaveBeenCalled();
+  expect(result.created).toEqual([]);
+  expect(result.updated).toEqual(['job-dead-letter', ...QUEUES.slice(0, -1)]);
+  expect(boss.updateQueue.mock.calls[0]).toEqual([
+    'job-dead-letter',
+    {
+      retryLimit: 5,
+      retryDelay: 30,
+      retryBackoff: true,
+      expireInSeconds: 300,
+      retentionSeconds: 1_209_600,
+      deleteAfterSeconds: 604_800,
+      deadLetter: null,
+    },
+  ]);
+  expect(boss.updateQueue.mock.calls[1]).toEqual([
+    'evaluate-pr',
+    expect.objectContaining({ retryLimit: 5, deadLetter: 'job-dead-letter' }),
+  ]);
+});
+
+test('a queue that differs only in its dead-letter queue is updated too, and the policy is never part of an update', async () => {
+  const boss = fakeBoss();
+  const sweep = QUEUE_DEFINITIONS.find(({ name }) => name === 'sweep');
+  boss.getQueues.mockResolvedValueOnce(
+    QUEUE_DEFINITIONS.map((definition) => ({
+      name: definition.name,
+      ...queueSettings(definition),
+      ...(definition === sweep ? { deadLetter: 'somewhere-else' } : {}),
+    })),
+  );
+  const { result } = await migrateWith(boss);
+  expect(result.updated).toEqual(['sweep']);
+  expect(boss.updateQueue).toHaveBeenCalledExactlyOnceWith(
+    'sweep',
+    expect.objectContaining({ deadLetter: 'job-dead-letter' }),
+  );
+  expect(boss.updateQueue.mock.calls[0]?.[1]).not.toHaveProperty('policy');
+});
+
+test('the dead-letter queue with a dead-letter queue of its own has it cleared, so there is no loop', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce(
+    QUEUE_DEFINITIONS.map((definition) => ({
+      name: definition.name,
+      ...queueSettings(definition),
+      ...(definition.name === 'job-dead-letter' ? { deadLetter: 'sweep' } : {}),
+    })),
+  );
+  const { result } = await migrateWith(boss);
+  expect(result.updated).toEqual(['job-dead-letter']);
+  expect(boss.updateQueue).toHaveBeenCalledExactlyOnceWith(
+    'job-dead-letter',
+    expect.objectContaining({ deadLetter: null }),
+  );
 });
 
 test('the errors pg-boss reports on its own connections go to the sink it was given', async () => {

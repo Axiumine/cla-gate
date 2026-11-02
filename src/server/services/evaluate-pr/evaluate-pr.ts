@@ -3,11 +3,7 @@
 import type { Logger } from 'pino';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
 import type { JobOutcome } from '../job-registry.ts';
-import {
-  InstallationGoneError,
-  InstallationNotAdmittedError,
-  InstallationSuspendedError,
-} from '../ports/github-errors.ts';
+import { isInstallationUnavailable } from '../ports/installation-unavailable.ts';
 import { evaluateOpen, evaluationKey } from './evaluate-open.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
 import { type EvaluationKey, findEvaluation } from './evaluation-rows.ts';
@@ -85,11 +81,7 @@ export async function evaluatePr(ports: EvaluatePrPorts, job: Job, context: Eval
   try {
     return await run(ports, job, context);
   } catch (error) {
-    if (
-      error instanceof InstallationNotAdmittedError ||
-      error instanceof InstallationGoneError ||
-      error instanceof InstallationSuspendedError
-    ) {
+    if (isInstallationUnavailable(error)) {
       return skipped(context.logger, 'installation_unavailable');
     }
     throw error;

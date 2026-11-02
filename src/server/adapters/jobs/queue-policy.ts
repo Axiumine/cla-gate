@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { QUEUE_DEFINITIONS, type QueueName, type QueuePolicy } from './queues.ts';
+import { QUEUE_DEFINITIONS, type QueueBounds, type QueueName, type QueuePolicy } from './queues.ts';
 
 // The policy of a queue (E07-S02) cannot be changed once the queue exists, so the migrate step and the start-up check
 // compare what the database has with {@link QUEUE_DEFINITIONS} and refuse a difference.
 
-/** A queue as pg-boss reports it: the policy is missing when pg-boss gives none, which is `standard`. */
-export interface ExistingQueue {
+/**
+ * A queue as pg-boss reports it: the policy is missing when pg-boss gives none, which is `standard`. The bounds and the
+ * dead-letter queue (`null` when it has none) are what E07-S05 compares with the definitions.
+ */
+export interface ExistingQueue extends Partial<QueueBounds> {
   readonly name: string;
   readonly policy?: string;
+  readonly deadLetter?: string | null;
 }
 
 /** A queue that exists with another policy than {@link QUEUE_DEFINITIONS} gives it. */

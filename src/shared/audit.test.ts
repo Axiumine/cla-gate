@@ -48,6 +48,12 @@ test('the eleventh action is installation.updated, added by E05-S08 for a refres
   expect(INSTANCE_ACTIONS.has('installation.updated')).toBe(false);
 });
 
+test('the twelfth action is installation.sync_failed, added by E07-S05 for a sync whose retries are spent', () => {
+  expect(AUDIT_ACTIONS[11]).toBe('installation.sync_failed');
+  expect(SYSTEM_ACTIONS.has('installation.sync_failed')).toBe(true);
+  expect(INSTANCE_ACTIONS.has('installation.sync_failed')).toBe(false);
+});
+
 test('no action and no metadata key is listed twice', () => {
   expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
   expect(new Set(AUDIT_METADATA_KEYS).size).toBe(AUDIT_METADATA_KEYS.length);
@@ -58,6 +64,7 @@ test('system actions are those performed by webhooks and schedules, and are all 
     'installation.rejected',
     'installation.admitted',
     'installation.updated',
+    'installation.sync_failed',
     'installation.deleted',
     'installation.suspended',
     'installation.unsuspended',

@@ -18,7 +18,8 @@ import { markDeliveryProcessed } from './services/webhook-delivery-rows.ts';
 // What the job workers need, wired at boot (E07-S03): the handlers, the delivery a finished job marks processed, the time
 // and how many jobs run at once. This is the one place where handlers are bound. An epic that owns a job registers its
 // handler here, with `registry.register(type, handler)` after `registerHandlers` (E10-S07 does so for
-// `revoke-user-sessions`); no file of the queue, the wrapper or the other handlers changes.
+// `revoke-user-sessions`); no file of the queue, the wrapper or the other handlers changes. The dead-letter handlers
+// (E07-S05) are bound for every type already, in `services/dead-letter/dead-letter-registry.ts`.
 
 export interface JobWorkersOptions {
   readonly db: Kysely<Database>;
@@ -65,5 +66,12 @@ export function jobWorkers(options: JobWorkersOptions): WorkerWiring {
     markDeliveryProcessed: (deliveryId) => markDeliveryProcessed(db, deliveryId),
     clock,
     concurrency: config.workerConcurrency,
+    deadLetter: {
+      db,
+      evaluation:
+        evaluation === undefined
+          ? undefined
+          : (signal) => ({ github: evaluation.github.withSignal(signal), reporter: evaluation.reporter }),
+    },
   };
 }

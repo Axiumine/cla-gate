@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 
+import { RETRY_LIMIT } from '../../domain/job-retry.ts';
+
 // The queues of the application (E07-S01). A queue is a row of `pgboss.queue`, created by the migration owner in the
 // second step of `yarn db:migrate` and only checked at start-up by the runtime role, which owns nothing.
 
@@ -41,9 +43,60 @@ export type QueueName = (typeof QUEUE_DEFINITIONS)[number]['name'];
 /** The names of {@link QUEUE_DEFINITIONS}, in the same order. */
 export const QUEUES: readonly QueueName[] = QUEUE_DEFINITIONS.map(({ name }) => name);
 
+/** The queue that takes the jobs whose retries are spent (E07-S05), and the one every other queue names as its dead-letter queue. */
+export const DEAD_LETTER_QUEUE: QueueName = 'job-dead-letter';
+
 /**
  * How long a job may stay `active` before pg-boss takes it back (retry, or failed when no retry is left): the time a
- * worker that died mid-run keeps the key of its job blocked (E07-S02, property P4). Every queue has it; E07-S05 adds the
- * retry bounds to the same options.
+ * worker that died mid-run keeps the key of its job blocked (E07-S02, property P4).
  */
-export const EXPIRE_IN_SECONDS = 300;
+const EXPIRE_IN_SECONDS = 300;
+
+const DAY_SECONDS = 86_400;
+
+/** What every queue is created with besides its policy (E07-S05), checked against pg-boss 12.38.0 (`QueueOptions`). */
+export interface QueueBounds {
+  /** Retries after the first run; `RETRY_LIMIT` (5), so a job that always fails runs 6 times. */
+  readonly retryLimit: number;
+  /** Seconds before the first retry; with backoff it is the base of the schedule, which doubles at every retry (with jitter). */
+  readonly retryDelay: number;
+  readonly retryBackoff: boolean;
+  readonly expireInSeconds: number;
+  /** Seconds a job may wait in `created` or `retry` before pg-boss deletes it (pg-boss 12 has no archive step). */
+  readonly retentionSeconds: number;
+  /** Seconds a finished job (completed, failed or cancelled) is kept before pg-boss deletes it. */
+  readonly deleteAfterSeconds: number;
+}
+
+/**
+ * The bounds of every queue (E07-S05): five retries, 30 s before the first and doubling after it, a job that stays active
+ * for 300 s is taken back, a finished job is deleted after 7 days and one that never ran after 14 days. The `pgboss`
+ * tables stay bounded without a purge job of our own, because pg-boss's maintenance deletes by these windows.
+ */
+const QUEUE_BOUNDS: QueueBounds = {
+  retryLimit: RETRY_LIMIT,
+  retryDelay: 30,
+  retryBackoff: true,
+  expireInSeconds: EXPIRE_IN_SECONDS,
+  retentionSeconds: 14 * DAY_SECONDS,
+  deleteAfterSeconds: 7 * DAY_SECONDS,
+};
+
+/** What a queue is created with: its policy, the {@link QUEUE_BOUNDS} and its dead-letter queue (the dead-letter queue itself has none). */
+export interface QueueSettings extends QueueBounds {
+  readonly policy: QueuePolicy;
+  readonly deadLetter?: string;
+}
+
+/** The settings of a queue of {@link QUEUE_DEFINITIONS}: its policy, the bounds, and `job-dead-letter` as its dead-letter queue. */
+export function queueSettings({ name, policy }: (typeof QUEUE_DEFINITIONS)[number]): QueueSettings {
+  return name === DEAD_LETTER_QUEUE
+    ? { policy, ...QUEUE_BOUNDS }
+    : { policy, ...QUEUE_BOUNDS, deadLetter: DEAD_LETTER_QUEUE };
+}
+
+/** The definitions in the order the queues are created: pg-boss wants a dead-letter queue to exist before a queue can name it. */
+export const DEFINITIONS_IN_CREATION_ORDER: readonly (typeof QUEUE_DEFINITIONS)[number][] = [
+  ...QUEUE_DEFINITIONS.filter(({ name }) => name === DEAD_LETTER_QUEUE),
+  ...QUEUE_DEFINITIONS.filter(({ name }) => name !== DEAD_LETTER_QUEUE),
+];

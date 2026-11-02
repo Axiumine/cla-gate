@@ -5,8 +5,9 @@ import type { ConstructorOptions } from 'pg-boss';
 import type { Database } from '../db/schema.ts';
 import { type Boss, createPgBoss, ownerBossOptions } from './boss.ts';
 import { DEFAULT_INDEX_BUILD_WAIT, type IndexBuildWait, waitForIndexBuilds } from './index-builds.ts';
+import { boundsDrifted, updateFor } from './queue-options.ts';
 import { policyMismatches, QueuePolicyError } from './queue-policy.ts';
-import { EXPIRE_IN_SECONDS, QUEUE_DEFINITIONS, QUEUES, type QueueName } from './queues.ts';
+import { DEFINITIONS_IN_CREATION_ORDER, QUEUES, type QueueName, queueSettings } from './queues.ts';
 import { grantRuntimeAccess } from './runtime-grants.ts';
 
 // The second step of `yarn db:migrate` (E07-S01), after the SQL files: pg-boss's own schema, the queues and the grants
@@ -28,31 +29,40 @@ export interface QueueMigrationOptions {
 }
 
 export interface QueueMigration {
-  /** The queues this run created, in the order of `QUEUES`; empty when they all existed. */
+  /** The queues this run created, dead-letter queue first; empty when they all existed. */
   readonly created: readonly QueueName[];
+  /** The queues that existed with other bounds or another dead-letter queue than the definitions give (E07-S05) and were brought in line. */
+  readonly updated: readonly QueueName[];
   /** `skipped` when the role `cla_app` does not exist. */
   readonly grants: 'granted' | 'skipped';
 }
 
 /**
- * Creates the queues that do not exist yet, each with its policy (E07-S02). Idempotent: an existing queue is left as it
- * is. A queue that exists with another policy than the table gives it is an error, because a policy cannot be changed.
+ * Creates the queues that do not exist yet, each with its policy (E07-S02), its retry, expiry and retention bounds and its
+ * dead-letter queue (E07-S05), the dead-letter queue first. Idempotent: an existing queue keeps its policy, and its bounds
+ * are brought in line when an older build created it with others. A queue that exists with another policy than the table
+ * gives it is an error, because a policy cannot be changed.
  */
-async function createMissingQueues(boss: Boss): Promise<QueueName[]> {
+async function createMissingQueues(boss: Boss): Promise<{ created: QueueName[]; updated: QueueName[] }> {
   const found = await boss.getQueues([...QUEUES]);
   const mismatches = policyMismatches(found);
   if (mismatches.length > 0) {
     throw new QueuePolicyError(mismatches);
   }
-  const existing = new Set(found.map((queue) => queue.name));
   const created: QueueName[] = [];
-  for (const { name, policy } of QUEUE_DEFINITIONS) {
-    if (!existing.has(name)) {
-      await boss.createQueue(name, { policy, expireInSeconds: EXPIRE_IN_SECONDS });
-      created.push(name);
+  const updated: QueueName[] = [];
+  for (const definition of DEFINITIONS_IN_CREATION_ORDER) {
+    const settings = queueSettings(definition);
+    const existing = found.find((queue) => queue.name === definition.name);
+    if (existing === undefined) {
+      await boss.createQueue(definition.name, settings);
+      created.push(definition.name);
+    } else if (boundsDrifted(existing, settings)) {
+      await boss.updateQueue(definition.name, updateFor(settings));
+      updated.push(definition.name);
     }
   }
-  return created;
+  return { created, updated };
 }
 
 /**
@@ -62,13 +72,13 @@ async function createMissingQueues(boss: Boss): Promise<QueueName[]> {
 export async function migrateJobQueues(options: QueueMigrationOptions): Promise<QueueMigration> {
   const boss = (options.createBoss ?? createPgBoss)(ownerBossOptions(options.connectionString));
   boss.on('error', options.onError);
-  let created: QueueName[];
+  let changes: Awaited<ReturnType<typeof createMissingQueues>>;
   try {
     await boss.start();
-    created = await createMissingQueues(boss);
+    changes = await createMissingQueues(boss);
     await waitForIndexBuilds(boss, options.indexBuildWait ?? DEFAULT_INDEX_BUILD_WAIT);
   } finally {
     await boss.stop();
   }
-  return { created, grants: await grantRuntimeAccess(options.db) };
+  return { ...changes, grants: await grantRuntimeAccess(options.db) };
 }

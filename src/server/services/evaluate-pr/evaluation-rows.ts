@@ -5,7 +5,8 @@ import type { PrEvaluationDetails } from '../../../shared/pr-evaluation-details.
 import type { InstallationRowId } from '../../adapters/db/installation-row-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 
-// The rows of `pr_evaluations` the evaluation job writes (E07-S04): `result` and `details`. The two columns of the reporter
+// The rows of `pr_evaluations` the evaluation job writes (E07-S04): `result` and `details`; the dead-letter handler writes
+// `failure` with a code (E07-S05). The two columns of the reporter
 // (`check_run_id`, `comment_id`, E09-S04) are read here and never written, and the upsert keeps them. Every statement
 // filters by the installation, so one tenant never reaches the rows of another.
 
@@ -80,4 +81,55 @@ export async function finishEvaluation(
     .where('id', '=', evaluationId)
     .returning('id')
     .executeTakeFirstOrThrow();
+}
+
+/**
+ * The details of a row whose evaluation could not be completed (E07-S05): a code and nothing else, so no contributor is
+ * named and no field of the engine's schema is claimed. Readers that do not know the code show it as `other`.
+ */
+const FAILED_DETAILS = JSON.stringify({ code: 'evaluation_failed' });
+
+/**
+ * Sets the evaluation of `key` to `failure` with the details `{ "code": "evaluation_failed" }`, creating the row when
+ * there is none (E07-S05): the dead-letter handler's write, one statement, so a retry of the handler leaves one row. A row
+ * that exists keeps its reporter columns and its id.
+ * @returns the id of the row.
+ */
+export async function failEvaluation(db: Kysely<Database>, key: EvaluationKey): Promise<number> {
+  const row = await db
+    .insertInto('pr_evaluations')
+    .values({
+      installation_id: key.installationId,
+      repository_id: key.repositoryId,
+      pr_number: key.prNumber,
+      head_sha: key.headSha,
+      result: 'failure',
+      details: FAILED_DETAILS,
+    })
+    .onConflict((conflict) =>
+      conflict
+        .columns(['repository_id', 'pr_number', 'head_sha'])
+        .doUpdateSet({ result: 'failure', details: FAILED_DETAILS, updated_at: sql`now()` })
+        .where('pr_evaluations.installation_id', '=', key.installationId),
+    )
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return row.id;
+}
+
+/** The rows of the repository of an installation at one head SHA, one per pull request that was evaluated at it, oldest first. */
+export async function evaluationsAtHead(
+  db: Kysely<Database>,
+  tenant: { readonly installationId: InstallationRowId; readonly repositoryId: number },
+  headSha: string,
+): Promise<{ readonly id: number; readonly prNumber: number }[]> {
+  const rows = await db
+    .selectFrom('pr_evaluations')
+    .select(['id', 'pr_number'])
+    .where('installation_id', '=', tenant.installationId)
+    .where('repository_id', '=', tenant.repositoryId)
+    .where('head_sha', '=', headSha)
+    .orderBy('id')
+    .execute();
+  return rows.map((row) => ({ id: row.id, prNumber: row.pr_number }));
 }

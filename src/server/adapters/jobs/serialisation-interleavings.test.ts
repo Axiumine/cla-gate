@@ -29,7 +29,7 @@ vi.setConfig({ testTimeout: 180_000 });
 const SEEDS = 200;
 const SEEDS_PER_TEST = 25;
 const INSTALLATION = parseGithubId(32_001);
-/** pg-boss retries a failed job twice unless told otherwise; a job is failed at most that often, so it never dies. */
+/** The queue retries a failed job five times (E07-S05); a job is failed at most twice here, so it never dies. */
 const FAILURES_PER_JOB = 2;
 
 const ownerUrl = (): string => requireTestDatabaseUrl(inject('testDatabaseUrl'));
@@ -106,6 +106,13 @@ async function liveJobs(owner: Kysely<Database>, key: string, running: number): 
   return (rows[0]?.queued ?? 0) + (rows[0]?.active ?? 0);
 }
 
+/** The retry of a failed job waits for its backoff (30 s or more, E07-S05): the test is the clock, and lets that time pass. */
+async function retryNow(owner: Kysely<Database>, id: string): Promise<void> {
+  await sql`update pgboss.job set start_after = now() where name = 'evaluate-pr' and id = ${id} and state = 'retry'`.execute(
+    owner,
+  );
+}
+
 /** The events of one interleaving, each a call: the sends, the starts of runs, and the ends of runs, and what they leave behind. */
 function createRun(world: Queue, seed: number) {
   const random = seededRandom(seed);
@@ -148,6 +155,7 @@ function createRun(world: Queue, seed: number) {
         failed.set(id, (failed.get(id) ?? 0) + 1);
         failures += 1;
         await world.boss.fail('evaluate-pr', id);
+        await retryNow(world.owner, id);
       } else {
         await world.boss.complete('evaluate-pr', id);
       }

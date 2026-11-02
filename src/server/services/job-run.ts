@@ -19,9 +19,10 @@ export interface QueuedJob {
 }
 
 /**
- * How the queue settles a job whose handler did not throw: `completed` with the handler's outcome, or `deadletter`, which
- * fails the job for good, with no retry (an invalid payload would fail the same way every time). A handler that throws
- * is not a verdict: its job fails and is retried.
+ * How the queue settles a job whose handler did not throw: `completed` with the handler's outcome, or `deadletter`, for
+ * data that is not the job's envelope: it would fail the same way every time, so it is never retried. The queue adapter
+ * turns that verdict into a rejection (E07-S05): the job is completed with `{ rejected: 'invalid_payload' }` and a copy of
+ * its data goes to the dead-letter queue. A handler that throws is not a verdict: its job fails and is retried.
  */
 export interface JobVerdict {
   readonly status: 'completed' | 'deadletter';
@@ -46,7 +47,7 @@ export const JOB_PAYLOAD_INVALID = 'job_payload_invalid';
  * What a zod error says, as `field:code` for each issue (`githubRepoId:invalid_type`, `(object):unrecognized_keys`): the
  * names of the fields of the schema and zod's own codes, never a value and never the name of a key somebody added.
  */
-function issuesOf(error: {
+export function issuesOf(error: {
   readonly issues: readonly { readonly path: readonly PropertyKey[]; readonly code: string }[];
 }): string[] {
   return error.issues.map(

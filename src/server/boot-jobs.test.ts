@@ -8,6 +8,7 @@ import type { InstallationWiring } from './boot-installations.ts';
 import { jobWorkers } from './boot-jobs.ts';
 import { deliveryIdSchema } from './domain/delivery-id.ts';
 import { JOB_TYPES } from './domain/job-envelope.ts';
+import { deadLetterRegistry } from './services/dead-letter/dead-letter-registry.ts';
 import { evaluateWorld, JOB } from './services/evaluate-pr/test-support.ts';
 import type { InstallationSync } from './services/installation-sync.ts';
 import { HandlerUnavailableError } from './services/job-handlers.ts';
@@ -139,4 +140,31 @@ test('the GitHub client of an evaluation is bound to the signal of the job: an a
     reason,
   );
   expect(world.calls()).toEqual([]);
+});
+
+test('the dead-letter handlers get the database, and no way to report while there is no GitHub App or no reporter (E07-S05)', async () => {
+  const { db, workers } = await wiring(undefined);
+  expect(workers.deadLetter?.db).toBe(db);
+  expect(workers.deadLetter?.evaluation).toBeUndefined();
+});
+
+test('with GitHub and a reporter a dead evaluate-pr is failed through the reporter, with GitHub bound to the signal of the dead-letter job', async () => {
+  const { world, workers } = await evaluating();
+  expect(workers.deadLetter?.evaluation).toBeTypeOf('function');
+  const registry = deadLetterRegistry(workers.deadLetter ?? { db: world.raw, evaluation: undefined }, workers.clock);
+  const outcome = await registry.run('evaluate-pr', JOB, { ...CONTEXT, signal: new AbortController().signal });
+  expect(outcome).toEqual({ outcome: 'reported' });
+  expect(world.reporter.failures.map((failure) => failure.code)).toEqual(['evaluation_failed']);
+  expect((await world.rows()).map((row) => row.result)).toEqual(['failure']);
+});
+
+test('an aborted dead-letter job asks GitHub for nothing', async () => {
+  const { world, workers } = await evaluating();
+  const registry = deadLetterRegistry(workers.deadLetter ?? { db: world.raw, evaluation: undefined }, workers.clock);
+  const reason = new Error('the worker is shutting down');
+  await expect(registry.run('evaluate-pr', JOB, { ...CONTEXT, signal: AbortSignal.abort(reason) })).rejects.toBe(
+    reason,
+  );
+  expect(world.calls()).toEqual([]);
+  expect(world.reporter.failures).toEqual([]);
 });

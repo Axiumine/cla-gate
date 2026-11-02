@@ -19,7 +19,7 @@ const SOME_FUNCTION: unknown = expect.any(Function);
 type QueueStep = NonNullable<MigrateCliOptions['queueStep']>;
 
 /** The queue step of E07-S01 with pg-boss out of the picture: it finds every queue in place and the grants done. */
-const upToDate = (): Promise<QueueMigration> => Promise.resolve({ created: [], grants: 'granted' });
+const upToDate = (): Promise<QueueMigration> => Promise.resolve({ created: [], updated: [], grants: 'granted' });
 
 /** Capturing sinks and a queue step that changes nothing, for the tests that are about the migrations. */
 function sinks(queueStep: QueueStep = upToDate): {
@@ -169,7 +169,7 @@ test('the queue step runs after the migrations, on the connection of the owner, 
   const queueStep = vi.fn<QueueStep>(async () => {
     out.push('queue step');
     await expect(sql`select 1`.execute(db)).resolves.toBeDefined();
-    return { created: [], grants: 'granted' };
+    return { created: [], updated: [], grants: 'granted' };
   });
   const directory = await writeMigrationDirectory(A);
   expect(await runMigrateCli({ env: ENV, directory, connect: () => db, ...io, queueStep })).toBe(0);
@@ -195,16 +195,40 @@ test('errors pg-boss reports on its own connections are reported like those of t
 
 test('the queues the step created are listed in order', async () => {
   const db = await openPgliteDatabase();
-  const queueStep: QueueStep = () => Promise.resolve({ created: ['evaluate-pr', 'sweep'], grants: 'granted' });
+  const queueStep: QueueStep = () =>
+    Promise.resolve({ created: ['evaluate-pr', 'sweep'], updated: [], grants: 'granted' });
   const { out, io } = sinks(queueStep);
   const directory = await writeMigrationDirectory({});
   expect(await runMigrateCli({ env: ENV, directory, connect: () => db, ...io })).toBe(0);
   expect(out).toEqual(['migrations: up to date', 'job queues created: evaluate-pr, sweep']);
 });
 
+test('the queues the step brought in line with the definitions (E07-S05) are listed after the created ones, and then the queues are not up to date', async () => {
+  const db = await openPgliteDatabase();
+  const queueStep: QueueStep = () =>
+    Promise.resolve({ created: ['job-dead-letter'], updated: ['evaluate-pr', 'sweep'], grants: 'granted' });
+  const { out, io } = sinks(queueStep);
+  const directory = await writeMigrationDirectory({});
+  expect(await runMigrateCli({ env: ENV, directory, connect: () => db, ...io })).toBe(0);
+  expect(out).toEqual([
+    'migrations: up to date',
+    'job queues created: job-dead-letter',
+    'job queues updated: evaluate-pr, sweep',
+  ]);
+});
+
+test('queues that only needed their bounds brought in line say so and are not reported as up to date', async () => {
+  const db = await openPgliteDatabase();
+  const queueStep: QueueStep = () => Promise.resolve({ created: [], updated: ['sweep'], grants: 'granted' });
+  const { out, io } = sinks(queueStep);
+  const directory = await writeMigrationDirectory({});
+  expect(await runMigrateCli({ env: ENV, directory, connect: () => db, ...io })).toBe(0);
+  expect(out).toEqual(['migrations: up to date', 'job queues updated: sweep']);
+});
+
 test('without the runtime role the skipped grants are said, on a line of their own', async () => {
   const db = await openPgliteDatabase();
-  const queueStep: QueueStep = () => Promise.resolve({ created: [], grants: 'skipped' });
+  const queueStep: QueueStep = () => Promise.resolve({ created: [], updated: [], grants: 'skipped' });
   const { out, io } = sinks(queueStep);
   const directory = await writeMigrationDirectory({});
   expect(await runMigrateCli({ env: ENV, directory, connect: () => db, ...io })).toBe(0);

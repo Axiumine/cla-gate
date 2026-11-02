@@ -9,7 +9,9 @@ import {
   type SendOptions,
   type StopOptions,
 } from 'pg-boss';
-import { PGBOSS_SCHEMA, type QueuePolicy } from './queues.ts';
+import type { QueueUpdate } from './queue-options.ts';
+import type { ExistingQueue } from './queue-policy.ts';
+import { PGBOSS_SCHEMA, type QueueSettings } from './queues.ts';
 
 // The part of pg-boss this application uses, and the two ways it is started (E07-S01). The queue code depends on
 // {@link Boss}, not on the class, so a test hands it a fake and the 100% gate holds on PGlite (pg-boss itself needs a
@@ -18,12 +20,18 @@ import { PGBOSS_SCHEMA, type QueuePolicy } from './queues.ts';
 /** What a worker settles one job with: pg-boss's `JobResult`, whose `output` is an object (pg-boss types it `any`). */
 export type WorkerResult = JobResult<object>;
 
-/** A job as the handler of a worker receives it: what the wrapper of E07-S03 reads of pg-boss's own `Job`. */
-export type WorkerJob = Pick<Job, 'id' | 'data' | 'retryCount' | 'signal'>;
+/**
+ * A job as the handler of a worker receives it: what the wrapper of E07-S03 reads of pg-boss's own `Job`. The data is
+ * `unknown`: pg-boss types it as an object, but the column is nullable JSON, and the wrapper does not trust it (E07-S05).
+ */
+export interface WorkerJob extends Pick<Job, 'id' | 'retryCount' | 'signal'> {
+  readonly data: unknown;
+}
 
 /**
  * How a queue is worked (E07-S03): `localConcurrency` jobs of the queue at once in this process, one job per fetch, and
- * the handler settles every job itself, so a job can fail for good (`deadletter`) without a retry.
+ * the handler settles every job itself with its own output, so a job whose data is invalid is completed as rejected
+ * (E07-S05) instead of being retried.
  */
 export interface WorkerOptions {
   readonly localConcurrency: number;
@@ -44,10 +52,15 @@ export interface Boss {
   /** Starts working `name`: `handler` gets the jobs fetched and answers how each one is settled. */
   work(name: string, options: WorkerOptions, handler: (jobs: WorkerJob[]) => Promise<WorkerResult[]>): Promise<string>;
   on(event: 'error', listener: (error: Error) => void): unknown;
-  /** Creates the queue with the policy and the expiry of `options` (E07-S02); a policy cannot be changed afterwards. */
-  createQueue(name: string, options: { readonly policy: QueuePolicy; readonly expireInSeconds: number }): Promise<void>;
-  /** The queues of these names that exist, with the policy each was created with (`standard` when pg-boss gives none). */
-  getQueues(names: string[]): Promise<readonly { readonly name: string; readonly policy?: string }[]>;
+  /**
+   * Creates the queue with the policy, the bounds and the dead-letter queue of `options` (E07-S02, E07-S05); a policy cannot
+   * be changed afterwards, and a dead-letter queue must exist before a queue names it.
+   */
+  createQueue(name: string, options: QueueSettings): Promise<void>;
+  /** Changes the bounds and the dead-letter queue of a queue that exists (E07-S05). The policy is not among them: it cannot change. */
+  updateQueue(name: string, options: QueueUpdate): Promise<void>;
+  /** The queues of these names that exist, with the policy (`standard` when pg-boss gives none), the bounds and the dead-letter queue each has. */
+  getQueues(names: string[]): Promise<readonly ExistingQueue[]>;
   /** The background index builds a pg-boss migration queued, counted by status. */
   getBamStatus(): Promise<readonly { readonly status: string; readonly count: number }[]>;
   /** The id of the job, or `null` when nothing was inserted (the id exists, or a throttle window or a queue policy refused it). */
