@@ -22,3 +22,11 @@ export function compareShaThenRole(
 ): number {
   return compareText(a.sha, b.sha) || compareText(a.role, b.role);
 }
+
+/** Orders advisories by commit SHA, then by code (E08-S06), plain codes again, so the order is the same everywhere. */
+export function compareAdvisories(
+  a: { readonly sha: string; readonly code: string },
+  b: { readonly sha: string; readonly code: string },
+): number {
+  return compareText(a.sha, b.sha) || compareText(a.code, b.code);
+}

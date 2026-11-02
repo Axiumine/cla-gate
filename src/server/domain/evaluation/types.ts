@@ -76,6 +76,15 @@ export interface CommitFacts {
   readonly rawCommitter: RawIdentity;
 }
 
+/**
+ * A finding that never blocks a pull request, only informs the maintainer (E08-S06). It names a commit and a code and
+ * nothing else: no name, login or email of the trailer it is about.
+ */
+export interface Advisory {
+  readonly code: AdvisoryCode;
+  readonly sha: string;
+}
+
 /** The CLA a repository enforces: one document, and the major version signatures must match. `null` means none. */
 export interface Policy {
   readonly documentId: number;

@@ -15,6 +15,11 @@ function isExemptCommitter(committer: Account, author: Account | null): boolean 
   return committer.id === GITHUB_WEB_FLOW_ID || committer.id === author?.id;
 }
 
+/** A commit with more than one parent is a merge: the engine skips all of it, its identities and its trailers. */
+export function isMergeCommit(commit: CommitFacts): boolean {
+  return commit.parents.length > 1;
+}
+
 function recordFinding(
   findings: Map<string, UnlinkedFinding>,
   sha: string,
@@ -56,7 +61,7 @@ export function extractActors(input: EvaluationInput): ActorExtraction {
   recordSighting(sightings, input.opener, 'opener');
   for (const commit of input.commits) {
     const sha = commit.sha.toLowerCase();
-    if (commit.parents.length > 1) {
+    if (isMergeCommit(commit)) {
       merges.add(sha);
     } else {
       readCommit(commit, sha, sightings, findings);

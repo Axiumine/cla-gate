@@ -49,3 +49,28 @@ export function sightingsToActors(sightings: ReadonlyMap<number, Sighting>): Ext
       shas: [...sighting.shas].sort(compareText),
     }));
 }
+
+/**
+ * Two lists of actors as one: actors with the same numeric id become one, with the union of their roles and commits.
+ * The type is the strictest of the two (`preferred`), so a co-author that merely claims an id never loosens an account
+ * that GitHub told us is a bot (E08-S06).
+ */
+export function mergeActors(first: readonly ExtractedActor[], second: readonly ExtractedActor[]): ExtractedActor[] {
+  const sightings = new Map<number, Sighting>();
+  for (const actor of [...first, ...second]) {
+    const sighting = sightings.get(actor.account.id) ?? {
+      account: actor.account,
+      roles: new Set<Role>(),
+      shas: new Set<string>(),
+    };
+    sighting.account = preferred(sighting.account, actor.account);
+    for (const role of actor.roles) {
+      sighting.roles.add(role);
+    }
+    for (const commitSha of actor.shas) {
+      sighting.shas.add(commitSha);
+    }
+    sightings.set(actor.account.id, sighting);
+  }
+  return sightingsToActors(sightings);
+}

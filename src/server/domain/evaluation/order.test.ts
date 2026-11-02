@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { compareShaThenRole, compareText } from './order.ts';
+import { compareAdvisories, compareShaThenRole, compareText } from './order.ts';
 
 test.each([
   ['equal strings', 'abc', 'abc', 0],
@@ -30,4 +30,39 @@ test.each([
   ['the same SHA and role are equal', { sha: 'aa', role: 'author' }, { sha: 'aa', role: 'author' }, 0],
 ])('compareShaThenRole orders %s', (_name, a, b, expected) => {
   expect(compareShaThenRole(a, b)).toBe(expected);
+});
+
+test.each([
+  [
+    'a lower SHA first, whatever the codes',
+    { sha: 'aa', code: 'too_many_trailers' },
+    { sha: 'ab', code: 'co_author_unresolved' },
+    -1,
+  ],
+  [
+    'a higher SHA second, whatever the codes',
+    { sha: 'ab', code: 'co_author_unresolved' },
+    { sha: 'aa', code: 'too_many_trailers' },
+    1,
+  ],
+  [
+    'the same SHA: co_author_unresolved before too_many_trailers',
+    { sha: 'aa', code: 'co_author_unresolved' },
+    { sha: 'aa', code: 'too_many_trailers' },
+    -1,
+  ],
+  [
+    'the same SHA: too_many_trailers after co_author_unresolved',
+    { sha: 'aa', code: 'too_many_trailers' },
+    { sha: 'aa', code: 'co_author_unresolved' },
+    1,
+  ],
+  [
+    'the same SHA and code are equal',
+    { sha: 'aa', code: 'too_many_trailers' },
+    { sha: 'aa', code: 'too_many_trailers' },
+    0,
+  ],
+])('compareAdvisories orders %s', (_name, a, b, expected) => {
+  expect(compareAdvisories(a, b)).toBe(expected);
 });

@@ -7,6 +7,7 @@ import * as vocabulary from './types.ts';
 test('the engine exposes exactly its vocabulary so far, and nothing it did not mean to', () => {
   expect(Object.keys(evaluation).sort((a, b) => a.localeCompare(b))).toEqual([
     'ACCOUNT_TYPES',
+    'addCoAuthors',
     'ADVISORY_CODES',
     'ALLOWLIST_KINDS',
     'ALLOWLIST_SCOPES',
@@ -17,7 +18,11 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'FAILURE_CODES',
     'FIX_CODES',
     'GITHUB_WEB_FLOW_ID',
+    'IGNORED_TRAILER_IDENTITIES',
+    'isMergeCommit',
     'matchAllowlist',
+    'MAX_TRAILERS_PER_COMMIT',
+    'parseCoAuthors',
     'ROLES',
     'storedUnlinked',
   ]);

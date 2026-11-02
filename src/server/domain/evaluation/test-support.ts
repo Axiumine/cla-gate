@@ -123,3 +123,18 @@ export function shuffled<T>(items: readonly T[], seed: number): T[] {
     .sort((a, b) => a.key - b.key)
     .map((keyed) => keyed.item);
 }
+
+/** `ID+login@users.noreply.github.com`, the address a `Co-authored-by` trailer resolves from (E08-S06). */
+export function noreplyEmail(id: number | string, login = 'someone'): string {
+  return `${id}+${login}@users.noreply.github.com`;
+}
+
+/** A trailer line as git writes it. The key is a parameter because its case is a rule of its own. */
+export function coAuthoredBy(email: string, name = 'Some Person', key = 'Co-authored-by'): string {
+  return `${key}: ${name} <${email}>`;
+}
+
+/** A commit message with a subject, a body paragraph and a final paragraph made of `lines`. */
+export function messageEndingWith(...lines: readonly string[]): string {
+  return ['Subject line', '', 'Body paragraph.', '', ...lines].join('\n');
+}
