@@ -19,6 +19,7 @@
     "!scripts/code-caps/test-support.ts!",
     "!scripts/escape-hatches/eslint-config.ts!",
     "!scripts/ci/**!",
+    "!scripts/ci-contract/**!",
     "!scripts/dev/**!",
     "!scripts/e2e/**!",
     "!scripts/leaks/**!",

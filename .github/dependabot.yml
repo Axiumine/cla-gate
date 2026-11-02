@@ -38,6 +38,15 @@ updates:
         patterns: ["vitest", "@vitest/*"]
       eslint:
         patterns: ["eslint", "@eslint/*", "eslint-plugin-*", "typescript-eslint"]
+      # Lockstep packages (E20-S09). A dependency joins the first group that matches it, so these stay above dev-tooling's "*"
+      # and set no update-types: a major bump of one has to carry the others. scripts/ci-contract.test.ts asserts all of this.
+      # @playwright/test also names the browser image (scripts/e2e-pin.test.ts fails until the image tags follow).
+      playwright:
+        patterns: ["@playwright/test"]
+      stryker:
+        patterns: ["@stryker-mutator/*"]
+      memlab:
+        patterns: ["memlab", "@memlab/api"]
       dev-tooling:
         patterns: ["*"]
         update-types: ["minor", "patch"]
