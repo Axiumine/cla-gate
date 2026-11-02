@@ -23,8 +23,12 @@ const OUTPUT_DIRS: ReadonlySet<string> = new Set([
   'test-results',
 ]);
 
-/** Tracked + untracked-but-not-ignored source files, or `undefined` outside a git repo. */
-function gitFiles(root: string): string[] | undefined {
+/**
+ * Tracked + untracked-but-not-ignored source files (tracked first), or `undefined` when git cannot list them (not a
+ * repository, git not installed).
+ * @internal Exported for the unit tests.
+ */
+export function gitFiles(root: string): string[] | undefined {
   const pathspec = [...EXTENSIONS].map((extension) => `*${extension}`);
   const args = ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...pathspec];
   try {
@@ -33,6 +37,7 @@ function gitFiles(root: string): string[] | undefined {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: Number.POSITIVE_INFINITY,
+      // Stryker disable next-line ArrayDeclaration: git is given no input and its stderr is never shown, so a closed input pipe and a dropped error pipe behave exactly like 'ignore'
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     return out.split('\0').filter((name) => name !== '');
@@ -41,8 +46,12 @@ function gitFiles(root: string): string[] | undefined {
   }
 }
 
-/** Every file below `dir` (posix paths relative to the root), pruning tool and output directories. */
-function walkFiles(root: string, dir = ''): string[] {
+/**
+ * Every file below `dir` (posix paths relative to the root, whatever the extension), pruning tool and output
+ * directories.
+ * @internal Exported for the unit tests.
+ */
+export function walkFiles(root: string, dir = ''): string[] {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- developer CLI: walks the repository root given by --root or the cwd
   const entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
   return entries.flatMap((entry) => {
@@ -57,6 +66,7 @@ function walkFiles(root: string, dir = ''): string[] {
 
 function isSource(root: string, rel: string): boolean {
   const parts = rel.split('/');
+  // Stryker disable next-line MethodExpression: no tool directory name has a source extension, so the file name itself can never be one and checking it too changes nothing
   const inToolDir = parts.slice(0, -1).some((part) => TOOL_DIRS.has(part));
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- developer CLI: entry of the repository file list
   const isFile = fs.statSync(path.join(root, rel), { throwIfNoEntry: false })?.isFile() === true;

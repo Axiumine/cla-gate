@@ -510,6 +510,9 @@ jobs:
   # nightly run always adds --force, so the cache cannot hide a regression for longer than a day. The report is uploaded
   # even when the score is below the threshold. Mutation never runs in a git hook. `--logLevel debug` is never used: it
   # crashes with Vitest 5 (Stryker issue 6272). No secret, no network beyond the package registry.
+  # The same job runs a second scope (E20-S05), `yarn mutate:scripts` = `STRYKER_SCOPE=scripts stryker run --incremental`,
+  # for the code caps tool, with its own incremental file and its own cache, so neither scope can spoil the other's cache.
+  # It runs after the server scope succeeded, and both reports land in the one uploaded artifact.
   mutation:
     name: mutation
     needs: static
@@ -580,6 +583,12 @@ jobs:
           path: reports/stryker-incremental.json
           key: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts') }}-${{ github.sha }}
           restore-keys: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts') }}-
+      - name: Restore the Stryker incremental file (scripts scope)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental-scripts.json
+          key: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.scripts.json') }}-${{ github.sha }}
+          restore-keys: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.scripts.json') }}-
       # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command.
       - name: Mutation tests
         env:
@@ -590,6 +599,16 @@ jobs:
             yarn mutate --force
           else
             yarn mutate
+          fi
+      - name: Mutation tests (scripts scope)
+        env:
+          MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
+        run: |
+          set -eu
+          if [ "$MUTATE_FORCE" = "true" ]; then
+            yarn mutate:scripts --force
+          else
+            yarn mutate:scripts
           fi
       - name: Upload the mutation report
         if: ${{ always() }}

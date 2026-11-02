@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { countLines, dedupeNames, measureSource } from './measure.ts';
-import { block, classBlock, func, kinds } from './test-support.ts';
+import { block, causeOf, classBlock, func, kinds } from './test-support.ts';
 import { CapsError, type Measure } from './types.ts';
 
 // --------------------------------------------------------------------------- function length
@@ -181,8 +181,27 @@ test('JSX is a syntax error outside .tsx and TypeScript is one inside .js', () =
   expect(measureSource('const a = 1;', 'a.cjs')).toEqual([]);
 });
 
-test('an expression too deep to walk is reported with the file name', () => {
+test('an expression too deep to walk is reported with the file name and keeps the original error as its cause', () => {
   const source = `const s = ${Array.from({ length: 50_000 }, () => '1').join(' + ')};`;
-  expect(() => measureSource(source, 'deep.ts')).toThrow(/^deep\.ts: cannot measure: RangeError/);
-  expect(() => measureSource(source, 'deep.ts')).toThrow(CapsError);
+  const measure = (): unknown => measureSource(source, 'deep.ts');
+  expect(measure).toThrow(/^deep\.ts: cannot measure: RangeError/);
+  expect(measure).toThrow(CapsError);
+  expect(causeOf(measure)).toBeInstanceOf(RangeError);
+});
+
+test('a syntax error in JavaScript is reported with the file and the line, like one in TypeScript', () => {
+  expect(() => measureSource('const a = 1;\nconst b = 2;\nconst = ;\n', 'bad.js')).toThrow(/^bad\.js:3: /);
+  expect(() => measureSource('const a = 1;\nlet b: number;\n', 'types.mjs')).toThrow(/^types\.mjs:2: /);
+});
+
+test.each(['m.ts', 'm.js', 'm.mjs'])(
+  'an import of a module that does not exist raises no resolution error (%s)',
+  (name) => {
+    const source = `import missing from './does-not-exist.ts';\nimport lib from 'not-installed';\nexport { lib, missing };\n`;
+    expect(measureSource(source, name)).toEqual([]);
+  },
+);
+
+test('a global type from a library that is not loaded raises no error: only the syntax is checked', () => {
+  expect(measureSource('const all = new Map<string, Promise<unknown>>();\nexport { all };\n', 'm.ts')).toEqual([]);
 });

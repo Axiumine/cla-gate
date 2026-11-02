@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import path from 'node:path';
 import { expect, test } from 'vitest';
 import { sourceFiles } from '../code-caps/files.ts';
 import { ROOT, repoText } from './test-support.ts';
@@ -87,7 +88,11 @@ test('the problems are numbered by line', () => {
   ]);
 });
 
-test('every suppression in this repository names its rule and gives a reason', () => {
+// A Stryker sandbox (E20-S05) is a copy of the work tree inside the git-ignored .stryker-tmp directory, where git lists no
+// file, so the repository-wide scan has nothing to read there. It runs for real in the test and coverage jobs.
+const inMutationSandbox = ROOT.split(path.sep).includes('.stryker-tmp');
+
+test.skipIf(inMutationSandbox)('every suppression in this repository names its rule and gives a reason', () => {
   const files = sourceFiles(ROOT);
   expect(files.length).toBeGreaterThan(100);
   const bad = files.flatMap((file) => problems(repoText(file)).map((problem) => `${file}:${problem}`));

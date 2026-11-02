@@ -29,6 +29,7 @@
     "fta": "fta . --config-path fta.json",
     "caps": "node scripts/check-code-caps.ts",
     "mutate": "stryker run --incremental",
+    "mutate:scripts": "STRYKER_SCOPE=scripts stryker run --incremental",
     "semgrep": "semgrep scan --config p/typescript --config p/javascript --config p/react --config p/nodejsscan --config p/secrets --error --metrics off --disable-version-check",
     "semgrep:rules": "node scripts/fetch-semgrep-rules.ts",
     "semgrep:offline": "semgrep scan --config rules/ --error --metrics off --disable-version-check",

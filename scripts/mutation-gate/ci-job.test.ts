@@ -9,12 +9,14 @@ import { tempDir } from '../code-caps/test-support.ts';
 import { ciJob, repoText } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from '../trivy-gate/test-support.ts';
 
-// E20-S04: the `mutation` job of .github/workflows/ci.yml, the manual trigger, and the step that decides on --force run for
-// real in bash against a stub yarn.
+// E20-S04 and E20-S05: the `mutation` job of .github/workflows/ci.yml with its two scopes (server and shared code, then the
+// scripts scope), the manual trigger, and the steps that decide on --force run for real in bash against a stub yarn.
 
 const job = ciJob('mutation');
 const CACHE = 'Restore the Stryker incremental file';
+const SCRIPTS_CACHE = 'Restore the Stryker incremental file (scripts scope)';
 const RUN = 'Mutation tests';
+const SCRIPTS_RUN = 'Mutation tests (scripts scope)';
 const UPLOAD = 'Upload the mutation report';
 const ciText = repoText('.github/workflows/ci.yml');
 
@@ -60,7 +62,7 @@ test('the job asks for no more than contents: read, holds no secret and cannot b
   expect(ciText).not.toMatch(/\$\{\{\s*secrets\./);
 });
 
-test('the steps are the standard Node and Yarn setup, then the cache, the run and the upload, in that order', () => {
+test('the steps are the standard Node and Yarn setup, the two caches, the two runs and the upload, in that order', () => {
   expect(job.steps.map((each) => each.name)).toEqual([
     'Preflight (runner capabilities)',
     'Keep tool state in the runner temp directory',
@@ -70,7 +72,9 @@ test('the steps are the standard Node and Yarn setup, then the cache, the run an
     'Restore the Yarn cache',
     'Install dependencies',
     CACHE,
+    SCRIPTS_CACHE,
     RUN,
+    SCRIPTS_RUN,
     UPLOAD,
   ]);
   expect(step('Install dependencies').run).toBe('yarn install --immutable');
@@ -101,6 +105,48 @@ test('the Vitest files the mutation run reads are part of the cache key too', ()
   expect(hashedFiles(key)).toEqual(expect.arrayContaining(['vitest.projects.ts', 'vitest.stryker.config.ts']));
 });
 
+/** A file name as `hashFiles` takes it: in single quotes. */
+function quoted(file: string): string {
+  return `'${file}'`;
+}
+
+/** The cache key (or the `restore-keys` prefix) of the scripts scope for a hash of `files`. */
+function scriptsPrefix(files: readonly string[]): string {
+  const hashed = expression(`hashFiles(${files.map(quoted).join(', ')})`);
+  return `stryker-scripts-${expression('runner.os')}-${hashed}-`;
+}
+
+test('the scripts scope has its own incremental file and cache, keyed by what makes an old result untrustworthy', () => {
+  const restore = step(SCRIPTS_CACHE);
+  expect(restore.uses).toBe(step(CACHE).uses);
+  const key = z.string().parse(restore.with?.['key']);
+  const prefix = scriptsPrefix(hashedFiles(key));
+  expect(restore.with).toEqual({
+    path: 'reports/stryker-incremental-scripts.json',
+    key: `${prefix}${expression('github.sha')}`,
+    'restore-keys': prefix,
+  });
+  expect(hashedFiles(key)).toEqual(
+    expect.arrayContaining([
+      'yarn.lock',
+      '.nvmrc',
+      'stryker.config.mjs',
+      'vitest.config.ts',
+      'vitest.projects.ts',
+      'vitest.stryker-scripts.config.ts',
+      'tsconfig.scripts.json',
+    ]),
+  );
+});
+
+test('the two caches share no file and no key prefix, so neither scope restores the result of the other', () => {
+  const server = step(CACHE).with;
+  const scripts = step(SCRIPTS_CACHE).with;
+  expect(scripts?.['path']).not.toBe(server?.['path']);
+  expect(z.string().parse(scripts?.['key']).startsWith(z.string().parse(server?.['restore-keys']))).toBe(false);
+  expect(z.string().parse(server?.['key']).startsWith(z.string().parse(scripts?.['restore-keys']))).toBe(false);
+});
+
 test('a manual run has a boolean force input that defaults to false, and the nightly schedule exists', () => {
   expect(workflow.on.workflow_dispatch.inputs.force).toMatchObject({ type: 'boolean', default: false });
   expect(workflow.on.workflow_dispatch.inputs.force.description).not.toBe('');
@@ -118,12 +164,12 @@ test('--force is decided in an environment variable that is true on the schedule
   expect(run.if).toBeUndefined();
 });
 
-/** Runs the Mutation tests step in bash with a stub yarn (`body` is its script), and returns the exit status and its calls. */
-function mutationStep(force: string, body = 'echo "$@" >> "$0.calls"') {
+/** Runs a mutation step in bash with a stub yarn (`body` is its script), and returns the exit status and its calls. */
+function mutationStep(force: string, body = 'echo "$@" >> "$0.calls"', name = RUN) {
   const bin = tempDir();
   const yarn = path.join(bin, 'yarn');
   writeExecutable(yarn, `#!/bin/sh\n${body}\n`);
-  const script = step(RUN).run ?? '';
+  const script = step(name).run ?? '';
   const result = spawnSync(findOnPath('bash'), ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script], {
     env: { PATH: `${bin}${path.delimiter}${path.dirname(findOnPath('bash'))}`, MUTATE_FORCE: force },
     encoding: 'utf8',
@@ -145,6 +191,32 @@ test.each(['false', ''])(
 
 test('a failing mutation run fails the step, so a score below the threshold fails the job', () => {
   expect(mutationStep('false', 'exit 1')).toEqual({ status: 1, commands: [] });
+});
+
+test('the scripts scope decides on --force the same way, in an environment variable and not in the command', () => {
+  const run = step(SCRIPTS_RUN);
+  expect(run.env).toEqual(step(RUN).env);
+  expect(run.run).not.toContain('${{');
+  expect(run.if).toBeUndefined();
+});
+
+test('a scheduled or forced run executes yarn mutate:scripts --force', () => {
+  expect(mutationStep('true', undefined, SCRIPTS_RUN)).toEqual({ status: 0, commands: ['mutate:scripts --force'] });
+});
+
+test.each(['false', ''])('a run that is not forced (%j) executes plain yarn mutate:scripts', (force) => {
+  expect(mutationStep(force, undefined, SCRIPTS_RUN)).toEqual({ status: 0, commands: ['mutate:scripts'] });
+});
+
+test('a failing scripts-scope run fails its step, so a score below the threshold fails the job', () => {
+  expect(mutationStep('false', 'exit 1', SCRIPTS_RUN)).toEqual({ status: 1, commands: [] });
+});
+
+test('the scripts scope runs right after the server scope and before the upload, which picks up both reports', () => {
+  const names = job.steps.map((each) => each.name);
+  expect(names.indexOf(SCRIPTS_RUN)).toBe(names.indexOf(RUN) + 1);
+  expect(names.indexOf(SCRIPTS_RUN)).toBeLessThan(names.indexOf(UPLOAD));
+  expect(step(UPLOAD).with?.['path']).toBe('reports/mutation/');
 });
 
 test('the report is uploaded as mutation-report for seven days, also when an earlier step failed, and it is the last step', () => {

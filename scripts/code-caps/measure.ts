@@ -12,11 +12,14 @@ const PARSE_OPTIONS: ts.CompilerOptions = { noLib: true, noResolve: true, allowJ
 function parse(source: string, rel: string): ts.SourceFile {
   const file = ts.createSourceFile(rel, source, ts.ScriptTarget.Latest, true);
   const host = ts.createCompilerHost(PARSE_OPTIONS);
+  // Stryker disable next-line ArrowFunction: the syntactic diagnostics are read from the file itself and the program only carries them, so what the host hands out changes nothing
   host.getSourceFile = () => file;
+  // Stryker disable next-line ArrayDeclaration: same reason, the list of root files does not change the diagnostics of `file`
   const program = ts.createProgram({ rootNames: [rel], options: PARSE_OPTIONS, host });
   const [first] = program.getSyntacticDiagnostics(file);
   if (first !== undefined) {
     const line = file.getLineAndCharacterOfPosition(first.start).line + 1;
+    // Stryker disable next-line StringLiteral: the parser's messages are plain strings, never chains, so the line separator is never used
     throw new CapsError(`${rel}:${line}: ${ts.flattenDiagnosticMessageText(first.messageText, '\n')}`);
   }
   return file;

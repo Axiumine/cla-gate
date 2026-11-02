@@ -105,6 +105,16 @@ export function depthOf(statements: string, rel = 'm.ts'): number {
   return nestingDepth(ts.createSourceFile(rel, statements, ts.ScriptTarget.Latest, true).statements);
 }
 
+/** The `cause` of the error that `action` throws; `undefined` when it throws nothing or something that is not an error. */
+export function causeOf(action: () => unknown): unknown {
+  try {
+    action();
+  } catch (error) {
+    return error instanceof Error ? error.cause : undefined;
+  }
+  return undefined;
+}
+
 export function capture(): { io: Io; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];

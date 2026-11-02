@@ -39,6 +39,7 @@ function bodyBranches(stmt: ts.Statement): Branch[] {
   if (ts.isLabeledStatement(stmt)) {
     return [{ stmts: asList(stmt.statement), offset: 0 }];
   }
+  // Stryker disable next-line BooleanLiteral: a labelled statement is answered by the branch above, so no label is ever left for this call to look through
   if (ts.isIterationStatement(stmt, false) || ts.isWithStatement(stmt)) {
     return [{ stmts: asList(stmt.statement), offset: 1 }];
   }

@@ -26,6 +26,7 @@ export function compareNames(a: string, b: string): number {
   if (a === b) {
     return 0;
   }
+  // Stryker disable next-line EqualityOperator: equal names returned above, so `a` and `b` differ here and `<=` gives the same answer as `<`
   return a < b ? -1 : 1;
 }
 
