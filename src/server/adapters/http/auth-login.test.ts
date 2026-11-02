@@ -143,6 +143,19 @@ test('a return_to with characters outside ASCII is percent-encoded, so the redir
   expect(member.headers.location).toBe('/caf%C3%A9/%E4%B8%AD');
 });
 
+test.each([
+  ['511 CJK characters, which resolve to a path of 4599', `/${'中'.repeat(511)}`, '/'],
+  ['an accented path that resolves to 513 characters', `/${'é'.repeat(85)}aa`, '/'],
+  ['the longest path that is kept, in the characters the cookie encodes three-fold', `/a${'/'.repeat(510)}`, undefined],
+])('a return_to of %s never makes the attempt cookie too big for a browser', async (_label, value, expected) => {
+  const { app } = await world();
+  const response = await app.inject({ url: '/api/auth/login', query: { return_to: value } });
+  expect(response.statusCode).toBe(302);
+  const sent = sentAttempt(response.headers['set-cookie']);
+  expect(sent.attempt.r).toBe(expected ?? value);
+  expect(sent.header.length).toBeLessThan(4096);
+});
+
 test('a second login start overwrites the first: same cookie name, a new state, so the earlier tab ends in a mismatch', async () => {
   const { app } = await world();
   const first = await app.inject('/api/auth/login?return_to=%2Fone');

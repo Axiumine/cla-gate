@@ -33,10 +33,12 @@ function decoded(text: string): string | undefined {
  * origin `http://localhost`. Anything else, a missing value included, becomes `/`; it is never an error. A query string
  * is allowed, so `/sign/123?pr=45` survives.
  *
- * Two checks go beyond the text of the value, because the answer ends up in a `Location` header and in a cookie:
- * the percent-decoded value must pass the same character rules (`/%0d%0aSet-Cookie:x` hides a line break), and the
+ * Three checks go beyond the text of the value, because the answer ends up in a `Location` header and in a cookie:
+ * the percent-decoded value must pass the same character rules (`/%0d%0aSet-Cookie:x` hides a line break), the
  * resolved path must not begin with `//` (`/..//evil.example` is a path on this site that a later reader of it as a
- * link would take for another host). The answer is the resolved path, query and fragment, so it holds only printable
+ * link would take for another host), and the resolved path is at most 512 characters too (the parser percent-encodes a
+ * character outside ASCII to up to 9, so a value within the bound can resolve to far more, and the signed cookie that
+ * carries the answer would outgrow the 4096 bytes a browser keeps). The answer is the resolved path, query and fragment, so it holds only printable
  * ASCII (the parser percent-encodes the rest, and a header with a wider character would throw) and has its `..`
  * segments applied.
  */
@@ -51,5 +53,6 @@ export function safeReturnTo(raw: string | undefined): string {
   // A string that starts with a single `/` has no way to fail parsing against a valid base, so this does not throw.
   const url = new URL(raw, BASE);
   // Stryker disable next-line ConditionalExpression: the origin check is the story's rule, kept as defence in depth; no text that passed the checks above resolves to another origin, so it cannot be seen to fail
-  return url.origin === BASE && isPlainPath(url.pathname) ? `${url.pathname}${url.search}${url.hash}` : '/';
+  const resolved = url.origin === BASE && isPlainPath(url.pathname) ? `${url.pathname}${url.search}${url.hash}` : '/';
+  return resolved.length > MAX_LENGTH ? '/' : resolved;
 }
