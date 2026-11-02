@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { generateKeyPairSync, type KeyObject } from 'node:crypto';
+import { type GitHubPrivateKey, publicKeyFingerprint } from './github-key.ts';
+import { Secret } from './secret.ts';
 
 // Key material for tests is made when the test runs and never written down: no key is committed (E05-S01), so the
 // secret scanner has nothing to find and no test depends on a key that leaked.
@@ -46,4 +48,18 @@ export function testUnsuitableKeys(): Readonly<Record<string, string>> {
     }),
     'a public key': rsa.publicKey.export({ type: 'spki', format: 'pem' }),
   };
+}
+
+/** A throw-away signing key as the configuration holds it, with the public half for `crypto.verify` (E05-S02). */
+export interface TestGitHubKey {
+  readonly key: GitHubPrivateKey;
+  /** The PKCS#8 PEM, to look for in logs and errors. */
+  readonly pem: string;
+  readonly publicKey: KeyObject;
+}
+
+/** A fresh key in the shape of {@link GitHubPrivateKey}: what `parseGitHubPrivateKey` would return for it. */
+export function testGitHubKey(): TestGitHubKey {
+  const { pkcs8, publicKey } = testRsaKey();
+  return { key: { pem: new Secret(pkcs8), fingerprint: publicKeyFingerprint(publicKey) }, pem: pkcs8, publicKey };
 }

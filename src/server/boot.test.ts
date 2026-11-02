@@ -5,6 +5,7 @@ import process from 'node:process';
 import type { LogFn } from 'pino';
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
+import { mockApp } from './adapters/github/test-support.ts';
 import { type BootOptions, boot, type RunningServer } from './boot.ts';
 import { publicKeyFingerprint } from './config/github-key.ts';
 import { testRsaKey } from './config/test-support.ts';
@@ -197,12 +198,15 @@ test('without GitHub credentials the server still starts, serves health and says
     level: 30,
     missing: ['GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY'],
   });
+  expect(server?.github).toBeUndefined();
 });
 
 test('with GitHub credentials it logs the App id and the key fingerprint at start-up, and never the key', async () => {
   const key = testRsaKey();
+  mockApp([key.publicKey]);
   const { server, logs } = await startLogging({ GITHUB_APP_ID: '4242', GITHUB_APP_PRIVATE_KEY: key.pkcs1 });
   expect(await status(server, '/healthz')).toBe(200);
+  expect(server?.github?.identity.current()).toMatchObject({ appId: 4242, slug: 'cla-gate-test' });
   expect(logs.lines().find((line) => line['msg'] === 'github.app_configured')).toMatchObject({
     appId: '4242',
     keyFingerprints: [publicKeyFingerprint(key.publicKey)],

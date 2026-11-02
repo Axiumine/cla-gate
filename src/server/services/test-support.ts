@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
+import type { Clock } from './ports/clock.ts';
 
 /** A person acting; the numeric GitHub id, never a `users.id`. */
 export const ACTOR = parseGithubId(41_898_282);
@@ -18,4 +19,21 @@ export const unchecked = (value: unknown): AuditEntry => anything.parse(value);
 /** A valid entry of a tenant action; override single fields to break it. */
 export function tenantEntry(installationId: number, overrides: Partial<AuditEntry> = {}): AuditEntry {
   return { action: 'repository.enabled', installationId, actorGithubId: ACTOR, ...overrides };
+}
+
+/** A clock that stands still until a test moves it (E05-S02). */
+export class FakeClock implements Clock {
+  #milliseconds: number;
+
+  constructor(start: string) {
+    this.#milliseconds = Date.parse(start);
+  }
+
+  now(): Date {
+    return new Date(this.#milliseconds);
+  }
+
+  advance(milliseconds: number): void {
+    this.#milliseconds += milliseconds;
+  }
 }
