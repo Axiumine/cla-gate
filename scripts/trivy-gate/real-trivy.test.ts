@@ -36,6 +36,9 @@ function runTrivy(args: readonly string[], cwd: string) {
   return spawnSync(TRIVY_BINARY ?? 'trivy', [...args], { cwd, env, encoding: 'utf8' });
 }
 
+/** Milliseconds for a test that starts the real Trivy more than once: the default 5 s is too short on a loaded machine. */
+const SLOW = 60_000;
+
 const SECRETS_SCRIPT = trivyArgs(SCRIPTS.get('trivy:secrets') ?? '');
 const SECOND_COMMAND_ARGS = trivyArgs(commandsOf(SCRIPTS.get('trivy') ?? '')[1] ?? '');
 const JSON_FLAGS = ['--format', 'json', '--quiet'];
@@ -120,6 +123,7 @@ test.skipIf(TRIVY_BINARY === undefined)(
     expect(good.status).toBe(0);
     expect(good.targets).toEqual([]);
   },
+  SLOW,
 );
 
 test.skipIf(TRIVY_BINARY === undefined)('the second pass also fails on a secret, whatever its severity', () => {
@@ -139,4 +143,5 @@ test.skipIf(TRIVY_BINARY === undefined)(
     expect(run(now)).toBe(1);
     expect(run(plusDays(now, -1))).toBe(1);
   },
+  SLOW,
 );
