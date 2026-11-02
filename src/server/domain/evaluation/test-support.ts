@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ActorExtraction, ExtractedActor, UnlinkedFinding, UnlinkedRole } from './actor-types.ts';
+import { collectRepoWalk, type RepoWalkResult, type WalkCommit } from './repo-walk.ts';
 import type {
   Account,
   AccountType,
@@ -137,4 +138,47 @@ export function coAuthoredBy(email: string, name = 'Some Person', key = 'Co-auth
 /** A commit message with a subject, a body paragraph and a final paragraph made of `lines`. */
 export function messageEndingWith(...lines: readonly string[]): string {
   return ['Subject line', '', 'Body paragraph.', '', ...lines].join('\n');
+}
+
+/** A commit for the repo walk: `walkCommit(5, 4)` is commit 5 with parent 4, `walkCommit(1)` is a root commit. */
+export function walkCommit(n: number, ...parents: readonly number[]): WalkCommit {
+  return { sha: sha(n), parents: parents.map(sha) };
+}
+
+/** A straight line of commits `from` to `to`: each one has the one before it as its parent, `from` has `from - 1`. */
+export function line(from: number, to: number): WalkCommit[] {
+  return Array.from({ length: to - from + 1 }, (_unused, index) => walkCommit(from + index, from + index - 1));
+}
+
+/** Cuts a list into pages of `size` (GitHub's 100 by default); the last page may be shorter. */
+export function paged<T>(items: readonly T[], size = 100): T[][] {
+  return Array.from({ length: Math.ceil(items.length / size) }, (_unused, page) =>
+    items.slice(page * size, (page + 1) * size),
+  );
+}
+
+/**
+ * The repo walk loop of E07-S04 in miniature: fetches `pages` one after the other, asks `collectRepoWalk` after each
+ * and stops at the first answer that is not `need_next_page`. `exhausted` is true once the last page is in.
+ */
+export function driveWalk(
+  pages: readonly (readonly WalkCommit[])[],
+  headSha: string,
+  mergeBaseSha: string,
+): { readonly result: RepoWalkResult; readonly pagesFetched: number } {
+  const ask = (pagesFetched: number): RepoWalkResult =>
+    collectRepoWalk({
+      headSha,
+      mergeBaseSha,
+      commits: pages.slice(0, pagesFetched).flat(),
+      pagesFetched,
+      exhausted: pagesFetched > 0 && pagesFetched >= pages.length,
+    });
+  let pagesFetched = 0;
+  let result = ask(pagesFetched);
+  while (result.status === 'need_next_page') {
+    pagesFetched += 1;
+    result = ask(pagesFetched);
+  }
+  return { result, pagesFetched };
 }
