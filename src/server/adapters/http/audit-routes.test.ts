@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { FastifyInstance } from 'fastify';
 import { expect, test } from 'vitest';
 import { AUDIT_ACTIONS } from '../../../shared/audit.ts';
 import { testApp } from '../../test-support.ts';
 import { AUDIT_EXEMPT_REASONS, auditProblem, UnauditedRouteError } from './audit-routes.ts';
+import { authWorld } from './auth-fixture/test-support.ts';
 
 const AUDIT = { audit: 'repository.enabled' };
 
@@ -84,12 +84,6 @@ test('the exemption reasons are exactly webhook, session and setup', () => {
   expect(AUDIT_ACTIONS).toContain(AUDIT.audit);
 });
 
-async function appWith(register: (app: FastifyInstance) => void): Promise<FastifyInstance> {
-  const { app } = await testApp();
-  register(app);
-  return app;
-}
-
 test('the application as built has no unaudited mutating route under /api', async () => {
   const { app } = await testApp();
   await app.ready();
@@ -119,16 +113,16 @@ test('a plugin that registers an unaudited route under a prefix fails to load, n
 });
 
 test('a route that declares config.audit or config.auditExempt registers and answers', async () => {
-  const app = await appWith((instance) => {
-    instance.post('/api/audited', { config: { audit: 'repository.enabled' } }, () => 'audited');
-    instance.delete('/api/exempt', { config: { auditExempt: 'session' } }, () => 'exempt');
-    instance.post('/outside', () => 'outside');
-    instance.get('/api/read', () => 'read');
-  });
+  const { app, login } = await authWorld();
+  app.post('/api/audited', { config: { audit: 'repository.enabled' } }, () => 'audited');
+  app.delete('/api/exempt', { config: { auditExempt: 'session' } }, () => 'exempt');
+  app.post('/outside', () => 'outside');
+  app.get('/api/read', () => 'read');
+  const { headers } = await login(1001);
   const answers = await Promise.all([
-    app.inject({ method: 'POST', url: '/api/audited' }),
-    app.inject({ method: 'DELETE', url: '/api/exempt' }),
-    app.inject({ method: 'POST', url: '/outside' }),
+    app.inject({ method: 'POST', url: '/api/audited', headers }),
+    app.inject({ method: 'DELETE', url: '/api/exempt', headers }),
+    app.inject({ method: 'POST', url: '/outside', headers }),
     app.inject('/api/read'),
   ]);
   expect(answers.map((answer) => answer.body)).toEqual(['audited', 'exempt', 'outside', 'read']);
@@ -149,8 +143,8 @@ test.each(['/ap*', '/a*', '/api*', '/a:id/x', '/ap:id/x'])(
 );
 
 test('a route with a static first segment that cannot be api registers without a declaration', async () => {
-  const app = await appWith((instance) => {
-    instance.post('/apix*', () => 'apix');
-  });
-  expect((await app.inject({ method: 'POST', url: '/apix/y' })).body).toBe('apix');
+  const { app, login } = await authWorld();
+  app.post('/apix*', () => 'apix');
+  const { headers } = await login(1001);
+  expect((await app.inject({ method: 'POST', url: '/apix/y', headers })).body).toBe('apix');
 });

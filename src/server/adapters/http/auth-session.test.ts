@@ -17,6 +17,7 @@ test('a live session gets 200 with the display snapshot and when the session end
   expect(response.json()).toEqual({
     user: { githubId: 1001, login: 'login-1001', name: 'Name 1001', avatarUrl: null },
     expiresAt: '2026-11-02T18:00:00.000Z',
+    csrfToken: alice.token,
   });
   expect(sessionResponseSchema.parse(response.json()).user.githubId).toBe(1001);
   expect(response.headers['set-cookie']).toBeUndefined();

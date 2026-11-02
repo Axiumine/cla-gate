@@ -11,7 +11,7 @@ import { authRoutes } from './auth-routes.ts';
 import { readSessionCookie } from './session-cookie.ts';
 
 // The hooks that turn the session cookie into `request.auth` (E10-S02); the shape of `request.auth` and `requireAuth` are in
-// auth-request.ts, the routes in auth-routes.ts.
+// auth-request.ts, the routes in auth-routes.ts, and the slot itself is declared with the request guards (E10-S03).
 
 /**
  * Looks the session up for a request. A cookie that cannot be a session id never reaches the database. `touch` runs on
@@ -68,9 +68,8 @@ export interface AuthOptions {
 export async function registerAuth(app: FastifyInstance, options: AuthOptions): Promise<void> {
   const store = createSessionStore(options.db, options.settings.session);
   await app.register(fastifyCookie, { secret: options.settings.sessionSecret.reveal() });
-  app.decorateRequest('auth', null);
   app.decorateRequest('sessionCookiePresented', false);
   app.addHook('onRequest', noStoreForAuth);
   app.addHook('onRequest', (request) => authenticate(request, store, options.clock));
-  await app.register(authRoutes);
+  await app.register(authRoutes, { sessionSecret: options.settings.sessionSecret });
 }

@@ -7,8 +7,9 @@ import { migrate } from './adapters/db/migrator.ts';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { createSessionStore } from './adapters/db/sessions.ts';
 import { MIGRATIONS_DIRECTORY } from './adapters/db/test-support.ts';
+import { expectedToken } from './adapters/http/auth-fixture/test-support.ts';
 import { boot } from './boot.ts';
-import { AUTH_ENV } from './config/auth-fixture/test-support.ts';
+import { AUTH_ENV, TEST_SESSION_SECRET } from './config/auth-fixture/test-support.ts';
 import { FakeClock } from './services/test-support.ts';
 import { captureLogs, FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
@@ -60,6 +61,7 @@ test('the running server answers /api/auth/session for a session, with the lifet
   expect(sessionResponseSchema.parse(await response.json())).toEqual({
     user: { githubId: 1001, login: 'octocat', name: null, avatarUrl: null },
     expiresAt: '2026-11-02T10:10:00.000Z',
+    csrfToken: expectedToken(TEST_SESSION_SECRET, session.csrfSecret),
   });
 });
 
