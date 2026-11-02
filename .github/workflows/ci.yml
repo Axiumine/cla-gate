@@ -278,3 +278,90 @@ jobs:
       - name: Remove the PostgreSQL container
         if: ${{ always() && env.CLA_PG_CONTAINER != '' }}
         run: yarn ci:postgres stop
+
+  # Security scan (E20-S01). Not a required check: it joins `static` and `coverage` only after it has been stable (E20-S10).
+  # Semgrep is a Python tool, installed with pipx at the exact version pinned in mise.toml (a test keeps the two equal).
+  # PIPX_HOME and PIPX_BIN_DIR point into the runner's temp directory, never into the shared runner user's home, and so do
+  # the files Semgrep itself writes (settings and log). `yarn semgrep` is `semgrep scan --config p/... --error`, the
+  # same command as the pre-push hook and `semgrep ci` is never used (it ignores --config and targets the platform).
+  # No SARIF upload, no artifact and no cache of rules/: the Semgrep Rules License v1.0 restricts redistribution.
+  semgrep:
+    name: semgrep
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. python3 and pipx are needed
+      # to install Semgrep: the log shows who runs here and says what is missing.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar python3 pipx; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Install Semgrep (pinned, in the runner temp directory)
+        run: |
+          set -eu
+          base="$RUNNER_TEMP/semgrep"
+          mkdir -p "$base"
+          export PIPX_HOME="$base/pipx" PIPX_BIN_DIR="$base/bin" PIPX_MAN_DIR="$base/man"
+          export SEMGREP_SETTINGS_FILE="$base/settings.yml" SEMGREP_LOG_FILE="$base/semgrep.log"
+          pipx install semgrep==1.183.0
+          {
+            echo "SEMGREP_SETTINGS_FILE=$SEMGREP_SETTINGS_FILE"
+            echo "SEMGREP_LOG_FILE=$SEMGREP_LOG_FILE"
+          } >> "$GITHUB_ENV"
+          echo "$PIPX_BIN_DIR" >> "$GITHUB_PATH"
+          "$PIPX_BIN_DIR/semgrep" --version
+      - name: Semgrep (security scan)
+        run: yarn semgrep

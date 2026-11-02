@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type * as NodeCrypto from 'node:crypto';
 import { expect, test, vi } from 'vitest';
 
 // The system picker must draw from the whole range, upper end included (crypto.randomInt excludes its maximum).
 const draws = vi.hoisted(() => ({ next: 40_000 }));
 
 vi.mock('node:crypto', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:crypto')>()),
+  ...(await importOriginal<typeof NodeCrypto>()),
   randomInt: vi.fn(() => draws.next++),
 }));
 

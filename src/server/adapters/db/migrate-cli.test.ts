@@ -10,6 +10,7 @@ import { openPgliteDatabase } from './pglite.ts';
 import type { Database } from './schema.ts';
 import { MIGRATIONS_DIRECTORY, writeMigrationDirectory } from './test-support.ts';
 
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_password -- made-up value: the tests prove that the password never reaches the output
 const URL_WITH_PASSWORD = 'postgres://owner:s3cr3t-pw@db.internal:5432/cla';
 const ENV = { DATABASE_URL: URL_WITH_PASSWORD };
 

@@ -12,16 +12,20 @@ export type Env = Readonly<Record<string, string | undefined>>;
 const USAGE = 'usage: ci-postgres <start|stop>';
 const DIGITS = /^\d{1,20}$/;
 
+/** `<run id>-<attempt>` when both come from the environment as plain numbers, else `local`. */
+function runPrefix(env: Env): string {
+  const runId = env['GITHUB_RUN_ID'] ?? '';
+  const attempt = env['GITHUB_RUN_ATTEMPT'] ?? '';
+  return DIGITS.test(runId) && DIGITS.test(attempt) ? `${runId}-${attempt}` : 'local';
+}
+
 /**
  * `cla-pg-<run id>-<attempt>-<random>`: unique per run and attempt, and the random tail keeps two helpers of the same
  * run (or two local shells) apart. The ids come from GITHUB_RUN_ID and GITHUB_RUN_ATTEMPT and are used only when they
  * are plain numbers, so no other field can reach a container name.
  */
 export function containerName(env: Env, hex: string): string {
-  const runId = env['GITHUB_RUN_ID'] ?? '';
-  const attempt = env['GITHUB_RUN_ATTEMPT'] ?? '';
-  const prefix = DIGITS.test(runId) && DIGITS.test(attempt) ? `${runId}-${attempt}` : 'local';
-  return `${CONTAINER_PREFIX}${prefix}-${hex}`;
+  return `${CONTAINER_PREFIX}${runPrefix(env)}-${hex}`;
 }
 
 interface Sink {

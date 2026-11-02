@@ -41,6 +41,7 @@ export function checkWorkflow(file: string, workflow: unknown): Violation[] {
   if (!isMapping(workflow) || !('on' in workflow) || !isMapping(workflow['jobs'])) {
     throw new WorkflowError(`${printable(file)}: not a workflow (a mapping with "on" and "jobs" is required)`);
   }
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos -- linear alternation on a file name from our own directory listing, not request data
   const hostedOnly = HOSTED_ONLY_FILE.test(path.basename(file));
   return [
     ...checkTriggers(file, workflow['on']),

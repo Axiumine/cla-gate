@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { errorResponseSchema } from '../shared/errors.ts';
 import { testApp } from './test-support.ts';
 
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_secret -- made-up message: the test proves that an exception message never reaches the response
 const SECRET_MESSAGE = 'connect to db.internal:5432 failed, password=hunter2';
 
 async function withRoutes() {

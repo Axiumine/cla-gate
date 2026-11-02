@@ -52,12 +52,13 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage and postgres, and the required ones keep their exact names', () => {
-  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres']);
+test('the jobs are static, coverage, postgres and semgrep, and the required ones keep their exact names', () => {
+  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep']);
   expect([...jobs.entries()].map(([id, job]) => [id, job.name])).toEqual([
     ['static', 'static'],
     ['coverage', 'coverage'],
     ['postgres', 'postgres'],
+    ['semgrep', 'semgrep'],
   ]);
 });
 
@@ -75,7 +76,7 @@ test('the break-glass edit (every runs-on becomes ubuntu-24.04) still passes the
   const hosted = ciText.replaceAll(SELF_HOSTED_LINE, `runs-on: ${HOSTED}`);
   const parsed: unknown = parse(hosted);
   const runners = Object.values(workflowSchema.parse(parsed).jobs).map((job) => job['runs-on']);
-  expect(runners).toEqual([HOSTED, HOSTED, HOSTED]);
+  expect(runners).toEqual(Array.from({ length: jobs.size }, () => HOSTED));
   expect(checkWorkflow(CI_FILE, parsed)).toEqual([]);
 });
 
@@ -86,7 +87,7 @@ test('every third-party action is pinned to a full commit SHA, and every checkou
     expect(step.uses).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
   }
   const checkouts = used.filter((step) => step.uses?.startsWith('actions/checkout@'));
-  expect(checkouts).toHaveLength(3);
+  expect(checkouts).toHaveLength(jobs.size);
   for (const step of checkouts) {
     expect(step.with).toMatchObject({ 'persist-credentials': false, clean: true });
   }

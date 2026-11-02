@@ -3,5 +3,9 @@
 #
 # Canonical Node version for mise (mise ignores .nvmrc unless configured). Keep in sync with .nvmrc,
 # package.json devEngines.runtime and the CI workflow (which reads .nvmrc).
+#
+# Semgrep (E20-S01) is a Python tool, installed by mise through pipx. Its exact version is also spelled in the
+# `semgrep` job of .github/workflows/ci.yml (`pipx install semgrep==<version>`): a test keeps the two equal.
 [tools]
 node = "26.13.0"
+"pipx:semgrep" = "1.183.0"

@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# E20-S01. A .semgrepignore REPLACES Semgrep's built-in defaults (it does not extend them), so node_modules, dist and
+# build are listed again next to the output and tool directories of .gitignore. Co-located *.test.ts files are source
+# and are scanned like any other file: nothing here ignores a test.
+#
+# Everything except node_modules is anchored to the repository root with a leading slash: a source directory that is
+# merely called coverage, reports, build or rules (src/server/domain/coverage/, say) must never drop out of the scan.
+node_modules/
+/dist/
+/build/
+/coverage/
+/reports/
+/.yarn/
+/.stryker-tmp/
+/.vitest/
+/playwright-report/
+/test-results/
+# The offline copy of the Semgrep rule sets (yarn semgrep:rules): scanned with, never scanned.
+/rules/

@@ -9,6 +9,7 @@ import { CONTAINER_LABEL, databaseUrl, NAME_PATTERN, POSTGRES_IMAGE, runArgument
 import { fail, fakeDocker, ok } from './test-support.ts';
 
 const NAME = 'cla-pg-1-1-abcd1234';
+// nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_password -- made-up value for a throw-away test container, not a credential
 const PASSWORD = 'f00dfacecafe';
 const HEALTHY = ok('running healthy\n');
 const STARTING = ok('running starting\n');

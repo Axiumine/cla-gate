@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["semgrep"],
   "entry": [
     "scripts/*.ts!",
     "scripts/ci/*.ts",
@@ -16,6 +17,7 @@
     "!scripts/escape-hatches/eslint-config.ts!",
     "!scripts/ci/**!",
     "!scripts/dev/**!",
+    "!scripts/semgrep-rules/**!",
     "src/**/*.ts!",
     "!src/**/test-support.ts!",
     "!src/server/adapters/db/pglite.ts!",

@@ -101,3 +101,25 @@ test('the postgres preflight passes with a working daemon and prints its version
   expect(code).toBe(0);
   expect(out).toContain('docker server stub docker version --format {{.Server.Version}}');
 });
+
+test('the semgrep preflight passes with git, curl, tar, python3 and pipx, and needs no Docker', () => {
+  const { code, out } = run(preflight('semgrep'), { stubs: { python3: 0, pipx: 0 } });
+  expect(code).toBe(0);
+  expect(out).toMatch(/^runner: Linux \w+, user \w+\n/);
+  expect(out).not.toContain('docker');
+});
+
+test.each([['python3'], ['pipx']])('the semgrep preflight fails fast and says so when %s is missing', (tool) => {
+  const stubs = tool === 'pipx' ? { python3: 0 } : { pipx: 0 };
+  const { code, out } = run(preflight('semgrep'), { stubs });
+  expect(code).toBe(1);
+  expect(out).toContain(`::error title=Runner preflight::missing on this runner: ${tool} (docs/ci-runners.md`);
+});
+
+test('the semgrep preflight lists everything that is missing, and still checks the disk space', () => {
+  const stubs = { python3: 0, pipx: 0 };
+  expect(run(preflight('semgrep'), { stubs, without: ['git', 'pipx'] }).out).toContain(
+    'missing on this runner: git pipx (',
+  );
+  expect(run(preflight('semgrep'), { stubs, freeMib: 100 }).out).toContain('only 100 MiB free in the workspace');
+});

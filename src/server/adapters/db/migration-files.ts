@@ -29,6 +29,7 @@ export function byName(a: { readonly name: string }, b: { readonly name: string 
 
 /** @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode). */
 export function toMigrationFile(name: string, sql: string): MigrationFile {
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos -- NAME is anchored with no nested quantifier (linear time); not a request handler
   if (!NAME.test(name)) {
     throw new MigrationError(`invalid migration file name ${JSON.stringify(name)}: expected NNN_snake_case.sql`);
   }
