@@ -20,12 +20,13 @@ const ATTRIBUTES = { path: '/', httpOnly: true, secure: true, sameSite: 'lax' } 
  * Called by the login callback (E10-S05) for the session it just created.
  */
 export function setSessionCookie(reply: FastifyReply, id: string, absoluteSeconds: number): void {
-  reply.setCookie(SESSION_COOKIE, id, { ...ATTRIBUTES, maxAge: absoluteSeconds });
+  // The reply is a thenable that settles when the response is sent: the result of `setCookie` is dropped, never awaited.
+  void reply.setCookie(SESSION_COOKIE, id, { ...ATTRIBUTES, maxAge: absoluteSeconds });
 }
 
 /** Tells the browser to forget the session cookie: the same attributes with an empty value and `Max-Age=0`. */
 export function clearSessionCookie(reply: FastifyReply): void {
-  reply.setCookie(SESSION_COOKIE, '', { ...ATTRIBUTES, maxAge: 0 });
+  void reply.setCookie(SESSION_COOKIE, '', { ...ATTRIBUTES, maxAge: 0 });
 }
 
 /** What a `Cookie` header says about the session: no cookie of ours, one that cannot be a session id, or the id. */

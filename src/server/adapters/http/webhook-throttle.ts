@@ -11,7 +11,8 @@ import { AppError } from './errors.ts';
 
 /** The `429` of a held-back address: `Retry-After` is the whole seconds until its oldest counted failure leaves the window. */
 function heldBack(reply: FastifyReply, seconds: number): AppError {
-  reply.header('retry-after', String(seconds));
+  // The reply is a thenable that settles when the response is sent: the result of `header` is dropped, never awaited.
+  void reply.header('retry-after', String(seconds));
   return new AppError(429, 'webhook_throttled');
 }
 

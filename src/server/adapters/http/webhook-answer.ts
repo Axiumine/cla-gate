@@ -38,6 +38,8 @@ export interface WebhookAnswer {
  * Routes a delivery whose envelope and payload passed their checks. `delivery` is `undefined` for an event with no
  * schema (`ping`, or one nobody subscribed to): the router answers or ignores it without reading its body.
  *
+ * @param envelope the event, the delivery id and the parsed body of the delivery, which passed the envelope checks
+ * @param delivery the delivery as its event's schema left it, or `undefined` for an event with no schema
  * @param appId the configured `GITHUB_APP_ID`
  */
 export function routeDelivery(

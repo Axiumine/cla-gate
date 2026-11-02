@@ -83,6 +83,7 @@ export const ROUTED_EVENTS: readonly string[] = [...ROUTERS.keys()];
  * @param event the `X-GitHub-Event` header
  * @param action the `action` of the payload, `undefined` for an event that has none or no schema (`ping`)
  * @param payload the payload as the schema of the event left it; not read for `ping` or an unsubscribed event
+ * @param context the configured App id and the delivery id, which a job carries
  * @throws ZodError when the payload of a subscribed event lacks a field its schema guarantees: a caller bug, since a
  *   delivery that reached the router passed that schema
  */

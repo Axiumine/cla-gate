@@ -46,19 +46,19 @@ const ATTRIBUTES = {
 export function setOauthCookie(reply: FastifyReply, attempt: Omit<OauthCookie, 't'>, now: Date): void {
   const { s, v, r } = attempt;
   const value: OauthCookie = { s, v, r, t: now.getTime() };
-  reply.setCookie(OAUTH_COOKIE, JSON.stringify(value), ATTRIBUTES);
+  // The reply is a thenable that settles when the response is sent: the result of `setCookie` is dropped, never awaited.
+  void reply.setCookie(OAUTH_COOKIE, JSON.stringify(value), ATTRIBUTES);
 }
 
 /** Tells the browser to forget the attempt: the same attributes with an empty value and `Max-Age=0`. */
 export function clearOauthCookie(reply: FastifyReply): void {
-  reply.setCookie(OAUTH_COOKIE, '', { ...ATTRIBUTES, signed: false, maxAge: 0 });
+  void reply.setCookie(OAUTH_COOKIE, '', { ...ATTRIBUTES, signed: false, maxAge: 0 });
 }
 
 /** The text as JSON, or undefined when it is not. */
 function parseJson(text: string): unknown {
   try {
-    const value: unknown = JSON.parse(text);
-    return value;
+    return JSON.parse(text);
   } catch {
     return undefined;
   }

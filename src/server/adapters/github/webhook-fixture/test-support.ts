@@ -133,8 +133,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** The member `key` of `node`, or `undefined` when `node` is not an object. */
 function member(node: unknown, key: string): unknown {
-  const value: unknown = isRecord(node) ? Reflect.get(node, key) : undefined;
-  return value;
+  return isRecord(node) ? Reflect.get(node, key) : undefined;
 }
 
 /** A fresh copy of the fixture of `event`, which a test may change. */

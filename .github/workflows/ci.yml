@@ -255,10 +255,12 @@ jobs:
   # src/server/adapters/db/test-support.ts) fails here instead of being skipped when the database is missing, and with
   # CLA_ROLE_TESTS=1, which lets the tests that create or alter cluster-wide roles run: the server is this job's own
   # disposable container, so no other database is touched. The server version goes to the job summary before the tests.
+  # The timeout is 45 minutes, not the 20 of the other short jobs: the suite (8181 tests, more with every epic) runs one file at a
+  # time on a real server, and on the shared runners it was cancelled at 20 minutes twice while its tests were still passing.
   postgres:
     name: postgres
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Also the first look at a
       # runner's capabilities (docs/ci-runners.md, Known unknowns): the log shows who runs here and how much room is left.

@@ -90,7 +90,8 @@ export function rejectRequest(error: unknown, request: FastifyRequest, reply: Fa
   const status = statusOf(failure);
   const app = failure instanceof AppError ? failure : undefined;
   if (upstream?.retryAfterSeconds !== undefined) {
-    reply.header('retry-after', String(upstream.retryAfterSeconds));
+    // The reply is a thenable that settles when the response is sent: the result of `header` is dropped, never awaited.
+    void reply.header('retry-after', String(upstream.retryAfterSeconds));
   }
   if (upstream !== undefined) {
     // GitHub failing is not a defect of ours: no stack, and a warning so that an outage is visible.
