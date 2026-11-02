@@ -61,6 +61,15 @@ test.each([
   ]);
 });
 
+test.each([
+  ['an ordinary file', CI],
+  ['a release file', RELEASE],
+])('R5 rejects actions: read at the workflow level of %s: only a job may read the Actions API', (_what, file) => {
+  expect(lines(file, 'permissions:\n  contents: read\n  actions: read')).toEqual([
+    `${file}: workflow: R5 top-level permission actions: "read" is not allowed`,
+  ]);
+});
+
 test('R5 still wants contents: read in a release file that only lists the extras', () => {
   expect(lines(RELEASE, 'permissions:\n  security-events: write')).toEqual([
     `${RELEASE}: workflow: R5 top-level permissions need contents: read, found nothing`,
@@ -77,6 +86,8 @@ test.each([
   ['inherits the top level', ''],
   ['grants none', '    permissions: {}\n'],
   ['repeats contents: read', '    permissions:\n      contents: read\n'],
+  ['reads the Actions API (E20-S04)', '    permissions:\n      actions: read\n      contents: read\n'],
+  ['reads the Actions API and nothing else', '    permissions:\n      actions: read\n'],
 ])('R5 accepts a job that %s', (_what, permissions) => {
   expect(lines(CI, GOOD, jobWith(permissions))).toEqual([]);
 });
@@ -89,6 +100,8 @@ test.each([
     '    permissions:\n      id-token: write\n',
     'permission id-token: "write" is not allowed',
   ],
+  ['actions: write', '    permissions:\n      actions: write\n', 'permission actions: "write" is not allowed'],
+  ['actions: none', '    permissions:\n      actions: none\n', 'permission actions: "none" is not allowed'],
 ])('R5 rejects a job-level override that is %s', (_what, permissions, message) => {
   expect(lines(CI, GOOD, jobWith(permissions))).toEqual([`${CI}: job "build": R5 ${message}`]);
 });

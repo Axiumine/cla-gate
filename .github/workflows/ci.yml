@@ -25,25 +25,50 @@ on:
   pull_request:
   push:
     branches: [main]
-    # Release candidates (E20-S07): a v* tag runs every job, and it is one of the three events that run the leaks job.
+    # Release candidates (E20-S07): a v* tag runs every job, and it is one of the three events that run the leaks job and the
+    # mutation job (a push to main runs neither).
     tags: ["v*"]
-  # Nightly run on the default branch (E20-S02): every job runs, and the trivy job also scans the dev dependencies.
+  # Nightly run on the default branch (E20-S02): every job runs, and the trivy job also scans the dev dependencies. It is the
+  # safety net of the mutation gate: always cold (--force), and each mutation shard is skipped when main has not moved since
+  # a nightly run in which that shard passed (E20-S04, the comment on the `mutation` job).
   schedule:
     - cron: "17 3 * * *"
   # Manual run (E20-S04). `force` adds --force to the mutation run: needed after a snapshot or environment change, which
-  # Stryker's incremental mode does not notice.
+  # Stryker's incremental mode does not notice. `shard` runs one shard of the mutation job (all by default), to repeat a
+  # failed one: a `choice` input, so GitHub itself refuses any value that is not in `options`, and the value only reaches
+  # the job as an environment variable. scripts/mutation-gate/ci-job.test.ts keeps the options equal to the shards.
   workflow_dispatch:
     inputs:
       force:
         description: Run every mutant again instead of reusing the incremental cache
         type: boolean
         default: false
+      shard:
+        description: Mutation shard to run (all runs every shard)
+        type: choice
+        default: all
+        options:
+          - all
+          - shared
+          - config
+          - http-a-v
+          - http-rest
+          - db
+          - root-domain-ports
+          - github-a-o
+          - github-rest
+          - evaluation-a-l
+          - evaluation-rest
+          - services-installation
+          - services-other
+          - scripts
 
 permissions:
   contents: read
 
 # The event name is part of the group so that a queued nightly run is never replaced by a newer push to main (GitHub keeps
-# one pending run per group and cancels the rest).
+# one pending run per group and cancels the rest). The `mutation` job holds the group of the nightly run (or of a manual run
+# or a tag push) for hours, and the groups of different events overlap: see the comment on that job.
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -514,28 +539,79 @@ jobs:
         if: ${{ github.event_name == 'schedule' }}
         run: yarn trivy:dev
 
-  # Mutation gate (E20-S04), `yarn mutate` = `stryker run --incremental`. Not a required check: it joins `static` and `coverage`
-  # only after it has been stable (E20-S13). It waits for `static`, because mutating code that does not even pass the static
-  # checks is wasted time. The incremental file is restored from a cache whose key starts with a hash of everything that makes
-  # an old result untrustworthy (the lockfile, Node, the Stryker config, the Vitest configs); the key ends with the commit, so
-  # every successful run saves a new file, and `restore-keys` is the same prefix, so a change to any of those files starts from
-  # a fresh run. Snapshot and environment changes are not seen by Stryker: a manual run with `force` covers them, and the
-  # nightly run always adds --force, so the cache cannot hide a regression for longer than a day. The report is uploaded
-  # even when the score is below the threshold. Mutation never runs in a git hook. `--logLevel debug` is never used: it
-  # crashes with Vitest 5 (Stryker issue 6272). No secret, no network beyond the package registry.
-  # The same job runs a second scope (E20-S05), `yarn mutate:scripts` = `STRYKER_SCOPE=scripts stryker run --incremental`,
-  # for the code caps tool, with its own incremental file and its own cache, so neither scope can spoil the other's cache.
-  # It runs after the server scope succeeded, and both reports land in the one uploaded artifact.
+  # Mutation gate (E20-S04, E20-S05): one job per shard, `yarn mutate:shard` = Stryker with `--incremental` on one slice of the
+  # code. A cold run of all the server and shared mutants (4631 now, 3807 on 2026-11-02) does not fit one job on the shared
+  # runners (2026-11-02: cancelled at 45 minutes, then stopped at the initial test run), so on 2026-11-02 the maintainer
+  # decided to split the run by directory and not to mind the total time (scripts/mutation-gate/shards.ts has the shards, docs/quality-gates.md the
+  # measured sizes and times). The scripts scope (the caps tool) is one more shard of the same matrix. Not a required
+  # check: it joins `static` and `coverage` only after it has been stable (E20-S13). It waits for `static`, because
+  # mutating code that does not even pass the static checks is wasted time.
+  #
+  # When it runs: the nightly schedule (always cold, --force, the safety net), a manual run and a v* tag push (a release
+  # candidate). Not on pull requests, and not on a push to main (2026-11-02): a cold sharded run holds two shared runners for
+  # hours, and one per merge would saturate the three runners that other repositories use too.
+  #
+  # Skip when nothing changed (E20-S04): the nightly run pays only when something moved. The step `decide` asks the Actions
+  # REST API (GET only, the job token with `actions: read`) whether the newest earlier completed run of this workflow of
+  # the event `schedule` with the same commit and a job `mutation (<shard>)` concluded that job `success`; if so every later
+  # step of the leg is skipped, and the leg ends green in about a minute. The newest run decides, so an older pass on the
+  # same commit never outranks a newer failure. A skipped leg is `success` too, so by induction a success on a
+  # commit means a cold --force pass of that shard on it; a budget stop, a timeout, a cancel and a score below the threshold
+  # are not `success`, so such a shard runs again the next night, alone. Only the schedule event can skip: a manual run and a
+  # tag push were asked for by a person. The lookup fails open: any error (network, a status other than 200, a rate limit, a
+  # shape that is not expected, a missing job, a cap on pages or runs) means "do not skip", and the step never fails because of
+  # it. A lost record costs time, never coverage. Every step after `decide` carries the gate
+  # `steps.decide.outputs.skip != 'true'` (the `always()` ones as `always() && ...`): scripts/mutation-gate/skip-job.test.ts
+  # computes that from this file, so a step added without the gate fails the test.
+  #
+  # The shards are shared-runner time that other repositories use too, so one workflow run starts at most two of them at
+  # once (`max-parallel: 2`) and one failed shard does not cancel the others (`fail-fast: false`): each has its own score and
+  # its own cache. A manual run can pick one shard (`shard` input, a `choice` that GitHub validates against its options; a
+  # test keeps the options, the list below and shards.ts equal); the matrix value only ever reaches the job through an
+  # environment variable, never a command line.
+  #
+  # What `max-parallel` does not do, accepted on 2026-11-02: it limits one workflow run, not the repository. The concurrency
+  # group of the workflow is `ci-<event>-<ref>`, so the nightly run, a tag push and a manual run are different groups and can
+  # overlap, each with its own two shards; two overlapping runs ask for four runners while the organisation has three, and
+  # the jobs of other repositories and the `static` and `coverage` of this one wait behind them. Stopping the older run would
+  # throw away hours of work, and one group for all events would cancel shards, so the overlap is accepted and not prevented.
+  # The overlap is rarer now that a push to main does not run the job: it takes a manual run or a tag push on top of a
+  # nightly run that is still working. It is listed in docs/ci-runners.md (Known unknowns and risks) and in the Open line of
+  # E20-S04.
+  #
+  # Every shard has its own incremental file, restored from a cache whose key starts with the shard name and a hash of
+  # everything that makes an old result untrustworthy (the lockfile, Node, the Stryker config, the Vitest configs, the tsconfig
+  # files); `restore-keys` is that same prefix, so a change to any of those files starts from a fresh run. The key ends with
+  # the run, so every run saves a new file and a cache key is never reserved twice (a cache key cannot be overwritten).
+  # The save step runs even when the run failed, timed out or was stopped, because a job that spent most of an hour on
+  # mutants must not throw that work away: `yarn mutate:shard` stops Stryker with SIGINT after MUTATE_BUDGET_MINUTES, Stryker
+  # writes the results of the mutants it finished into the incremental file on that signal (it does not otherwise write
+  # it before the end), and a run that is not --force (a manual one, a tag push) continues from them. The nightly run is
+  # always cold: snapshot and environment changes are not seen by Stryker, so it adds --force, and the cache cannot hide a
+  # regression for longer than a day; a manual run with `force` covers them too. Each shard uploads its own report, also
+  # when its score is below the threshold. Mutation never runs in a git hook. `--logLevel debug` is never used: it crashes
+  # with Vitest 5 (Stryker issue 6272). No secret, no network beyond the package registry and, in the `decide` step, the
+  # GitHub API of this repository.
   mutation:
-    name: mutation
+    name: mutation (${{ matrix.shard }})
     needs: static
-    # Not on pull requests (2026-11-02): the first cold run on the shared runners hit the 45-minute timeout and was cancelled,
-    # so no incremental file was saved, and a job that long on every push would hold one of the three shared runners that other
-    # repositories also use. It runs on pushes to main, tags, the nightly schedule and by hand, which is where the incremental
-    # cache is written. The condition is removed after the first green run (E20-S04, Open line).
-    if: ${{ github.event_name != 'pull_request' }}
+    # The schedule, a manual run and a v* tag push: the same condition as the `leaks` job, and for the same reason (it is too
+    # long to run on every pull request and every merge). Pull requests and pushes to main never run it (2026-11-02).
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+    # Only what the `decide` step and the checkout need: `actions: read` lists the runs and jobs of this repository (a job
+    # block replaces the workflow-level one, so contents: read is repeated), and nothing else. The other jobs do not get it.
+    permissions:
+      actions: read
+      contents: read
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 45
+    # 60 minutes is the policy cap for a job on the shared runners (docs/ci-runners.md, R4). Stryker is stopped 10 minutes
+    # earlier (MUTATE_BUDGET_MINUTES below) so that the save and upload steps always get to run.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","config","http-a-v","http-rest","db","root-domain-ports","github-a-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-other","scripts"]') }}
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
       - name: Preflight (runner capabilities)
@@ -581,59 +657,85 @@ jobs:
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
+      # The decision needs the repository and Node and nothing that `yarn install` brings: it imports only Node and files of
+      # this repository (a test checks that), so it runs before Corepack and the install, and a skipped leg never pays for
+      # them. The token reaches it as an environment variable, as does the shard; it is never spliced into a command and
+      # the script never prints it. It exits 0 whatever happens (scripts/mutation-gate/skip-cli.ts): no output means "run".
+      - name: Decide whether this shard can be skipped (nightly run only)
+        id: decide
+        env:
+          STRYKER_SHARD: ${{ matrix.shard }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/mutation-gate/decide-skip.ts
       - name: Enable Corepack
+        if: ${{ steps.decide.outputs.skip != 'true' }}
         run: |
           prefix="$RUNNER_TEMP/npm-global"
           npm install --global --prefix "$prefix" corepack@0.36.0
           "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
           echo "$prefix/bin" >> "$GITHUB_PATH"
       - name: Restore the Yarn cache
+        if: ${{ steps.decide.outputs.skip != 'true' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/yarn/cache
           key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: yarn-${{ runner.os }}-
       - name: Install dependencies
+        if: ${{ steps.decide.outputs.skip != 'true' }}
         run: yarn install --immutable
       - name: Restore the Stryker incremental file
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ steps.decide.outputs.skip != 'true' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: reports/stryker-incremental.json
-          key: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-${{ github.sha }}
-          restore-keys: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-
-      - name: Restore the Stryker incremental file (scripts scope)
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: reports/stryker-incremental-scripts.json
-          key: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-${{ github.sha }}
-          restore-keys: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-
-      # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command.
+          path: reports/stryker-incremental-${{ matrix.shard }}.json
+          key: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-
+      # Stryker rethrows every error but "no such file" when it reads the incremental file, so a file that is cut short stops
+      # the run before its first mutant, every time. The check deletes such a file (scripts/mutation-gate/incremental-file.ts);
+      # the shard starts cold instead of failing at start-up.
+      - name: Check the restored Stryker incremental file
+        if: ${{ steps.decide.outputs.skip != 'true' }}
+        env:
+          STRYKER_SHARD: ${{ matrix.shard }}
+        run: yarn mutate:check-incremental
+      # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command;
+      # the shard reaches the runner the same way (STRYKER_SHARD), and `yarn mutate:shard` checks it against the shard list.
       - name: Mutation tests
+        if: ${{ steps.decide.outputs.skip != 'true' }}
         env:
           MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
+          STRYKER_SHARD: ${{ matrix.shard }}
+          MUTATE_BUDGET_MINUTES: "50"
         run: |
           set -eu
           if [ "$MUTATE_FORCE" = "true" ]; then
-            yarn mutate --force
+            yarn mutate:shard --force
           else
-            yarn mutate
+            yarn mutate:shard
           fi
-      - name: Mutation tests (scripts scope)
+      # A run that is stopped twice (Stryker exits at once on a second signal) can leave half a file, and the save below would
+      # store it under the newest key, the one every later run restores. A file that cannot be read is deleted here, so nothing
+      # is saved and the next run restores the previous cache.
+      - name: Check the Stryker incremental file before the save
+        if: ${{ always() && steps.decide.outputs.skip != 'true' }}
         env:
-          MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
-        run: |
-          set -eu
-          if [ "$MUTATE_FORCE" = "true" ]; then
-            yarn mutate:scripts --force
-          else
-            yarn mutate:scripts
-          fi
+          STRYKER_SHARD: ${{ matrix.shard }}
+        run: yarn mutate:check-incremental
+      # Also after a failed, stopped or timed-out run: the results of the mutants that did finish are what the next run
+      # continues from. A save that finds no file, or a key that exists, only warns.
+      - name: Save the Stryker incremental file
+        if: ${{ always() && steps.decide.outputs.skip != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental-${{ matrix.shard }}.json
+          key: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload the mutation report
-        if: ${{ always() }}
+        if: ${{ always() && steps.decide.outputs.skip != 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: mutation-report
-          path: reports/mutation/
+          name: mutation-report-${{ matrix.shard }}
+          path: reports/mutation/${{ matrix.shard }}/
           retention-days: 7
 
   # Browser tests (E20-S06), `yarn e2e` against the built server on a migrated PostgreSQL 18. Not a required check: it joins

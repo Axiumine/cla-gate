@@ -9,21 +9,32 @@ const EXTRA_PERMISSIONS: ReadonlyMap<string, string> = new Map([
   ['id-token', 'write'],
 ]);
 
+/** Whether a permission is allowed: `contents: read` everywhere, `actions: read` in a job only, the extras in hosted-only files. */
+function isAllowed(key: string, level: unknown, hostedOnly: boolean, topLevel: boolean): boolean {
+  if (key === 'contents') {
+    return level === 'read';
+  }
+  if (key === 'actions') {
+    // E20-S04: the `mutation` job lists the runs and jobs of its own repository (read only, GET only). Never the workflow level.
+    return !topLevel && level === 'read';
+  }
+  return hostedOnly && EXTRA_PERMISSIONS.get(key) === level;
+}
+
 /**
  * Problems with a `permissions` value. The workflow level must be a mapping holding contents: read; a job level
  * mapping only has to stay inside the allowed set (an override could otherwise escalate what the top level restricts).
  */
-function permissionProblems(value: unknown, hostedOnly: boolean, requireContents: boolean): string[] {
+function permissionProblems(value: unknown, hostedOnly: boolean, topLevel: boolean): string[] {
   if (!isMapping(value)) {
     return [`permissions must be a mapping, found ${describe(value)}`];
   }
   const problems: string[] = [];
-  if (requireContents && value['contents'] !== 'read') {
+  if (topLevel && value['contents'] !== 'read') {
     problems.push(`permissions need contents: read, found ${describe(value['contents'])}`);
   }
   for (const [key, level] of Object.entries(value)) {
-    const allowed = key === 'contents' ? level === 'read' : hostedOnly && EXTRA_PERMISSIONS.get(key) === level;
-    if (!allowed) {
+    if (!isAllowed(key, level, hostedOnly, topLevel)) {
       problems.push(`permission ${printable(key)}: ${describe(level)} is not allowed`);
     }
   }

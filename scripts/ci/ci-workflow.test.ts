@@ -40,8 +40,12 @@ function readYaml(file: string): unknown {
 }
 
 const CI_FILE = '.github/workflows/ci.yml';
+// `mutation` is a matrix job (E20-S04): each shard's job may take the guard's cap of 60 minutes, because the slowest cold
+// run of a shard measured 13 minutes 7 seconds on a development machine and a shared runner may be 2 to 3 times slower
+// (26 to 39 minutes, inside the 50-minute Stryker budget); see the comment on the job in ci.yml and docs/quality-gates.md
+// (Testing, Stryker), which has the measurements of every shard.
 const LONG_JOBS = new Map([
-  ['mutation', 45],
+  ['mutation', 60],
   ['leaks', 30],
   ['qodana', 30],
 ]);
@@ -78,7 +82,7 @@ test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, le
     ['postgres', 'postgres'],
     ['semgrep', 'semgrep'],
     ['trivy', 'trivy'],
-    ['mutation', 'mutation'],
+    ['mutation', `mutation (${expression('matrix.shard')})`],
     ['e2e', 'e2e'],
     ['leaks', 'leaks'],
     ['qodana', 'qodana'],
@@ -91,7 +95,7 @@ test('every job but qodana runs on the shared self-hosted runners, qodana on ubu
   expect(GITHUB_HOSTED_JOBS.map((id) => jobNamed(id)['runs-on'])).toEqual([HOSTED]);
   for (const [id, job] of [...jobs.entries()]) {
     expect(job['timeout-minutes']).toBeGreaterThan(0);
-    // The mutation run (E20-S04), the leak scenarios (E20-S07, three browser runs and a download) and Qodana (E20-S08, a
+    // The mutation shards (E20-S04), the leak scenarios (E20-S07, three browser runs and a download) and Qodana (E20-S08, a
     // 1 GiB linter image) are the long jobs; the guard caps every job at 60.
     expect(job['timeout-minutes']).toBeLessThanOrEqual(LONG_JOBS.get(id) ?? 20);
   }
@@ -110,7 +114,13 @@ test('every third-party action is pinned to a full commit SHA, and every checkou
   const used = allSteps.flatMap((step) => (step.uses === undefined ? [] : [step]));
   expect(used.length).toBeGreaterThan(0);
   for (const step of used) {
-    expect(step.uses).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
+    // `owner/repo@sha`, or `owner/repo/path@sha` for an action inside a repository (actions/cache/restore).
+    const [action = '', sha = ''] = (step.uses ?? '').split('@');
+    expect(sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(action.split('/').length).toBeGreaterThanOrEqual(2);
+    for (const segment of action.split('/')) {
+      expect(segment).toMatch(/^[\w.-]+$/);
+    }
   }
   const checkouts = used.filter((step) => step.uses?.startsWith('actions/checkout@'));
   expect(checkouts).toHaveLength(jobs.size);

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { PrEvaluationDetails, parseStoredDetails } from './pr-evaluation-details.ts';
+import { actorSchema } from './pr-evaluation-parts.ts';
 import { storedDetailsSample } from './test-support.ts';
 
 // A JSON value, so that a sample can be copied and broken one field at a time without a single `any`.
@@ -255,4 +256,37 @@ test('reading never throws, not even for a value whose getter or proxy does', ()
   revoke();
   expect(parseStoredDetails(getter)).toEqual({ ok: false });
   expect(parseStoredDetails(proxy)).toEqual({ ok: false });
+});
+
+// E20-S04 (mutation testing): the cross-field rules carry a message for whoever reads the zod error, and the message is the
+// only thing that tells the rules apart in a failing parse.
+function issueMessages(value: unknown): string[] {
+  const result = PrEvaluationDetails.safeParse(value);
+  return result.success ? [] : result.error.issues.map((issue) => issue.message);
+}
+
+test('a document without a major, or a major without a document, says that both are set or both null', () => {
+  const half = { ...storedDetailsSample(), documentId: 12, activeMajor: null };
+  expect(issueMessages(half)).toEqual(['documentId and activeMajor are both set or both null.']);
+  expect(issueMessages({ ...half, documentId: null, activeMajor: 2 })).toEqual([
+    'documentId and activeMajor are both set or both null.',
+  ]);
+});
+
+test('a success with failure codes, or a failure without any, says that success means no failure codes', () => {
+  const sample = storedDetailsSample();
+  const message = 'The outcome is success exactly when failureCodes is empty.';
+  expect(issueMessages({ ...sample, outcome: 'success' })).toEqual([message]);
+  expect(issueMessages({ ...sample, outcome: 'failure', failureCodes: [] })).toEqual([message]);
+});
+
+test('an actor that is covered without a basis, or has a basis and is not covered, says why', () => {
+  const message = 'An actor is covered exactly when it has a covering basis.';
+  const messages = (actor: unknown) => {
+    const result = actorSchema.safeParse(actor);
+    return result.success ? [] : result.error.issues.map((issue) => issue.message);
+  };
+  expect(messages({ githubId: 1, roles: ['opener'], covered: true, basis: null })).toEqual([message]);
+  const basis = { kind: 'signature', signatureId: 1, versionId: 1, major: 1 };
+  expect(messages({ githubId: 1, roles: ['opener'], covered: false, basis })).toEqual([message]);
 });

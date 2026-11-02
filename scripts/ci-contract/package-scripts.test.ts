@@ -3,13 +3,15 @@
 import { expect, test } from 'vitest';
 import { scriptProblems } from './package-scripts.ts';
 
-// E20-S09: the five script contracts, each broken in the ways a careless edit or a hostile one would break it.
+// E20-S09: the script contracts, each broken in the ways a careless edit or a hostile one would break it.
 
 const GOOD: Readonly<Record<string, string>> = {
   semgrep: 'semgrep scan --config p/typescript --error --metrics off --disable-version-check',
   trivy:
     'trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 . && trivy fs --scanners secret,misconfig --exit-code 1 .',
-  mutate: 'stryker run --incremental',
+  mutate: 'node scripts/mutation-gate/mutate.ts --all',
+  'mutate:shard': 'node scripts/mutation-gate/mutate.ts',
+  'mutate:scripts': 'STRYKER_SCOPE=scripts stryker run --incremental',
   coverage: 'CI=1 vitest run --coverage',
 };
 
@@ -30,6 +32,8 @@ test.each([
   ['semgrep', 'the semgrep script'],
   ['trivy', 'the trivy script'],
   ['mutate', 'the mutate script'],
+  ['mutate:shard', 'the mutate:shard script'],
+  ['mutate:scripts', 'the mutate:scripts script'],
   ['coverage', 'the coverage script'],
 ])('a package.json without the %s script is reported (%s)', (name) => {
   expect(scriptProblems(manifest({ [name]: undefined }))).toEqual([`package.json has no ${name} script`]);
@@ -110,12 +114,37 @@ test.each([
   expect(scriptProblems(manifest({ trivy: script }))).toEqual([expected]);
 });
 
+const RUNNER = 'scripts/mutation-gate/mutate.ts';
+const MUTATE_PROBLEM = (name: string) =>
+  `the ${name} script needs --incremental, or the runner ${RUNNER}, which adds it`;
+
 test.each([
-  ['the flag is absent', 'stryker run'],
-  ['the flag is a prefix of another', 'stryker run --incrementalx'],
-  ['the flag is attached to a value', 'stryker run --incremental=true'],
-])('mutate where %s is reported', (_label, script) => {
-  expect(scriptProblems(manifest({ mutate: script }))).toEqual(['the mutate script needs --incremental']);
+  ['mutate', 'the flag is absent', 'stryker run'],
+  ['mutate', 'the flag is a prefix of another', 'stryker run --incrementalx'],
+  ['mutate', 'the flag is attached to a value', 'stryker run --incremental=true'],
+  ['mutate', 'the runner is only a substring of another file name', 'node scripts/mutation-gate/mutate.tsx --all'],
+  ['mutate', 'the runner is only part of a longer path', 'node old/scripts/mutation-gate/mutate.ts --all'],
+  ['mutate:shard', 'the flag is absent', 'stryker run'],
+  ['mutate:shard', 'another script runs instead of the runner', 'node scripts/other.ts'],
+  ['mutate:scripts', 'the flag is absent', 'STRYKER_SCOPE=scripts stryker run'],
+  [
+    'mutate:scripts',
+    'the flag is attached to a value in the scripts scope',
+    'STRYKER_SCOPE=scripts stryker run --incremental=1',
+  ],
+])('%s where %s is reported', (name, _label, script) => {
+  expect(scriptProblems(manifest({ [name]: script }))).toEqual([MUTATE_PROBLEM(name)]);
+});
+
+test.each([
+  ['mutate', 'stryker run --incremental'],
+  ['mutate', 'node scripts/mutation-gate/mutate.ts --all'],
+  ['mutate:shard', 'node scripts/mutation-gate/mutate.ts'],
+  ['mutate:shard', 'stryker run --incremental'],
+  ['mutate:scripts', 'STRYKER_SCOPE=scripts stryker run --incremental'],
+  ['mutate:scripts', 'node scripts/mutation-gate/mutate.ts scripts'],
+])('%s as %j meets the contract', (name, script) => {
+  expect(scriptProblems(manifest({ [name]: script }))).toEqual([]);
 });
 
 test.each([
