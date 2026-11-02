@@ -22,7 +22,9 @@ export type EnqueueOutcome = 'queued' | 'already_queued' | 'deduplicated';
  * send under a `dedupeKey` that was already used in the same window is dropped, which is how a burst of events about one
  * pull request becomes one job. A window is pg-boss's throttle slot of `dedupeWindowSeconds` seconds, starting at a
  * multiple of that length counted from the epoch (E07-S01): two sends a second apart on either side of a slot boundary
- * are both accepted, which the burst case does not mind. Neither of the two is optional on its own.
+ * are both accepted, which the burst case does not mind. Neither of the two is optional on its own. A job type that the
+ * queue serialises per key (`evaluate-pr`, one run per pull request at a time, E07-S02) carries that key as its only
+ * pg-boss key, so there the window is per serialisation key: every `dedupeKey` of the same pull request shares it.
  */
 export type EnqueueOptions = { readonly idempotencyKey: string } & (
   | { readonly dedupeKey?: undefined; readonly dedupeWindowSeconds?: undefined }

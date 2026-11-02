@@ -5,7 +5,7 @@ import type { Logger } from 'pino';
 import type { JobQueue } from '../../services/ports/jobs.ts';
 import { type Boss, createPgBoss, runtimeBossOptions } from './boss.ts';
 import { PgBossEnqueuer } from './enqueuer.ts';
-import { MissingQueuesError, missingQueues } from './queue-check.ts';
+import { assertQueues, missingQueues } from './queue-check.ts';
 
 // The job queue at run time (E07-S01): pg-boss started as the runtime role, which neither creates nor migrates the
 // schema, with the check that every queue of `QUEUES` exists.
@@ -30,8 +30,9 @@ async function queuesAnswer(boss: Boss): Promise<boolean> {
 /**
  * Starts pg-boss and checks the queues. A `error` event of pg-boss is logged (`jobs.queue_error`) and makes the queue not
  * ready until a read of the queues succeeds again; a stopped queue is never ready.
- * @throws MissingQueuesError naming the queues the database lacks; anything pg-boss throws on start (the schema is not
- * installed or out of date, the database is unreachable). pg-boss is stopped before either is thrown.
+ * @throws MissingQueuesError naming the queues the database lacks, QueuePolicyError naming those of the wrong policy
+ * (E07-S02); anything pg-boss throws on start (the schema is not installed or out of date, the database is unreachable).
+ * pg-boss is stopped before any of them is thrown.
  */
 export async function startJobQueue(options: StartJobQueueOptions): Promise<JobQueue> {
   const { logger } = options;
@@ -45,10 +46,7 @@ export async function startJobQueue(options: StartJobQueueOptions): Promise<JobQ
   });
   try {
     await boss.start();
-    const missing = await missingQueues(boss);
-    if (missing.length > 0) {
-      throw new MissingQueuesError(missing);
-    }
+    await assertQueues(boss);
   } catch (error) {
     await boss.stop().catch(() => undefined);
     throw error;

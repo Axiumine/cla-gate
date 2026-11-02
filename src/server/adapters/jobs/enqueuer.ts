@@ -8,6 +8,7 @@ import type { Database } from '../db/schema.ts';
 import type { Boss } from './boss.ts';
 import { jobIdFor } from './job-id.ts';
 import type { QueueName } from './queues.ts';
+import { serialisationKey } from './serialisation.ts';
 
 // The pg-boss implementation of the `JobEnqueuer` port (E07-S01, port by E06-S06). The job is sent on the connection of
 // the Kysely transaction the webhook intake opened, so it commits or rolls back together with the `webhook_deliveries`
@@ -18,20 +19,23 @@ const LIVE_STATES: ReadonlySet<string> = new Set(['created', 'retry', 'active'])
 
 /**
  * The send options of one job on `db`. The job id (made from the `idempotencyKey`) makes a second send under the same key
- * meet the first job's row. A `dedupeKey` becomes pg-boss's throttle: one job per `singletonKey` in a window of `singletonSeconds`, a window
- * that starts at a multiple of its length counted from the epoch (so two sends a second apart on either side of a window
- * boundary are both accepted). pg-boss reads the window as a whole number of seconds; anything else is refused here
- * instead of in the middle of a statement.
+ * meet the first job's row. A job with a serialisation key (E07-S02) is sent with it as pg-boss's `singletonKey`, which
+ * the `singleton` policy of its queue reads to run one job per key at a time. A `dedupeKey` becomes pg-boss's throttle:
+ * one job per `singletonKey` in a window of `singletonSeconds`, a window that starts at a multiple of its length counted
+ * from the epoch (so two sends a second apart on either side of a window boundary are both accepted). pg-boss has one key
+ * per job, so on a serialised queue the throttle is per serialisation key: the window is shared by every dedupe key of
+ * the same pull request, and the dedupe key itself is not stored. pg-boss reads the window as a whole number of seconds;
+ * anything else is refused here instead of in the middle of a statement.
  */
-function sendOptions(id: string, db: Db, options: EnqueueOptions): SendOptions {
-  const base = { id, db };
+function sendOptions(id: string, db: Db, serialisation: string | undefined, options: EnqueueOptions): SendOptions {
+  const base = serialisation === undefined ? { id, db } : { id, db, singletonKey: serialisation };
   if (options.dedupeKey === undefined) {
     return base;
   }
   if (!Number.isSafeInteger(options.dedupeWindowSeconds) || options.dedupeWindowSeconds < 1) {
     throw new RangeError('dedupeWindowSeconds must be a whole number of seconds, at least 1');
   }
-  return { ...base, singletonKey: options.dedupeKey, singletonSeconds: options.dedupeWindowSeconds };
+  return { ...base, singletonKey: serialisation ?? options.dedupeKey, singletonSeconds: options.dedupeWindowSeconds };
 }
 
 export class PgBossEnqueuer implements JobEnqueuer {
@@ -52,7 +56,7 @@ export class PgBossEnqueuer implements JobEnqueuer {
     const queue: QueueName = job.type;
     const id = jobIdFor(options.idempotencyKey);
     const db = fromKysely(tx);
-    const send = sendOptions(id, db, options);
+    const send = sendOptions(id, db, serialisationKey(job), options);
     if ((await this.#boss.send(queue, job, send)) !== null) {
       return 'queued';
     }

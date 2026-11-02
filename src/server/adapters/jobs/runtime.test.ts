@@ -5,7 +5,8 @@ import { captureLogs, testConfig } from '../../test-support.ts';
 import { createLogger } from '../http/logger.ts';
 import { PgBossEnqueuer } from './enqueuer.ts';
 import { MissingQueuesError } from './queue-check.ts';
-import { QUEUES } from './queues.ts';
+import { QueuePolicyError } from './queue-policy.ts';
+import { QUEUE_DEFINITIONS, QUEUES } from './queues.ts';
 import { type StartJobQueueOptions, startJobQueue } from './runtime.ts';
 import { fakeBoss } from './test-support.ts';
 
@@ -40,6 +41,17 @@ test('a missing queue stops pg-boss and fails with the names of the missing ones
   const error = await queue.catch((caught: unknown) => caught);
   expect(error).toBeInstanceOf(MissingQueuesError);
   expect(error).toMatchObject({ queues: QUEUES.filter((name) => name !== 'evaluate-pr') });
+  expect(boss.stop).toHaveBeenCalledOnce();
+});
+
+test('a queue of the wrong policy stops pg-boss and fails with the queue and the policy it has (E07-S02)', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce(
+    QUEUE_DEFINITIONS.map(({ name, policy }) => ({ name, policy: name === 'evaluate-pr' ? 'standard' : policy })),
+  );
+  const error = await start(boss).queue.catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(QueuePolicyError);
+  expect(error).toMatchObject({ mismatches: [{ queue: 'evaluate-pr', found: 'standard', expected: 'singleton' }] });
   expect(boss.stop).toHaveBeenCalledOnce();
 });
 

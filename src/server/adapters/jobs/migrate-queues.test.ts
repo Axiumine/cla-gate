@@ -6,7 +6,8 @@ import { UNREACHABLE_DATABASE_URL } from '../../test-support.ts';
 import { openPgliteDatabase } from '../db/pglite.ts';
 import { emptyTestDatabase, ensureRuntimeRole } from '../db/test-support.ts';
 import { migrateJobQueues } from './migrate-queues.ts';
-import { QUEUES } from './queues.ts';
+import { QueuePolicyError } from './queue-policy.ts';
+import { EXPIRE_IN_SECONDS, QUEUE_DEFINITIONS, QUEUES } from './queues.ts';
 import { fakeBoss } from './test-support.ts';
 
 // The queue step of `yarn db:migrate` with a pg-boss that is only a script, on PGlite for the grants (E07-S01). Against a
@@ -61,6 +62,26 @@ test('it starts pg-boss with the options of the owner and creates every queue th
   expect(result.created).toEqual([...QUEUES]);
 });
 
+test('every queue is created with the policy of the table and the expiry of a job that a dead worker holds (E07-S02)', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce([]);
+  await migrateWith(boss);
+  expect(boss.createQueue.mock.calls).toEqual(
+    QUEUE_DEFINITIONS.map(({ name, policy }) => [name, { policy, expireInSeconds: EXPIRE_IN_SECONDS }]),
+  );
+  expect(boss.createQueue).toHaveBeenCalledWith('evaluate-pr', { policy: 'singleton', expireInSeconds: 300 });
+});
+
+test('a queue that exists with another policy fails the step before anything is created, and pg-boss is stopped', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce([{ name: 'evaluate-pr', policy: 'standard' }]);
+  const error = await migrateWith(boss).catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(QueuePolicyError);
+  expect(error).toMatchObject({ mismatches: [{ queue: 'evaluate-pr', found: 'standard', expected: 'singleton' }] });
+  expect(boss.createQueue).not.toHaveBeenCalled();
+  expect(boss.stop).toHaveBeenCalledOnce();
+});
+
 test('it creates only the queues that do not exist: a run on a migrated database creates none', async () => {
   const boss = fakeBoss();
   const { result } = await migrateWith(boss);
@@ -70,11 +91,14 @@ test('it creates only the queues that do not exist: a run on a migrated database
 
 test('with some queues present it creates the others', async () => {
   const boss = fakeBoss();
-  boss.getQueues.mockResolvedValueOnce([{ name: 'evaluate-pr' }, { name: 'sweep' }]);
+  boss.getQueues.mockResolvedValueOnce([
+    { name: 'evaluate-pr', policy: 'singleton' },
+    { name: 'sweep', policy: 'standard' },
+  ]);
   const { result } = await migrateWith(boss);
   expect(result.created).not.toContain('sweep');
   expect(result.created).toHaveLength(QUEUES.length - 2);
-  expect(boss.createQueue).not.toHaveBeenCalledWith('evaluate-pr');
+  expect(boss.createQueue).not.toHaveBeenCalledWith('evaluate-pr', expect.anything());
 });
 
 test('the errors pg-boss reports on its own connections go to the sink it was given', async () => {

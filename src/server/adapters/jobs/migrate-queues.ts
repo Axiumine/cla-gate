@@ -5,7 +5,8 @@ import type { ConstructorOptions } from 'pg-boss';
 import type { Database } from '../db/schema.ts';
 import { type Boss, createPgBoss, ownerBossOptions } from './boss.ts';
 import { DEFAULT_INDEX_BUILD_WAIT, type IndexBuildWait, waitForIndexBuilds } from './index-builds.ts';
-import { QUEUES, type QueueName } from './queues.ts';
+import { policyMismatches, QueuePolicyError } from './queue-policy.ts';
+import { EXPIRE_IN_SECONDS, QUEUE_DEFINITIONS, QUEUES, type QueueName } from './queues.ts';
 import { grantRuntimeAccess } from './runtime-grants.ts';
 
 // The second step of `yarn db:migrate` (E07-S01), after the SQL files: pg-boss's own schema, the queues and the grants
@@ -33,13 +34,21 @@ export interface QueueMigration {
   readonly grants: 'granted' | 'skipped';
 }
 
-/** Creates the queues that do not exist yet. Idempotent: an existing queue is left as it is. */
+/**
+ * Creates the queues that do not exist yet, each with its policy (E07-S02). Idempotent: an existing queue is left as it
+ * is. A queue that exists with another policy than the table gives it is an error, because a policy cannot be changed.
+ */
 async function createMissingQueues(boss: Boss): Promise<QueueName[]> {
-  const existing = new Set((await boss.getQueues([...QUEUES])).map((queue) => queue.name));
+  const found = await boss.getQueues([...QUEUES]);
+  const mismatches = policyMismatches(found);
+  if (mismatches.length > 0) {
+    throw new QueuePolicyError(mismatches);
+  }
+  const existing = new Set(found.map((queue) => queue.name));
   const created: QueueName[] = [];
-  for (const name of QUEUES) {
+  for (const { name, policy } of QUEUE_DEFINITIONS) {
     if (!existing.has(name)) {
-      await boss.createQueue(name);
+      await boss.createQueue(name, { policy, expireInSeconds: EXPIRE_IN_SECONDS });
       created.push(name);
     }
   }

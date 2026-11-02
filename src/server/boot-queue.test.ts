@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
+import { containing } from './adapters/db/test-support.ts';
 import { MissingQueuesError } from './adapters/jobs/queue-check.ts';
+import { QueuePolicyError } from './adapters/jobs/queue-policy.ts';
 import { type BootOptions, boot } from './boot.ts';
 import { captureLogs, FakeProcess, fakeJobQueue, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
@@ -67,6 +69,19 @@ test('missing queues stop the start: they are named, the way out is said, the da
     { queues: ['close-pr', 'sweep'], msg: 'Job queues are missing: close-pr, sweep: run yarn db:migrate' },
   ]);
   expect(signals.listenerCount('SIGTERM')).toBe(0);
+});
+
+test('a queue of the wrong policy stops the start: queue and policies are named, and the way out is said', async () => {
+  const mismatches = [{ queue: 'evaluate-pr', found: 'standard', expected: 'singleton' }] as const;
+  const { server, signals, logs } = await start(() => Promise.reject(new QueuePolicyError(mismatches)));
+  expect(server).toBeUndefined();
+  expect(signals.exitCode).toBe(1);
+  expect(fatal(logs)).toMatchObject([
+    {
+      mismatches: [{ queue: 'evaluate-pr', found: 'standard', expected: 'singleton' }],
+      msg: containing('evaluate-pr is standard, not singleton'),
+    },
+  ]);
 });
 
 test('a queue that cannot start for another reason stops the start with that error in the log', async () => {

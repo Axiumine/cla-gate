@@ -24,6 +24,16 @@ async function inTransaction<T>(work: (tx: Transaction<Database>) => Promise<T>)
   return db.transaction().execute(work);
 }
 
+/** The job of the serialised queue (E07-S02): pull request 42 of repository 9001. */
+const EVALUATION: Job = {
+  type: 'evaluate-pr',
+  githubInstallationId: parseGithubId(70_001),
+  githubRepoId: parseGithubId(9001),
+  prNumber: 42,
+  trigger: 'pull_request',
+  deliveryId: GUID,
+};
+
 const KEY: EnqueueOptions = { idempotencyKey: GUID };
 /** The connection of the transaction: its identity is not what the tests look at, that it is passed is. */
 const SOME_CONNECTION: unknown = expect.anything();
@@ -64,6 +74,37 @@ test('a dedupe key and window become the throttle of pg-boss: a singleton key an
     singletonKey: 'sync:70001',
     singletonSeconds: 60,
   });
+});
+
+test('an evaluate-pr job carries its serialisation key, the repository id and the pull request number, as pg-boss reads it', async () => {
+  const boss = fakeBoss();
+  await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, EVALUATION, KEY));
+  expect(boss.send).toHaveBeenCalledExactlyOnceWith('evaluate-pr', EVALUATION, {
+    id: jobIdFor(GUID),
+    db: SOME_CONNECTION,
+    singletonKey: '9001:42',
+  });
+});
+
+test('a dedupe window on an evaluate-pr job throttles per pull request: the serialisation key stays, the dedupe key is not stored', async () => {
+  const boss = fakeBoss();
+  const options = { idempotencyKey: GUID, dedupeKey: 'recheck:9001:42', dedupeWindowSeconds: 60 };
+  await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, EVALUATION, options));
+  expect(boss.send.mock.calls[0]?.[2]).toEqual({
+    id: jobIdFor(GUID),
+    db: SOME_CONNECTION,
+    singletonKey: '9001:42',
+    singletonSeconds: 60,
+  });
+});
+
+test('a window that is not a whole number of seconds is refused for a serialised job too', async () => {
+  const boss = fakeBoss();
+  const options = { idempotencyKey: GUID, dedupeKey: 'recheck:9001:42', dedupeWindowSeconds: 0.5 };
+  await expect(inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, EVALUATION, options))).rejects.toThrow(
+    RangeError,
+  );
+  expect(boss.send).not.toHaveBeenCalled();
 });
 
 test.each([[0], [-5], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY], [2 ** 53]])(

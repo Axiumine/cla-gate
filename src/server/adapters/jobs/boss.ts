@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type ConstructorOptions, type Db, PgBoss, type SendOptions, type StopOptions } from 'pg-boss';
-import { PGBOSS_SCHEMA } from './queues.ts';
+import { PGBOSS_SCHEMA, type QueuePolicy } from './queues.ts';
 
 // The part of pg-boss this application uses, and the two ways it is started (E07-S01). The queue code depends on
 // {@link Boss}, not on the class, so a test hands it a fake and the 100% gate holds on PGlite (pg-boss itself needs a
@@ -13,9 +13,10 @@ export interface Boss {
   /** Stops the workers (waiting for the running jobs, up to the default of 30 s) and closes pg-boss's own pool. */
   stop(options?: StopOptions): Promise<void>;
   on(event: 'error', listener: (error: Error) => void): unknown;
-  createQueue(name: string): Promise<void>;
-  /** The queues of these names that exist. */
-  getQueues(names: string[]): Promise<readonly { readonly name: string }[]>;
+  /** Creates the queue with the policy and the expiry of `options` (E07-S02); a policy cannot be changed afterwards. */
+  createQueue(name: string, options: { readonly policy: QueuePolicy; readonly expireInSeconds: number }): Promise<void>;
+  /** The queues of these names that exist, with the policy each was created with (`standard` when pg-boss gives none). */
+  getQueues(names: string[]): Promise<readonly { readonly name: string; readonly policy?: string }[]>;
   /** The background index builds a pg-boss migration queued, counted by status. */
   getBamStatus(): Promise<readonly { readonly status: string; readonly count: number }[]>;
   /** The id of the job, or `null` when nothing was inserted (the id exists, or a throttle window or a queue policy refused it). */

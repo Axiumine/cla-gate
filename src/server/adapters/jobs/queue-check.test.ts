@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { MissingQueuesError, missingQueues } from './queue-check.ts';
-import { QUEUES } from './queues.ts';
+import { assertQueues, MissingQueuesError, missingQueues } from './queue-check.ts';
+import { QueuePolicyError } from './queue-policy.ts';
+import { QUEUE_DEFINITIONS, QUEUES } from './queues.ts';
 import { fakeBoss } from './test-support.ts';
 
 test('asks pg-boss for every queue of the constant and finds none missing when all exist', async () => {
@@ -37,4 +38,30 @@ test('the error names the queues, and only them', () => {
   expect(error.queues).toEqual(['sweep', 'close-pr']);
   expect(error.name).toBe('MissingQueuesError');
   expect(error).toBeInstanceOf(Error);
+});
+
+const EXISTING = QUEUE_DEFINITIONS.map(({ name, policy }) => ({ name, policy }));
+
+test('the check passes when every queue exists with its policy, after one read of the queues', async () => {
+  const boss = fakeBoss();
+  await expect(assertQueues(boss)).resolves.toBeUndefined();
+  expect(boss.getQueues).toHaveBeenCalledExactlyOnceWith([...QUEUES]);
+});
+
+test('the check names the missing queues before it looks at any policy', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce([{ name: 'evaluate-pr', policy: 'standard' }]);
+  const error = await assertQueues(boss).catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(MissingQueuesError);
+  expect(error).toMatchObject({ queues: QUEUES.filter((name) => name !== 'evaluate-pr') });
+});
+
+test('the check refuses a queue of the wrong policy', async () => {
+  const boss = fakeBoss();
+  boss.getQueues.mockResolvedValueOnce(
+    EXISTING.map((queue) => (queue.name === 'evaluate-pr' ? { ...queue, policy: 'standard' } : queue)),
+  );
+  const error = await assertQueues(boss).catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(QueuePolicyError);
+  expect(error).toMatchObject({ mismatches: [{ queue: 'evaluate-pr', found: 'standard', expected: 'singleton' }] });
 });
