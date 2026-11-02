@@ -64,15 +64,9 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
   const auth = new AppAuth({ appId, keys, clock: options.clock, logger });
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
   const limiter = new RateLimiter({ clock: options.clock, logger });
-  const identity = new AppIdentityCheck({
-    auth,
-    appId,
-    logger,
-    fetch: options.fetch,
-    timeoutMs,
-    clock: options.clock,
-    limiter,
-  });
+  // What the identity check and the token provider both need to send a request through the rate limiter.
+  const http = { fetch: options.fetch, timeoutMs, clock: options.clock, limiter, logger };
+  const identity = new AppIdentityCheck({ auth, appId, ...http });
   try {
     await identity.verify();
   } catch (error) {
@@ -88,15 +82,7 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
     await identity.verify();
     return auth.withJwt(send);
   };
-  const installationTokens = new InstallationTokens({
-    withJwt,
-    clock: options.clock,
-    logger,
-    fetch: options.fetch,
-    timeoutMs,
-    limiter,
-    gate: options.gate,
-  });
+  const installationTokens = new InstallationTokens({ withJwt, gate: options.gate, ...http });
   const octokit = createOctokit({ fetch: options.fetch, timeoutMs, logger });
   const client = new OctokitGitHubClient({ octokit, withJwt, tokens: installationTokens, limiter });
   return { identity, withJwt, installationTokens, client };

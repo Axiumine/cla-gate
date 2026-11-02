@@ -23,7 +23,7 @@ type GitHubAccountType = 'User' | 'Organization';
  * The account types an installation can belong to: a user, an organisation or `Other`, which is any account GitHub
  * describes in another way (an enterprise). `Other` is read, recorded as rejected and never served.
  */
-export type GitHubInstallationAccountType = GitHubAccountType | 'Other';
+type GitHubInstallationAccountType = GitHubAccountType | 'Other';
 
 /** The App the JWT belongs to (`GET /app`). */
 export interface GitHubAppInfo {

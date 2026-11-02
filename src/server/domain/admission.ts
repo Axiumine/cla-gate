@@ -34,6 +34,7 @@ export function effectiveAccountIds(policy: AdmissionPolicy): GithubId[] {
  * Whether `accountId` is an account the policy serves. The argument is `unknown` on purpose: the id comes from a GitHub
  * payload or a database row, and anything that is not a positive safe integer (`0`, `-1`, `NaN`, a float, a string, a
  * bigint, `null`) is refused, even when its text would equal an id in the list.
+ * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode); the services ask {@link decideAccountAdmission}.
  */
 export function decideAdmission(accountId: unknown, policy: AdmissionPolicy): AdmissionVerdict {
   const parsed = githubIdSchema.safeParse(accountId);
