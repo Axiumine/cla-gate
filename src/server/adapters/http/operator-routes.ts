@@ -7,6 +7,7 @@ import { OPERATOR_INSTALLATIONS_PATH, operatorInstallationsResponseSchema } from
 import { tenantState } from '../../domain/tenant-state.ts';
 import { listInstallationsForOperator } from '../../services/installation-operator.ts';
 import type { Database } from '../db/schema.ts';
+import { setNoStore } from './no-store.ts';
 
 // The routes of the instance operator (E11-S08). Who may call them is decided by the guard of the `operator` access kind
 // (operator-guard.ts); the operator role gives no access to any tenant.
@@ -29,7 +30,7 @@ export const operatorRoutes: FastifyPluginCallbackZod<OperatorRoutesOptions> = (
     { schema: { response: { 200: operatorInstallationsResponseSchema } }, config: { access: 'operator' } },
     async (_request, reply): Promise<z.infer<typeof operatorInstallationsResponseSchema>> => {
       const installations = await listInstallationsForOperator(options.db);
-      reply.header('cache-control', 'no-store');
+      setNoStore(reply);
       return {
         installations: installations.map((installation) => ({
           githubInstallationId: installation.githubInstallationId,

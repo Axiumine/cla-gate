@@ -26,7 +26,7 @@ export async function listRepoAdminCandidates(
   limit: number,
 ): Promise<RepoAdminCandidate[]> {
   const { installationId } = scope;
-  const rows = await db
+  return db
     .selectFrom('repositories')
     .innerJoin('installations', 'installations.id', 'repositories.installation_id')
     .select([
@@ -49,5 +49,4 @@ export async function listRepoAdminCandidates(
     .orderBy('repositories.id')
     .limit(limit)
     .execute();
-  return rows;
 }

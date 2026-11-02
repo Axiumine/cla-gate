@@ -137,7 +137,7 @@ function addProbeRoutes(world: AuthWorld, reached: string[]): void {
 
 /** Every tenant table as its rows read now: what a denied call must leave exactly as it was. */
 export async function tenantTables(db: Kysely<Database>): Promise<string> {
-  const tables = [
+  const tables = await Promise.all([
     db.selectFrom('installations').selectAll().orderBy('id').execute(),
     db.selectFrom('repositories').selectAll().orderBy('id').execute(),
     db.selectFrom('cla_documents').selectAll().orderBy('id').execute(),
@@ -149,8 +149,8 @@ export async function tenantTables(db: Kysely<Database>): Promise<string> {
     db.selectFrom('pr_evaluations').selectAll().orderBy('id').execute(),
     db.selectFrom('audit_log').selectAll().orderBy('id').execute(),
     db.selectFrom('installation_admin_seen').selectAll().orderBy('installation_id').orderBy('user_github_id').execute(),
-  ];
-  return JSON.stringify(await Promise.all(tables));
+  ]);
+  return JSON.stringify(tables);
 }
 
 /** The GitHub calls a role is read with: the only ones the guard ever makes (the port has no call that changes anything at GitHub). */

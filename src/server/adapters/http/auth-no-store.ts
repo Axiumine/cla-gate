@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { setNoStore } from './no-store.ts';
 
 // Keeps `/api/auth` out of every cache (E10-S02). It is registered by `buildApp` ahead of the rate limit, and the answers
 // that never reach a route (an invalid URL) set the header from {@link isAuthUrl}, so no answer under the path lacks it,
@@ -41,8 +42,7 @@ function isAuthRequest(request: FastifyRequest): boolean {
 
 export function noStoreForAuth(request: FastifyRequest, reply: FastifyReply, done: () => void): void {
   if (isAuthRequest(request)) {
-    // The reply is a thenable that settles when the response is sent: the result of `header` is dropped, never awaited.
-    void reply.header('cache-control', 'no-store');
+    setNoStore(reply);
   }
   done();
 }
