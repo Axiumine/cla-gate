@@ -12,6 +12,7 @@ import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
 import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
+import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { securityHeaders } from './adapters/http/security.ts';
@@ -65,13 +66,15 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     reply.header(REQUEST_ID_HEADER, request.id);
     done();
   });
+  const clock = options.clock ?? systemClock;
+  await registerRateLimit(app, { trustProxy: config.trustProxy, clock });
   const loginSettings = authSettings(config);
   registerRequestGuards(app, { publicBaseUrl: config.publicBaseUrl, sessionSecret: loginSettings?.sessionSecret });
   if (loginSettings !== undefined) {
     await registerAuth(app, {
       db,
       settings: loginSettings,
-      clock: options.clock ?? systemClock,
+      clock,
       fetch: options.fetch,
       githubTimeoutMs: options.githubTimeoutMs,
     });

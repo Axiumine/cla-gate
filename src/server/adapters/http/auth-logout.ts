@@ -5,6 +5,7 @@ import { logoutRequestSchema } from '../../../shared/auth.ts';
 import type { SessionStore } from '../db/sessions.ts';
 import { requireAuth } from './auth-request.ts';
 import { AppError } from './errors.ts';
+import { RATE_LIMITS, routeRateLimit } from './rate-limit.ts';
 import { clearSessionCookie } from './session-cookie.ts';
 
 interface LogoutRoutesOptions {
@@ -22,22 +23,26 @@ interface LogoutRoutesOptions {
  * `auditExempt: 'session'` (E04-S09). The log line carries the flag and, for everywhere, the count, never an id or a login.
  */
 export const logoutRoutes: FastifyPluginCallbackZod<LogoutRoutesOptions> = (app, options, done) => {
-  app.post('/api/auth/logout', { config: { auditExempt: 'session' } }, async (request, reply) => {
-    const { sessionId, user } = requireAuth(request);
-    const body = logoutRequestSchema.safeParse(request.body);
-    if (!body.success) {
-      throw new AppError(400, 'bad_request');
-    }
-    const everywhere = body.data?.everywhere === true;
-    if (everywhere) {
-      const removed = await options.store.removeAllOfUser(user.id);
-      request.log.info({ everywhere, removed }, 'auth.logout');
-    } else {
-      await options.store.remove(sessionId);
-      request.log.info({ everywhere }, 'auth.logout');
-    }
-    clearSessionCookie(reply);
-    return reply.code(204).send();
-  });
+  app.post(
+    '/api/auth/logout',
+    { config: { auditExempt: 'session', rateLimit: routeRateLimit(RATE_LIMITS.logout) } },
+    async (request, reply) => {
+      const { sessionId, user } = requireAuth(request);
+      const body = logoutRequestSchema.safeParse(request.body);
+      if (!body.success) {
+        throw new AppError(400, 'bad_request');
+      }
+      const everywhere = body.data?.everywhere === true;
+      if (everywhere) {
+        const removed = await options.store.removeAllOfUser(user.id);
+        request.log.info({ everywhere, removed }, 'auth.logout');
+      } else {
+        await options.store.remove(sessionId);
+        request.log.info({ everywhere }, 'auth.logout');
+      }
+      clearSessionCookie(reply);
+      return reply.code(204).send();
+    },
+  );
   done();
 };

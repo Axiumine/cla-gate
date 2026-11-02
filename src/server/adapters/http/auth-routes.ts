@@ -6,6 +6,7 @@ import { sessionResponseSchema } from '../../../shared/auth.ts';
 import type { Secret } from '../../config/secret.ts';
 import { requireAuth } from './auth-request.ts';
 import { csrfToken } from './csrf-token.ts';
+import { RATE_LIMITS, routeRateLimit } from './rate-limit.ts';
 import { clearSessionCookie } from './session-cookie.ts';
 
 interface AuthRoutesOptions {
@@ -21,8 +22,12 @@ interface AuthRoutesOptions {
 export const authRoutes: FastifyPluginCallbackZod<AuthRoutesOptions> = (app, options, done) => {
   app.get(
     '/api/auth/session',
-    // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
-    { schema: { response: { 200: sessionResponseSchema } } },
+    {
+      // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
+      schema: { response: { 200: sessionResponseSchema } },
+      config: { rateLimit: routeRateLimit(RATE_LIMITS.session) },
+      exposeHeadRoute: false,
+    },
     (request, reply): z.infer<typeof sessionResponseSchema> => {
       if (request.auth === null && request.sessionCookiePresented) {
         clearSessionCookie(reply);

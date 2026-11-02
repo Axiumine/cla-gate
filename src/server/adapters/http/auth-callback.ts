@@ -9,6 +9,7 @@ import { safeReturnTo } from '../../domain/return-to.ts';
 import type { SessionLimits } from '../../domain/session.ts';
 import { completeLogin, type LoginContext } from '../../services/login.ts';
 import { clearOauthCookie, readOauthCookie } from './oauth-cookie.ts';
+import { RATE_LIMITS, routeRateLimit } from './rate-limit.ts';
 import { setSessionCookie } from './session-cookie.ts';
 
 /** `code`, `state` and `error` are each at most this long: GitHub's are a few dozen characters, and the rest is hostile. */
@@ -85,15 +86,19 @@ async function complete(request: FastifyRequest, options: CallbackRoutesOptions)
  * session), which is the one write a GET may make: the login cannot be completed by any other request.
  */
 export const callbackRoutes: FastifyPluginCallbackZod<CallbackRoutesOptions> = (app, options, done) => {
-  app.get('/api/auth/callback', async (request, reply) => {
-    clearOauthCookie(reply);
-    const outcome = await complete(request, options);
-    if (!outcome.ok) {
-      request.log.info({ reason: outcome.reason }, 'auth.login_failed');
-      return reply.redirect(loginFailedPath(outcome.reason));
-    }
-    setSessionCookie(reply, outcome.sessionId, options.limits.absoluteSeconds);
-    return reply.redirect(outcome.returnTo);
-  });
+  app.get(
+    '/api/auth/callback',
+    { config: { rateLimit: routeRateLimit(RATE_LIMITS.callback) }, exposeHeadRoute: false },
+    async (request, reply) => {
+      clearOauthCookie(reply);
+      const outcome = await complete(request, options);
+      if (!outcome.ok) {
+        request.log.info({ reason: outcome.reason }, 'auth.login_failed');
+        return reply.redirect(loginFailedPath(outcome.reason));
+      }
+      setSessionCookie(reply, outcome.sessionId, options.limits.absoluteSeconds);
+      return reply.redirect(outcome.returnTo);
+    },
+  );
   done();
 };

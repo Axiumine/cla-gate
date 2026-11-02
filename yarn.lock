@@ -868,6 +868,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fastify/rate-limit@npm:^11.2.1":
+  version: 11.2.1
+  resolution: "@fastify/rate-limit@npm:11.2.1"
+  dependencies:
+    "@lukeed/ms": "npm:^2.0.2"
+    fastify-plugin: "npm:^6.0.0"
+    ip-address: "npm:^10.2.0"
+    toad-cache: "npm:^3.7.0"
+  checksum: 10c0/a0501a7fe27b83048d54d71295d54dcbb6227599bc2506c3fd86f0f9c6d426ef45a2838aa17163353aa2973260088f6fbb24b16f29986427dac4ea9794dde922
+  languageName: node
+  linkType: hard
+
 "@humanfs/core@npm:^0.19.2":
   version: 0.19.2
   resolution: "@humanfs/core@npm:0.19.2"
@@ -1219,6 +1231,13 @@ __metadata:
   version: 1.1.1
   resolution: "@keyv/serialize@npm:1.1.1"
   checksum: 10c0/b0008cae4a54400c3abf587b8cc2474c6f528ee58969ce6cf9cb07a04006f80c73c85971d6be6544408318a2bc40108236a19a82aea0a6de95aae49533317374
+  languageName: node
+  linkType: hard
+
+"@lukeed/ms@npm:^2.0.2":
+  version: 2.0.2
+  resolution: "@lukeed/ms@npm:2.0.2"
+  checksum: 10c0/843b922717313bcde4943f478145d8bc13115b9b91d83bbaed53739b5644122984412310aed574792f4e6b492f2cbda178175f601856d310f67e14834c3f17a0
   languageName: node
   linkType: hard
 
@@ -3119,6 +3138,7 @@ __metadata:
     "@eslint/js": "npm:^10.0.1"
     "@fastify/cookie": "npm:^11.1.5"
     "@fastify/helmet": "npm:^13.2.0"
+    "@fastify/rate-limit": "npm:^11.2.1"
     "@memlab/api": "npm:2.0.6"
     "@playwright/test": "npm:1.64.1"
     "@stryker-mutator/api": "npm:10.1.1"
@@ -4539,7 +4559,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ip-address@npm:^10.1.1":
+"ip-address@npm:^10.1.1, ip-address@npm:^10.2.0":
   version: 10.7.5
   resolution: "ip-address@npm:10.7.5"
   checksum: 10c0/0213462eada955051a4d5927a62f6613b7bf0f4b426347641491ef9c8498ee6e1ef0bcbe1455382de6d61771b0ab4a344919102d4b614d284161ed8df620125f

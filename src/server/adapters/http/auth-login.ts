@@ -6,6 +6,7 @@ import { safeReturnTo } from '../../domain/return-to.ts';
 import type { Clock } from '../../services/ports/clock.ts';
 import { authorizeUrl, newLoginAttempt } from './oauth-attempt.ts';
 import { setOauthCookie } from './oauth-cookie.ts';
+import { RATE_LIMITS, routeRateLimit } from './rate-limit.ts';
 
 interface LoginRoutesOptions {
   /** The GitHub App's client id. */
@@ -28,21 +29,29 @@ const loginQuery = z.object({ return_to: z.string().optional().catch(undefined) 
  * no cookie and no round trip to GitHub; anyone else gets the attempt cookie and a redirect to GitHub's authorize page.
  */
 export const loginRoutes: FastifyPluginCallbackZod<LoginRoutesOptions> = (app, options, done) => {
-  app.get('/api/auth/login', { schema: { querystring: loginQuery } }, (request, reply) => {
-    const returnTo = safeReturnTo(request.query.return_to);
-    if (request.auth !== null) {
-      return reply.redirect(returnTo);
-    }
-    const attempt = newLoginAttempt();
-    setOauthCookie(reply, { s: attempt.state, v: attempt.verifier, r: returnTo }, options.clock.now());
-    return reply.redirect(
-      authorizeUrl({
-        clientId: options.clientId,
-        redirectUri: options.callbackUrl,
-        state: attempt.state,
-        challenge: attempt.challenge,
-      }),
-    );
-  });
+  app.get(
+    '/api/auth/login',
+    {
+      schema: { querystring: loginQuery },
+      config: { rateLimit: routeRateLimit(RATE_LIMITS.login) },
+      exposeHeadRoute: false,
+    },
+    (request, reply) => {
+      const returnTo = safeReturnTo(request.query.return_to);
+      if (request.auth !== null) {
+        return reply.redirect(returnTo);
+      }
+      const attempt = newLoginAttempt();
+      setOauthCookie(reply, { s: attempt.state, v: attempt.verifier, r: returnTo }, options.clock.now());
+      return reply.redirect(
+        authorizeUrl({
+          clientId: options.clientId,
+          redirectUri: options.callbackUrl,
+          state: attempt.state,
+          challenge: attempt.challenge,
+        }),
+      );
+    },
+  );
   done();
 };

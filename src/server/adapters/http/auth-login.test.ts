@@ -159,7 +159,12 @@ test('a second login start overwrites the first: same cookie name, a new state, 
 
 test('fifty calls produce fifty distinct state values', async () => {
   const { app } = await world();
-  const responses = await Promise.all(Array.from({ length: 50 }, () => app.inject('/api/auth/login')));
+  // Fifty clients, one start each: the budget of a start is 20 a minute for one client address (E10-S08).
+  const responses = await Promise.all(
+    Array.from({ length: 50 }, (_unused, n) =>
+      app.inject({ url: '/api/auth/login', remoteAddress: `198.51.100.${n + 1}` }),
+    ),
+  );
   const states = responses.map((response) => new URL(String(response.headers.location)).searchParams.get('state'));
   expect(new Set(states).size).toBe(50);
   const verifiers = responses.map((response) => sentAttempt(response.headers['set-cookie']).attempt.v);

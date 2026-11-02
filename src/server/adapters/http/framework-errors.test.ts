@@ -7,7 +7,17 @@ import { captureLogs, freePort, sendRaw, testApp, testConfig } from '../../test-
 import { frameworkErrorHandlers } from './framework-errors.ts';
 import { createLogger } from './logger.ts';
 
-const NOT_SECURITY = new Set(['content-type', 'content-length', 'date', 'connection', 'keep-alive', 'x-request-id']);
+/** The headers of the rate limit (E10-S08): a request that fails before routing never reaches the limiter, so its answer has none. */
+const RATE_LIMIT = ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'];
+const NOT_SECURITY = new Set([
+  'content-type',
+  'content-length',
+  'date',
+  'connection',
+  'keep-alive',
+  'x-request-id',
+  ...RATE_LIMIT,
+]);
 
 /** The headers helmet adds: everything but the body's own headers and the request id. */
 const securityOf = (headers: Readonly<Record<string, unknown>>) =>
@@ -34,7 +44,9 @@ test.each([
   expect(response.headers['content-type']).toBe('application/json; charset=utf-8');
   expect(securityOf(response.headers)).toEqual(securityOf(normal.headers));
   // Nothing the probe response of the security headers carried (a date, a connection) leaks into the answer.
-  expect(new Set(Object.keys(response.headers))).toEqual(new Set(Object.keys(normal.headers)));
+  expect(new Set(Object.keys(response.headers))).toEqual(
+    new Set(Object.keys(normal.headers).filter((name) => !RATE_LIMIT.includes(name))),
+  );
   expect(response.body).not.toMatch(/FST_ERR|not a valid url|exceeding|%ZZ|aaaa/);
   expect(logs.lines().find((line) => line['msg'] === 'request rejected')).toMatchObject({
     statusCode: expected.status,
