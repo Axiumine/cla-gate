@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { InsertQueryNode, type Kysely, type KyselyPlugin } from 'kysely';
-import { parseGithubId } from '../../../shared/github-id.ts';
+import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import { CLA_TEXT, publishVersion, seedSignature, sha256, type Tenant } from '../../adapters/db/test-support.ts';
 import { type AdmissionWorld, admissionWorld, auditRows, OWNER } from '../admission-fixture/test-support.ts';
@@ -70,10 +70,22 @@ export interface SyncWorld extends AdmissionWorld {
 export async function syncWorld(configured: readonly number[] = []): Promise<SyncWorld> {
   const world = await admissionWorld();
   const { db, clock, logger } = world;
-  const fake = new FakeGitHub({ gate: createStoredGate((githubId) => findInstallationByGithubId(db, githubId)) });
+  // The gate is not what these tests are about: it serves every account any sync of the world serves (the gate's own
+  // policy check is tested in installation-gate.test.ts).
+  const served = new Set<GithubId>([OWNER]);
+  const fake = new FakeGitHub({
+    gate: createStoredGate((githubId) => findInstallationByGithubId(db, githubId), {
+      current: () => Promise.resolve({ accountIds: served }),
+    }),
+  });
   const syncWith = (admission: InstallationAdmission): InstallationSync =>
     createInstallationSync({ db, github: fake, admission, clock, logger });
-  const syncFor = (ids: readonly number[]): InstallationSync => syncWith(world.admissionFor(ids));
+  const syncFor = (ids: readonly number[]): InstallationSync => {
+    for (const account of ids) {
+      served.add(id(account));
+    }
+    return syncWith(world.admissionFor(ids));
+  };
   return { ...world, fake, sync: syncFor(configured), syncFor };
 }
 

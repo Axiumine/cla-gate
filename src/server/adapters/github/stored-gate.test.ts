@@ -3,6 +3,7 @@
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../../shared/github-id.ts';
 import { testGitHubKey } from '../../config/test-support.ts';
+import { createAdmissionPolicy } from '../../domain/admission.ts';
 import { id, installation, repository } from '../../services/github-contract/test-support.ts';
 import { createStoredGate } from '../../services/installation-gate.ts';
 import { createInstallationStore, type InstallationUpsert } from '../../services/installation-store.ts';
@@ -17,6 +18,8 @@ import { gatedHttpWorld } from './http-world/test-support.ts';
 // App's own start-up check) and over FakeGitHub (it records no call).
 
 const signer = testGitHubKey();
+// The account of installationOf(1) (n * 1000) is served by the policy in force.
+const POLICIES = { current: () => Promise.resolve(createAdmissionPolicy([parseGithubId(1000)], parseGithubId(9001))) };
 const LATER = new Date('2026-06-01T12:00:00Z');
 const REJECTED = { status: 'rejected', reason: 'account_not_allowed', decidedAt: DECIDED_AT } as const;
 
@@ -34,7 +37,7 @@ async function gateFor(state: Partial<InstallationUpsert> | undefined) {
   if (state !== undefined) {
     await store.upsertInstallation({ ...installationOf(1, { githubInstallationId: parseGithubId(11) }), ...state });
   }
-  return createStoredGate((githubInstallationId) => store.findInstallationByGithubId(githubInstallationId));
+  return createStoredGate((githubInstallationId) => store.findInstallationByGithubId(githubInstallationId), POLICIES);
 }
 
 test.each(STATES)(

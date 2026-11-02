@@ -46,7 +46,6 @@ export async function wireInstallations(options: InstallationWiringOptions): Pro
   const { db, config, logger, gate, app } = options;
   const clock = options.clock ?? systemClock;
   const installations = createInstallationStore(db);
-  gate.bind(createStoredGate((githubInstallationId) => installations.findInstallationByGithubId(githubInstallationId)));
   if (app === undefined) {
     return { installations, admission: undefined, sync: undefined };
   }
@@ -61,6 +60,12 @@ export async function wireInstallations(options: InstallationWiringOptions): Pro
   } else {
     await policies.current();
   }
+  gate.bind(
+    createStoredGate(
+      (githubInstallationId) => installations.findInstallationByGithubId(githubInstallationId),
+      policies,
+    ),
+  );
   const admission = createInstallationAdmission({ db, policies, clock, logger });
   return {
     installations,

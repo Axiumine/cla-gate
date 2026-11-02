@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../shared/github-id.ts';
+import { decideAdmission } from '../domain/admission.ts';
 import { type InstallationIneligibleReason, installationEligibility } from '../domain/eligibility.ts';
+import type { AdmissionPolicies } from './admission-policies.ts';
 import type { InstallationRow } from './installation-state.ts';
 import { InstallationNotAdmittedError, type NotAdmittedReason } from './ports/github-errors.ts';
 import { closedGate, type InstallationGate } from './ports/installation-gate.ts';
 
 // The gate the installation token provider asks (E05-S03) before it hands out or mints a token: the instance serves an
-// installation only when the stored row says so. Whatever the policy decided is already in the row (E05-S07), so this
-// reads the row and nothing else, and refuses before any request to GitHub is made.
+// installation only when the stored row says so AND the policy in force now still serves its account. The row holds
+// what the last sync decided (E05-S07); the policy is asked again on every call, so an account the operator removed
+// from GITHUB_ALLOWED_ACCOUNT_IDS stops being served at the next start, before any reconciliation has re-decided the row
+// (a reconciliation that fails, or has not run yet, leaves the row stale). Both are checked before any request to GitHub.
 
 /** What each reason of the domain is called at the gate. */
 const GATE_REASONS: Readonly<Record<InstallationIneligibleReason, NotAdmittedReason>> = {
@@ -17,14 +21,28 @@ const GATE_REASONS: Readonly<Record<InstallationIneligibleReason, NotAdmittedRea
   installation_suspended: 'suspended',
 };
 
+/** What the row says, unless the policy in force no longer serves its account. A stored refusal needs no policy. */
+async function admissionNow(
+  row: InstallationRow,
+  policies: Pick<AdmissionPolicies, 'current'>,
+): Promise<InstallationRow['admission_status']> {
+  if (row.admission_status !== 'admitted') {
+    return row.admission_status;
+  }
+  return decideAdmission(row.account_id, await policies.current()).admitted ? 'admitted' : 'rejected';
+}
+
 /**
  * The gate over stored installations. `find` reads the row by GitHub installation id. An installation with no row is
  * `unknown`, one the policy rejected (or never decided: the default is rejected) is `rejected`, then `deleted`, then
- * `suspended`, in the order the evaluation checks them. A failing read is not caught, so a database error refuses the
- * call too: the gate fails closed.
+ * `suspended`, in the order the evaluation checks them. A row that says `admitted` is also checked against the policy
+ * in force now (`policies.current()`, held in memory): an account it no longer serves is `rejected` too, and a policy
+ * that cannot be built yet (the App owner is not known) refuses with that failure. A failing read is not caught, so a
+ * database error refuses the call too: the gate fails closed.
  */
 export function createStoredGate(
   find: (githubInstallationId: GithubId) => Promise<InstallationRow | null>,
+  policies: Pick<AdmissionPolicies, 'current'>,
 ): InstallationGate {
   return {
     async assertAdmitted(githubInstallationId) {
@@ -33,7 +51,7 @@ export function createStoredGate(
         throw new InstallationNotAdmittedError('unknown');
       }
       const served = installationEligibility({
-        admissionStatus: row.admission_status,
+        admissionStatus: await admissionNow(row, policies),
         deletedAt: row.deleted_at,
         suspendedAt: row.suspended_at,
       });

@@ -117,6 +117,23 @@ test('a rejected stored installation is refused by the booted client before any 
   expect(routes.mints).toEqual([]);
 });
 
+test('an account removed from the list is refused after the restart, although its stored row still says admitted', async () => {
+  const routes = githubWithTokens();
+  const { server } = await start({ GITHUB_ALLOWED_ACCOUNT_IDS: '77' });
+  await server?.installations.upsertInstallation({
+    githubInstallationId: id(11),
+    accountId: id(5000),
+    accountLogin: 'was-allowed',
+    accountType: 'Organization',
+    suspendedAt: null,
+    admission: { status: 'admitted', reason: null, decidedAt: new Date(START) },
+  });
+  await expect(server?.github?.client.listInstallationRepositories(id(11))).rejects.toEqual(
+    new InstallationNotAdmittedError('rejected'),
+  );
+  expect(routes.mints).toEqual([]);
+});
+
 test('an installation with no stored row is refused by the booted client before any request', async () => {
   const routes = githubWithTokens();
   const { server } = await start();
