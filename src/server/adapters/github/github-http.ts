@@ -70,8 +70,7 @@ export async function readJson(response: Response, route: string): Promise<unkno
     throw unreachable(error);
   }
   try {
-    const body: unknown = JSON.parse(text);
-    return body;
+    return JSON.parse(text);
   } catch {
     throw new GitHubResponseError(route, []);
   }

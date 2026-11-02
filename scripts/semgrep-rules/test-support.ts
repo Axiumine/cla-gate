@@ -77,8 +77,7 @@ export function activeLines(text: string): string[] {
 }
 
 function repoYaml(file: string): unknown {
-  const parsed: unknown = parse(repoText(file));
-  return parsed;
+  return parse(repoText(file));
 }
 
 /** The `scripts` of package.json. */

@@ -11,6 +11,7 @@ export const REFUSAL = 'Refusing to write visual baselines outside the pinned co
 /**
  * Throws unless the run cannot write a baseline (`updateSnapshots` is `none`) or runs inside the container.
  * @param updateSnapshots the resolved mode: Playwright's default `missing` writes baselines, so the config sets `none`.
+ * @param env the process environment, read for the marker that says the run is inside the pinned container.
  */
 export function assertBaselinePolicy(updateSnapshots: string, env: Env): void {
   if (updateSnapshots !== 'none' && !isInContainer(env)) {

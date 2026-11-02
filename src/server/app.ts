@@ -51,8 +51,9 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   requireAuditedRoutes(app);
 
   await app.register(helmet, securityHeaders(config));
-  app.addHook('onRequest', async (request, reply) => {
+  app.addHook('onRequest', (request, reply, done) => {
     reply.header(REQUEST_ID_HEADER, request.id);
+    done();
   });
   await app.register(healthRoutes, {
     db,

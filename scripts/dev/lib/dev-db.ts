@@ -48,7 +48,7 @@ function lastLine(text: string): string {
   return text.trim().split('\n').slice(-1).join('');
 }
 
-/** `postgres://cla_app:...@127.0.0.1:<port>/cla` for the runtime role, the owner's for migrations. */
+/** The loopback connection URL of the development database on `port`: the runtime role's, or the owner's for migrations. */
 export function connectionUrl(role: Role, port: number): string {
   return `postgres://${credentials(role)}@${LOOPBACK}:${port}/${DATABASE_NAME}`;
 }
