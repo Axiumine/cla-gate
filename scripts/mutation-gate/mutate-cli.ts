@@ -72,7 +72,9 @@ export async function runMutateCli(argv: readonly string[], env: Env, io: Io, de
   const failed: string[] = [];
   for (const shard of request.shards) {
     const outcome = await runShard(shard, request, { env, io, deps });
-    if (outcome.code !== 0) {
+    // A budget stop fails the shard whatever the code says: Stryker exits 130 on SIGINT, but a shard that was stopped has
+    // partial results and must never count as a pass (the skip decision of the nightly run relies on that, E20-S04).
+    if (outcome.code !== 0 || outcome.timedOut) {
       failed.push(shard);
     }
   }

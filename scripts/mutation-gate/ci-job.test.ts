@@ -9,12 +9,15 @@ import { tempDir } from '../code-caps/test-support.ts';
 import { ciJob, ciTextOnSharedRunners, ROOT, repoText } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from '../trivy-gate/test-support.ts';
 import { SHARD_NAMES } from './shards.ts';
+import { ALWAYS_GATE, GATE } from './test-support.ts';
 
 // E20-S04 and E20-S05: the `mutation` job of .github/workflows/ci.yml, one matrix job per shard (the server shards and the
 // scripts scope), the manual trigger that can pick one shard, and the steps that decide on --force run for real in bash
-// against a stub yarn. The shards themselves are tested in shards.test.ts.
+// against a stub yarn. The shards themselves are tested in shards.test.ts; when the job runs, its permissions and the skip
+// decision (the `decide` step and the gate on every step after it) are pinned in skip-job.test.ts.
 
 const job = ciJob('mutation');
+const DECIDE = 'Decide whether this shard can be skipped (nightly run only)';
 const RESTORE = 'Restore the Stryker incremental file';
 const CHECK_RESTORED = 'Check the restored Stryker incremental file';
 const RUN = 'Mutation tests';
@@ -90,10 +93,10 @@ test('the matrix runs every shard, one failed shard does not stop the others, an
   expect(ciText).toMatch(/max-parallel: 2\n/);
 });
 
-test('max-parallel limits one workflow run, not the repository, and the documents say so and name the two consequences of the concurrency group', () => {
-  // The group is per event and ref (and a pull request is the only run that cancels): a push to main, a tag, the nightly run
-  // and a manual run are different groups, each with its own matrix of two shards at a time, and a push to main holds its
-  // group for as long as its shards run.
+test('max-parallel limits one workflow run, not the repository, and the documents say so and name the overlap of the nightly, tag and manual runs', () => {
+  // The group is per event and ref (and a pull request is the only run that cancels): the nightly run, a tag and a manual run
+  // are different groups, each with its own matrix of two shards at a time. A push to main does not run the job any more
+  // (skip-job.test.ts), so it no longer holds its group for hours, and the consequence that followed from that is gone.
   expect(workflow.concurrency.group).toBe(`ci-${expression('github.event_name')}-${expression('github.ref')}`);
   expect(workflow.concurrency['cancel-in-progress']).toBe(expression("github.event_name == 'pull_request'"));
   const runners = readText('docs/ci-runners.md');
@@ -105,11 +108,17 @@ test('max-parallel limits one workflow run, not the repository, and the document
   expect(ciText).toContain('it limits one workflow run, not the repository');
   const risk =
     runners.split('\n').find((line) => line.startsWith('- **The mutation matrix and the shared runners')) ?? '';
-  expect(risk).toContain('different groups and can overlap');
+  expect(risk).toContain('the nightly run, a `v*` tag push and a manual run are different groups and can overlap');
   expect(risk).toContain('two overlapping runs ask for four runners while the organisation has three');
-  expect(risk).toContain('the next push waits as the pending run and a third push replaces that pending run');
-  expect(risk).toContain('can be cancelled before it starts');
-  expect(ciText).toContain('the next push to main waits as the pending run and a third push replaces that pending run');
+  expect(risk).toContain('A push to `main` does not run the `mutation` job');
+  for (const stale of [
+    'the next push waits as the pending run',
+    'a third push replaces that pending run',
+    'can be cancelled before it starts',
+  ]) {
+    expect(risk).not.toContain(stale);
+    expect(ciText).not.toContain(stale);
+  }
 });
 
 test('the matrix is every shard of shards.ts, or the one shard a manual run picked, and the picked value is never spliced into a command', () => {
@@ -139,23 +148,21 @@ test('the shard choice offers all and every shard, in the order of shards.ts, so
   expect(workflow.on.workflow_dispatch.inputs.shard.options).toEqual(['all', ...SHARD_NAMES]);
 });
 
-test('the job asks for no more than contents: read, holds no secret, stays off pull requests until it has a green run and cannot fail softly', () => {
-  expect(job.permissions).toBeUndefined();
+test('the job holds no secret of its own, sets no job-level environment and cannot fail softly', () => {
   expect(job.env).toBeUndefined();
-  // Not on pull requests (docs/epics/E20.md, E20-S04 Open line); every other event runs it.
-  expect(job.if).toBe(expression("github.event_name != 'pull_request'"));
   expect(job.steps.filter((each) => each['continue-on-error'] !== undefined)).toEqual([]);
   expect(ciText).toMatch(/^permissions:\n {2}contents: read\n/m);
   // The qodana job (E20-S08) holds a secret and runs on a GitHub-hosted machine: it is not part of this check.
   expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
 });
 
-test('the steps are the standard Node and Yarn setup, the restore and its check, the run, the check and the save, and the upload, in that order', () => {
+test('the steps are Node, the skip decision, Corepack and Yarn, the restore and its check, the run, the check and the save, and the upload, in that order', () => {
   expect(job.steps.map((each) => each.name)).toEqual([
     'Preflight (runner capabilities)',
     'Keep tool state in the runner temp directory',
     'Check out the repository',
     'Set up Node.js (version from .nvmrc)',
+    DECIDE,
     'Enable Corepack',
     'Restore the Yarn cache',
     'Install dependencies',
@@ -233,7 +240,7 @@ test('each shard caches the incremental file its Stryker run writes, which is na
 
 test('the incremental file is saved after the run, whatever happened to it, under the key the restore step looked for', () => {
   expect(save.uses).toMatch(/^actions\/cache\/save@[0-9a-f]{40}$/);
-  expect(save.if).toBe(expression('always()'));
+  expect(save.if).toBe(ALWAYS_GATE);
   expect(save.with).toEqual({ path: restore.with?.['path'], key: restore.with?.['key'] });
   const names = job.steps.map((each) => each.name);
   expect(names.indexOf(SAVE)).toBe(names.indexOf(CHECK_BEFORE_SAVE) + 1);
@@ -253,8 +260,9 @@ test('a file Stryker cannot read is deleted after the restore and again before t
     expect(checking.uses).toBeUndefined();
   }
   // After the restore it runs when the job is healthy; before the save it also runs after a failed, stopped or timed-out run.
-  expect(step(CHECK_RESTORED).if).toBeUndefined();
-  expect(step(CHECK_BEFORE_SAVE).if).toBe(expression('always()'));
+  // Both only when the leg was not skipped (skip-job.test.ts pins the gate on every step).
+  expect(step(CHECK_RESTORED).if).toBe(GATE);
+  expect(step(CHECK_BEFORE_SAVE).if).toBe(ALWAYS_GATE);
 });
 
 test('yarn mutate:check-incremental runs the check script', () => {
@@ -282,7 +290,7 @@ test('--force is decided in an environment variable that is true on the schedule
     ),
   });
   expect(run.run).not.toContain('${{');
-  expect(run.if).toBeUndefined();
+  expect(run.if).toBe(GATE);
 });
 
 test('the shard reaches the run as STRYKER_SHARD, and the run is stopped by a budget that leaves the last steps their time', () => {
@@ -299,7 +307,7 @@ test('the shard reaches the run as STRYKER_SHARD, and the run is stopped by a bu
   expect(Number(env['MUTATE_BUDGET_MINUTES'])).toBeGreaterThanOrEqual(30);
 });
 
-test('the matrix value appears in no command: only as a name, a path, a cache key and the STRYKER_SHARD variable of the run and of the two checks', () => {
+test('the matrix value appears in no command: only as a name, a path, a cache key and the STRYKER_SHARD variable of the decision, the run and the two checks', () => {
   expect(job.steps.filter((each) => (each.run ?? '').includes('matrix'))).toEqual([]);
   const lines = ciText
     .split('\n')
@@ -308,6 +316,7 @@ test('the matrix value appears in no command: only as a name, a path, a cache ke
   const byName = (a: string | undefined, b: string | undefined) => String(a).localeCompare(String(b));
   expect(lines.toSorted(byName)).toEqual(
     [
+      'STRYKER_SHARD',
       'STRYKER_SHARD',
       'STRYKER_SHARD',
       'STRYKER_SHARD',
@@ -358,7 +367,7 @@ test('a failing mutation run fails the step, so a score below the threshold fail
 test('each shard uploads its own report as mutation-report-<shard> for seven days, also when an earlier step failed, and it is the last step', () => {
   const upload = step(UPLOAD);
   expect(upload.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/);
-  expect(upload.if).toBe(expression('always()'));
+  expect(upload.if).toBe(ALWAYS_GATE);
   expect(upload.with).toEqual({
     name: `mutation-report-${SHARD}`,
     path: `reports/mutation/${SHARD}/`,

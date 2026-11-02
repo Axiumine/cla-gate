@@ -166,6 +166,22 @@ test('a shard stopped by its budget fails and says that the next run continues f
   expect(quiet.err).toEqual([]);
 });
 
+test.each([0, 130, 1])(
+  'a shard stopped by its budget fails whatever exit code Stryker gave (%j), so a partial run is never green',
+  async (code) => {
+    const result = await mutate(['shared'], { MUTATE_BUDGET_MINUTES: '5' }, [{ code, timedOut: true }]);
+    expect(result.code).toBe(1);
+    expect(result.err.at(-1)).toBe('mutation: 1 of 1 shard(s) failed: shared');
+  },
+);
+
+test('a shard that finished before its budget ran out passes with exit code 0, and one that did not finish fails alone', async () => {
+  const stopped: Outcome = { code: 0, timedOut: true };
+  const result = await mutate(['--all'], { MUTATE_BUDGET_MINUTES: '5' }, [OK, stopped, OK]);
+  expect(result.code).toBe(1);
+  expect(result.err.at(-1)).toBe(`mutation: 1 of ${SHARD_NAMES.length} shard(s) failed: ${SHARD_NAMES[1]}`);
+});
+
 test('each shard announces itself with the Stryker command it runs', async () => {
   const result = await mutate(['config', '--force']);
   expect(result.out).toEqual([

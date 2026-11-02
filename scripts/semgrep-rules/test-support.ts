@@ -7,7 +7,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { exists, readText } from '../ci/lib/test-support.ts';
+import { exists, expression, readText } from '../ci/lib/test-support.ts';
 import { compareNames } from '../code-caps/types.ts';
 import type { FetchLike } from './download.ts';
 
@@ -66,6 +66,19 @@ export function withoutQodanaJob(workflow: string): string {
  */
 export function ciTextOnSharedRunners(): string {
   return withoutQodanaJob(repoText('.github/workflows/ci.yml'));
+}
+
+/**
+ * The one line on the shared runners that may name GITHUB_TOKEN (E20-S04): the environment of the `decide` step of the
+ * `mutation` job, which asks the Actions API (read only) whether a shard can be skipped. The job has `actions: read` and
+ * `contents: read`, expires with the run and never runs on a pull request; scripts/mutation-gate/skip-job.test.ts pins all
+ * three. Every other job on the shared runners still holds no token.
+ */
+const DECIDE_TOKEN_LINE = `          GITHUB_TOKEN: ${expression('github.token')}\n`;
+
+/** `ciTextOnSharedRunners()` without that one line, for the jobs that must not name GITHUB_TOKEN anywhere. */
+export function ciTextWithoutJobToken(): string {
+  return ciTextOnSharedRunners().replace(DECIDE_TOKEN_LINE, '');
 }
 
 /** The lines of a configuration file that are not comments or blank. */

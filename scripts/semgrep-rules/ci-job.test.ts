@@ -5,7 +5,7 @@ import path from 'node:path';
 import { expect, test } from 'vitest';
 import { findOnPath, readText, writeExecutable } from '../ci/lib/test-support.ts';
 import { tempDir } from '../code-caps/test-support.ts';
-import { ciJob, ciTextOnSharedRunners, listDir, repoText } from './test-support.ts';
+import { ciJob, ciTextOnSharedRunners, ciTextWithoutJobToken, listDir, repoText } from './test-support.ts';
 
 // E20-S01: the `semgrep` job of .github/workflows/ci.yml, and its install step run for real in bash against a stub pipx.
 
@@ -39,7 +39,8 @@ test('the job asks for no more than contents: read and holds no secret', () => {
   expect(text).toMatch(/^permissions:\n {2}contents: read\n/m);
   // The qodana job (E20-S08) holds a secret and runs on a GitHub-hosted machine: it is not part of this check.
   expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
-  expect(ciTextOnSharedRunners()).not.toMatch(/\bGITHUB_TOKEN\b/);
+  // The one exception is the read-only job token of the mutation job's `decide` step (E20-S04).
+  expect(ciTextWithoutJobToken()).not.toMatch(/\bGITHUB_TOKEN\b/);
 });
 
 test('the scan can neither be skipped nor fail softly: no condition and no continue-on-error anywhere in the job', () => {

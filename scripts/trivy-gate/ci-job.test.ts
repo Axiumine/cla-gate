@@ -6,7 +6,13 @@ import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { expression, findOnPath, readText } from '../ci/lib/test-support.ts';
 import { tempDir } from '../code-caps/test-support.ts';
-import { ciJob, ciTextOnSharedRunners, listDir, repoText } from '../semgrep-rules/test-support.ts';
+import {
+  ciJob,
+  ciTextOnSharedRunners,
+  ciTextWithoutJobToken,
+  listDir,
+  repoText,
+} from '../semgrep-rules/test-support.ts';
 import { yamlOf } from './test-support.ts';
 import { compareVersions, parseVersion } from './versions.ts';
 
@@ -61,7 +67,8 @@ test('the job asks for no more than contents: read, holds no secret and sets onl
   expect(ciText).toMatch(/^permissions:\n {2}contents: read\n/m);
   // The qodana job (E20-S08) holds a secret and runs on a GitHub-hosted machine: it is not part of this check.
   expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
-  expect(ciTextOnSharedRunners()).not.toMatch(/\bGITHUB_TOKEN\b/);
+  // The one exception is the read-only job token of the mutation job's `decide` step (E20-S04).
+  expect(ciTextWithoutJobToken()).not.toMatch(/\bGITHUB_TOKEN\b/);
 });
 
 test('the steps are the standard Node and Yarn setup, then Trivy, its cache, and the scan, in that order', () => {
