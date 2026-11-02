@@ -13,8 +13,20 @@
 export const messages = {
   'app.name': 'CLA Platform',
   'common.close': 'Close',
+  'common.required': '(required)',
   'common.unknownDate': 'Unknown date',
   'errors.forbidden': 'You do not have access to this page.',
+  'status.active': 'Active',
+  'status.cancelled': 'Cancelled',
+  'status.disabled': 'Disabled',
+  'status.draft': 'Draft',
+  'status.enabled': 'Enabled',
+  'status.failed': 'Failed',
+  'status.outdated': 'Outdated',
+  'status.passed': 'Passed',
+  'status.pending': 'Pending',
+  'status.revoked': 'Revoked',
+  'status.suspended': 'Suspended',
 } as const;
 
 /** The type of the catalog itself, whose literal messages the placeholder types are read from. */
