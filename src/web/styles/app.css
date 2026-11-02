@@ -80,6 +80,17 @@
   --breakpoint-xl: 80rem;
 }
 
+/* The spinner of LoadingState (E17-S07): Tailwind's own `animate-spin`, which comes with the default theme this sheet leaves out. */
+@theme {
+  --animate-spin: spin 1s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
 /* The base rules, in the base layer: a utility (a later layer) overrides any of them. */
 @layer base {
   body {

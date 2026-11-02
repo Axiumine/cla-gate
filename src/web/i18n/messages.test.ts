@@ -36,9 +36,18 @@ test.each([
   ['an empty segment', 'common..close', 'Close'],
   ['a trailing dot', 'common.close.', 'Close'],
   ['a digit first', 'common.1close', 'Close'],
+  ['an underscore first', 'common._close', 'Close'],
+  ['an underscore at the start of the key', '_common.close', 'Close'],
 ])('a catalog with %s as its key is not sound', (_what, key, text) => {
   expect(catalogProblems({ [key]: text })).toEqual([`${key}: not a dotted key`]);
 });
+
+test.each(['errors.csrf_invalid', 'errors.too_many_requests', 'login.failed.state_mismatch'])(
+  'a snake_case segment is part of a sound key, because an error code and a login reason are written that way (%s)',
+  (key) => {
+    expect(catalogProblems({ [key]: 'Text' })).toEqual([]);
+  },
+);
 
 test.each([
   ['an empty string', ''],

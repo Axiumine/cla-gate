@@ -12,8 +12,11 @@ import { parseRetryAfter } from './retry-after.ts';
 export const UNAUTHENTICATED_STATUS = 401;
 const UNAUTHENTICATED = 'unauthenticated';
 const UNEXPECTED_RESPONSE = 'unexpected_response';
-// What the server's own request ids look like; a header from anywhere else is not trusted into an error.
-const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
+/**
+ * What the server's own request ids look like; a header from anywhere else is not trusted into an error, and an id that does
+ * not look like this is not shown on a screen (E17-S07).
+ */
+export const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
 /** An abort is not a failure of the network: the caller asked for it, and it passes through as the original error. */
 function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {

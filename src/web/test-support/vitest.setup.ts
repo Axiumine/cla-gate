@@ -6,12 +6,14 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
-import { installResizeObserver } from './layout.ts';
+import { installResizeObserver, installScrollTo } from './layout.ts';
 import { server } from './server.ts';
 import { resetThemeEnvironment } from './theme.ts';
 
-// jsdom does no layout and has no ResizeObserver, which Radix's primitives use (E17-S06).
+// jsdom does no layout and has no ResizeObserver, which Radix's primitives use (E17-S06), and its scrollTo only complains,
+// which the router calls when it navigates (E17-S07).
 installResizeObserver();
+installScrollTo();
 
 // A request without a handler fails (MSW 3 calls the option onUnhandledFrame): the app reaches the network only as a test says.
 beforeAll(() => {

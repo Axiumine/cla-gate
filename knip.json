@@ -13,6 +13,7 @@
     "src/web/api/index.ts!",
     "src/web/theme/index.ts!",
     "src/web/theme/theme-init.ts!",
+    "src/web/states/index.ts!",
     "src/web/ui/index.ts!",
     "src/web/styles/app.css",
     "src/server/domain/evaluation/index.ts!",

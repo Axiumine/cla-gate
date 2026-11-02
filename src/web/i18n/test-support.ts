@@ -2,9 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { PLACEHOLDER } from './interpolate.ts';
 
-/** What a catalog key looks like: lower-case segments of letters and digits, at least two, joined by dots. */
+/**
+ * What a catalog key looks like: segments that start with a lower-case letter and go on with letters, digits and
+ * underscores (an error code is a segment: `errors.csrf_invalid`, E17-S07), at least two, joined by dots.
+ */
 // eslint-disable-next-line security/detect-unsafe-regex -- the segments are told apart by a literal dot, so nothing can backtrack, and the input is a catalog key of the source
-export const KEY_PATTERN = /^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9]*)+$/;
+export const KEY_PATTERN = /^[a-z]\w*(\.[a-z]\w*)+$/;
 
 /** The placeholder names of a message, in order of appearance, without repeats. */
 export function placeholdersOf(message: string): string[] {

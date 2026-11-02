@@ -35,3 +35,9 @@ test('a checkbox in a form, which measures its hidden input, renders', () => {
   );
   expect(screen.getByRole('checkbox', { name: 'Agree' })).toBeInTheDocument();
 });
+
+test('the setup gives every test a scrollTo that does nothing, so a navigation does not write jsdom\'s "not implemented" error', () => {
+  const write = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  window.scrollTo(0, 100);
+  expect(write).not.toHaveBeenCalled();
+});

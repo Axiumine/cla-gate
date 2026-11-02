@@ -9,6 +9,7 @@ export { BADGE_STATUSES, BADGE_VARIANTS, type BadgeStatus, type BadgeVariant } f
 export type { ButtonVariant } from './button-styles.ts';
 export { Checkbox, type CheckboxProps } from './Checkbox.tsx';
 export { Field, type FieldProps } from './Field.tsx';
+export { Heading, type HeadingLevel, type HeadingProps } from './Heading.tsx';
 export { RadioGroup, type RadioGroupProps, type RadioOption } from './RadioGroup.tsx';
 export { Select, type SelectOption, type SelectProps } from './Select.tsx';
 export { StatusMessage, type StatusMessageProps, type StatusTone } from './StatusMessage.tsx';

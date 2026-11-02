@@ -52,8 +52,11 @@ const BOUNDARIES = [
   ...['--accent', '--danger'].flatMap((token) => ['--page', '--surface'].map((surface) => boundary(token, surface))),
 ];
 
+/** An error state (E17-S07) is drawn on the danger tint, and its request id and its buttons sit on it: ordinary text, and the focus ring. */
+const ON_DANGER_TINT = [text('--fg', '--danger-bg'), boundary('--focus', '--danger-bg')];
+
 const TEXT_PAIRS: readonly Pair[] = [...BODY_TEXT, ...ACTION_LABELS, ...STATUS_TEXT];
-const PAIRS: readonly Pair[] = [...TEXT_PAIRS, ...BOUNDARIES];
+const PAIRS: readonly Pair[] = [...TEXT_PAIRS, ...BOUNDARIES, ...ON_DANGER_TINT];
 
 const tokens = themeTokens(tokensCss);
 const THEMES = [
@@ -85,7 +88,8 @@ test.each(THEMES)(
 
 test('the pairs cover text at 4.5:1 and boundaries and the focus ring at 3:1, and no other threshold', () => {
   expect(new Set(PAIRS.map((pair) => pair.minimum))).toEqual(new Set([4.5, 3]));
-  expect(PAIRS.filter((pair) => pair.foreground === '--focus' && pair.minimum === 3)).toHaveLength(SURFACES.length);
+  // The ring is checked on each surface and on the tint of the error states (E17-S07).
+  expect(PAIRS.filter((pair) => pair.foreground === '--focus' && pair.minimum === 3)).toHaveLength(SURFACES.length + 1);
 });
 
 test('every colour token of the light theme is redefined for dark, and dark defines no colour that light lacks', () => {
