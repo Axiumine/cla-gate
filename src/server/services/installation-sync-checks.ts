@@ -31,6 +31,40 @@ export async function recordSuspension(
   return true;
 }
 
+const sameInstant = (a: Date | null, b: Date | null): boolean =>
+  a === null || b === null ? a === b : a.getTime() === b.getTime();
+
+/**
+ * The snapshot of a stored installation changed in a way no other audit row of the sync tells: the account, its login or
+ * its type, or the time of a suspension that stays (it was lifted and set again between two syncs). A suspension that
+ * starts or ends has its own row.
+ */
+export function snapshotRefreshed(stored: InstallationRow, remote: GitHubInstallation): boolean {
+  return (
+    stored.account_id !== remote.account.id ||
+    stored.account_login !== remote.account.login ||
+    stored.account_type !== remote.account.type ||
+    (stored.suspended_at !== null &&
+      remote.suspendedAt !== null &&
+      !sameInstant(stored.suspended_at, remote.suspendedAt))
+  );
+}
+
+/** Appends `installation.updated`: numeric account id and type code only, never the login. */
+export async function recordRefresh(
+  trx: Transaction<Database>,
+  row: InstallationRow,
+  remote: GitHubInstallation,
+): Promise<void> {
+  await appendAudit(trx, {
+    action: 'installation.updated',
+    installationId: row.id,
+    actorGithubId: null,
+    subject: { type: 'installation', id: remote.id },
+    metadata: { account_id: remote.account.id, account_type: accountTypeCode(remote.account.type) },
+  });
+}
+
 /** One WARN line naming the permissions that fall short of the minimum; the sync carries on. */
 export function warnMissingPermissions(ctx: SyncContext, remote: GitHubInstallation): void {
   const missing = missingPermissions(remote.permissions);

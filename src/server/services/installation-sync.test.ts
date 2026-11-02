@@ -71,15 +71,55 @@ test('a second run over unchanged state writes no row and no audit entry', async
   expect(await stateOf(db)).toEqual(before);
 });
 
-test('a refreshed account login is stored without an audit row, and last_synced_at moves with the write', async () => {
-  const { fake, sync, db, clock } = await syncWorld();
+test('a refreshed account login is stored and audited as installation.updated with ids only; last_synced_at moves with the write', async () => {
+  const { fake, sync, db, clock, logs } = await syncWorld();
   fake.addInstallation(remoteInstallation(11, OWNER, { login: 'old' }));
   await sync.syncInstallation(id(11));
   clock.advance(60_000);
   fake.addInstallation(remoteInstallation(11, OWNER, { login: 'new' }));
   await sync.syncInstallation(id(11));
   expect((await installationRows(db))[0]).toMatchObject({ account_login: 'new', last_synced_at: clock.now() });
-  expect(await auditActions(db)).toEqual(['installation.admitted']);
+  expect(await auditActions(db)).toEqual(['installation.admitted', 'installation.updated']);
+  const [, updated] = await auditRows(db);
+  expect(updated).toMatchObject({
+    actor_github_id: null,
+    subject_type: 'installation',
+    subject_id: 11,
+    metadata: { account_id: OWNER, account_type: 'organization' },
+  });
+  expect(JSON.stringify(await auditRows(db)) + logs.text()).not.toMatch(/\b(old|new)\b/);
+});
+
+test('a suspension that stays but carries another time is a refresh: audited as installation.updated, not as a new suspension', async () => {
+  const { fake, sync, db, clock } = await syncWorld();
+  fake.addInstallation(remoteInstallation(11, OWNER, { suspendedAt: clock.now() }));
+  await sync.syncInstallation(id(11));
+  const later = new Date(clock.now().getTime() + 3_600_000);
+  fake.addInstallation(remoteInstallation(11, OWNER, { suspendedAt: later }));
+  expect(await sync.syncInstallation(id(11))).toMatchObject({ status: 'suspended', changed: true });
+  expect((await installationRows(db))[0]?.suspended_at).toEqual(later);
+  expect(await auditActions(db)).toEqual(['installation.admitted', 'installation.suspended', 'installation.updated']);
+});
+
+test('a suspension that starts together with a new login has both rows; a suspension alone has only its own', async () => {
+  const { fake, sync, db, clock } = await syncWorld();
+  fake.addInstallation(remoteInstallation(11, OWNER, { login: 'old' }), remoteRepositories(100, 1));
+  await sync.syncInstallation(id(11));
+  fake.addInstallation(
+    remoteInstallation(11, OWNER, { login: 'old', suspendedAt: clock.now() }),
+    remoteRepositories(100, 1),
+  );
+  await sync.syncInstallation(id(11));
+  expect(await auditActions(db)).toEqual(['installation.admitted', 'repository.added', 'installation.suspended']);
+  fake.addInstallation(remoteInstallation(11, OWNER, { login: 'new', suspendedAt: null }), remoteRepositories(100, 1));
+  await sync.syncInstallation(id(11));
+  expect(await auditActions(db)).toEqual([
+    'installation.admitted',
+    'repository.added',
+    'installation.suspended',
+    'installation.unsuspended',
+    'installation.updated',
+  ]);
 });
 
 test('a rejected installation is recorded and stops there: no listing, no token, no repository row', async () => {

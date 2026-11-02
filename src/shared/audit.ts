@@ -24,6 +24,9 @@ export const AUDIT_ACTIONS = [
   'repository.disabled',
   // Added by E05-S07: the admission policy decided to serve an installation (the counterpart of installation.rejected).
   'installation.admitted',
+  // Added by E05-S08: the account snapshot of a stored installation changed (its login, account or the time of a
+  // suspension that stays), so every change of stored state has an audit row. Ids and the type code only, no login.
+  'installation.updated',
   // Instance-wide actions: SYSTEM_ACTIONS and INSTANCE_ACTIONS must be subsets of this list.
   'data_export.created',
   'network_metadata.purged',
@@ -38,6 +41,7 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 export const SYSTEM_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>([
   'installation.rejected',
   'installation.admitted',
+  'installation.updated',
   'installation.deleted',
   'installation.suspended',
   'installation.unsuspended',

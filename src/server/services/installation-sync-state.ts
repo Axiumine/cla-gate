@@ -7,7 +7,12 @@ import type { Database } from '../adapters/db/schema.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
 import { findInstallationByGithubId, upsertInstallation } from './installation-queries.ts';
 import type { InstallationRow } from './installation-state.ts';
-import { recordSuspension, warnMissingPermissions } from './installation-sync-checks.ts';
+import {
+  recordRefresh,
+  recordSuspension,
+  snapshotRefreshed,
+  warnMissingPermissions,
+} from './installation-sync-checks.ts';
 import { markDeleted } from './installation-sync-deleted.ts';
 import { type SyncContext, type SyncOutcome, type SyncStatus, untouched } from './installation-sync-model.ts';
 import type { GitHubInstallation } from './ports/github.ts';
@@ -15,7 +20,8 @@ import type { GitHubInstallation } from './ports/github.ts';
 // The installation half of a sync (E05-S08), in one transaction under the installation's advisory lock: the uninstall,
 // the account snapshot, the admission decision and a suspension. It never calls GitHub: the caller fetched `remote`
 // before, so no database connection is held while a request is out. Every state change has an audit row in the same
-// transaction, and a run over unchanged state writes nothing.
+// transaction (a decision, a suspension that starts or ends, a repository, and any other change of the account snapshot as
+// `installation.updated`), and a run over unchanged state writes nothing.
 
 /** What the installation step found; `repositoriesOf` is the stored installation (`installations.id`) whose repositories are next. */
 export interface StateStep {
@@ -69,6 +75,9 @@ async function applyRemote(
   const decision = await ctx.admission.admit(remote, trx);
   const wasSuspended = stored !== null && stored.suspended_at !== null;
   const suspensionChanged = await recordSuspension(trx, decision.installation, wasSuspended, remote);
+  if (stored !== null && snapshotRefreshed(stored, remote)) {
+    await recordRefresh(trx, decision.installation, remote);
+  }
   if (decision.admitted) {
     warnMissingPermissions(ctx, remote);
   }
