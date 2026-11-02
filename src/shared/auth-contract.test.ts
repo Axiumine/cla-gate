@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { logoutRequestSchema, sessionResponseSchema } from './auth.ts';
-import { CSRF_HEADER, logoutRoute, sessionRoute } from './auth-contract.ts';
+import { CSRF_HEADER, LOGIN_PATH, LOGIN_RETURN_TO_PARAM, logoutRoute, sessionRoute } from './auth-contract.ts';
 import { responseSchemaFor } from './contract.ts';
 
 test('the session route is GET /api/auth/session and answers with the session schema', () => {
@@ -20,4 +20,9 @@ test('the logout route is POST /api/auth/logout, takes the strict optional body 
 
 test('the CSRF token travels in the header E10 reads', () => {
   expect(CSRF_HEADER).toBe('x-csrf-token');
+});
+
+test('the login start is a browser navigation at /api/auth/login with one parameter, return_to', () => {
+  expect(LOGIN_PATH).toBe('/api/auth/login');
+  expect(LOGIN_RETURN_TO_PARAM).toBe('return_to');
 });

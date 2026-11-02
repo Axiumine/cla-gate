@@ -2,22 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { useState } from 'react';
 import { createQueryClient } from './api/query-client.ts';
-import { useT } from './i18n/index.ts';
 import { AppProviders } from './providers.tsx';
+import { AppRouter } from './router.tsx';
 import { RootErrorBoundary } from './states/index.ts';
 
-/** The page of the app for now: a heading. The router and the shell arrive with E17-S08 and E17-S09. */
-function Home() {
-  const t = useT();
-  return (
-    <main>
-      <h1>{t('app.name')}</h1>
-    </main>
-  );
-}
-
 /**
- * The root of the app: the providers (the query cache is made once, here), then the page inside the root error boundary
+ * The root of the app: the providers (the query cache is made once, here), then the router inside the root error boundary
  * (E17-S07), which sits below the providers so its fallback has text and a theme. The footer of E17-S09 goes beside the
  * boundary, not inside it.
  */
@@ -26,7 +16,7 @@ export function App() {
   return (
     <AppProviders queryClient={queryClient}>
       <RootErrorBoundary>
-        <Home />
+        <AppRouter />
       </RootErrorBoundary>
     </AppProviders>
   );

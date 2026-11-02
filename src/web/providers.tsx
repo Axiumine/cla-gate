@@ -14,7 +14,8 @@ export interface AppProvidersProps {
 /**
  * Every provider the screens rely on, in one place that the app and the test helper share, so a test renders inside the
  * same providers as the app (E17-S04). Whatever the screens render sits inside the i18n provider, so an error fallback can
- * always show text; the theme provider (E17-S05) sits just inside it. The router joins here as E17-S08 lands.
+ * always show text; the theme provider (E17-S05) sits just inside it. The router is not here: `AppRouter` (E17-S08) renders
+ * inside these providers, and a test that needs no routes renders its element without one.
  */
 export function AppProviders({ queryClient, children }: AppProvidersProps) {
   return (

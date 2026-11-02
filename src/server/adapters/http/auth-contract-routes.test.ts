@@ -2,7 +2,13 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { sessionResponseSchema } from '../../../shared/auth.ts';
-import { CSRF_HEADER, logoutRoute, sessionRoute } from '../../../shared/auth-contract.ts';
+import {
+  CSRF_HEADER,
+  LOGIN_PATH,
+  LOGIN_RETURN_TO_PARAM,
+  logoutRoute,
+  sessionRoute,
+} from '../../../shared/auth-contract.ts';
 import { responseSchemaFor } from '../../../shared/contract.ts';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import { authWorld } from './auth-fixture/test-support.ts';
@@ -65,4 +71,16 @@ test('logout without the token in that header is a 403 csrf_invalid, the answer 
   });
   expect(response.statusCode).toBe(403);
   expect(errorResponseSchema.parse(response.json()).error.code).toBe('csrf_invalid');
+});
+
+test('the login start is registered at the shared path and reads the shared parameter: a logged-in caller goes straight to the checked path', async () => {
+  const { app, login } = await authWorld();
+  const alice = await login(1001);
+  const response = await app.inject({
+    url: `${LOGIN_PATH}?${LOGIN_RETURN_TO_PARAM}=${encodeURIComponent('/sign/42?pr=7')}`,
+    headers: { cookie: alice.cookie },
+  });
+  expect(response.statusCode).toBe(302);
+  expect(response.headers.location).toBe('/sign/42?pr=7');
+  expect(response.headers['set-cookie']).toBeUndefined();
 });

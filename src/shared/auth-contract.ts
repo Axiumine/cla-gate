@@ -6,7 +6,7 @@ import { defineRoute } from './contract.ts';
 
 // The descriptors of the session routes of E10 (E17-S04). The server registers `/api/auth/session` and
 // `/api/auth/logout` from these values and the web client calls them through the same ones. Login start is a browser
-// navigation, not an API call, so it has no descriptor.
+// navigation, not an API call, so it has no descriptor; its path and its one parameter are the constants below.
 
 /** `GET /api/auth/session` (E10-S02): the caller, until when, and the CSRF token. Without a live session it is a 401. */
 export const sessionRoute = defineRoute({
@@ -31,3 +31,12 @@ export const logoutRoute = defineRoute({
  * the session response; the server compares it in constant time and answers `403 csrf_invalid` when it is missing or wrong.
  */
 export const CSRF_HEADER = 'x-csrf-token';
+
+/**
+ * `GET /api/auth/login` (E10-S04): the start of the login. A link the browser follows with a full-page navigation, never
+ * an API call, so it has no route descriptor. It writes nothing, which is why a plain link is enough (E17-S08).
+ */
+export const LOGIN_PATH = '/api/auth/login';
+
+/** The one parameter of {@link LOGIN_PATH}: the path on this site where the login ends. The server checks it again (E10-S04). */
+export const LOGIN_RETURN_TO_PARAM = 'return_to';

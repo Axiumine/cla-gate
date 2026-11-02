@@ -32,6 +32,7 @@ export interface TestRoutesProps {
 
 function buildRouter({ route, pages, errorComponent, notFoundComponent }: TestRoutesProps) {
   const root = createRootRoute({
+    staticData: { access: 'public' },
     component: Outlet,
     ...(errorComponent === undefined ? {} : { errorComponent }),
     ...(notFoundComponent === undefined ? {} : { notFoundComponent }),
@@ -40,6 +41,7 @@ function buildRouter({ route, pages, errorComponent, notFoundComponent }: TestRo
     createRoute({
       getParentRoute: () => root,
       path: page.path,
+      staticData: { access: 'public' },
       component: page.component,
       ...(page.loader === undefined ? {} : { loader: page.loader }),
     }),

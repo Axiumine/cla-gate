@@ -98,3 +98,23 @@ test('every render has a cache of its own', () => {
   const second = renderWithProviders(<p>page</p>);
   expect(second.queryClient).not.toBe(first.queryClient);
 });
+
+test('the render records each request the session endpoint receives, and setSession changes the answer from then on', async () => {
+  const { sessionRequests, setSession } = renderWithProviders(<p>page</p>, { session: SESSION });
+  expect(sessionRequests).toHaveLength(0);
+  expect((await fetch(sessionRoute.path, { headers: { 'x-probe': 'one' } })).status).toBe(200);
+  setSession(undefined);
+  expect((await fetch(sessionRoute.path)).status).toBe(401);
+  setSession({ ...SESSION, user: { ...SESSION.user, login: 'monalisa' } });
+  const reply = await fetch(sessionRoute.path);
+  expect(await reply.json()).toMatchObject({ user: { login: 'monalisa' } });
+  expect(sessionRequests).toHaveLength(3);
+  expect(sessionRequests[0]?.headers.get('x-probe')).toBe('one');
+});
+
+test('a session that setSession is given is checked against the shared contract too', () => {
+  const { setSession } = renderWithProviders(<p>page</p>);
+  expect(() => {
+    setSession({ ...SESSION, csrfToken: 'short' });
+  }).toThrow();
+});
