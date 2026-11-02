@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { GithubId } from '../../../shared/github-id.ts';
 
 // What a GitHub call can fail with (E05-S02). The messages are fixed text: a token, a key, a request header or a
 // response body never reaches one, so an error can be logged and thrown to any caller as it is. No `cause` is kept
@@ -31,5 +32,48 @@ export class GitHubResponseError extends Error {
     super(`GitHub's answer to ${route} is not what was expected (${paths.join(', ') || 'not JSON'})`);
     this.route = route;
     this.paths = paths;
+  }
+}
+
+// What the installation token provider adds (E05-S03). An installation is a tenant: these say that one cannot be served
+// right now, so the caller skips it instead of retrying (E09 maps them to a skipped job).
+
+/** GitHub answered 404 to a token request: the installation was uninstalled. */
+export class InstallationGoneError extends Error {
+  override readonly name = 'InstallationGoneError';
+  readonly githubInstallationId: GithubId;
+
+  constructor(githubInstallationId: GithubId) {
+    super(`GitHub installation ${githubInstallationId} no longer exists`);
+    this.githubInstallationId = githubInstallationId;
+  }
+}
+
+/** GitHub answered 403 saying the installation is suspended: no token is issued until it is unsuspended. */
+export class InstallationSuspendedError extends Error {
+  override readonly name = 'InstallationSuspendedError';
+  readonly githubInstallationId: GithubId;
+
+  constructor(githubInstallationId: GithubId) {
+    super(`GitHub installation ${githubInstallationId} is suspended`);
+    this.githubInstallationId = githubInstallationId;
+  }
+}
+
+/**
+ * Why the instance does not serve an installation: the admission policy rejected its account (`rejected`), it was
+ * uninstalled (`deleted`), GitHub suspended it (`suspended`), it is not a known row (`unknown`), or no gate is wired
+ * (`not_wired`, which fails closed).
+ */
+export type NotAdmittedReason = 'rejected' | 'deleted' | 'suspended' | 'unknown' | 'not_wired';
+
+/** The {@link InstallationGate} refused the installation, so no request to GitHub was made for it. */
+export class InstallationNotAdmittedError extends Error {
+  override readonly name = 'InstallationNotAdmittedError';
+  readonly reason: NotAdmittedReason;
+
+  constructor(reason: NotAdmittedReason) {
+    super(`The installation is not served (${reason})`);
+    this.reason = reason;
   }
 }

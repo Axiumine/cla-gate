@@ -4,11 +4,13 @@ import type { Logger } from 'pino';
 import type { AppConfig } from '../../config/env.ts';
 import { type Clock, systemClock } from '../../services/ports/clock.ts';
 import { GitHubAuthError, GitHubUnavailableError } from '../../services/ports/github-errors.ts';
+import type { InstallationGate } from '../../services/ports/installation-gate.ts';
 import { AppAuth, type KeyList } from './app-auth.ts';
 import { AppIdentityCheck } from './app-identity.ts';
+import { InstallationTokens } from './installation-tokens.ts';
 
-/** How long the self-check waits for GitHub: start-up does not hang on a black hole. */
-const SELF_CHECK_TIMEOUT_MS = 10_000;
+/** How long a request to GitHub waits for the answer: start-up and the first use do not hang on a black hole. */
+const REQUEST_TIMEOUT_MS = 10_000;
 
 /** The App's credentials and what GitHub said about it. The services of later stories take it from the boot. */
 export interface GitHubApp {
@@ -21,6 +23,8 @@ export interface GitHubApp {
    * Every request that needs the App's JWT goes through here, so none can precede the check.
    */
   withJwt<T>(send: (jwt: string) => Promise<T>): Promise<T>;
+  /** The installation access tokens (E05-S03): they refuse every installation until a gate is wired. */
+  readonly installationTokens: InstallationTokens;
 }
 
 /** @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode). */
@@ -29,8 +33,10 @@ export interface GitHubStartOptions {
   readonly logger: Logger;
   readonly clock: Clock;
   readonly fetch: typeof fetch;
-  /** Defaults to 10 s. */
+  /** How long a request to GitHub waits; defaults to 10 s. */
   readonly timeoutMs?: number;
+  /** Which installations get a token (E05-S03, E05-S07). Without one the token provider refuses every installation. */
+  readonly gate?: InstallationGate;
 }
 
 /**
@@ -50,13 +56,8 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
   }
   const keys: KeyList = previousPrivateKey === undefined ? [privateKey] : [privateKey, previousPrivateKey];
   const auth = new AppAuth({ appId, keys, clock: options.clock, logger });
-  const identity = new AppIdentityCheck({
-    auth,
-    appId,
-    logger,
-    fetch: options.fetch,
-    timeoutMs: options.timeoutMs ?? SELF_CHECK_TIMEOUT_MS,
-  });
+  const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const identity = new AppIdentityCheck({ auth, appId, logger, fetch: options.fetch, timeoutMs });
   try {
     await identity.verify();
   } catch (error) {
@@ -67,13 +68,19 @@ export async function startGitHubApp(options: GitHubStartOptions): Promise<GitHu
     }
     logger.warn({ err: error }, 'github.app_check_deferred');
   }
-  return {
-    identity,
-    withJwt: async (send) => {
-      await identity.verify();
-      return auth.withJwt(send);
-    },
+  const withJwt: GitHubApp['withJwt'] = async (send) => {
+    await identity.verify();
+    return auth.withJwt(send);
   };
+  const installationTokens = new InstallationTokens({
+    withJwt,
+    clock: options.clock,
+    logger,
+    fetch: options.fetch,
+    timeoutMs,
+    gate: options.gate,
+  });
+  return { identity, withJwt, installationTokens };
 }
 
 export interface BootGitHubOptions {

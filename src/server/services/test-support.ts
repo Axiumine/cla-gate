@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
-import { parseGithubId } from '../../shared/github-id.ts';
+import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
 import type { Clock } from './ports/clock.ts';
+import { InstallationNotAdmittedError, type NotAdmittedReason } from './ports/github-errors.ts';
+import type { InstallationGate } from './ports/installation-gate.ts';
 
 /** A person acting; the numeric GitHub id, never a `users.id`. */
 export const ACTOR = parseGithubId(41_898_282);
@@ -35,5 +37,26 @@ export class FakeClock implements Clock {
 
   advance(milliseconds: number): void {
     this.#milliseconds += milliseconds;
+  }
+}
+
+/** A gate that admits every installation except those a test turns away, and keeps the ids it was asked about (E05-S03). */
+export class FakeGate implements InstallationGate {
+  readonly #refused = new Map<GithubId, NotAdmittedReason>();
+  /** Every id the gate was asked about, in order. */
+  readonly asked: GithubId[] = [];
+
+  refuse(githubInstallationId: GithubId, reason: NotAdmittedReason): void {
+    this.#refused.set(githubInstallationId, reason);
+  }
+
+  admit(githubInstallationId: GithubId): void {
+    this.#refused.delete(githubInstallationId);
+  }
+
+  assertAdmitted(githubInstallationId: GithubId): Promise<void> {
+    this.asked.push(githubInstallationId);
+    const reason = this.#refused.get(githubInstallationId);
+    return reason === undefined ? Promise.resolve() : Promise.reject(new InstallationNotAdmittedError(reason));
   }
 }

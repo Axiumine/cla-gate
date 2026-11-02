@@ -24,3 +24,15 @@ export const appSchema = z.object({
 });
 
 export type AppResponse = z.infer<typeof appSchema>;
+
+/**
+ * `POST /app/installations/{id}/access_tokens` (E05-S03). `token` is a credential: it is parsed here and held as a
+ * `Secret` right after, and a failure of this schema names paths, never values. GitHub sends `expires_at` as
+ * `2016-07-11T22:14:10Z`; an offset is accepted too, since both name one instant.
+ */
+export const installationTokenSchema = z.object({
+  token: z.string().min(1),
+  expires_at: z.iso.datetime({ offset: true }),
+});
+
+export type InstallationTokenResponse = z.infer<typeof installationTokenSchema>;
