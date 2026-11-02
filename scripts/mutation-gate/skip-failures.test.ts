@@ -178,6 +178,29 @@ test('a repository named .github, which GitHub allows, and a 64-digit commit are
   expect(decision).toMatchObject({ skip: true, runId: 700, sha });
 });
 
+test.each(['Axiumine/cla_gate', 'octo_corp/cla_gate', 'Axiumine/cla-gate.v2', 'a/b'])(
+  'the repository %j, whose name uses an underscore, a dot or a dash, is accepted and asked for exactly as written',
+  async (repository) => {
+    const github = answering();
+    const decision = await decide(skipEnv({ GITHUB_REPOSITORY: repository }), github.fetcher);
+    expect(decision).toMatchObject({ skip: true, runId: 700 });
+    expect(github.calls[0]?.url.pathname).toBe(`/repos/${repository}/actions/workflows/ci.yml/runs`);
+  },
+);
+
+test.each(['1', '9'.repeat(15), '1'.repeat(15), '123456789012345'])(
+  'the run id %j, up to fifteen digits, is accepted, and that run is not its own evidence',
+  async (id) => {
+    const github = answering({ status: 200, body: { workflow_runs: [runEntry(Number(id)), runEntry(700)] } });
+    const decision = await decide(skipEnv({ GITHUB_RUN_ID: id }), github.fetcher);
+    expect(decision).toMatchObject({ skip: true, runId: 700 });
+    expect(github.calls.map((call) => call.url.pathname.replace(/^.*\/actions\//, ''))).toEqual([
+      'workflows/ci.yml/runs',
+      'runs/700/jobs',
+    ]);
+  },
+);
+
 test.each(['', 'nope', 'Shared', 'shared ', 'all', 'scripts,shared'])(
   'a shard that is not a shard (%j) throws before any request, whatever the event',
   async (shard) => {

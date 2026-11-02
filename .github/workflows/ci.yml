@@ -51,7 +51,8 @@ on:
           - all
           - shared
           - config
-          - http
+          - http-a-v
+          - http-rest
           - db
           - root-domain-ports
           - github-a-o
@@ -539,9 +540,9 @@ jobs:
         run: yarn trivy:dev
 
   # Mutation gate (E20-S04, E20-S05): one job per shard, `yarn mutate:shard` = Stryker with `--incremental` on one slice of the
-  # code. A cold run of all 3807 server and shared mutants does not fit one job on the shared runners (2026-11-02: cancelled
-  # at 45 minutes, then stopped at the initial test run), so on 2026-11-02 the maintainer decided to split the run by
-  # directory and not to mind the total time (scripts/mutation-gate/shards.ts has the shards, docs/quality-gates.md the
+  # code. A cold run of all the server and shared mutants (4631 now, 3807 on 2026-11-02) does not fit one job on the shared
+  # runners (2026-11-02: cancelled at 45 minutes, then stopped at the initial test run), so on 2026-11-02 the maintainer
+  # decided to split the run by directory and not to mind the total time (scripts/mutation-gate/shards.ts has the shards, docs/quality-gates.md the
   # measured sizes and times). The scripts scope (the caps tool) is one more shard of the same matrix. Not a required
   # check: it joins `static` and `coverage` only after it has been stable (E20-S13). It waits for `static`, because
   # mutating code that does not even pass the static checks is wasted time.
@@ -551,9 +552,10 @@ jobs:
   # hours, and one per merge would saturate the three runners that other repositories use too.
   #
   # Skip when nothing changed (E20-S04): the nightly run pays only when something moved. The step `decide` asks the Actions
-  # REST API (GET only, the job token with `actions: read`) whether an earlier completed run of this workflow of the event
-  # `schedule` has the same commit and a job `mutation (<shard>)` that concluded `success`; if so every later step of the leg
-  # is skipped, and the leg ends green in about a minute. A skipped leg is `success` too, so by induction a success on a
+  # REST API (GET only, the job token with `actions: read`) whether the newest earlier completed run of this workflow of
+  # the event `schedule` with the same commit and a job `mutation (<shard>)` concluded that job `success`; if so every later
+  # step of the leg is skipped, and the leg ends green in about a minute. The newest run decides, so an older pass on the
+  # same commit never outranks a newer failure. A skipped leg is `success` too, so by induction a success on a
   # commit means a cold --force pass of that shard on it; a budget stop, a timeout, a cancel and a score below the threshold
   # are not `success`, so such a shard runs again the next night, alone. Only the schedule event can skip: a manual run and a
   # tag push were asked for by a person. The lookup fails open: any error (network, a status other than 200, a rate limit, a
@@ -609,7 +611,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","config","http","db","root-domain-ports","github-a-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-other","scripts"]') }}
+        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","config","http-a-v","http-rest","db","root-domain-ports","github-a-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-other","scripts"]') }}
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
       - name: Preflight (runner capabilities)

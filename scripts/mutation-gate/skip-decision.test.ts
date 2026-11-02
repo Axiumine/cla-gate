@@ -8,13 +8,19 @@ import { MAX_RUNS } from './skip-github.ts';
 import { MAX_PAGES, PER_PAGE } from './skip-http.ts';
 import { COMMIT, CURRENT_RUN, githubOf, jobEntry, OTHER_COMMIT, runEntry, skipEnv, TOKEN } from './test-support.ts';
 
-// E20-S04: the skip decision of the nightly mutation run. A shard is skipped only when an earlier completed scheduled run of
-// the same commit has the job `mutation (<shard>)` concluded `success`. The API is a fake; the failure paths are in
-// skip-failures.test.ts.
+// E20-S04: the skip decision of the nightly mutation run. A shard is skipped only when the newest earlier completed scheduled
+// run of the same commit that has the job `mutation (<shard>)` concluded it `success`; an older pass never outranks a newer
+// failure. The API is a fake; the failure paths are in skip-failures.test.ts.
 
 const NAME = jobNameOf('config');
-const PASSED = [jobEntry('static', 'success'), jobEntry(NAME, 'success'), jobEntry(jobNameOf('http'), 'failure')];
+const PASSED = [jobEntry('static', 'success'), jobEntry(NAME, 'success'), jobEntry(jobNameOf('http-a-v'), 'failure')];
 const NO_PASS = `run, no earlier scheduled run passed ${NAME} on commit ${COMMIT}`;
+/** The decision when the newest run that has the job is `runId` and the job did not pass in it. */
+const redIn = (runId: number) =>
+  ({
+    skip: false,
+    message: `run, the newest earlier scheduled run, ${runId}, did not pass ${NAME} on commit ${COMMIT}`,
+  }) as const;
 
 /** Decides over a fake API that holds `runs` and the jobs of each run. */
 async function decided(
@@ -105,21 +111,21 @@ test.each(['failure', 'cancelled', 'skipped', 'timed_out', 'neutral', 'action_re
   'a job that concluded %j is not a pass: the shard runs',
   async (conclusion) => {
     const { decision } = await decided([runEntry(700)], { 700: [jobEntry(NAME, conclusion)] });
-    expect(decision).toEqual({ skip: false, message: NO_PASS });
+    expect(decision).toEqual(redIn(700));
   },
 );
 
 test('a job that is not completed is not a pass, whatever its conclusion field says', async () => {
   for (const status of ['in_progress', 'queued', 'waiting']) {
     const { decision } = await decided([runEntry(700)], { 700: [jobEntry(NAME, 'success', status)] });
-    expect(decision).toEqual({ skip: false, message: NO_PASS });
+    expect(decision).toEqual(redIn(700));
   }
 });
 
 test.each([
   ['no job at all', []],
   ['other jobs only', [jobEntry('static', 'success'), jobEntry('coverage', 'success')]],
-  ['the name of another shard', [jobEntry(jobNameOf('http'), 'success')]],
+  ['the name of another shard', [jobEntry(jobNameOf('http-a-v'), 'success')]],
   ['the bare job name', [jobEntry('mutation', 'success')]],
   ['a name with a suffix', [jobEntry(`${NAME} `, 'success')]],
   ['a name with another case', [jobEntry('Mutation (config)', 'success')]],
@@ -156,13 +162,39 @@ test('the run that is asking is never its own evidence', async () => {
   expect(both.decision).toMatchObject({ skip: true, runId: 700 });
 });
 
-test('runs are read newest first and the search stops at the first pass', async () => {
+test('runs are read newest first and the search stops at the first run that has the job', async () => {
   const first = await decided([runEntry(700), runEntry(600)], { 700: PASSED, 600: PASSED });
   expect(first.decision).toMatchObject({ skip: true, runId: 700 });
   expect(first.urls).toHaveLength(2);
   const second = await decided([runEntry(700), runEntry(600)], { 700: [jobEntry(NAME, 'failure')], 600: PASSED });
-  expect(second.decision).toMatchObject({ skip: true, runId: 600 });
-  expect(second.urls).toHaveLength(3);
+  expect(second.decision).toEqual(redIn(700));
+  expect(second.urls).toHaveLength(2);
+});
+
+test('an older pass on the same commit never outranks a newer failure, a cancel or a timeout: the shard runs again until it passes', async () => {
+  for (const newer of ['failure', 'cancelled', 'timed_out', 'skipped', null]) {
+    const { decision, calls } = await decided([runEntry(800), runEntry(700), runEntry(600)], {
+      800: [jobEntry(NAME, newer)],
+      700: PASSED,
+      600: PASSED,
+    });
+    expect(decision, String(newer)).toEqual(redIn(800));
+    expect(calls, String(newer)).toHaveLength(2);
+  }
+});
+
+test('a newer pass outranks an older failure, so a shard that went red and then passed is skipped again', async () => {
+  const { decision } = await decided([runEntry(800), runEntry(700)], { 800: PASSED, 700: [jobEntry(NAME, 'failure')] });
+  expect(decision).toMatchObject({ skip: true, runId: 800 });
+});
+
+test('a run without the job says nothing about the shard, so the search goes on to the next older run, whichever way that one ended', async () => {
+  const none = [jobEntry('static', 'success'), jobEntry(jobNameOf('http-a-v'), 'success')];
+  const passed = await decided([runEntry(800), runEntry(700)], { 800: none, 700: PASSED });
+  expect(passed.decision).toMatchObject({ skip: true, runId: 700 });
+  expect(passed.urls).toHaveLength(3);
+  const failed = await decided([runEntry(800), runEntry(700)], { 800: none, 700: [jobEntry(NAME, 'failure')] });
+  expect(failed.decision).toEqual(redIn(700));
 });
 
 test.each(['workflow_dispatch', 'push', 'pull_request', 'release', ''])(
@@ -224,10 +256,10 @@ test(`more than ${MAX_PAGES} full pages of jobs is a cap too`, async () => {
   expect(calls).toHaveLength(1 + MAX_PAGES);
 });
 
-test(`${MAX_RUNS} runs without a pass are the cap on runs: the next one is not read, even if it passed`, async () => {
+test(`${MAX_RUNS} runs without the job are the cap on runs: the next one is not read, even if it passed`, async () => {
   const ids = Array.from({ length: MAX_RUNS + 1 }, (_, index) => 700 - index);
   const jobs = Object.fromEntries(
-    ids.map((id, index) => [id, [jobEntry(NAME, index === MAX_RUNS ? 'success' : 'failure')]]),
+    ids.map((id, index) => [id, index === MAX_RUNS ? PASSED : [jobEntry('static', 'success')]]),
   );
   const { decision, calls } = await decided(
     ids.map((id) => runEntry(id)),
@@ -235,22 +267,38 @@ test(`${MAX_RUNS} runs without a pass are the cap on runs: the next one is not r
   );
   expect(decision).toEqual({
     skip: false,
-    message: `run, the lookup did not give an answer (${MAX_RUNS} earlier runs were read without finding a pass, so the search stopped)`,
+    message: `run, the lookup did not give an answer (${MAX_RUNS} earlier runs were read without finding the job, so the search stopped)`,
   });
   expect(calls).toHaveLength(1 + MAX_RUNS);
 });
 
-test(`exactly ${MAX_RUNS} runs without a pass, the current run not counted among them, is an ordinary "no pass", not the cap`, async () => {
+test(`exactly ${MAX_RUNS} runs without the job, the current run not counted among them, is an ordinary "no pass", not the cap`, async () => {
   const ids = Array.from({ length: MAX_RUNS }, (_, index) => 700 - index);
-  const jobs = Object.fromEntries(ids.map((id) => [id, [jobEntry(NAME, 'failure')]]));
+  const jobs = Object.fromEntries(ids.map((id) => [id, [jobEntry('static', 'success')]]));
   const runs = [runEntry(CURRENT_RUN), ...ids.map((id) => runEntry(id))];
   const { decision, calls } = await decided(runs, jobs);
   expect(decision).toEqual({ skip: false, message: NO_PASS });
   expect(calls).toHaveLength(1 + MAX_RUNS);
 });
 
+test(`the ${MAX_RUNS}th run is still read: a pass there skips`, async () => {
+  const ids = Array.from({ length: MAX_RUNS }, (_, index) => 700 - index);
+  const jobs = Object.fromEntries(
+    ids.map((id, index) => [id, index === MAX_RUNS - 1 ? PASSED : [jobEntry('static', 'success')]]),
+  );
+  const { decision } = await decided(
+    ids.map((id) => runEntry(id)),
+    jobs,
+  );
+  expect(decision).toMatchObject({ skip: true, runId: 700 - (MAX_RUNS - 1) });
+});
+
 test('the whole lookup shares one abort signal, so a slow API cannot hold the job past its limit', async () => {
-  const { calls } = await decided([runEntry(700), runEntry(600)], { 700: [jobEntry(NAME, 'failure')], 600: PASSED });
+  const { calls } = await decided([runEntry(700), runEntry(600)], {
+    700: [jobEntry('static', 'success')],
+    600: PASSED,
+  });
+  expect(calls).toHaveLength(3);
   const signals = new Set(calls.map((call) => call.init.signal));
   expect(signals.size).toBe(1);
   const [signal] = [...signals];

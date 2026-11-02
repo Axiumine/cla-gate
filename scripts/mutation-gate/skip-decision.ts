@@ -4,14 +4,16 @@
 import { type Env, variable } from '../ci/lib/env.ts';
 import { printable } from '../code-caps/types.ts';
 import { SHARD_NAMES } from './shards.ts';
-import { jobPassed, MAX_RUNS, scheduledRunsOf } from './skip-github.ts';
+import { newestVerdict } from './skip-github.ts';
 import { type Fetcher, type Source, UndecidedError } from './skip-http.ts';
 
 // Skip when nothing changed (E20-S04). The nightly run is the safety net of the mutation gate, always cold (`--force`), and a
-// shard is skipped only when the same commit already passed it in an earlier nightly run: a completed run of ci.yml of the
-// event `schedule` whose head_sha is this run's commit and in which the job `mutation (<shard>)` concluded `success`. A leg
-// that skipped itself ends `success` too, so by induction a success on a commit means a cold pass of that shard on it.
-// A budget stop, a timeout, a cancel and a score below the threshold are not `success`.
+// shard is skipped only when the same commit already passed it in an earlier nightly run: the newest completed run of ci.yml
+// of the event `schedule` whose head_sha is this run's commit and that has the job `mutation (<shard>)` is the one that
+// decides, and the shard skips when that job concluded `success`. A leg that skipped itself ends `success` too, so by
+// induction a success on a commit means a cold pass of that shard on it. A budget stop, a timeout, a cancel and a score below
+// the threshold are not `success`, and because the newest run decides, an older pass on the same commit does not outrank a
+// newer failure: a shard that went red reruns every night until it passes.
 //
 // Only the schedule event can skip: a manual run and a release-candidate tag were asked for by a person. Everything that goes
 // wrong while asking (network, a status other than 200, a rate limit, a shape that is not expected, a missing job, a cap)
@@ -58,29 +60,6 @@ function apiUrlOf(env: Env): string {
   return text.replace(/\/$/, '');
 }
 
-/** Whether an earlier scheduled run of this commit passed the shard: the run, or undefined when none did. */
-async function earlierPass(
-  source: Source,
-  sha: string,
-  currentRun: number,
-  shard: string,
-): Promise<number | undefined> {
-  let read = 0;
-  for await (const runId of scheduledRunsOf(source, sha)) {
-    if (runId === currentRun) {
-      continue;
-    }
-    if (read === MAX_RUNS) {
-      throw new UndecidedError(`${MAX_RUNS} earlier runs were read without finding a pass, so the search stopped`);
-    }
-    read += 1;
-    if (await jobPassed(source, runId, jobNameOf(shard))) {
-      return runId;
-    }
-  }
-  return undefined;
-}
-
 async function lookup(env: Env, fetcher: Fetcher, shard: string): Promise<Decision> {
   const source: Source = {
     fetcher,
@@ -90,15 +69,19 @@ async function lookup(env: Env, fetcher: Fetcher, shard: string): Promise<Decisi
     token: variable(env, 'GITHUB_TOKEN'),
   };
   const sha = matching(env, 'GITHUB_SHA', COMMIT);
-  const runId = await earlierPass(source, sha, Number(matching(env, 'GITHUB_RUN_ID', RUN_ID)), shard);
-  return runId === undefined
-    ? run(`no earlier scheduled run passed ${jobNameOf(shard)} on commit ${sha}`)
-    : {
-        skip: true,
-        runId,
-        sha,
-        message: `skip, scheduled run ${runId} already passed ${jobNameOf(shard)} on commit ${sha}`,
-      };
+  const verdict = await newestVerdict(source, sha, Number(matching(env, 'GITHUB_RUN_ID', RUN_ID)), jobNameOf(shard));
+  if (verdict === undefined) {
+    return run(`no earlier scheduled run passed ${jobNameOf(shard)} on commit ${sha}`);
+  }
+  if (!verdict.passed) {
+    return run(`the newest earlier scheduled run, ${verdict.runId}, did not pass ${jobNameOf(shard)} on commit ${sha}`);
+  }
+  return {
+    skip: true,
+    runId: verdict.runId,
+    sha,
+    message: `skip, scheduled run ${verdict.runId} already passed ${jobNameOf(shard)} on commit ${sha}`,
+  };
 }
 
 /** What may be printed of an error: our own reasons, and for anything else only its class, never a message that might hold a header. */

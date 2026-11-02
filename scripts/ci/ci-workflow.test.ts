@@ -43,7 +43,7 @@ const CI_FILE = '.github/workflows/ci.yml';
 // `mutation` is a matrix job (E20-S04): each shard's job may take the guard's cap of 60 minutes, because the slowest cold
 // run of a shard measured 13 minutes 7 seconds on a development machine and a shared runner may be 2 to 3 times slower
 // (26 to 39 minutes, inside the 50-minute Stryker budget); see the comment on the job in ci.yml and docs/quality-gates.md
-// (Testing, Stryker), which has the measurements of all twelve shards.
+// (Testing, Stryker), which has the measurements of every shard.
 const LONG_JOBS = new Map([
   ['mutation', 60],
   ['leaks', 30],

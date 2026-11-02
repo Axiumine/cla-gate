@@ -75,4 +75,5 @@ test('run from a directory outside the repository, the entry script finds the ba
     stdout: [''],
     stderr: [`${BASELINE_NAME} exists: use --force to overwrite`, ''],
   });
-});
+  // It starts a child process that loads the whole tool, so the default 5 s timeout fails on a loaded machine too.
+}, 60_000);

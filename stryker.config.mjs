@@ -5,10 +5,11 @@
 // the 100% coverage gate is real, because a test that only executes a line leaves its mutants alive. Mutation never runs
 // in a git hook: only the `mutation` CI job runs it.
 //
-// One cold run of all 3807 server and shared mutants does not fit a CI job on the shared runners (2026-11-02: the job was
-// cancelled at its 45-minute timeout, and a run on main stopped at the initial test run). The maintainer decided to split
-// the run by directory and not to mind the total time, so the scope is cut into shards (scripts/mutation-gate/shards.ts),
-// each with its own incremental file, reports and score, and each one gated at `break` on its own.
+// One cold run of all the server and shared mutants (4631 now, 3807 on 2026-11-02) does not fit a CI job on the shared
+// runners (2026-11-02: the job was cancelled at its 45-minute timeout, and a run on main stopped at the initial test run).
+// The maintainer decided to split the run by directory and not to mind the total time, so the scope is cut into shards
+// (scripts/mutation-gate/shards.ts), each with its own incremental file, reports and score, and each one gated at `break`
+// on its own.
 //
 // Two environment variables choose what runs:
 //   STRYKER_SCOPE   unset (or `server`)  server and shared code (E20-S04).

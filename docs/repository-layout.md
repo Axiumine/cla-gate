@@ -79,7 +79,7 @@ Items marked (planned) do not exist yet.
 ├── scripts/fetch-semgrep-rules.ts   downloads the five Semgrep rulesets into rules/ (`yarn semgrep:rules`); scripts/semgrep-rules/
 │                                holds its logic and the tests of the Semgrep wiring
 ├── scripts/trivy-gate/          Trivy wiring: trivy.yaml, .trivyignore expiry, version pin, hook and CI job tests
-├── scripts/mutation-gate/       the Stryker shards (shards.ts), the runner behind `yarn mutate` (mutate*.ts), the skip decision of the nightly run (decide-skip.ts, skip-cli.ts, skip-decision.ts, skip-github.ts, skip-http.ts), and the tests of the configs, the shards and the `mutation` job
+├── scripts/mutation-gate/       the Stryker shards (shards.ts), the runner behind `yarn mutate` (mutate*.ts), the check that deletes an unreadable incremental file (check-incremental.ts, incremental-file.ts), the skip decision of the nightly run (decide-skip.ts, skip-cli.ts, skip-decision.ts, skip-github.ts, skip-http.ts), and the tests of the configs, the shards and the `mutation` job
 ├── scripts/e2e/  scripts/e2e-pin.test.ts   Playwright settings, container guards, spec rules; the version and digest pin test
 ├── scripts/leaks/               memlab wrapper logic (runner, outcome, exit guard, fixture server) and tests
 ├── scripts/qodana-gate/         tests of qodana.yaml, the token gate of the `qodana` job and the exclude-comment rule

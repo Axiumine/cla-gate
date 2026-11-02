@@ -117,6 +117,7 @@ const jobSchema = z.object({
   // The shared self-hosted list, or the one literal ubuntu-24.04 of the qodana job (E20-S08).
   'runs-on': z.union([z.string(), z.array(z.string())]),
   'timeout-minutes': z.number(),
+  'continue-on-error': z.unknown().optional(),
   permissions: z.unknown().optional(),
   env: z.unknown().optional(),
   steps: z.array(stepSchema),

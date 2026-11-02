@@ -5,10 +5,10 @@
 // scripts/mutation-gate/mutate.ts runs them, the `mutation` job of ci.yml lists them (a test compares the two), and the
 // numbers in docs/quality-gates.md come from them.
 //
-// Why shards: one cold run of the server and shared code (3807 mutants) does not fit one CI job on the shared runners.
-// The maintainer decided on 2026-11-02 to split it by directory and not to mind the total time. A shard is a name and a
-// list of mutate globs. Each shard has its own incremental file, reports and score, and each one must reach the `break`
-// threshold on its own, so a strong directory cannot hide a weak one.
+// Why shards: one cold run of the server and shared code (4631 mutants) does not fit one CI job on the shared runners
+// (3807 mutants on 2026-11-02, before the webhook intake). The maintainer decided on 2026-11-02 to split it by directory
+// and not to mind the total time. A shard is a name and a list of mutate globs. Each shard has its own incremental file,
+// reports and score, and each one must reach the `break` threshold on its own, so a strong directory cannot hide a weak one.
 //
 // Nothing may escape: shards.test.ts matches every file the unsharded server scope selects against these globs and fails
 // unless each file lands in exactly one shard, so a new directory or a new file in a split directory is a failing test until
@@ -34,28 +34,31 @@ export const MUTATE_EXCLUSIONS: readonly string[] = [
 /**
  * The server and shared code, by directory. A directory with more than about 500 mutants is cut by file name: its glob
  * keeps the directory and adds a letter range. The counts are what Stryker prints before the initial test run
- * ("Instrumented N source file(s) with M mutant(s)"), measured on 2026-11-02, and docs/quality-gates.md (Testing) has the
- * table with the times.
+ * ("Instrumented N source file(s) with M mutant(s)"), measured on 2026-11-02 and again on the code of the webhook intake
+ * (E06), and docs/quality-gates.md (Testing) has the table with the times.
  */
 export const SERVER_SHARDS: readonly Shard[] = [
-  // 8 files, 161 mutants. Imported by nearly every test, so each static mutant here runs most of the suite: the slowest
+  // 10 files, 163 mutants. Imported by nearly every test, so each static mutant here runs most of the suite: the slowest
   // shard per mutant.
   { name: 'shared', mutate: ['src/shared/**/*.ts'] },
-  // 8 files, 367 mutants.
+  // 10 files, 375 mutants.
   { name: 'config', mutate: ['src/server/config/**/*.ts'] },
-  // 9 files, 362 mutants.
-  { name: 'http', mutate: ['src/server/adapters/http/**/*.ts'] },
+  // The HTTP adapter has 771 mutants since the webhook intake (E06) joined it, so it is cut by file name like the others:
+  // 9 files, 402 mutants: audit-routes, errors, framework-errors, health, limits, logger, request-id, security, trust-proxy.
+  { name: 'http-a-v', mutate: ['src/server/adapters/http/[a-v]*.ts'] },
+  // 12 files, 369 mutants: the webhook intake (webhook-*), and whatever a file name beyond `v` will be.
+  { name: 'http-rest', mutate: ['src/server/adapters/http/[!a-v]*.ts'] },
   // 14 files, 215 mutants.
   { name: 'db', mutate: ['src/server/adapters/db/**/*.ts'] },
-  // 9 + 3 + 4 files, 111 + 112 + 27 mutants (250 in all): the files directly in src/server (app, boot, shutdown, main), the domain files
-  // outside evaluation/ and the service ports.
+  // 9 + 12 + 5 files, 116 + 285 + 27 mutants (428 in all): the files directly in src/server (app, boot, shutdown, main), the
+  // domain files outside evaluation/ and the service ports.
   {
     name: 'root-domain-ports',
     mutate: ['src/server/*.ts', 'src/server/domain/*.ts', 'src/server/services/ports/**/*.ts'],
   },
   // 19 files, 496 mutants.
   { name: 'github-a-o', mutate: ['src/server/adapters/github/[a-o]*.ts'] },
-  // 13 files, 383 mutants.
+  // 14 files, 425 mutants.
   { name: 'github-rest', mutate: ['src/server/adapters/github/[!a-o]*.ts'] },
   // 15 files (5 of them hold only types and have no mutant), 382 mutants.
   { name: 'evaluation-a-l', mutate: ['src/server/domain/evaluation/[a-l]*.ts'] },
@@ -63,7 +66,8 @@ export const SERVER_SHARDS: readonly Shard[] = [
   { name: 'evaluation-rest', mutate: ['src/server/domain/evaluation/[!a-l]*.ts'] },
   // 14 files, 419 mutants: every service whose name starts with `i` (installation-*).
   { name: 'services-installation', mutate: ['src/server/services/i*.ts'] },
-  // 12 files, 331 mutants: every other service (audit-*, repository-*, admission-policies).
+  // 18 files, 516 mutants: every other service (audit-*, repository-*, admission-policies, and the webhook intake's
+  // tenant-filter, failure-throttle, log-limiter, webhook-deliveries). About 500 is the target; this one is a little over it.
   { name: 'services-other', mutate: ['src/server/services/[!i]*.ts'] },
 ];
 

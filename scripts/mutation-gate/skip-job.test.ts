@@ -58,6 +58,15 @@ test('the decide step follows Node and runs the script under plain node, before 
   }
 });
 
+test('no failure of the leg can be reported as a success: neither the job nor any step of it continues on error', () => {
+  // The skip chain trusts that a `success` of the job in the API is a pass of the shard, so a red leg must never end green.
+  expect(job['continue-on-error']).toBeUndefined();
+  expect(job.steps.length).toBeGreaterThan(10);
+  for (const each of job.steps) {
+    expect(each['continue-on-error'], each.name).toBeUndefined();
+  }
+});
+
 test('the decide step gets the shard and the job token as environment variables, never in the command, and nothing else', () => {
   expect(decide?.env).toEqual({ STRYKER_SHARD: expression('matrix.shard'), GITHUB_TOKEN: expression('github.token') });
   expect(decide?.run).not.toContain('${{');

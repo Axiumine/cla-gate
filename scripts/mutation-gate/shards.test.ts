@@ -70,7 +70,12 @@ test('a test file, a test-support file and a global setup are owned by no shard'
 test('the directories with letter ranges cover the whole alphabet and every digit, so no file name falls between two ranges', () => {
   const ranged = SERVER_SHARDS.filter((shard) => shard.mutate.some((glob) => glob.includes('[')));
   expect(ranged.length).toBeGreaterThan(0);
-  for (const directory of ['src/server/adapters/github', 'src/server/domain/evaluation', 'src/server/services']) {
+  for (const directory of [
+    'src/server/adapters/github',
+    'src/server/adapters/http',
+    'src/server/domain/evaluation',
+    'src/server/services',
+  ]) {
     for (const first of 'abcdefghijklmnopqrstuvwxyz0123456789') {
       const file = `${directory}/${first}-probe.ts`;
       expect(ownersOf(file, SERVER_SHARDS, MUTATE_EXCLUSIONS), file).toHaveLength(1);
