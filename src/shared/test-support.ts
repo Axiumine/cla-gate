@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { PrEvaluationDetails } from './pr-evaluation-details.ts';
+
 import { AUDIT_METADATA_KEYS } from './audit.ts';
+import type { PrEvaluationDetails } from './pr-evaluation-details.ts';
 
 /**
  * A stored evaluation that uses every field: both covering bases, an actor with several roles, an uncovered co-author,
