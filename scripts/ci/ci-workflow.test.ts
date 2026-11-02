@@ -52,23 +52,25 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage, postgres, semgrep and trivy, and the required ones keep their exact names', () => {
-  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep', 'trivy']);
+test('the jobs are static, coverage, postgres, semgrep, trivy and mutation, and the required ones keep their exact names', () => {
+  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep', 'trivy', 'mutation']);
   expect([...jobs.entries()].map(([id, job]) => [id, job.name])).toEqual([
     ['static', 'static'],
     ['coverage', 'coverage'],
     ['postgres', 'postgres'],
     ['semgrep', 'semgrep'],
     ['trivy', 'trivy'],
+    ['mutation', 'mutation'],
   ]);
 });
 
 test('every job runs on one and the same allowed runner and has a timeout', () => {
   const runners = new Set([...jobs.values()].map((job) => JSON.stringify(job['runs-on'])));
   expect(runners.size).toBe(1);
-  for (const job of [...jobs.values()]) {
+  for (const [id, job] of [...jobs.entries()]) {
     expect(job['timeout-minutes']).toBeGreaterThan(0);
-    expect(job['timeout-minutes']).toBeLessThanOrEqual(20);
+    // The mutation run is the one long job (E20-S04); the guard caps every job at 60.
+    expect(job['timeout-minutes']).toBeLessThanOrEqual(id === 'mutation' ? 45 : 20);
   }
 });
 

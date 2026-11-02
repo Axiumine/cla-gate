@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import net from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import type { Kysely } from 'kysely';
@@ -15,6 +15,11 @@ import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
 
 const LogLine = z.record(z.string(), z.unknown());
+
+/** The part of `process` the server touches (signals and the exit code), for the tests of boot() and closeOnSignals(). */
+export class FakeProcess extends EventEmitter {
+  exitCode: number | string | null | undefined;
+}
 
 export const UNREACHABLE_DATABASE_URL = 'postgres://user:pw@127.0.0.1:1/db';
 

@@ -49,6 +49,7 @@ export async function openPgliteDatabase(): Promise<Kysely<Database>> {
   const client = new PGlite({ parsers: { [INT8_OID]: parseInt8 } });
   const db = new Kysely<Database>({ dialect: new PgliteDialect(client) });
   // Kysely starts its driver lazily and destroy() is a no-op before that, which would leak the WASM instance.
+  // Stryker disable next-line StringLiteral: any statement starts the driver, the text of this one is not used for anything
   await sql`select 1`.execute(db);
   return db;
 }

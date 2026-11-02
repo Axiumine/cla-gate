@@ -64,16 +64,19 @@ test('.gitignore keeps rules/ out of the repository: the Semgrep Rules License v
   expect(repoText('.gitignore').split('\n')).toContain('rules/');
 });
 
-test('no workflow uploads an artifact or SARIF, and none caches rules/ outside the repository', () => {
+test('no workflow uploads SARIF, and none uploads or caches rules/ outside the repository', () => {
   const steps = workflows().flatMap((flow) => Object.values(flow.jobs).flatMap((job) => job.steps));
   expect(steps.length).toBeGreaterThan(0);
   const used = steps.flatMap((step) => (step.uses === undefined ? [] : [step.uses]));
-  expect(used.filter((action) => /upload-artifact|upload-sarif|codeql-action/.test(action))).toEqual([]);
-  const cachePaths = steps.flatMap((step) =>
-    step.uses?.startsWith('actions/cache') === true ? [step.with?.['path']] : [],
-  );
-  expect(cachePaths.map((value) => z.string().parse(value))).not.toEqual([]);
-  expect(cachePaths.filter((value) => z.string().parse(value).includes('rules'))).toEqual([]);
+  expect(used.filter((action) => /upload-sarif|codeql-action/.test(action))).toEqual([]);
+  // E20-S04 uploads the mutation report as an artifact, so an upload is allowed as long as it is not the rules.
+  const paths = (action: string) =>
+    steps.filter((step) => step.uses?.startsWith(action) === true).map((step) => z.string().parse(step.with?.['path']));
+  const uploadPaths = paths('actions/upload-artifact');
+  expect(uploadPaths.filter((value) => value.includes('rules'))).toEqual([]);
+  const cachePaths = paths('actions/cache');
+  expect(cachePaths).not.toEqual([]);
+  expect(cachePaths.filter((value) => value.includes('rules'))).toEqual([]);
 });
 
 test('the lefthook semgrep job is in the pre-push static-analysis group, runs yarn semgrep, and skips when the binary is absent', () => {

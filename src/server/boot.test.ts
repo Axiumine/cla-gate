@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import process from 'node:process';
+import type { LogFn } from 'pino';
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { type BootOptions, boot, type RunningServer } from './boot.ts';
-import { freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
-
-class FakeProcess extends EventEmitter {
-  exitCode: number | string | null | undefined;
-}
+import { FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 const BASE_ENV = { DATABASE_URL: UNREACHABLE_DATABASE_URL, HOST: '127.0.0.1', LOG_LEVEL: 'silent' };
 
@@ -146,6 +142,23 @@ test('a port that is taken fails the start, releases the database and sets the e
     'driver has already been destroyed',
   );
   expect(await status(first.server, '/healthz')).toBe(200);
+});
+
+test('a port that is taken is logged as fatal, with the error that stopped the start', async () => {
+  const first = await start();
+  const db = await openPgliteDatabase();
+  const fatalCalls: unknown[][] = [];
+  const fatal: LogFn = (...args: unknown[]) => {
+    fatalCalls.push(args);
+  };
+  const createDb: NonNullable<BootOptions['createDb']> = (_config, logger) => {
+    logger.fatal = fatal;
+    return db;
+  };
+  const env = { ...BASE_ENV, PORT: new URL(first.server?.address ?? '').port };
+  expect(await boot({ env, signals: new FakeProcess(), createDb })).toBeUndefined();
+  expect(fatalCalls).toHaveLength(1);
+  expect(fatalCalls[0]).toMatchObject([{ err: { code: 'EADDRINUSE' } }, 'failed to start']);
 });
 
 test('by default it connects with node-postgres, so an unreachable database means live but not ready', async () => {

@@ -26,6 +26,14 @@ on:
   # Nightly run on the default branch (E20-S02): every job runs, and the trivy job also scans the dev dependencies.
   schedule:
     - cron: "17 3 * * *"
+  # Manual run (E20-S04). `force` adds --force to the mutation run: needed after a snapshot or environment change, which
+  # Stryker's incremental mode does not notice.
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Run every mutant again instead of reusing the incremental cache
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -492,3 +500,101 @@ jobs:
       - name: Trivy (dev dependencies, nightly run only)
         if: ${{ github.event_name == 'schedule' }}
         run: yarn trivy:dev
+
+  # Mutation gate (E20-S04), `yarn mutate` = `stryker run --incremental`. Not a required check: it joins `static` and `coverage`
+  # only after it has been stable (E20-S13). It waits for `static`, because mutating code that does not even pass the static
+  # checks is wasted time. The incremental file is restored from a cache whose key starts with a hash of everything that makes
+  # an old result untrustworthy (the lockfile, Node, the Stryker config, the Vitest configs); the key ends with the commit, so
+  # every successful run saves a new file, and `restore-keys` is the same prefix, so a change to any of those files starts from
+  # a fresh run. Snapshot and environment changes are not seen by Stryker: a manual run with `force` covers them, and the
+  # nightly run always adds --force, so the cache cannot hide a regression for longer than a day. The report is uploaded
+  # even when the score is below the threshold. Mutation never runs in a git hook. `--logLevel debug` is never used: it
+  # crashes with Vitest 5 (Stryker issue 6272). No secret, no network beyond the package registry.
+  mutation:
+    name: mutation
+    needs: static
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Restore the Stryker incremental file
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts') }}-${{ github.sha }}
+          restore-keys: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts') }}-
+      # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command.
+      - name: Mutation tests
+        env:
+          MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
+        run: |
+          set -eu
+          if [ "$MUTATE_FORCE" = "true" ]; then
+            yarn mutate --force
+          else
+            yarn mutate
+          fi
+      - name: Upload the mutation report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 7

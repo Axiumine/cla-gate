@@ -24,6 +24,7 @@ export function byName(a: { readonly name: string }, b: { readonly name: string 
   if (a.name === b.name) {
     return 0;
   }
+  // Stryker disable next-line EqualityOperator: equal names returned 0 above, so < and <= agree on everything that gets here
   return a.name < b.name ? -1 : 1;
 }
 

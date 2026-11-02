@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { PGlite } from '@electric-sql/pglite';
 import { type Kysely, sql } from 'kysely';
 import { expect, onTestFinished, test } from 'vitest';
+import { PgliteDriver } from './pglite/driver.ts';
 import { toExecResult, toQueryResult } from './pglite/results.ts';
 import { openPgliteDatabase } from './pglite.ts';
 import type { Database } from './schema.ts';
@@ -99,6 +101,23 @@ test('isolation level and access mode are applied to the transaction', async () 
   await expect(readOnly).rejects.toMatchObject({ code: '25006' });
 });
 
+test('isolation level and access mode can be set on the same transaction', async () => {
+  const db = await open();
+  const state = await db
+    .transaction()
+    .setIsolationLevel('repeatable read')
+    .setAccessMode('read only')
+    .execute((trx) =>
+      sql<{
+        level: string;
+        readOnly: string;
+      }>`select current_setting('transaction_isolation') as level, current_setting('transaction_read_only') as "readOnly"`.execute(
+        trx,
+      ),
+    );
+  expect(state.rows).toEqual([{ level: 'repeatable read', readOnly: 'on' }]);
+});
+
 test('the single connection is queued: nobody sees the inside of another transaction', async () => {
   const db = await open();
   const writer = db.transaction().execute(async (trx) => {
@@ -127,6 +146,15 @@ test('Kysely can introspect the schema through the dialect', async () => {
   const tables = await db.introspection.getTables();
   expect(tables.map((table) => table.name)).toEqual(['scratch']);
   expect(tables[0]?.columns.map((column) => column.name)).toEqual(['id', 'note']);
+});
+
+test('destroying the driver closes the PGlite instance, which frees its memory', async () => {
+  const client = new PGlite();
+  const driver = new PgliteDriver(client);
+  await driver.init();
+  expect(client.closed).toBe(false);
+  await driver.destroy();
+  expect(client.closed).toBe(true);
 });
 
 test('destroy closes the database', async () => {

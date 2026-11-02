@@ -15,7 +15,7 @@ function statusOf(error: unknown): number {
   }
   if (typeof error === 'object' && error !== null && 'statusCode' in error) {
     const status = error.statusCode;
-    if (typeof status === 'number' && status >= 400 && status < 500) {
+    if (typeof status === 'number' && status >= 400 && status <= 499) {
       return status;
     }
   }
@@ -27,10 +27,12 @@ const STATUS_TEXT = new Map(Object.entries(STATUS_CODES));
 /** `400` becomes `bad_request`, `500` becomes `internal_server_error`. The message is the standard status text, never ours. */
 export function errorBody(status: number, requestId: string): ErrorBody {
   const message = STATUS_TEXT.get(String(status)) ?? 'Error';
+  // Stryker disable next-line Regex: no standard status text has two separators in a row, so the + changes nothing for any text this map holds
   return { error: { code: message.toLowerCase().replaceAll(/[^a-z0-9]+/g, '_'), message, requestId } };
 }
 
 function respond(request: FastifyRequest, reply: FastifyReply, status: number): FastifyReply {
+  // Stryker disable next-line StringLiteral: Fastify gives an object body this very content type by itself; it is spelled out so it never depends on that
   return reply.code(status).type('application/json; charset=utf-8').send(errorBody(status, request.id));
 }
 

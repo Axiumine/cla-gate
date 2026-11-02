@@ -34,6 +34,10 @@ test('a minimal environment yields the documented defaults', () => {
   expect(config.databaseUrl.reveal()).toBe(DB);
 });
 
+test('a GITHUB_APP_ID of 20 digits is accepted as text', () => {
+  expect(loadConfig({ DATABASE_URL: DB, GITHUB_APP_ID: '1'.repeat(20) }).github.appId).toBe('1'.repeat(20));
+});
+
 test('every variable is read and secrets become Secret values', () => {
   const config = loadConfig({
     NODE_ENV: 'production',
@@ -67,6 +71,13 @@ test('every variable is read and secrets become Secret values', () => {
 
 test('the public base URL defaults to localhost on the configured port', () => {
   expect(loadConfig({ DATABASE_URL: DB, PORT: '4000' }).publicBaseUrl).toBe('http://localhost:4000');
+});
+
+test.each([
+  ['http://localhost:8080', 'http://localhost:8080'],
+  ['https://cla.example.org:8443/', 'https://cla.example.org:8443'],
+])('a development PUBLIC_BASE_URL of %s is accepted as the origin %s', (given, origin) => {
+  expect(loadConfig({ DATABASE_URL: DB, PUBLIC_BASE_URL: given }).publicBaseUrl).toBe(origin);
 });
 
 test('PORT 0 (an ephemeral port) is valid', () => {
@@ -107,6 +118,13 @@ test.each([
   ['a PUBLIC_BASE_URL that is not a URL', { PUBLIC_BASE_URL: 'cla.example.org' }, ['PUBLIC_BASE_URL']],
   ['a short SESSION_SECRET', { SESSION_SECRET: 'short' }, ['SESSION_SECRET']],
   ['a non numeric GITHUB_APP_ID', { GITHUB_APP_ID: 'abc' }, ['GITHUB_APP_ID']],
+  ['a GITHUB_APP_ID that ends in letters', { GITHUB_APP_ID: '123abc' }, ['GITHUB_APP_ID']],
+  ['a GITHUB_APP_ID that starts with letters', { GITHUB_APP_ID: 'abc123' }, ['GITHUB_APP_ID']],
+  ['a GITHUB_APP_ID of 21 digits', { GITHUB_APP_ID: '1'.repeat(21) }, ['GITHUB_APP_ID']],
+  ['a PORT with trailing text', { PORT: '8080 ' }, ['PORT']],
+  ['a PORT in exponent notation', { PORT: '1e3' }, ['PORT']],
+  ['a PORT in hexadecimal', { PORT: '0x50' }, ['PORT']],
+  ['a PORT of six digits', { PORT: '000080' }, ['PORT']],
   ['production over http', { NODE_ENV: 'production', PUBLIC_BASE_URL: 'http://cla.example.org' }, ['PUBLIC_BASE_URL']],
   ['production without PUBLIC_BASE_URL', { NODE_ENV: 'production' }, ['PUBLIC_BASE_URL']],
 ])('%s is reported by name', (_label, extra, names) => {

@@ -33,7 +33,13 @@ function step(name: string) {
 const workflow = z
   .object({
     on: z
-      .object({ pull_request: z.unknown(), push: z.unknown(), schedule: z.array(z.object({ cron: z.string() })) })
+      .object({
+        pull_request: z.unknown(),
+        push: z.unknown(),
+        schedule: z.array(z.object({ cron: z.string() })),
+        // E20-S04: the manual run of the mutation job.
+        workflow_dispatch: z.unknown(),
+      })
       .strict(),
     concurrency: z.object({ group: z.string(), 'cancel-in-progress': z.string() }),
   })

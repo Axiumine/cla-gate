@@ -27,6 +27,12 @@ test.each([
   expect(printed).not.toContain('super-secret');
 });
 
+test('the mask is the literal [REDACTED]', () => {
+  expect(MASK).toBe('[REDACTED]');
+  expect(String(new Secret(VALUE))).toBe('[REDACTED]');
+  expect(JSON.stringify({ secret: new Secret(VALUE) })).toBe('{"secret":"[REDACTED]"}');
+});
+
 test.each([
   ['toString', (secret: Secret) => secret.toString()],
   ['toJSON', (secret: Secret) => secret.toJSON()],

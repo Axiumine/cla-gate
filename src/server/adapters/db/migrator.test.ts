@@ -71,6 +71,7 @@ test('an edited migration refuses the whole run, naming the file but never its S
   const run = migrate(db, [edited, B]);
   await expect(run).rejects.toThrow(MigrationError);
   await expect(run).rejects.toThrow('applied migration 001_a.sql was edited after it was applied');
+  await expect(run).rejects.toThrow('migrations are forward-only: restore the file and add a new migration instead');
   await expect(run).rejects.not.toThrow('secret_column');
   expect(await tables(db)).toEqual(['a', 'schema_migrations']);
 });
@@ -87,7 +88,7 @@ test('a new migration that sorts before an applied one refuses the run', async (
   const { db } = await emptyTestDatabase();
   await migrate(db, [B]);
   await expect(migrate(db, [A, B])).rejects.toThrow(
-    'pending migration 001_a.sql is older than the applied migration 002_b.sql',
+    'pending migration 001_a.sql is older than the applied migration 002_b.sql; migrations must be added in order',
   );
   expect(await tables(db)).toEqual(['b', 'schema_migrations']);
 });

@@ -35,6 +35,7 @@ function pendingMigrations(applied: readonly AppliedRow[], files: readonly Migra
   const appliedNames = new Set(applied.map((row) => row.name));
   const pending = files.filter((file) => !appliedNames.has(file.name));
   const newest = applied.toSorted(byName).at(-1)?.name ?? '';
+  // Stryker disable next-line EqualityOperator: a pending file is never the newest applied one, so < and <= agree
   const stale = pending.find((file) => file.name < newest);
   if (stale !== undefined) {
     throw new MigrationError(

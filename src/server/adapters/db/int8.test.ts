@@ -17,9 +17,20 @@ test.each([
   expect(parseInt8(text)).toBe(expected);
 });
 
-test.each([['9007199254740992'], ['-9007199254740992'], ['9223372036854775807'], ['not a number'], ['1.5'], ['']])(
-  '%j is refused instead of being rounded',
-  (text) => {
-    expect(() => parseInt8(text)).toThrow(RangeError);
-  },
-);
+test.each([
+  ['9007199254740992'],
+  ['-9007199254740992'],
+  ['9223372036854775807'],
+  ['not a number'],
+  ['1.5'],
+  [''],
+  // Number() accepts all of these as safe integers; a bigint column never prints like that.
+  [' 42'],
+  ['42 '],
+  ['+5'],
+  ['0x10'],
+  ['1e3'],
+  ['0b11'],
+])('%j is refused instead of being rounded or reinterpreted', (text) => {
+  expect(() => parseInt8(text)).toThrow(new RangeError('bigint value is outside the safe integer range'));
+});

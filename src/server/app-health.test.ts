@@ -27,6 +27,21 @@ test('GET /readyz answers ready when the database answers', async () => {
   expect(readyResponseSchema.parse(response.json())).toEqual({ status: 'ready' });
 });
 
+test('GET /readyz asks the database a real question: select 1', async () => {
+  const asked: string[] = [];
+  const db = (await openPgliteDatabase()).withPlugin({
+    transformQuery: ({ node }) => {
+      asked.push(JSON.stringify(node));
+      return node;
+    },
+    transformResult: ({ result }) => Promise.resolve(result),
+  });
+  const { app } = await testApp({ db });
+  expect((await app.inject('/readyz')).statusCode).toBe(200);
+  expect(asked).toHaveLength(1);
+  expect(asked[0]).toContain('select 1');
+});
+
 test('GET /readyz answers 503 with a generic body when the database is down', async () => {
   const { app, logs } = await testApp({ db: unreachable() });
   const response = await app.inject('/readyz');

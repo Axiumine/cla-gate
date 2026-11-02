@@ -11,7 +11,15 @@ import { securityHeaders } from './security.ts';
 type Headers = Readonly<Record<string, string>>;
 
 /** The headers of a response that carry no security meaning, and are left out of {@link securityHeaderValues}. */
-const NOT_SECURITY_HEADERS = new Set(['content-type', 'content-length', 'date', 'connection', 'keep-alive']);
+const NOT_SECURITY_HEADERS = new Set([
+  // Stryker disable next-line StringLiteral: the answer sets its own content type (rejectRequest, rawResponse), so a leaked one changes nothing
+  'content-type',
+  // Stryker disable next-line StringLiteral: Fastify computes the length of the real body and rawResponse sets its own, so a leaked one changes nothing
+  'content-length',
+  'date',
+  // Stryker disable next-line StringLiteral: Node adds its own and rawResponse sets 'close', so a leaked one changes nothing
+  'connection',
+]);
 
 /**
  * The security headers the helmet plugin sets, as plain values. Responses that never reach a route (an invalid URL, a
@@ -21,14 +29,15 @@ const NOT_SECURITY_HEADERS = new Set(['content-type', 'content-length', 'date', 
 async function securityHeaderValues(config: Pick<AppConfig, 'publicBaseUrl'>): Promise<Headers> {
   const probe = Fastify();
   await probe.register(helmetPlugin, securityHeaders(config));
+  // Stryker disable next-line StringLiteral: only the headers of the answer are read, never its body
   probe.get('/', () => 'probe');
   const response = await probe.inject('/');
   await probe.close();
-  return Object.fromEntries(
-    Object.entries(response.headers).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string' && !NOT_SECURITY_HEADERS.has(entry[0]),
-    ),
+  const textual = Object.entries(response.headers).filter(
+    // Stryker disable next-line ConditionalExpression: a type guard for the compiler; every header helmet sets is text, so there is no other kind of value to let through
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
   );
+  return Object.fromEntries(textual.filter(([name]) => !NOT_SECURITY_HEADERS.has(name)));
 }
 
 /** What the HTTP parser rejected, as the status Node's own default handler uses. */
