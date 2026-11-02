@@ -34,15 +34,17 @@ test('a visitor without a session gets "Log in with GitHub" that returns to the 
   expect(screen.queryByRole('button', { name: messages['auth.logout'] })).toBeNull();
 });
 
-test('nothing is shown while the server has not said who is logged in', () => {
+test('nothing about the account is shown while the server has not said who is logged in', () => {
   renderWithProviders(<AppRouter />, { session: ALICE });
-  expect(screen.queryByRole('button')).toBeNull();
-  expect(screen.queryByRole('link')).toBeNull();
+  expect(screen.queryByRole('button', { name: messages['auth.logout'] })).toBeNull();
+  expect(screen.queryByRole('link', { name: messages['auth.login'] })).toBeNull();
+  expect(screen.queryByText(ALICE.user.login)).toBeNull();
 });
 
-test('the menu is reached with the keyboard: Tab arrives at "Log out"', async () => {
+test('the menu is reached with the keyboard: Tab goes on from the theme choice to "Log out"', async () => {
   const { user } = renderWithProviders(<AppRouter />, { session: ALICE });
   await screen.findByRole('button', { name: messages['auth.logout'] });
+  screen.getByRole('radio', { name: messages['theme.system'] }).focus();
   await user.tab();
   expect(screen.getByRole('button', { name: messages['auth.logout'] })).toHaveFocus();
 });

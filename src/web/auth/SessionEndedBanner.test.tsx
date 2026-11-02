@@ -69,10 +69,19 @@ async function sessionThatEnds(route = '/notes') {
 
 const save = () => screen.getByRole('button', { name: 'Save notes' });
 
+/** The banner's live region: the shell puts it just above the header, and it is not the shell's own region for page titles. */
+function bannerRegion(): HTMLElement {
+  const region = screen.getByRole('banner').previousElementSibling;
+  if (!(region instanceof HTMLElement) || region.getAttribute('role') !== 'status') {
+    throw new Error('the banner region is not just above the header');
+  }
+  return region;
+}
+
 test('the banner region is in the page before anything happens, empty, so that a screen reader announces what comes into it', async () => {
   renderWithProviders(<TestAppRoutes route="/notes" pages={pages} />, { session: ALICE });
   await screen.findByLabelText('Notes');
-  expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  expect(bannerRegion()).toBeEmptyDOMElement();
 });
 
 test('a 401 after the person typed puts up the banner with a login link that returns to the page, and the typed text stays', async () => {
@@ -82,7 +91,7 @@ test('a 401 after the person typed puts up the banner with a login link that ret
   await user.click(save());
 
   const banner = await screen.findByText(messages['auth.sessionEnded']);
-  const region = screen.getByRole('status');
+  const region = bannerRegion();
   expect(region).toContainElement(banner);
   expect(within(region).getByRole('link', { name: messages['auth.login'] })).toHaveAttribute(
     'href',
@@ -141,18 +150,17 @@ test('a 401 for a visitor who was never logged in says nothing about a session',
   await screen.findByRole('link', { name: messages['auth.login'] });
   await user.click(save());
   await delay(30);
-  expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  expect(bannerRegion()).toBeEmptyDOMElement();
 });
 
 test('the login link of the banner is a plain link that Tab reaches', async () => {
   const { user } = await sessionThatEnds();
   await user.click(save());
   await screen.findByText(messages['auth.sessionEnded']);
-  const link = within(screen.getByRole('status')).getByRole('link', { name: messages['auth.login'] });
+  const link = within(bannerRegion()).getByRole('link', { name: messages['auth.login'] });
   expect(link.tagName).toBe('A');
-  if (document.activeElement instanceof HTMLElement) {
-    document.activeElement.blur();
-  }
+  // The "Skip to content" link is the first stop of the page (E17-S09); the banner is the next one.
+  screen.getByRole('link', { name: messages['nav.skip'] }).focus();
   await user.tab();
   expect(link).toHaveFocus();
 });

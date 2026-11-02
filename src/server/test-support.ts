@@ -11,7 +11,7 @@ import { pickSystemFreePort } from '../../scripts/ci/lib/ports.ts';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
-import { buildApp } from './app.ts';
+import { type AppOptions, buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
 import type { OperatorPolicies } from './services/operator-policies.ts';
 import type { Clock } from './services/ports/clock.ts';
@@ -88,6 +88,8 @@ export interface TestAppOptions {
   readonly github?: RoleGitHub;
   /** Who operates the instance (E11-S08); defaults to the app's own, from `OPERATOR_GITHUB_IDS` in `env`. */
   readonly operators?: OperatorPolicies;
+  /** The verified identity of the GitHub App, for the install address of `GET /api/meta` (E17-S09). Defaults to none. */
+  readonly appIdentity?: AppOptions['appIdentity'];
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */

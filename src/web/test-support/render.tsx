@@ -8,6 +8,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { z } from 'zod';
 import { sessionResponseSchema } from '../../shared/auth.ts';
 import { sessionRoute } from '../../shared/auth-contract.ts';
+import { DEFAULT_SOURCE_URL, type MetaResponse, metaRoute } from '../../shared/meta.ts';
 import { createQueryClient } from '../api/query-client.ts';
 import { AppProviders } from '../providers.tsx';
 import { server } from './server.ts';
@@ -19,6 +20,8 @@ export interface RenderOptions {
   readonly route?: string;
   /** The signed-in user the session endpoint answers with. Absent means anonymous: the endpoint answers 401. */
   readonly session?: SessionInput;
+  /** What `GET /api/meta` answers with (E17-S09): the default repository, no commit and no install address when absent. */
+  readonly meta?: MetaResponse;
 }
 
 export interface Rendered extends RenderResult {
@@ -31,6 +34,9 @@ export interface Rendered extends RenderResult {
   /** Changes what the session endpoint answers from now on: a user, or `undefined` for 401 (the session ended or was never there). */
   readonly setSession: (session: SessionInput | undefined) => void;
 }
+
+/** What a fresh instance says about itself: the default repository, a commit that is not known, and no App to install. */
+const DEFAULT_META: MetaResponse = { sourceUrl: DEFAULT_SOURCE_URL, commit: null, installUrl: null };
 
 /** The app's query client, except that a query never retries: a failing test fails at once instead of after the back-off. */
 function testQueryClient(): QueryClient {
@@ -49,13 +55,13 @@ function anonymous(): Response {
 /**
  * Renders `ui` the way the app runs: on `route`, inside the providers of the app (`AppProviders`: the query client with
  * `retry: false`, the i18n provider of E17-S02 and the theme provider of E17-S05), with the session endpoint answering as
- * `session` says. A test of the app renders `<AppRouter />` (E17-S08) here. The session is checked against the shared
+ * `session` says and the meta endpoint (the footer's source link, E17-S09) as `meta` says. A test of the app renders `<AppRouter />` (E17-S08) here. The session is checked against the shared
  * contract, so a fixture that the server could never send fails the test that uses it, and `setSession` changes the answer
  * later. The result is Testing Library's plus `user`, the user-event instance that acts on that render, its `queryClient`
  * and the requests the session endpoint received.
  */
 export function renderWithProviders(ui: ReactElement, options: RenderOptions = {}): Rendered {
-  const { route = '/', session } = options;
+  const { route = '/', session, meta = DEFAULT_META } = options;
   window.history.replaceState(null, '', route);
   let body = session === undefined ? undefined : sessionResponseSchema.parse(session);
   const sessionRequests: Request[] = [];
@@ -64,6 +70,7 @@ export function renderWithProviders(ui: ReactElement, options: RenderOptions = {
       sessionRequests.push(request.clone());
       return body === undefined ? anonymous() : HttpResponse.json(body);
     }),
+    http.get(metaRoute.path, () => HttpResponse.json(meta)),
   );
   const queryClient = testQueryClient();
   const wrapper = ({ children }: { children: ReactNode }) => (

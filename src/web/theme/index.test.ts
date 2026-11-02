@@ -4,5 +4,5 @@ import { expect, test } from 'vitest';
 import * as theme from './index.ts';
 
 test('the barrel exports what the screens import for the theme, and nothing else', () => {
-  expect(new Set(Object.keys(theme))).toEqual(new Set(['THEME_MODES', 'ThemeProvider', 'useTheme']));
+  expect(new Set(Object.keys(theme))).toEqual(new Set(['ThemeProvider', 'ThemeToggle']));
 });

@@ -22,6 +22,8 @@ export interface AppConfig {
   readonly github: GithubConfig;
   /** The directory the single-page app is served from (E17-S03): absolute, `dist/web` unless `WEB_ROOT` says otherwise. */
   readonly webRoot: string;
+  /** Where the corresponding source of the running version is (E17-S09, AGPL section 13): the repository and, when the build knows it, the commit. */
+  readonly source: { readonly url: string; readonly commit: string | null };
 }
 
 /** Thrown for an invalid environment. Carries variable NAMES only: a value must never reach an error message or log. */
@@ -48,6 +50,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     session: { idleSeconds: env.SESSION_IDLE_SECONDS, absoluteSeconds: env.SESSION_ABSOLUTE_SECONDS },
     github: toGithubConfig(env),
     webRoot: env.WEB_ROOT,
+    source: { url: env.SOURCE_URL, commit: env.SOURCE_COMMIT },
   };
 }
 

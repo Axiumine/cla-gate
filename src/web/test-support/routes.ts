@@ -7,7 +7,9 @@
 /** What a test needs to know of a route: its id, what its options declare, and its children. */
 export interface RouteNode {
   readonly id: string;
-  readonly options: { readonly staticData?: { readonly access?: unknown } | undefined };
+  readonly options: {
+    readonly staticData?: { readonly access?: unknown; readonly title?: unknown } | undefined;
+  };
   readonly children?: unknown;
 }
 
@@ -30,6 +32,17 @@ export function routeAccessProblems(root: RouteNode): string[] {
   return allRoutes(root).flatMap((route) => {
     const access = route.options.staticData?.access;
     return access === 'public' || access === 'authenticated' ? [] : [`${route.id}: no access declared`];
+  });
+}
+
+/**
+ * The routes whose `staticData.title` is not a key of `catalog`, one line each; none means every route names a page title
+ * from the catalog (E17-S09).
+ */
+export function routeTitleProblems(root: RouteNode, catalog: Readonly<Record<string, string>>): string[] {
+  return allRoutes(root).flatMap((route) => {
+    const title = route.options.staticData?.title;
+    return typeof title === 'string' && Object.hasOwn(catalog, title) ? [] : [`${route.id}: no catalog title declared`];
   });
 }
 

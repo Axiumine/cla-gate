@@ -65,9 +65,9 @@ test('Knip follows the stylesheet and the theme script: both are entries, and CS
   const knip = z
     .object({ entry: z.array(z.string()), project: z.array(z.string()) })
     .parse(JSON.parse(repoText('knip.json')));
-  expect(knip.entry).toEqual(
-    expect.arrayContaining(['src/web/theme/index.ts!', 'src/web/theme/theme-init.ts!', 'src/web/styles/app.css']),
-  );
+  expect(knip.entry).toEqual(expect.arrayContaining(['src/web/theme/theme-init.ts!', 'src/web/styles/app.css']));
+  // The barrel is imported by production code now (the provider by the app, the toggle by the user menu, E17-S09), so it is no entry.
+  expect(knip.entry).not.toContain('src/web/theme/index.ts!');
   expect(knip.project).toContain('src/**/*.css');
   expect(knip.project).not.toContain('src/**/*.css!');
 });

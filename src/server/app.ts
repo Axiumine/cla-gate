@@ -13,6 +13,7 @@ import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
 import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
+import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
@@ -65,6 +66,12 @@ export interface AppOptions {
    * `OPERATOR_GITHUB_IDS` names, or to none when it is unset (the owner of the App is not known without the GitHub client).
    */
   readonly operators?: OperatorPolicies | undefined;
+  /**
+   * The verified identity of the GitHub App (E05-S02): `GET /api/meta` (E17-S09) builds the install address from its slug,
+   * read at each request because the check can succeed after the server is listening. Defaults to none, and an App that is
+   * not configured is none.
+   */
+  readonly appIdentity?: { current(): { readonly slug: string } | undefined } | undefined;
 }
 
 /**
@@ -148,6 +155,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   });
 
   await app.register(operatorRoutes, { db });
+  await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
 
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },

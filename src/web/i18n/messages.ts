@@ -12,6 +12,7 @@
  */
 export const messages = {
   'app.name': 'CLA Platform',
+  'app.pageTitle': '{title} · CLA',
   'auth.login': 'Log in with GitHub',
   'auth.logout': 'Log out',
   'auth.sessionEnded': 'Your session ended',
@@ -42,8 +43,11 @@ export const messages = {
   'errors.unprocessable_entity': 'What you entered could not be processed. Check it and try again.',
   'errors.unsupported_media_type': 'The server does not accept that kind of content.',
   'errors.uri_too_long': 'The address of the request was too long.',
+  'footer.licence': 'Licensed under {licence}',
+  'footer.sourceCode': 'Source code',
   'landing.signedIn': 'You are logged in.',
   'landing.tagline': 'Contributor License Agreements, checked on every pull request.',
+  'landing.title': 'Home',
   'login.failed.access_denied': 'You cancelled the login at GitHub. Nothing was changed.',
   'login.failed.bad_request': 'The login request was not valid. Try again.',
   'login.failed.exchange_failed': 'GitHub did not complete the login. Try again.',
@@ -55,6 +59,10 @@ export const messages = {
     'The login did not start from this browser, or took too long. Start it again from this page.',
   'login.failed.title': 'Login failed',
   'login.failed.unsupported_account': 'This kind of GitHub account cannot log in here. Use a personal account.',
+  'nav.home': 'Home',
+  'nav.label': 'Main',
+  'nav.menu': 'Menu',
+  'nav.skip': 'Skip to content',
   'states.copied': 'Request ID copied',
   'states.copyFailed': 'The request ID could not be copied',
   'states.copyRequestId': 'Copy request ID',
@@ -80,6 +88,10 @@ export const messages = {
   'status.pending': 'Pending',
   'status.revoked': 'Revoked',
   'status.suspended': 'Suspended',
+  'theme.dark': 'Dark',
+  'theme.label': 'Theme',
+  'theme.light': 'Light',
+  'theme.system': 'System',
 } as const;
 
 /** The type of the catalog itself, whose literal messages the placeholder types are read from. */
@@ -87,3 +99,8 @@ export type Messages = typeof messages;
 
 /** A key of the catalog: `t('typo')` fails `tsc`. */
 export type MessageKey = keyof Messages;
+
+/** A key whose message has no `{name}` placeholder: one that can be shown without parameters, such as the title of a page. */
+export type PlainMessageKey = {
+  [Key in MessageKey]: Messages[Key] extends `${string}{${string}` ? never : Key;
+}[MessageKey];

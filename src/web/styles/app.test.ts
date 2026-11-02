@@ -103,6 +103,21 @@ test('the breakpoints are the one theme value written out, as media queries cann
   });
 });
 
+test('the page widths are written out too, because max-w-2xl and max-w-5xl have no rule without them (E17-S09)', () => {
+  const declared = atRulesOf(app, 'theme')
+    .filter((rule) => rule.params === '')
+    .map(declarationsIn)
+    .flatMap((map) => [...map])
+    .filter(([name]) => name.startsWith('--container-'));
+  expect(Object.fromEntries(declared)).toEqual({ '--container-2xl': '42rem', '--container-5xl': '64rem' });
+});
+
+test('the md breakpoint, where the navigation stops collapsing, is 768 px (E17-S09)', () => {
+  const declared = declarationsIn(atRulesOf(app, 'theme').find((rule) => rule.params === ''));
+  const rem = Number.parseFloat(declared.get('--breakpoint-md') ?? '');
+  expect(rem * 16).toBe(768);
+});
+
 test('the dark: variant follows data-theme, so a utility obeys the choice of the person and not the system alone', () => {
   const [variant] = atRulesOf(app, 'custom-variant');
   expect(variant?.params).toBe('dark (&:where(:root[data-theme="dark"], :root[data-theme="dark"] *))');

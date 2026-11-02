@@ -6,6 +6,6 @@
 export { type I18nValue, type Locale, useFormatters, useLocale, useT } from './context.ts';
 export { type Formatters, type Instant, parseInstant } from './format.ts';
 export { DEFAULT_LOCALE, I18nProvider, type I18nProviderProps } from './I18nProvider.tsx';
-export { type MessageKey, type Messages, messages } from './messages.ts';
+export { type MessageKey, type Messages, messages, type PlainMessageKey } from './messages.ts';
 export { Timestamp, type TimestampProps } from './Timestamp.tsx';
 export { createTranslator, type Translate } from './translate.ts';

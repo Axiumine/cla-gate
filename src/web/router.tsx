@@ -5,7 +5,7 @@ import { createRootRouteWithContext, createRoute, createRouter, RouterProvider }
 import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
-import { RootLayout } from './layout/RootLayout.tsx';
+import { AppShell } from './layout/AppShell.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
 import { type RouterContext, withAccess } from './route-access.ts';
@@ -15,9 +15,9 @@ import { NotFoundPage, RouterErrorComponent } from './states/index.ts';
 // `withAccess(...)`, which is where it says who may see it. E18 adds the sign page and the maintainer screens here, and E19
 // the setup pages.
 
+// The root is the deepest match only when no route matched, so its title is the not-found page's.
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  ...withAccess('public'),
-  component: RootLayout,
+  ...withAccess('public', { title: 'states.notFound.title' }),
   notFoundComponent: NotFoundPage,
   errorComponent: RouterErrorComponent,
 });
@@ -25,7 +25,7 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const landingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  ...withAccess('public'),
+  ...withAccess('public', { title: 'landing.title' }),
   component: LandingPage,
 });
 
@@ -35,7 +35,7 @@ const loginFailedSearch = z.object({ reason: loginFailureReasonSchema.optional()
 const loginFailedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: LOGIN_FAILED_PATH,
-  ...withAccess('public'),
+  ...withAccess('public', { title: 'login.failed.title' }),
   validateSearch: loginFailedSearch,
   component: function LoginFailedRoute() {
     return <LoginFailedPage reason={loginFailedRoute.useSearch().reason} />;
@@ -51,7 +51,7 @@ const routeTree = rootRoute.addChildren([landingRoute, loginFailedRoute]);
  */
 export function createAppRouter(queryClient: RouterContext['queryClient']) {
   // type-coverage:ignore-next-line -- the route tree type holds any, see above
-  return createRouter({ routeTree, context: { queryClient } });
+  return createRouter({ routeTree, context: { queryClient }, InnerWrap: AppShell });
 }
 
 declare module '@tanstack/react-router' {

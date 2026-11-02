@@ -12,7 +12,6 @@
     "src/web/i18n/index.ts!",
     "src/web/api/index.ts!",
     "src/web/auth/index.ts!",
-    "src/web/theme/index.ts!",
     "src/web/theme/theme-init.ts!",
     "src/web/states/index.ts!",
     "src/web/ui/index.ts!",

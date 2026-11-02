@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { accessById, allRoutes, type RouteNode, routeAccessProblems } from './routes.ts';
+import { accessById, allRoutes, type RouteNode, routeAccessProblems, routeTitleProblems } from './routes.ts';
 
 const tree: RouteNode = {
   id: '__root__',
@@ -33,4 +33,26 @@ test('a root without a children list is a tree of one route', () => {
 
 test('accessById maps each route to what it declared', () => {
   expect(accessById(tree)).toEqual({ __root__: 'public', '/a': 'authenticated', '/b': 'maybe', '/b/c': undefined });
+});
+
+const catalog = { 'landing.title': 'Home' };
+
+test('a route is a problem when its title is missing, is not text, or is not a key of the catalog', () => {
+  const titles: RouteNode = {
+    id: '__root__',
+    options: { staticData: { title: 'landing.title' } },
+    children: [
+      { id: '/ok', options: { staticData: { title: 'landing.title' } } },
+      { id: '/missing', options: { staticData: {} } },
+      { id: '/number', options: { staticData: { title: 7 } } },
+      { id: '/unknown', options: { staticData: { title: 'no.such.key' } } },
+      { id: '/inherited', options: { staticData: { title: 'toString' } } },
+    ],
+  };
+  expect(routeTitleProblems(titles, catalog)).toEqual([
+    '/missing: no catalog title declared',
+    '/number: no catalog title declared',
+    '/unknown: no catalog title declared',
+    '/inherited: no catalog title declared',
+  ]);
 });

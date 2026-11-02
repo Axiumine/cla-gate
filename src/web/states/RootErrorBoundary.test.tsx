@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { DEFAULT_SOURCE_URL } from '../../shared/meta.ts';
 import { ApiError } from '../api/errors.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
@@ -135,17 +136,31 @@ test('"Reload" loads the page again, with the mouse, Enter and Space', async () 
   expect(reload).toHaveBeenCalledTimes(3);
 });
 
-test('what is beside the boundary, such as the footer, stays on screen when the page crashes', () => {
+test('what is beside the boundary stays on screen when the page crashes', () => {
   renderWithProviders(
     <>
       <RootErrorBoundary>
         <Boom error={serverError()} />
       </RootErrorBoundary>
-      <footer>Source code</footer>
+      <aside>Beside</aside>
     </>,
   );
-  expect(screen.getByRole('contentinfo')).toHaveTextContent('Source code');
+  expect(screen.getByRole('complementary')).toHaveTextContent('Beside');
   expect(screen.getByRole('alert')).toBeInTheDocument();
+});
+
+test('the fallback has the source footer, so the offer of the source outlives a crash of the whole app (E17-S09)', () => {
+  renderWithProviders(
+    <RootErrorBoundary>
+      <Boom error={serverError()} />
+    </RootErrorBoundary>,
+  );
+  const footer = screen.getByRole('contentinfo');
+  expect(within(footer).getByRole('link', { name: messages['footer.sourceCode'] })).toHaveAttribute(
+    'href',
+    DEFAULT_SOURCE_URL,
+  );
+  expect(screen.getByRole('main')).toContainElement(screen.getByRole('alert'));
 });
 
 test('the fallback passes axe', async () => {

@@ -10,7 +10,7 @@ import type { RouterContext } from './route-access.ts';
 import { AppRouter, createAppRouter } from './router.tsx';
 import { expectNoA11yViolations } from './test-support/a11y.ts';
 import { renderWithProviders } from './test-support/render.tsx';
-import { accessById, type RouteNode, routeAccessProblems } from './test-support/routes.ts';
+import { accessById, type RouteNode, routeAccessProblems, routeTitleProblems } from './test-support/routes.ts';
 import { server } from './test-support/server.ts';
 import { ALICE } from './test-support/session.ts';
 
@@ -26,6 +26,10 @@ function routerFor(queryClient = createQueryClient()): { tree: RouteNode; contex
 
 test('every route of the tree declares its access: this test fails on the route that does not, whoever adds it', () => {
   expect(routeAccessProblems(routerFor().tree)).toEqual([]);
+});
+
+test('every route of the tree names its page title, and it is a key of the catalog (E17-S09)', () => {
+  expect(routeTitleProblems(routerFor().tree, messages)).toEqual([]);
 });
 
 test('the routes of this epic are the front page, the failed-login page and the not-found route, all public', () => {

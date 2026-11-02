@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { expect, test } from 'vitest';
 import { sessionRoute } from '../../shared/auth-contract.ts';
 import { errorResponseSchema } from '../../shared/errors.ts';
+import { DEFAULT_SOURCE_URL, metaRoute } from '../../shared/meta.ts';
 import { renderWithProviders } from './render.tsx';
 
 const SESSION = {
@@ -117,4 +118,16 @@ test('a session that setSession is given is checked against the shared contract 
   expect(() => {
     setSession({ ...SESSION, csrfToken: 'short' });
   }).toThrow();
+});
+
+test('the meta endpoint answers with the default repository and no commit unless an option says otherwise (E17-S09)', async () => {
+  renderWithProviders(<p>page</p>);
+  expect(await (await fetch(metaRoute.path)).json()).toEqual({
+    sourceUrl: DEFAULT_SOURCE_URL,
+    commit: null,
+    installUrl: null,
+  });
+  const meta = { sourceUrl: 'https://git.example.test/org/cla', commit: 'c'.repeat(40), installUrl: null };
+  renderWithProviders(<p>page</p>, { meta });
+  expect(await (await fetch(metaRoute.path)).json()).toEqual(meta);
 });

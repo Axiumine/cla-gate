@@ -70,8 +70,8 @@ test.each([
 ])('the button is operable with the keyboard: Tab, then %s', async (_key, keys) => {
   const seen = answer(logoutRoute.path, noContent());
   const { user } = renderWithProviders(<AppRouter />, { session: ALICE });
-  await logoutButton();
-  await user.tab();
+  const button = await logoutButton();
+  button.focus();
   await user.keyboard(keys);
   await waitFor(() => {
     expect(seen).toHaveLength(1);

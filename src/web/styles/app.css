@@ -80,6 +80,16 @@
   --breakpoint-xl: 80rem;
 }
 
+/*
+ * The widths of a page (E17-S09): the text column (`max-w-2xl`) and the rows of the header and the footer (`max-w-5xl`).
+ * Tailwind's `max-w-*` utilities read `--container-*`, which belong to the default theme this sheet leaves out, so without
+ * these a `max-w-2xl` class would produce no rule at all.
+ */
+@theme {
+  --container-2xl: 42rem;
+  --container-5xl: 64rem;
+}
+
 /* The spinner of LoadingState (E17-S07): Tailwind's own `animate-spin`, which comes with the default theme this sheet leaves out. */
 @theme {
   --animate-spin: spin 1s linear infinite;
