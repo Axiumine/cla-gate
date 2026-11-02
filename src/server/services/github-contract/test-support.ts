@@ -4,8 +4,11 @@ import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import type {
   GitHubClient,
+  GitHubClient,
+  GitHubCommit,
   GitHubInstallation,
   GitHubOrgMembership,
+  GitHubPullRequest,
   GitHubRepository,
   GitHubRepositoryPermission,
 } from '../ports/github.ts';
@@ -39,6 +42,28 @@ export interface GitHubWorld {
     fullName: string,
     login: string,
     permission: GitHubRepositoryPermission,
+  ) => void;
+  /** A pull request of a repository (`owner/name`) of an installation. */
+  readonly addPullRequest: (githubInstallationId: GithubId, fullName: string, pullRequest: GitHubPullRequest) => void;
+  /** What `listPullRequestCommits` lists for a pull request, in order. */
+  readonly setPullRequestCommits: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+    commits: readonly GitHubCommit[],
+  ) => void;
+  /** What `listRepositoryCommits` lists for a repository, in order. */
+  readonly setRepositoryCommits: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    commits: readonly GitHubCommit[],
+  ) => void;
+  /** The merge base `compareCommits` answers for two commits. */
+  readonly setMergeBase: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    commits: { readonly baseSha: string; readonly headSha: string },
+    mergeBaseSha: string,
   ) => void;
   /** The instance does not serve this installation: its gate refuses it. */
   readonly refuse: (githubInstallationId: GithubId, reason: NotAdmittedReason) => void;
@@ -95,6 +120,18 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
     },
     addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
       fake.addRepositoryPermission(githubInstallationId, fullName, login, permission);
+    },
+    addPullRequest: (githubInstallationId, fullName, pullRequest) => {
+      fake.addPullRequest(githubInstallationId, fullName, pullRequest);
+    },
+    setPullRequestCommits: (githubInstallationId, fullName, prNumber, commits) => {
+      fake.setPullRequestCommits(githubInstallationId, fullName, prNumber, commits);
+    },
+    setRepositoryCommits: (githubInstallationId, fullName, commits) => {
+      fake.setRepositoryCommits(githubInstallationId, fullName, commits);
+    },
+    setMergeBase: (githubInstallationId, fullName, commits, mergeBaseSha) => {
+      fake.setMergeBase(githubInstallationId, fullName, commits, mergeBaseSha);
     },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);

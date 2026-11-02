@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../shared/github-id.ts';
 import type { JobType } from '../domain/job-envelope.ts';
+import { evaluatePr } from './evaluate-pr/evaluate-pr.ts';
+import type { EvaluatePrPorts } from './evaluate-pr/evaluate-pr-ports.ts';
 import type { SyncOutcome } from './installation-sync-model.ts';
 import type { HandlerRegistry, JobHandler } from './job-registry.ts';
 
@@ -33,6 +35,12 @@ export interface HandlerDeps {
   readonly syncInstallation:
     | ((githubInstallationId: GithubId, signal: AbortSignal) => Promise<SyncOutcome>)
     | undefined;
+  /**
+   * What the `evaluate-pr` job runs on, for one job (E07-S04): its GitHub client is bound to the `signal` of the job, so a
+   * job that is being shut down does not hold the process on a request. Undefined when the application has no GitHub App
+   * or no reporter (the reporter is E09): the handler then fails every job and keeps its delivery for a redelivery.
+   */
+  readonly evaluatePr: ((signal: AbortSignal) => EvaluatePrPorts) | undefined;
 }
 
 /**
@@ -49,6 +57,11 @@ function syncInstallation(sync: NonNullable<HandlerDeps['syncInstallation']>): J
   return async (job, { signal }) => ({ outcome: (await sync(job.githubInstallationId, signal)).status });
 }
 
+/** `evaluate-pr`: the numbers of the payload are keys only, the pull request and the policy are read now (E07-S04). */
+function evaluatePrHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): JobHandler<'evaluate-pr'> {
+  return (job, { signal, attempt, logger }) => evaluatePr(ports(signal), job, { attempt, logger });
+}
+
 /**
  * Binds the handlers of the delivery-driven jobs (`evaluate-pr`, `evaluate-head-sha`, `close-pr`, `recheck-comment`,
  * `sync-installation`) and of the two the scheduler starts (`sweep`, `sweep-installation`). The ones whose story is not
@@ -62,7 +75,12 @@ export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): 
       ? unavailable('sync-installation', 'no GitHub App is configured')
       : syncInstallation(deps.syncInstallation),
   );
-  registry.register('evaluate-pr', unavailable('evaluate-pr', 'its handler is built by E07-S04'));
+  registry.register(
+    'evaluate-pr',
+    deps.evaluatePr === undefined
+      ? unavailable('evaluate-pr', 'no GitHub App or no evaluation reporter (E09) is configured')
+      : evaluatePrHandler(deps.evaluatePr),
+  );
   registry.register('evaluate-head-sha', unavailable('evaluate-head-sha', 'its handler is built by E07-S07'));
   registry.register('close-pr', unavailable('close-pr', 'its handler is built by E07-S06'));
   registry.register('recheck-comment', unavailable('recheck-comment', 'its handler is built by E07-S07'));

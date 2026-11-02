@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import type { GithubId } from '../../../shared/github-id.ts';
+import type { Evaluation } from '../../domain/evaluation/index.ts';
+import type { JobEnvelope } from '../../domain/job-envelope.ts';
+
+// What the evaluation job (E07-S04) needs of the code that writes the Check Run and the pull request comment. The reporter
+// is E09: this file is the port the job calls, `FakeReporter` (`services/evaluate-pr/test-support.ts`) the double the job is
+// tested with, and E09-S05 the implementation the composition root binds. A later story adds its method here with its row
+// in the fake (`failed` for E07-S05, `cancelled` for E07-S06).
+
+/** Why an `evaluate-pr` job runs: the closed set of its envelope. */
+type EvaluationTrigger = Extract<JobEnvelope, { type: 'evaluate-pr' }>['trigger'];
+
+/**
+ * The pull request and head SHA a report is about. Every report is for one head SHA, because the Check Run is per head SHA:
+ * the SHA written is always `headSha`, never one the reporter read elsewhere.
+ */
+export interface ReportTarget {
+  readonly githubInstallationId: GithubId;
+  readonly githubRepoId: GithubId;
+  /** `owner/name` as GitHub shows the repository now (a display snapshot; the ids are the identity). */
+  readonly fullName: string;
+  readonly prNumber: number;
+  readonly headSha: string;
+  readonly trigger: EvaluationTrigger;
+  /** The id of the `pr_evaluations` row of this head SHA, which the Check Run carries as its external id. */
+  readonly evaluationId: number;
+}
+
+export interface EvaluationReporter {
+  /** The evaluation of `target` began: its Check Run is `in_progress`. Safe to call again after a crash. */
+  started(target: ReportTarget): Promise<void>;
+
+  /**
+   * The verdict on `target`, which the job has stored already. Called once per evaluation that was not superseded; a retry
+   * of the job calls it again, so it must be idempotent.
+   */
+  publish(target: ReportTarget, evaluation: Evaluation): Promise<void>;
+}

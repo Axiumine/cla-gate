@@ -108,3 +108,70 @@ export const repositoryPermissionSchema = z
     user: z.object({ id: githubIdSchema }),
   })
   .transform(({ permission, user }) => ({ permission, userId: user.id }));
+
+/** The lower-case commit SHA of a SHA-1 or SHA-256 repository. */
+const commitShaSchema = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/);
+
+/** The account types of a pull request opener or a commit's linked account. Anything else fails validation. */
+const commitAccountTypeSchema = z.enum(['User', 'Bot', 'Organization', 'Mannequin']);
+
+/** A linked account of a pull request or a commit: the numeric id, the login (a lookup handle) and the type. */
+const accountRefSchema = z.object({ id: githubIdSchema, login: z.string().min(1), type: commitAccountTypeSchema });
+
+/**
+ * The author or committer of a commit as GitHub links it. GitHub sends `null`, or `{}`, for an identity it could not
+ * link, and an object without a numeric id is no account either: all of them, and anything else that is not an account
+ * we can name, read as `null`, an unlinked identity, which fails closed (E07-S10, E08-S02).
+ */
+const linkedAccountSchema = z.union([accountRefSchema, z.unknown().transform(() => null)]);
+
+/** `GET /repos/{owner}/{repo}/pulls/{pull_number}`: only what the evaluation reads. */
+export const pullRequestSchema = z
+  .object({
+    number: z.int().positive(),
+    state: z.enum(['open', 'closed']),
+    draft: z.boolean().default(false),
+    head: z.object({ sha: commitShaSchema }),
+    base: z.object({ sha: commitShaSchema }),
+    user: accountRefSchema,
+    commits: z.int().nonnegative(),
+  })
+  .transform(({ number, state, draft, head, base, user, commits }) => ({
+    number,
+    state,
+    draft,
+    headSha: head.sha,
+    baseSha: base.sha,
+    opener: user,
+    commitCount: commits,
+  }));
+
+/** A git identity (the name and email a commit was written with): display only. */
+const gitIdentitySchema = z.object({ name: z.string(), email: z.string() });
+
+/** One entry of a commit listing, from `GET .../pulls/{n}/commits` and `GET .../commits`. */
+const commitSchema = z
+  .object({
+    sha: commitShaSchema,
+    parents: z.array(z.object({ sha: commitShaSchema })),
+    author: linkedAccountSchema.optional(),
+    committer: linkedAccountSchema.optional(),
+    commit: z.object({ message: z.string(), author: gitIdentitySchema, committer: gitIdentitySchema }),
+  })
+  .transform(({ sha, parents, author, committer, commit }) => ({
+    sha,
+    parents: parents.map((parent) => parent.sha),
+    author: author ?? null,
+    committer: committer ?? null,
+    message: commit.message,
+    rawAuthor: commit.author,
+    rawCommitter: commit.committer,
+  }));
+
+/** One page of a commit listing: a bare array. */
+export const commitPageSchema = z.array(commitSchema);
+
+/** `GET /repos/{owner}/{repo}/compare/{base}...{head}`: the merge base commit, the only field used. */
+export const comparisonSchema = z
+  .object({ merge_base_commit: z.object({ sha: commitShaSchema }) })
+  .transform(({ merge_base_commit }) => ({ mergeBaseSha: merge_base_commit.sha }));

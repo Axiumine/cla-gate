@@ -81,7 +81,7 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
   }
   const { db, github, ...wiring } = started;
   const { clock, fetch } = options;
-  const workers = jobWorkers({ db, config, syncFor: wiring.syncFor, clock });
+  const workers = jobWorkers({ db, config, logger, syncFor: wiring.syncFor, clock });
   const queue = await startQueueOrReport(config, logger, workers, options.createJobQueue);
   if (queue === undefined) {
     await db.destroy();

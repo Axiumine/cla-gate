@@ -76,6 +76,55 @@ export interface GitHubRepositoryPermission {
   readonly userId: GithubId;
 }
 
+/** The account types GitHub gives an account that opens a pull request or commits: no `Unknown`, which is for trailers only. */
+type GitHubCommitAccountType = 'User' | 'Bot' | 'Organization' | 'Mannequin';
+
+/**
+ * An account of a pull request or a commit (E07-S10). The numeric id is the identity; the login is a lookup handle (the
+ * organisation membership call takes one) and a display snapshot, and never reaches the evaluation engine.
+ */
+export interface GitHubAccountRef {
+  readonly id: GithubId;
+  readonly login: string;
+  readonly type: GitHubCommitAccountType;
+}
+
+/** A pull request as the evaluation reads it (`GET /repos/{owner}/{repo}/pulls/{pull_number}`). */
+export interface GitHubPullRequest {
+  readonly number: number;
+  readonly state: 'open' | 'closed';
+  readonly draft: boolean;
+  /** Lower-case commit SHA of the head. */
+  readonly headSha: string;
+  /** Lower-case commit SHA of the base branch tip. */
+  readonly baseSha: string;
+  /** The account that opened the pull request. */
+  readonly opener: GitHubAccountRef;
+  /** How many commits GitHub says the pull request has. */
+  readonly commitCount: number;
+}
+
+/**
+ * One commit of a listing. `author` and `committer` are the GitHub accounts git's identities are linked to, or `null`
+ * when GitHub could not link them (the answer holds `null`, `{}`, or no numeric id): an unlinked identity. The raw
+ * identities are what git recorded; they are display-only. SHAs are lower case.
+ */
+export interface GitHubCommit {
+  readonly sha: string;
+  readonly parents: readonly string[];
+  readonly author: GitHubAccountRef | null;
+  readonly committer: GitHubAccountRef | null;
+  readonly message: string;
+  readonly rawAuthor: { readonly name: string; readonly email: string };
+  readonly rawCommitter: { readonly name: string; readonly email: string };
+}
+
+/** One page of a commit listing, 100 commits at most. `last` is true when GitHub names no next page. */
+export interface GitHubCommitPage {
+  readonly commits: readonly GitHubCommit[];
+  readonly last: boolean;
+}
+
 export interface GitHubClient {
   /** `GET /app`, signed as the App. */
   getApp(): Promise<GitHubAppInfo>;
@@ -122,6 +171,48 @@ export interface GitHubClient {
     repo: string,
     login: string,
   ): Promise<GitHubRepositoryPermission | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/pulls/{pull_number}` with the installation's token (E07-S10). `fullName` is `owner/name`
+   * as GitHub shows it now. Resolves null for a pull request GitHub does not have, and for a name GitHub cannot hold.
+   */
+  getPullRequest(githubInstallationId: GithubId, fullName: string, prNumber: number): Promise<GitHubPullRequest | null>;
+
+  /**
+   * One page (1-based, 100 commits) of `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits`: the commits of the pull
+   * request in GitHub's order, at most 250 of them in all.
+   * @throws GitHubNotFoundError for a pull request GitHub does not have.
+   */
+  listPullRequestCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+    page: number,
+  ): Promise<GitHubCommitPage>;
+
+  /**
+   * One page (1-based, 100 commits) of `GET /repos/{owner}/{repo}/commits?sha={headSha}`: the history behind `headSha`
+   * in commit-date order, which is how a pull request above 250 commits is read (E08-S07).
+   * @throws GitHubNotFoundError for a repository or commit GitHub does not have.
+   */
+  listRepositoryCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    page: number,
+  ): Promise<GitHubCommitPage>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/compare/{base}...{head}`: the merge base of the two commits (a criss-cross history
+   * has several; GitHub names one).
+   * @throws GitHubNotFoundError for a repository or commit GitHub does not have.
+   */
+  compareCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    baseSha: string,
+    headSha: string,
+  ): Promise<{ readonly mergeBaseSha: string }>;
 
   /**
    * The same client for one unit of work, such as a job (E07-S03): a request is abandoned, and rejects with the reason of

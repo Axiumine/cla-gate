@@ -19,6 +19,7 @@ import {
   fetchRepository,
   fetchRepositoryPermission,
 } from './octokit-installation-calls.ts';
+import { OctokitPullReads } from './octokit-pull-reads.ts';
 import type { RateLimiter } from './rate-limiter.ts';
 
 // The Octokit adapter of the GitHub client port (E05-S04). The App-level methods are signed with the App JWT (and so
@@ -47,13 +48,12 @@ export interface OctokitClientOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
-export class OctokitGitHubClient implements GitHubClient {
+export class OctokitGitHubClient extends OctokitPullReads implements GitHubClient {
   readonly #options: OctokitClientOptions;
-  readonly #dispatch: Dispatch;
 
   constructor(options: OctokitClientOptions) {
+    super(new Dispatch(options));
     this.#options = options;
-    this.#dispatch = new Dispatch(options);
   }
 
   withSignal(signal: AbortSignal): GitHubClient {
@@ -61,30 +61,30 @@ export class OctokitGitHubClient implements GitHubClient {
   }
 
   getApp(): Promise<GitHubAppInfo> {
-    return this.#dispatch.asApp(fetchApp);
+    return this.dispatch.asApp(fetchApp);
   }
 
   getInstallation(githubInstallationId: GithubId): Promise<GitHubInstallation | null> {
-    return this.#dispatch.asApp((channel, headers) => fetchInstallation(channel, headers, githubInstallationId));
+    return this.dispatch.asApp((channel, headers) => fetchInstallation(channel, headers, githubInstallationId));
   }
 
   listInstallations(): Promise<GitHubInstallation[]> {
-    return this.#dispatch.asApp(fetchInstallations);
+    return this.dispatch.asApp(fetchInstallations);
   }
 
   listInstallationRepositories(githubInstallationId: GithubId): Promise<GitHubRepository[]> {
-    return this.#dispatch.asInstallation(githubInstallationId, fetchRepositories);
+    return this.dispatch.asInstallation(githubInstallationId, fetchRepositories);
   }
 
   getRepositoryById(githubInstallationId: GithubId, githubRepoId: GithubId): Promise<GitHubRepository | null> {
-    return this.#dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       fetchRepository(channel, headers, githubRepoId),
     );
   }
 
   getOrgMembership(githubInstallationId: GithubId, org: string, login: string): Promise<GitHubOrgMembership | null> {
     // The installation is checked first, so a refused installation is refused whatever the names are.
-    return this.#dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       NAME.test(org) && NAME.test(login) ? fetchMembership(channel, headers, org, login) : Promise.resolve(null),
     );
   }

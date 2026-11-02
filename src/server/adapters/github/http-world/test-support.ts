@@ -8,9 +8,12 @@ import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import type { TestGitHubKey } from '../../../config/test-support.ts';
 import type { GitHubWorld } from '../../../services/github-contract/test-support.ts';
 import type {
+  GitHubAccountRef,
   GitHubClient,
+  GitHubCommit,
   GitHubInstallation,
   GitHubOrgMembership,
+  GitHubPullRequest,
   GitHubRepository,
   GitHubRepositoryPermission,
 } from '../../../services/ports/github.ts';
@@ -45,6 +48,10 @@ interface State {
   readonly entries: Map<GithubId, Entry>;
   readonly memberships: Map<string, GitHubOrgMembership>;
   readonly permissions: Map<string, GitHubRepositoryPermission>;
+  readonly pullRequests: Map<string, GitHubPullRequest>;
+  readonly pullCommits: Map<string, readonly GitHubCommit[]>;
+  readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
+  readonly mergeBases: Map<string, string>;
   readonly requests: string[];
   /** The next `GET /app/installations/{id}` is answered when this settles; `arrived` is called as it comes in. */
   stall?: { readonly arrived: () => void; readonly released: Promise<void> } | undefined;
@@ -82,6 +89,38 @@ function repositoryBody(repository: GitHubRepository): Record<string, unknown> {
   };
 }
 
+/** An account as GitHub spells it, with fields the platform does not use; `null` stays `null`, as for an unlinked identity. */
+function accountBody(account: GitHubAccountRef | null): Record<string, unknown> | null {
+  return account === null ? null : { ...account, node_id: 'MDQ6VXNlcjE=', site_admin: false };
+}
+
+function pullRequestBody(pullRequest: GitHubPullRequest): Record<string, unknown> {
+  return {
+    number: pullRequest.number,
+    state: pullRequest.state,
+    draft: pullRequest.draft,
+    head: { sha: pullRequest.headSha, ref: 'feature' },
+    base: { sha: pullRequest.baseSha, ref: 'main' },
+    user: accountBody(pullRequest.opener),
+    commits: pullRequest.commitCount,
+    title: 'A title the platform never reads',
+  };
+}
+
+function commitBody(commit: GitHubCommit): Record<string, unknown> {
+  return {
+    sha: commit.sha,
+    parents: commit.parents.map((sha) => ({ sha })),
+    author: accountBody(commit.author),
+    committer: accountBody(commit.committer),
+    commit: {
+      message: commit.message,
+      author: { ...commit.rawAuthor, date: '2026-11-01T09:00:00Z' },
+      committer: { ...commit.rawCommitter, date: '2026-11-01T09:00:00Z' },
+    },
+  };
+}
+
 /** One page of `items` and the `Link` header that leads to the next, like GitHub's. */
 function pageOf<T>(url: URL, items: readonly T[]): { items: T[]; link: Record<string, string> } {
   const page = Math.max(1, Number(url.searchParams.get('page') ?? '1'));
@@ -98,6 +137,9 @@ const membershipKey = (installationId: unknown, org: string, login: string): str
 
 const permissionKey = (installationId: unknown, fullName: string, login: string): string =>
   `${String(installationId)}/${fullName.toLowerCase()}/${login.toLowerCase()}`;
+/** `${installation}/${owner}/${repo}` with the names in lower case: GitHub does not tell `Acme/API` from `acme/api`. */
+const repositoryKey = (installationId: unknown, owner: string, repo: string): string =>
+  `${String(installationId)}/${owner.toLowerCase()}/${repo.toLowerCase()}`;
 
 const idOf = (value: unknown): GithubId => parseGithubId(Number(z.string().parse(value)));
 
@@ -204,6 +246,44 @@ function installationRoutes(state: State) {
   ];
 }
 
+/** The key of the repository of a request to `/repos/{owner}/{repo}/...`, as the installation of its token sees it: one no installation holds matches nothing. */
+function repositoryOf(state: State, request: Request, params: Record<string, unknown>): string {
+  const owner = z.string().parse(params['owner']);
+  const repo = z.string().parse(params['repo']);
+  return repositoryKey(installationOf(state, request)?.installation.id, owner, repo);
+}
+
+/** The routes of the evaluation job (E07-S10): a pull request, its commits, the history behind a head, a comparison. */
+function pullRoutes(state: State) {
+  const commitsOf = (store: Map<string, readonly GitHubCommit[]>, key: string, request: Request) => {
+    const commits = store.get(key);
+    if (commits === undefined) {
+      return notFound();
+    }
+    const { items, link } = pageOf(new URL(request.url), commits);
+    return HttpResponse.json(items.map(commitBody), { headers: link });
+  };
+  return [
+    http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/pulls/:number/commits`, ({ request, params }) => {
+      const repository = repositoryOf(state, request, params);
+      return commitsOf(state.pullCommits, `${repository}#${String(params['number'])}`, request);
+    }),
+    http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/pulls/:number`, ({ request, params }) => {
+      const repository = repositoryOf(state, request, params);
+      const found = state.pullRequests.get(`${repository}#${String(params['number'])}`);
+      return found ? HttpResponse.json(pullRequestBody(found)) : notFound();
+    }),
+    http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/commits`, ({ request, params }) =>
+      commitsOf(state.repositoryCommits, repositoryOf(state, request, params), request),
+    ),
+    http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/compare/:basehead`, ({ request, params }) => {
+      const repository = repositoryOf(state, request, params);
+      const mergeBase = state.mergeBases.get(`${repository}@${String(params['basehead'])}`);
+      return mergeBase ? HttpResponse.json({ merge_base_commit: { sha: mergeBase }, status: 'diverged' }) : notFound();
+    }),
+  ];
+}
+
 /** Starts MSW with these routes until the test ends; every request is noted in `state.requests`. */
 function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
   const server = setupServer(
@@ -215,11 +295,18 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
     ...appRoutes(state),
     tokenRoute(state, signer, clock),
     ...installationRoutes(state),
+    ...pullRoutes(state),
   );
   server.listen({ onUnhandledFrame: 'error' });
   onTestFinished(() => {
     server.close();
   });
+}
+
+/** The key of a repository given as `owner/name`. */
+function keyOf(githubInstallationId: GithubId, fullName: string): string {
+  const [owner = '', repo = ''] = fullName.split('/');
+  return repositoryKey(githubInstallationId, owner, repo);
 }
 
 /** The scripting half of the world: what a test changes while the routes read it. */
@@ -237,6 +324,18 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
     },
     addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
       state.permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
+    },
+    addPullRequest: (githubInstallationId, fullName, pullRequest) => {
+      state.pullRequests.set(`${keyOf(githubInstallationId, fullName)}#${pullRequest.number}`, pullRequest);
+    },
+    setPullRequestCommits: (githubInstallationId, fullName, prNumber, commits) => {
+      state.pullCommits.set(`${keyOf(githubInstallationId, fullName)}#${prNumber}`, commits);
+    },
+    setRepositoryCommits: (githubInstallationId, fullName, commits) => {
+      state.repositoryCommits.set(keyOf(githubInstallationId, fullName), commits);
+    },
+    setMergeBase: (githubInstallationId, fullName, { baseSha, headSha }, mergeBaseSha) => {
+      state.mergeBases.set(`${keyOf(githubInstallationId, fullName)}@${baseSha}...${headSha}`, mergeBaseSha);
     },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);
@@ -266,7 +365,16 @@ async function startWorld(
   signer: TestGitHubKey,
   gate: InstallationGate,
 ): Promise<{ client: GitHubClient; state: State }> {
-  const state: State = { entries: new Map(), memberships: new Map(), permissions: new Map(), requests: [] };
+  const state: State = {
+    entries: new Map(),
+    memberships: new Map(),
+    permissions: new Map(),
+    pullRequests: new Map(),
+    pullCommits: new Map(),
+    repositoryCommits: new Map(),
+    mergeBases: new Map(),
+    requests: [],
+  };
   const clock = new FakeClock(START);
   serve(state, signer, clock);
   const app = await startGitHubApp({

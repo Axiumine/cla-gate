@@ -82,6 +82,25 @@ export async function findActiveRepositoryByGithubId(
 }
 
 /**
+ * The repository stored for this installation under this GitHub id, removed or not, or `null`: at most one row, because
+ * the pair is unique, and never another tenant's. The evaluation job reads it to tell a repository that left the
+ * installation (`repository_removed`) from one the installation never had (E07-S04).
+ */
+export async function findRepositoryByGithubId(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  githubRepoId: GithubId,
+): Promise<RepositoryRow | null> {
+  const row = await db
+    .selectFrom('repositories')
+    .selectAll()
+    .where('installation_id', '=', installationId)
+    .where('github_repo_id', '=', githubRepoId)
+    .executeTakeFirst();
+  return row ?? null;
+}
+
+/**
  * The GitHub ids of the installation's active repositories, ascending: what the sync (E05-S08) compares with GitHub's
  * list to find the ones GitHub no longer shows. Another tenant's repositories are never in it.
  */

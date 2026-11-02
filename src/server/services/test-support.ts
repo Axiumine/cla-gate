@@ -7,12 +7,16 @@ import type { Clock } from './ports/clock.ts';
 import type {
   GitHubAppInfo,
   GitHubClient,
+  GitHubCommit,
+  GitHubCommitPage,
   GitHubInstallation,
   GitHubOrgMembership,
+  GitHubPullRequest,
   GitHubRepository,
   GitHubRepositoryPermission,
 } from './ports/github.ts';
 import {
+  GitHubNotFoundError,
   InstallationGoneError,
   InstallationNotAdmittedError,
   InstallationSuspendedError,
@@ -82,7 +86,11 @@ export type GitHubMethod =
   | 'listInstallationRepositories'
   | 'getRepositoryById'
   | 'getOrgMembership'
-  | 'getRepositoryPermission';
+  | 'getRepositoryPermission'
+  | 'getPullRequest'
+  | 'listPullRequestCommits'
+  | 'listRepositoryCommits'
+  | 'compareCommits';
 
 /** One call the fake served: the method and the installation id it was made for (undefined: not about one). */
 export interface RecordedCall {
@@ -110,6 +118,11 @@ interface FakeState {
   readonly installations: Map<GithubId, FakeInstallation>;
   readonly memberships: Map<string, GitHubOrgMembership>;
   readonly permissions: Map<string, GitHubRepositoryPermission>;
+  readonly pullRequests: Map<string, GitHubPullRequest>;
+  readonly pullCommits: Map<string, readonly GitHubCommit[]>;
+  readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
+  readonly mergeBases: Map<string, string>;
+  readonly observers: ((call: RecordedCall) => void)[];
   readonly failures: { method: GitHubMethod; error: Error }[];
   readonly hooks: { method: GitHubMethod; run: () => Promise<void> }[];
   app: GitHubAppInfo;
@@ -132,6 +145,11 @@ export class FakeGitHub implements GitHubClient {
     installations: new Map(),
     memberships: new Map(),
     permissions: new Map(),
+    pullRequests: new Map(),
+    pullCommits: new Map(),
+    repositoryCommits: new Map(),
+    mergeBases: new Map(),
+    observers: [],
     failures: [],
     hooks: [],
     app: FAKE_APP,
@@ -196,6 +214,41 @@ export class FakeGitHub implements GitHubClient {
     permission: GitHubRepositoryPermission,
   ): void {
     this.#state.permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
+  }
+
+  /** Adds, or replaces, a pull request of a repository (`owner/name`) of an installation. */
+  addPullRequest(githubInstallationId: GithubId, fullName: string, pullRequest: GitHubPullRequest): void {
+    this.#state.pullRequests.set(pullKey(githubInstallationId, fullName, pullRequest.number), pullRequest);
+  }
+
+  /** The commits `GET .../pulls/{n}/commits` lists for a pull request, in order (at most 250 on GitHub). */
+  setPullRequestCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+    commits: readonly GitHubCommit[],
+  ): void {
+    this.#state.pullCommits.set(pullKey(githubInstallationId, fullName, prNumber), commits);
+  }
+
+  /** The history `GET .../commits?sha=` lists for a repository, in the order given (commit-date order on GitHub). */
+  setRepositoryCommits(githubInstallationId: GithubId, fullName: string, commits: readonly GitHubCommit[]): void {
+    this.#state.repositoryCommits.set(repositoryKey(githubInstallationId, fullName), commits);
+  }
+
+  /** The merge base `compareCommits` answers for two commits of a repository. */
+  setMergeBase(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commits: { readonly baseSha: string; readonly headSha: string },
+    mergeBaseSha: string,
+  ): void {
+    this.#state.mergeBases.set(mergeKey(githubInstallationId, fullName, commits), mergeBaseSha);
+  }
+
+  /** `listener` is told of every call the fake serves, in order, as it is recorded: what a test uses to order GitHub's calls among other events. */
+  observe(listener: (call: RecordedCall) => void): void {
+    this.#state.observers.push(listener);
   }
 
   /** The next call of `method` throws `error` (once, after it is recorded). Several calls queue in order. */
@@ -264,6 +317,67 @@ export class FakeGitHub implements GitHubClient {
     );
   }
 
+  getPullRequest(
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+  ): Promise<GitHubPullRequest | null> {
+    return this.#serveInstallation(
+      'getPullRequest',
+      githubInstallationId,
+      () => this.#state.pullRequests.get(pullKey(githubInstallationId, fullName, prNumber)) ?? null,
+    );
+  }
+
+  listPullRequestCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+    page: number,
+  ): Promise<GitHubCommitPage> {
+    return this.#serveInstallation('listPullRequestCommits', githubInstallationId, () =>
+      pageOf(
+        this.#state.pullCommits.get(pullKey(githubInstallationId, fullName, prNumber)),
+        page,
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/commits',
+      ),
+    );
+  }
+
+  listRepositoryCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    page: number,
+  ): Promise<GitHubCommitPage> {
+    return this.#serveInstallation('listRepositoryCommits', githubInstallationId, () =>
+      pageOf(
+        COMMIT_SHA.test(headSha)
+          ? this.#state.repositoryCommits.get(repositoryKey(githubInstallationId, fullName))
+          : undefined,
+        page,
+        'GET /repos/{owner}/{repo}/commits',
+      ),
+    );
+  }
+
+  compareCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    baseSha: string,
+    headSha: string,
+  ): Promise<{ readonly mergeBaseSha: string }> {
+    return this.#serveInstallation('compareCommits', githubInstallationId, () => {
+      const key = mergeKey(githubInstallationId, fullName, { baseSha, headSha });
+      const mergeBaseSha =
+        COMMIT_SHA.test(baseSha) && COMMIT_SHA.test(headSha) ? this.#state.mergeBases.get(key) : undefined;
+      if (mergeBaseSha === undefined) {
+        throw new GitHubNotFoundError('GET /repos/{owner}/{repo}/compare/{basehead}');
+      }
+      return { mergeBaseSha };
+    });
+  }
+
   #known(githubInstallationId: GithubId): FakeInstallation {
     const entry = this.#state.installations.get(githubInstallationId);
     if (entry === undefined) {
@@ -280,8 +394,12 @@ export class FakeGitHub implements GitHubClient {
   async #serve<T>(method: GitHubMethod, installationId: GithubId | undefined, read: () => T): Promise<T> {
     const signal = this.#signal;
     signal?.throwIfAborted();
-    const { calls, hooks, failures } = this.#state;
-    calls.push({ method, installationId });
+    const { calls, hooks, failures, observers } = this.#state;
+    const call: RecordedCall = { method, installationId };
+    calls.push(call);
+    for (const observer of observers) {
+      observer(call);
+    }
     const hook = takeFirst(hooks, method);
     const scripted = takeFirst(failures, method);
     await abortable(signal, hook?.run() ?? Promise.resolve());
@@ -338,6 +456,34 @@ function takeFirst<T extends { readonly method: GitHubMethod }>(queue: T[], meth
   const index = queue.findIndex((entry) => entry.method === method);
   return index === -1 ? undefined : queue.splice(index, 1)[0];
 }
+
+/** A commit id GitHub can hold: the adapter sends nothing else in a path or a query, and so the fake knows nothing else. */
+const COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+/** Commits per page of a listing: the most GitHub gives. */
+const COMMITS_PER_PAGE = 100;
+
+/** Page `page` (1-based) of `commits`; a listing nobody scripted is a 404, as for a repository GitHub does not have. */
+function pageOf(commits: readonly GitHubCommit[] | undefined, page: number, route: string): GitHubCommitPage {
+  if (commits === undefined) {
+    throw new GitHubNotFoundError(route);
+  }
+  const from = (page - 1) * COMMITS_PER_PAGE;
+  return { commits: commits.slice(from, from + COMMITS_PER_PAGE), last: from + COMMITS_PER_PAGE >= commits.length };
+}
+
+/** GitHub compares repository names without regard to case too. */
+const repositoryKey = (githubInstallationId: GithubId, fullName: string): string =>
+  `${githubInstallationId}/${fullName.toLowerCase()}`;
+
+const pullKey = (githubInstallationId: GithubId, fullName: string, prNumber: number): string =>
+  `${repositoryKey(githubInstallationId, fullName)}#${prNumber}`;
+
+const mergeKey = (
+  githubInstallationId: GithubId,
+  fullName: string,
+  { baseSha, headSha }: { readonly baseSha: string; readonly headSha: string },
+): string => `${repositoryKey(githubInstallationId, fullName)}@${baseSha}...${headSha}`;
 
 /** GitHub compares organisation and login names without regard to case. */
 const membershipKey = (githubInstallationId: GithubId, org: string, login: string): string =>

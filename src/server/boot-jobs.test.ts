@@ -8,6 +8,7 @@ import type { InstallationWiring } from './boot-installations.ts';
 import { jobWorkers } from './boot-jobs.ts';
 import { deliveryIdSchema } from './domain/delivery-id.ts';
 import { JOB_TYPES } from './domain/job-envelope.ts';
+import { evaluateWorld, JOB } from './services/evaluate-pr/test-support.ts';
 import type { InstallationSync } from './services/installation-sync.ts';
 import { HandlerUnavailableError } from './services/job-handlers.ts';
 import { createJobsTable, deliveryRows, fakeEnqueuer } from './services/jobs-fixture/test-support.ts';
@@ -28,7 +29,13 @@ async function wiring(syncFor: InstallationWiring['syncFor'], env: Record<string
   await createJobsTable(db);
   return {
     db,
-    workers: jobWorkers({ db, config: testConfig(env), syncFor, clock: new FakeClock('2026-11-02T10:00:00Z') }),
+    workers: jobWorkers({
+      db,
+      config: testConfig(env),
+      logger: createLogger({ logLevel: 'silent' }),
+      syncFor,
+      clock: new FakeClock('2026-11-02T10:00:00Z'),
+    }),
   };
 }
 
@@ -46,10 +53,10 @@ test('the clock is the one given, and the wall clock when none is', async () => 
   const { db } = await migratedTestDatabase();
   const config = testConfig();
   const given = new FakeClock('2026-11-02T10:00:00Z');
-  expect(jobWorkers({ db, config, syncFor: undefined, clock: given }).clock).toBe(given);
-  expect(Math.abs(jobWorkers({ db, config, syncFor: undefined }).clock.now().getTime() - Date.now())).toBeLessThan(
-    5000,
-  );
+  expect(jobWorkers({ db, config, logger: CONTEXT.logger, syncFor: undefined, clock: given }).clock).toBe(given);
+  expect(
+    Math.abs(jobWorkers({ db, config, logger: CONTEXT.logger, syncFor: undefined }).clock.now().getTime() - Date.now()),
+  ).toBeLessThan(5000);
 });
 
 test('the delivery marker sets processed_at of the recorded delivery and of no other', async () => {
@@ -93,4 +100,43 @@ test('without a GitHub App the handler of sync-installation fails its jobs', asy
       { ...CONTEXT, signal: new AbortController().signal },
     ),
   ).rejects.toBeInstanceOf(HandlerUnavailableError);
+});
+
+test('without an evaluation reporter the handler of evaluate-pr fails its jobs', async () => {
+  const { workers } = await wiring(undefined);
+  await expect(
+    workers.registry.run('evaluate-pr', JOB, { ...CONTEXT, signal: new AbortController().signal }),
+  ).rejects.toBeInstanceOf(HandlerUnavailableError);
+});
+
+async function evaluating() {
+  const world = await evaluateWorld();
+  const workers = jobWorkers({
+    db: world.raw,
+    config: testConfig(),
+    logger: CONTEXT.logger,
+    syncFor: undefined,
+    evaluation: { github: world.fake, reporter: world.reporter },
+    clock: new FakeClock('2026-11-02T10:00:00Z'),
+  });
+  return { world, workers };
+}
+
+test('with GitHub and a reporter the handler of evaluate-pr evaluates the pull request with the engine of E08 and reports the verdict', async () => {
+  const { world, workers } = await evaluating();
+  const outcome = await workers.registry.run('evaluate-pr', JOB, { ...CONTEXT, signal: new AbortController().signal });
+  expect(outcome).toEqual({ outcome: 'evaluated' });
+  expect(world.reporter.published.map((report) => report.evaluation.outcome)).toEqual(['failure']);
+  expect((await world.rows()).map((row) => row.result)).toEqual(['failure']);
+});
+
+test('the GitHub client of an evaluation is bound to the signal of the job: an aborted job asks GitHub for nothing', async () => {
+  const { world, workers } = await evaluating();
+  const controller = new AbortController();
+  const reason = new Error('the worker is shutting down');
+  controller.abort(reason);
+  await expect(workers.registry.run('evaluate-pr', JOB, { ...CONTEXT, signal: controller.signal })).rejects.toBe(
+    reason,
+  );
+  expect(world.calls()).toEqual([]);
 });

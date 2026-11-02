@@ -21,6 +21,11 @@ type FetchPage = (url: string | undefined) => Promise<Page>;
 
 const NEXT_LINK = /<([^<>]*)>\s*;\s*rel="next"/;
 
+/** Whether a `Link` header names a next page: the one question a caller that pages by hand asks. */
+export function hasNextPage(link: string | undefined): boolean {
+  return link !== undefined && NEXT_LINK.test(link);
+}
+
 /**
  * The URL of the next page, or undefined on the last one. The token goes with the request, so a URL that does not
  * point at api.github.com is refused.
