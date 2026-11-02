@@ -61,3 +61,10 @@ export function deferred<T>(): {
   const handles = Promise.withResolvers<T>();
   return { promise: handles.promise, resolve: handles.resolve, reject: handles.reject };
 }
+
+/** The fields the logger puts on every line: they say nothing of the event, and `time` and `pid` are digits that may spell any id. */
+const LOGGER_FIELDS: ReadonlySet<string> = new Set(['level', 'time', 'pid', 'hostname']);
+
+/** What log lines say beyond the fields the logger adds to every line, so a test can assert on the whole event and not on raw text. */
+export const eventsOf = (lines: readonly Record<string, unknown>[]): Record<string, unknown>[] =>
+  lines.map((each) => Object.fromEntries(Object.entries(each).filter(([key]) => !LOGGER_FIELDS.has(key))));

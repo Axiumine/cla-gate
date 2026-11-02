@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { testGitHubKey } from '../../config/test-support.ts';
 import { id, installation } from '../../services/github-contract/test-support.ts';
 import { createOrgAdminLookup } from '../../services/org-admin.ts';
@@ -10,7 +10,13 @@ import {
   InstallationNotAdmittedError,
   type NotAdmittedReason,
 } from '../../services/ports/github-errors.ts';
-import { orgInstallation, userInstallation, VIEWER, VIEWER_ID } from '../../services/role-fixture/test-support.ts';
+import {
+  eventsOf,
+  orgInstallation,
+  userInstallation,
+  VIEWER,
+  VIEWER_ID,
+} from '../../services/role-fixture/test-support.ts';
 import { createLogger } from '../http/logger.ts';
 import { clientFixture, json, line, type RouteAnswer, type Routes } from './client-fixture/test-support.ts';
 import { httpWorld } from './http-world/test-support.ts';
@@ -95,13 +101,21 @@ test.each([
   expect(fixture.logs.lines().filter((each) => each['msg'] === 'members_permission_missing')).toEqual([]);
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 test('the 403 that is a missing permission logs the numeric installation id and nothing of the person or the organisation', async () => {
+  // A clock whose milliseconds spell the viewer's id: the line's own `time` must not look like a leak of the id.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-02T20:01:25.501Z'));
   const fixture = world({ [MEMBERSHIP]: () => json({ message: 'Resource not accessible by integration' }, 403) });
   expect(await fixture.lookup(orgInstallation(11, 'acme'), VIEWER)).toBe(false);
   const warned = fixture.logs.lines().filter((each) => each['msg'] === 'members_permission_missing');
   expect(warned).toHaveLength(1);
-  expect(warned[0]).toMatchObject({ level: 40, githubInstallationId: 11 });
-  expect(fixture.logs.text()).not.toMatch(/alice|acme|501/);
+  expect(warned[0]).toMatchObject({ level: 40 });
+  expect(eventsOf(warned)).toEqual([{ githubInstallationId: 11, msg: 'members_permission_missing' }]);
+  expect(JSON.stringify(eventsOf(warned))).not.toMatch(/alice|acme|501/);
 });
 
 test.each([

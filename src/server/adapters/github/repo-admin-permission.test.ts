@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { testGitHubKey } from '../../config/test-support.ts';
 import { id, installation } from '../../services/github-contract/test-support.ts';
 import {
@@ -10,7 +10,13 @@ import {
   type NotAdmittedReason,
 } from '../../services/ports/github-errors.ts';
 import { createRepoAdminLookup } from '../../services/repo-admin.ts';
-import { installationRow, storedRepository, VIEWER, VIEWER_ID } from '../../services/role-fixture/test-support.ts';
+import {
+  eventsOf,
+  installationRow,
+  storedRepository,
+  VIEWER,
+  VIEWER_ID,
+} from '../../services/role-fixture/test-support.ts';
 import { createLogger } from '../http/logger.ts';
 import { clientFixture, json, line, type RouteAnswer, type Routes } from './client-fixture/test-support.ts';
 import { httpWorld } from './http-world/test-support.ts';
@@ -93,12 +99,20 @@ test.each([
   expect(warnings(fixture)).toEqual([]);
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 test('the 403 that is a missing permission logs the numeric installation id and nothing of the person or the repository', async () => {
+  // A clock whose milliseconds spell the viewer's id: the line's own `time` must not look like a leak of the id.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-02T20:01:25.501Z'));
   const fixture = world({ [PERMISSION]: () => json({ message: 'Resource not accessible by integration' }, 403) });
   expect(await fixture.lookup(ACME_INSTALLATION, API, VIEWER)).toBe(false);
   expect(warnings(fixture)).toHaveLength(1);
-  expect(warnings(fixture)[0]).toMatchObject({ level: 40, githubInstallationId: 11 });
-  expect(fixture.logs.text()).not.toMatch(/alice|acme|501/);
+  expect(warnings(fixture)[0]).toMatchObject({ level: 40 });
+  expect(eventsOf(warnings(fixture))).toEqual([{ githubInstallationId: 11, msg: 'repository_permission_missing' }]);
+  expect(JSON.stringify(eventsOf(warnings(fixture)))).not.toMatch(/alice|acme|501/);
 });
 
 test.each([
