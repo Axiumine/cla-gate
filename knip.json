@@ -24,6 +24,7 @@
     "!scripts/dev/**!",
     "!scripts/e2e/**!",
     "!scripts/leaks/**!",
+    "!scripts/mutation-gate/**!",
     "!scripts/qodana-gate/**!",
     "!scripts/semgrep-rules/**!",
     "!scripts/trivy-gate/**!",

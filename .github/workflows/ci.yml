@@ -31,13 +31,33 @@ on:
   schedule:
     - cron: "17 3 * * *"
   # Manual run (E20-S04). `force` adds --force to the mutation run: needed after a snapshot or environment change, which
-  # Stryker's incremental mode does not notice.
+  # Stryker's incremental mode does not notice. `shard` runs one shard of the mutation job (all by default), to repeat a
+  # failed one: a `choice` input, so GitHub itself refuses any value that is not in `options`, and the value only reaches
+  # the job as an environment variable. scripts/mutation-gate/ci-job.test.ts keeps the options equal to the shards.
   workflow_dispatch:
     inputs:
       force:
         description: Run every mutant again instead of reusing the incremental cache
         type: boolean
         default: false
+      shard:
+        description: Mutation shard to run (all runs every shard)
+        type: choice
+        default: all
+        options:
+          - all
+          - shared
+          - config
+          - http
+          - db
+          - root-domain-ports
+          - github-a-o
+          - github-rest
+          - evaluation-a-l
+          - evaluation-rest
+          - services-installation
+          - services-other
+          - scripts
 
 permissions:
   contents: read
@@ -514,28 +534,49 @@ jobs:
         if: ${{ github.event_name == 'schedule' }}
         run: yarn trivy:dev
 
-  # Mutation gate (E20-S04), `yarn mutate` = `stryker run --incremental`. Not a required check: it joins `static` and `coverage`
-  # only after it has been stable (E20-S13). It waits for `static`, because mutating code that does not even pass the static
-  # checks is wasted time. The incremental file is restored from a cache whose key starts with a hash of everything that makes
-  # an old result untrustworthy (the lockfile, Node, the Stryker config, the Vitest configs); the key ends with the commit, so
-  # every successful run saves a new file, and `restore-keys` is the same prefix, so a change to any of those files starts from
-  # a fresh run. Snapshot and environment changes are not seen by Stryker: a manual run with `force` covers them, and the
-  # nightly run always adds --force, so the cache cannot hide a regression for longer than a day. The report is uploaded
-  # even when the score is below the threshold. Mutation never runs in a git hook. `--logLevel debug` is never used: it
-  # crashes with Vitest 5 (Stryker issue 6272). No secret, no network beyond the package registry.
-  # The same job runs a second scope (E20-S05), `yarn mutate:scripts` = `STRYKER_SCOPE=scripts stryker run --incremental`,
-  # for the code caps tool, with its own incremental file and its own cache, so neither scope can spoil the other's cache.
-  # It runs after the server scope succeeded, and both reports land in the one uploaded artifact.
+  # Mutation gate (E20-S04, E20-S05): one job per shard, `yarn mutate:shard` = Stryker with `--incremental` on one slice of the
+  # code. A cold run of all 3807 server and shared mutants does not fit one job on the shared runners (2026-11-02: cancelled
+  # at 45 minutes, then stopped at the initial test run), so on 2026-11-02 the maintainer decided to split the run by
+  # directory and not to mind the total time (scripts/mutation-gate/shards.ts has the shards, docs/quality-gates.md the
+  # measured sizes and times). The scripts scope (the caps tool) is one more shard of the same matrix. Not a required
+  # check: it joins `static` and `coverage` only after it has been stable (E20-S13). It waits for `static`, because
+  # mutating code that does not even pass the static checks is wasted time.
+  #
+  # The shards are shared-runner time that other repositories use too, so at most two run at once (`max-parallel: 2`), the
+  # job does not run on pull requests (below), and one failed shard does not cancel the others (`fail-fast: false`): each
+  # has its own score and its own cache. A manual run can pick one shard (`shard` input, a `choice` that GitHub validates
+  # against its options; a test keeps the options, the list below and shards.ts equal); the matrix value only ever reaches
+  # the job through an environment variable, never a command line.
+  #
+  # Every shard has its own incremental file, restored from a cache whose key starts with the shard name and a hash of
+  # everything that makes an old result untrustworthy (the lockfile, Node, the Stryker config, the Vitest configs, the tsconfig
+  # files); `restore-keys` is that same prefix, so a change to any of those files starts from a fresh run. The key ends with
+  # the run, so every run saves a new file and a cache key is never reserved twice (a cache key cannot be overwritten).
+  # The save step runs even when the run failed, timed out or was stopped, because a job that spent most of an hour on
+  # mutants must not throw that work away: `yarn mutate:shard` stops Stryker with SIGINT after MUTATE_BUDGET_MINUTES, Stryker
+  # writes the results of the mutants it finished into the incremental file on that signal (it does not otherwise write
+  # it before the end), and the next run continues from them. Snapshot and environment changes are not seen by Stryker: a
+  # manual run with `force` covers them, and the nightly run always adds --force, so the cache cannot hide a regression for
+  # longer than a day. Each shard uploads its own report, also when its score is below the threshold. Mutation never runs
+  # in a git hook. `--logLevel debug` is never used: it crashes with Vitest 5 (Stryker issue 6272). No secret, no network
+  # beyond the package registry.
   mutation:
-    name: mutation
+    name: mutation (${{ matrix.shard }})
     needs: static
     # Not on pull requests (2026-11-02): the first cold run on the shared runners hit the 45-minute timeout and was cancelled,
-    # so no incremental file was saved, and a job that long on every push would hold one of the three shared runners that other
-    # repositories also use. It runs on pushes to main, tags, the nightly schedule and by hand, which is where the incremental
-    # cache is written. The condition is removed after the first green run (E20-S04, Open line).
+    # so no incremental file was saved, and twelve jobs of up to an hour on every push of every pull request would hold the
+    # three shared runners that other repositories also use. It runs on pushes to main, tags, the nightly schedule and by hand,
+    # which is where the incremental caches are written. The condition is removed after the first green run (E20-S04, Open line).
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 45
+    # 60 minutes is the policy cap for a job on the shared runners (docs/ci-runners.md, R4). Stryker is stopped 10 minutes
+    # earlier (MUTATE_BUDGET_MINUTES below) so that the save and upload steps always get to run.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","config","http","db","root-domain-ports","github-a-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-other","scripts"]') }}
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
       - name: Preflight (runner capabilities)
@@ -596,44 +637,39 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
       - name: Restore the Stryker incremental file
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: reports/stryker-incremental.json
-          key: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-${{ github.sha }}
-          restore-keys: stryker-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'tsconfig.base.json', 'tsconfig.server.json') }}-
-      - name: Restore the Stryker incremental file (scripts scope)
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: reports/stryker-incremental-scripts.json
-          key: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-${{ github.sha }}
-          restore-keys: stryker-scripts-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.scripts.json') }}-
-      # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command.
+          path: reports/stryker-incremental-${{ matrix.shard }}.json
+          key: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-
+      # The decision is made in an environment variable and read by the shell, so no expression is spliced into the command;
+      # the shard reaches the runner the same way (STRYKER_SHARD), and `yarn mutate:shard` checks it against the shard list.
       - name: Mutation tests
         env:
           MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
+          STRYKER_SHARD: ${{ matrix.shard }}
+          MUTATE_BUDGET_MINUTES: "50"
         run: |
           set -eu
           if [ "$MUTATE_FORCE" = "true" ]; then
-            yarn mutate --force
+            yarn mutate:shard --force
           else
-            yarn mutate
+            yarn mutate:shard
           fi
-      - name: Mutation tests (scripts scope)
-        env:
-          MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
-        run: |
-          set -eu
-          if [ "$MUTATE_FORCE" = "true" ]; then
-            yarn mutate:scripts --force
-          else
-            yarn mutate:scripts
-          fi
+      # Also after a failed, stopped or timed-out run: the results of the mutants that did finish are what the next run
+      # continues from. A save that finds no file, or a key that exists, only warns.
+      - name: Save the Stryker incremental file
+        if: ${{ always() }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/stryker-incremental-${{ matrix.shard }}.json
+          key: stryker-${{ matrix.shard }}-${{ runner.os }}-${{ hashFiles('yarn.lock', '.nvmrc', 'stryker.config.mjs', 'vitest.config.ts', 'vitest.projects.ts', 'vitest.stryker.config.ts', 'vitest.stryker-scripts.config.ts', 'tsconfig.base.json', 'tsconfig.server.json', 'tsconfig.scripts.json') }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Upload the mutation report
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: mutation-report
-          path: reports/mutation/
+          name: mutation-report-${{ matrix.shard }}
+          path: reports/mutation/${{ matrix.shard }}/
           retention-days: 7
 
   # Browser tests (E20-S06), `yarn e2e` against the built server on a migrated PostgreSQL 18. Not a required check: it joins

@@ -62,6 +62,13 @@ export const METADATA_CASES: readonly MetadataCase[] = [
   ['four numbers of which one has four digits', { kind: '1234.5.6.7' }, true],
   ['five numbers with dots', { kind: '1.2.3.4.5' }, true],
   ['a code with one colon', { scope: 'org:member' }, true],
+  // Mutation testing (E20-S04): each of these tells apart an address check from the same check with one anchor or one
+  // digit-count dropped. The database check (migration 002) judges them the same way.
+  ['hex digits around a single colon, which is no IPv6 address', { scope: 'dead:beef' }, true],
+  ['an IPv4 address with a port and trailing text', { scope: '1.2.3.4:5x' }, true],
+  ['an IPv4 address with a port and leading text', { scope: 'x1.2.3.4:5' }, true],
+  ['two colons after text, which is no IPv6 address', { state: 'xyz:a:b' }, true],
+  ['two colons before text, which is no IPv6 address', { state: 'a:b:xyz' }, true],
   ['a list of integers', { rows: [1, 2, 3] }, true],
   ['an empty list', { rows: [] }, true],
   ['a list of 100 integers', { rows: Array.from({ length: 100 }, (_, index) => index) }, true],
@@ -75,6 +82,8 @@ export const METADATA_CASES: readonly MetadataCase[] = [
   ['an IPv4 address', { kind: '203.0.113.7' }, false],
   ['an IPv4 address under another key', { state: '198.51.100.9' }, false],
   ['an IPv4 address with a port', { scope: '203.0.113.7:8080' }, false],
+  ['an IPv4 address whose last number has three digits', { kind: '203.0.113.255' }, false],
+  ['an IPv4 address of three-digit numbers with a five-digit port', { scope: '203.113.113.255:65535' }, false],
   ['an IPv6 address', { kind: '2001:db8::1' }, false],
   ['an IPv6 address with a group after the gap', { state: '2001:db8:0:1::5' }, false],
   ['the IPv6 loopback address', { kind: '::1' }, false],
