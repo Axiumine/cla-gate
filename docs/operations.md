@@ -2,7 +2,15 @@
 
 What an operator must keep in mind. Configuration variables are in [`configuration.md`](configuration.md); the CI runner policy is in [`ci-runners.md`](ci-runners.md).
 
-- **Private key rotation**: the App supports multiple private keys; generate the new key and deploy it before deleting the old one.
+- **Private key rotation**: the App supports multiple private keys. Generate the new key in the App settings, deploy it as `GITHUB_APP_PRIVATE_KEY` and keep the old one as `GITHUB_APP_PRIVATE_KEY_PREVIOUS`, then delete the old key in the settings once the new one works. On a 401 the previous key is tried, promoted, and `github.app_key_fallback` is logged with its fingerprint; `github.app_keys_refused` (error) means GitHub refused every key. After setting or rotating a key, compare the fingerprint in the `github.app_configured` start-up line with the App settings page.
 - **Backups**: signatures are legal evidence. Daily backups plus point-in-time recovery, with a periodically tested restore.
 - **Poison jobs**: bounded pg-boss `retryLimit` and a dead-letter queue whose handler sets the Check Run to `failure` with a `/recheck` hint, so a check is never stuck `in_progress`.
-- **GitHub rate budget**: cache installation tokens and org membership; Octokit throttling honours `retry-after`.
+- **GitHub rate budget**: cache installation tokens and org membership. The platform's own rate limiter (one lane per installation plus one for the App) waits out a 429 or a rate-limit 403 of 60 s or less and hands a longer limit to the job layer; watch the WARN line `github.rate_limited` (fields `scope`, `waitSeconds`, `route`, `installationId`; `installationId` null is the App's own lane).
+- **Runtime image**: it must contain `package.json` next to `dist` (the `User-Agent` version is read from it at start-up; a missing file fails the first GitHub request).
+- **Log lines to watch**: `installation.reconciled` (INFO) after each reconciliation, and the WARN lines `installation.sync_failed`, `installation.reconcile_failed`, `installation.permissions_missing` and `installation.deleted_still_listed`. Reconciliation runs once in the background after start-up.
+
+## Multi-org operation
+
+One instance authenticates as one GitHub App and serves several orgs. The recommended setup is to set the App visibility to Only on this account, so GitHub refuses other accounts. For a public App, `GITHUB_ALLOWED_ACCOUNT_IDS` is the second line: any other installation is recorded as rejected (`admission_status` rejected, reason `account_not_allowed`, audit action `installation.rejected`, one WARN `installation.rejected`) and never touched: no token, no repository listing, no PR data. An installation of an account that is neither a user nor an organisation (an enterprise) is rejected the same way, whatever its id.
+
+To admit another org, add its numeric account id to `GITHUB_ALLOWED_ACCOUNT_IDS` and restart; the reconciliation then admits it. Removing an id takes effect at the restart: the installation gate refuses the account at once, and the reconciliation records the change as `policy_changed`. If GitHub is down at start-up the log shows `github.admission_policy_pending` and `github.admission_policy` appears on the first use. The operator view is `listInstallationsForOperator` (no HTTP route until E11 and E18).
