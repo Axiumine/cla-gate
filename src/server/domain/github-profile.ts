@@ -6,7 +6,7 @@ import type { VerifiedEmail } from '../../shared/verified-email.ts';
 // the name and the avatar are display snapshots that a person controls, so each is bounded here before it is stored.
 
 /** GitHub's rule for a username: letters, digits and single hyphens, at most 39 characters, never starting with a hyphen. */
-export const LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+export const LOGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 
 /** The longest display name stored: 255 characters, counted as Unicode code points so a cut never splits an emoji. */
 const MAX_NAME = 255;

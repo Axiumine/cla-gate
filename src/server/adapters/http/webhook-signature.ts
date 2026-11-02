@@ -38,7 +38,9 @@ function digestOf(secret: Secret, body: Buffer): Buffer {
  * header is never read. A missing, repeated or malformed header matches nothing, and so does a configuration without
  * any secret: the check fails closed.
  *
+ * @param body the raw bytes of the request body, exactly as received
  * @param header the value of the header as the framework hands it over: anything but one string matches nothing
+ * @param secrets the current secret and, during a rotation, the one being retired
  */
 export function matchWebhookSignature(body: Buffer, header: unknown, secrets: WebhookSecrets): SignatureMatch {
   const hex = typeof header === 'string' ? SIGNATURE.exec(header)?.[1] : undefined;

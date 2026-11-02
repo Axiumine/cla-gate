@@ -16,6 +16,7 @@ export const WEBHOOK_DEADLINE_MS = 8000;
  * transaction it holds is rolled back and nothing it started afterwards commits.
  *
  * @param budgetMs what is left of the deadline; zero or less expires at once
+ * @param work the step to run, handed the signal that aborts at the deadline
  * @throws AppError `503` `webhook_timeout`
  */
 export async function withDeadline<T>(budgetMs: number, work: (signal: AbortSignal) => Promise<T>): Promise<T> {

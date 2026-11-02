@@ -41,7 +41,8 @@ function isAuthRequest(request: FastifyRequest): boolean {
 
 export function noStoreForAuth(request: FastifyRequest, reply: FastifyReply, done: () => void): void {
   if (isAuthRequest(request)) {
-    reply.header('cache-control', 'no-store');
+    // The reply is a thenable that settles when the response is sent: the result of `header` is dropped, never awaited.
+    void reply.header('cache-control', 'no-store');
   }
   done();
 }

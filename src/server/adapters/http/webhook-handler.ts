@@ -48,7 +48,8 @@ export function deliveryHandler(options: DeliveryHandlerOptions) {
       return answerFor(admitted, recordingOf(options.deliveries, envelope, delivery, { log: request.log, signal }));
     });
     seen.answered(answer.body);
-    reply.code(answer.statusCode);
+    // Assigned, not `reply.code(...)`: the reply is a thenable that settles when the response is sent, so it is never awaited.
+    reply.statusCode = answer.statusCode;
     return answer.body;
   };
 }

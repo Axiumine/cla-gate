@@ -102,6 +102,8 @@ function parseJsonObject(body: Buffer): Record<string, unknown> {
  * (`400`), the media type (`415`), the JSON syntax and shape (`400`). The first failure is thrown as an
  * {@link AppError}; nothing runs for a request the signature refused, because this is called only after it.
  *
+ * @param headers the request headers; `content-type` is the media type of the body as the client sent it
+ * @param body the raw bytes of the request body
  * @param appId the configured `GITHUB_APP_ID`
  */
 export function readEnvelope(headers: IncomingHttpHeaders, body: Buffer, appId: string | undefined): WebhookEnvelope {
