@@ -31,10 +31,13 @@ const routeConfig = z.object({
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
- * `/api` and everything below it, and also a route whose first segment is a wildcard or a parameter (`/*`, `/:tenant`),
- * because it would answer `/api/...` too. Fastify matches case-sensitively, but the guard does not rely on it.
+ * `/api` and everything below it, and also a route whose first segment could match `api`: it starts with a wildcard or
+ * a parameter (`/*`, `/:tenant`), or a static start that `api` begins with (`a`, `ap`, `api`) and then a wildcard or a
+ * parameter (`/a*`, `/ap:id/x`, `/api*`). Such a route would answer `/api/...` too. A first segment whose static start
+ * cannot be the start of `api` (`/apix*`, `/health*`) is not an `/api` route. Fastify matches case-sensitively, but
+ * the guard does not rely on it.
  */
-const API_ROUTE = /^(?:\/(?:api(?:\/|$)|[*:(])|\*)/i;
+const API_ROUTE = /^(?:\/(?:api(?:[/*:(]|$)|(?:a|ap)?[*:(])|\*)/i;
 
 /**
  * What is wrong with the audit declaration of a route, or `undefined` when nothing is: every route under `/api` with a

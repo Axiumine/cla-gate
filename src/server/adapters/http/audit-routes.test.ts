@@ -15,6 +15,10 @@ test.each([
   ['a POST outside /api', 'POST', '/webhooks/github', undefined],
   ['a POST to a path that only starts with the letters api', 'POST', '/apiary', undefined],
   ['a POST to /health', 'POST', '/healthz', undefined],
+  ['a POST to a static path that is a prefix of api', 'POST', '/ap/things', undefined],
+  ['a POST whose wildcard follows a static first segment that cannot be api', 'POST', '/health*', undefined],
+  ['a POST whose parameter follows text that cannot be the start of api', 'POST', '/x:id/things', undefined],
+  ['a POST to api with more letters before the wildcard', 'POST', '/apix*', undefined],
   ['a POST that declares an audit action', 'POST', '/api/things', AUDIT],
   ['a PUT that declares an audit action', 'PUT', '/api/things/:id', AUDIT],
   ['a PATCH that declares an audit action', 'PATCH', '/api/things/:id', AUDIT],
@@ -39,6 +43,14 @@ test.each([
   ['an upper-case path', 'POST', '/API/things', {}],
   ['a catch-all, which would also answer /api', 'POST', '/*', {}],
   ['a bare wildcard', 'POST', '*', {}],
+  ['a wildcard glued to api, which would answer /api/x', 'POST', '/api*', {}],
+  ['a wildcard glued to ap, which would answer /api/x', 'POST', '/ap*', {}],
+  ['a wildcard glued to a, which would answer /api/x', 'POST', '/a*', {}],
+  ['a parameter glued to a, which would answer /api/x', 'PUT', '/a:id/x', {}],
+  ['a parameter glued to ap, which would answer /api/x', 'PATCH', '/ap:id/x', {}],
+  ['a parameter glued to api, which would answer /api/x', 'DELETE', '/api:id/x', {}],
+  ['a wildcard glued to API in capitals', 'POST', '/AP*', {}],
+  ['a regex first segment', 'POST', '/(.*)', {}],
   ['a route that starts with a parameter, which would also answer /api', 'DELETE', '/:tenant/things', {}],
   ['a method list with one mutating method', ['GET', 'POST'], '/api/things', {}],
   ['null config', 'POST', '/api/things', null],
@@ -126,4 +138,19 @@ test('a route registered for several methods is checked for the mutating ones', 
   const { app } = await testApp();
   const register = () => app.route({ method: ['GET', 'PUT'], url: '/api/both', handler: () => 'ok' });
   expect(register).toThrow('route GET|PUT /api/both must declare config.audit');
+});
+
+test.each(['/ap*', '/a*', '/api*', '/a:id/x', '/ap:id/x'])(
+  'registering a POST route %s, which would answer /api/x, throws without a declaration',
+  async (url) => {
+    const { app } = await testApp();
+    expect(() => app.post(url, () => 'ok')).toThrow(`route POST ${url} must declare config.audit`);
+  },
+);
+
+test('a route with a static first segment that cannot be api registers without a declaration', async () => {
+  const app = await appWith((instance) => {
+    instance.post('/apix*', () => 'apix');
+  });
+  expect((await app.inject({ method: 'POST', url: '/apix/y' })).body).toBe('apix');
 });
