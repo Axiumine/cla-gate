@@ -23,6 +23,8 @@ on:
   pull_request:
   push:
     branches: [main]
+    # Release candidates (E20-S07): a v* tag runs every job, and it is one of the three events that run the leaks job.
+    tags: ["v*"]
   # Nightly run on the default branch (E20-S02): every job runs, and the trivy job also scans the dev dependencies.
   schedule:
     - cron: "17 3 * * *"
@@ -750,3 +752,110 @@ jobs:
       - name: Remove the PostgreSQL container
         if: ${{ always() && env.CLA_PG_CONTAINER != '' }}
         run: yarn ci:postgres stop
+
+  # Memory leak scenarios (E20-S07), `yarn leaks:control` and then `yarn leaks`. Never a required check and never promoted: it
+  # runs only on the nightly schedule, on a manual run and on a v* tag (a release candidate), so a pull request does not wait
+  # for it. It waits for `coverage`, so a build that fails the unit tests is not measured. memlab has no exit code for a leak,
+  # so tests/leaks/run.ts turns the number of leaks into one (0 clean, 1 a leak, 2 an error), and leaks:control proves that
+  # with a fixture that leaks on purpose, a clean one and a broken one before the real scenarios run. memlab works on Node
+  # 26 (smoke run of E20-S07), so the job runs on the runner with the repository's Node, not in a container. It drives the
+  # Chromium that Playwright installs, so one browser is downloaded; PLAYWRIGHT_BROWSERS_PATH points into the runner's temp
+  # directory, because the default is the shared runner user's home directory. The step after the install runs the browser
+  # once, so a runner that lacks the libraries Chromium needs says so in one line. No secret, no container, no Docker. The
+  # scenario reports (memlab's traces and heap snapshots, plus any *.heapprofile written there by hand with
+  # `node --heap-prof --heap-prof-dir=reports/leaks`) are uploaded when a step fails.
+  leaks:
+    name: leaks
+    needs: coverage
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # No install script runs: memlab's puppeteer would download a second Chromium from it, and the next step installs the one
+      # browser the job uses.
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      # The variable goes to the next steps through GITHUB_ENV; tests/leaks/run.ts asks Playwright where the browser is, and
+      # Playwright reads the same variable.
+      - name: Install Chromium (the one browser, in the runner temp directory)
+        run: |
+          set -eu
+          browsers="$RUNNER_TEMP/playwright-browsers"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$browsers" >> "$GITHUB_ENV"
+          PLAYWRIGHT_BROWSERS_PATH="$browsers" yarn playwright install --no-shell chromium
+      - name: Check that Chromium starts
+        run: |
+          set -eu
+          chrome=$(node -p "require('@playwright/test').chromium.executablePath()")
+          if ! "$chrome" --version; then
+            echo "::error title=Chromium::the browser Playwright installed does not start on this runner: a system library is probably missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+      - name: Positive control (the wrapper must fail on a leak, pass on a clean page and report an error)
+        run: yarn leaks:control
+      - name: Leak scenarios
+        run: yarn leaks
+      - name: Upload the leak report, traces and heap profiles
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: leaks-report
+          path: reports/leaks/
+          retention-days: 7
+          if-no-files-found: ignore

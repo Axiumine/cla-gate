@@ -40,6 +40,10 @@ function readYaml(file: string): unknown {
 }
 
 const CI_FILE = '.github/workflows/ci.yml';
+const LONG_JOBS = new Map([
+  ['mutation', 45],
+  ['leaks', 30],
+]);
 const ciText = readText(path.join(ROOT, CI_FILE));
 const jobs = new Map(Object.entries(workflowSchema.parse(readYaml(CI_FILE)).jobs));
 const allSteps = [...jobs.values()].flatMap((job) => job.steps);
@@ -52,8 +56,8 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage, postgres, semgrep, trivy, mutation and e2e, and the required ones keep their exact names', () => {
-  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep', 'trivy', 'mutation', 'e2e']);
+test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e and leaks, and the required ones keep their exact names', () => {
+  expect([...jobs.keys()]).toEqual(['static', 'coverage', 'postgres', 'semgrep', 'trivy', 'mutation', 'e2e', 'leaks']);
   expect([...jobs.entries()].map(([id, job]) => [id, job.name])).toEqual([
     ['static', 'static'],
     ['coverage', 'coverage'],
@@ -62,6 +66,7 @@ test('the jobs are static, coverage, postgres, semgrep, trivy, mutation and e2e,
     ['trivy', 'trivy'],
     ['mutation', 'mutation'],
     ['e2e', 'e2e'],
+    ['leaks', 'leaks'],
   ]);
 });
 
@@ -70,8 +75,9 @@ test('every job runs on one and the same allowed runner and has a timeout', () =
   expect(runners.size).toBe(1);
   for (const [id, job] of [...jobs.entries()]) {
     expect(job['timeout-minutes']).toBeGreaterThan(0);
-    // The mutation run is the one long job (E20-S04); the guard caps every job at 60.
-    expect(job['timeout-minutes']).toBeLessThanOrEqual(id === 'mutation' ? 45 : 20);
+    // The mutation run (E20-S04) and the leak scenarios (E20-S07, three browser runs and a download) are the long jobs;
+    // the guard caps every job at 60.
+    expect(job['timeout-minutes']).toBeLessThanOrEqual(LONG_JOBS.get(id) ?? 20);
   }
 });
 

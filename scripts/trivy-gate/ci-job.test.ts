@@ -113,7 +113,8 @@ test('setup-trivy installs the exact version of mise.toml into the runner temp d
 test('the schedule is a nightly cron on the default branch, next to the existing pull request and push triggers', () => {
   expect(workflow.on.schedule).toEqual([{ cron: '17 3 * * *' }]);
   expect(workflow.on.pull_request).toBeDefined();
-  expect(workflow.on.push).toEqual({ branches: ['main'] });
+  // The v* tags are the release candidates that the leaks job (E20-S07) also runs for.
+  expect(workflow.on.push).toEqual({ branches: ['main'], tags: ['v*'] });
 });
 
 test('a queued nightly run is not replaced by a push: the event name is part of the concurrency group', () => {

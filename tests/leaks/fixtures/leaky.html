@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Giovanni Manzoni -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>memlab leaking fixture</title>
+  </head>
+  <body>
+    <!-- E20-S07, the positive control. The same page as clean.html, except that every row is also kept in a global array: closing
+         the panel detaches the rows from the document, and the array keeps them alive. memlab must report them as a leak,
+         otherwise the wrapper cannot be trusted to ever fail (yarn leaks:control). -->
+    <nav>
+      <a id="open" href="#detail">Open</a>
+      <a id="close" href="#home">Close</a>
+    </nav>
+    <main id="view"></main>
+    <script>
+      const view = document.getElementById('view');
+      window.retainedRows = [];
+      function render() {
+        view.replaceChildren();
+        if (location.hash !== '#detail') {
+          return;
+        }
+        const panel = document.createElement('section');
+        for (let index = 0; index < 50; index += 1) {
+          const row = document.createElement('p');
+          row.textContent = `row ${index}`;
+          panel.appendChild(row);
+          window.retainedRows.push(row);
+        }
+        view.appendChild(panel);
+      }
+      window.addEventListener('hashchange', render);
+      render();
+    </script>
+  </body>
+</html>

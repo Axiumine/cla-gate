@@ -1,0 +1,2 @@
+# E20-S07: basic-ftp 5.3.1 (CVE-2026-102990, fixed in 6.2.1) is a dev-only dependency of memlab: memlab, puppeteer, proxy-agent, get-uri, basic-ftp. It parses FTP directory listings, which only a PAC proxy script that fetches over ftp: would reach; the leak scenarios load loopback fixtures and never configure a proxy. get-uri still asks for ^5, so only a new puppeteer release fixes it. Remove this entry when it does.
+CVE-2026-102990 exp:2027-01-15

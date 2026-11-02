@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Giovanni Manzoni -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>memlab clean fixture</title>
+  </head>
+  <body>
+    <!-- E20-S07. Two views in one document, switched by the hash. Opening builds a panel, closing drops it, and nothing keeps a
+         reference to it: the detached rows are garbage, so memlab must report no leak. leaky.html differs in one line. -->
+    <nav>
+      <a id="open" href="#detail">Open</a>
+      <a id="close" href="#home">Close</a>
+    </nav>
+    <main id="view"></main>
+    <script>
+      const view = document.getElementById('view');
+      function render() {
+        view.replaceChildren();
+        if (location.hash !== '#detail') {
+          return;
+        }
+        const panel = document.createElement('section');
+        for (let index = 0; index < 50; index += 1) {
+          const row = document.createElement('p');
+          row.textContent = `row ${index}`;
+          panel.appendChild(row);
+        }
+        view.appendChild(panel);
+      }
+      window.addEventListener('hashchange', render);
+      render();
+    </script>
+  </body>
+</html>
