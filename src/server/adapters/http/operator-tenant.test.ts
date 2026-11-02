@@ -10,7 +10,7 @@ import {
   matrixWorld,
   operatorWorld,
 } from './cross-tenant-runner/test-support.ts';
-import { declaredAccess } from './route-access.ts';
+import { declaredAccess } from './route-access-model.ts';
 
 // Operator is not tenant admin (E11-S08): the person who operates the instance, and is neither org admin nor an admin the
 // ledger remembers, gets the uniform `404` from every tenant route. The routes come from the route table of the app, so a

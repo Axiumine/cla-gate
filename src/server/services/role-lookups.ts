@@ -5,9 +5,10 @@ import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { OrgAdminInstallation, RoleViewer } from './org-admin.ts';
 import type { ProbeBudget } from './probe-budget.ts';
 import type { RepoAdminInstallation, RepoAdminLookup, RepoAdminRepository } from './repo-admin.ts';
-import type { LookupContext, RoleCache } from './role-cache.ts';
+import type { RoleCache } from './role-cache.ts';
 import { ORG_SCOPE, repoScope } from './role-key.ts';
 import type { ViewerLookupBudget } from './role-lookup-budget.ts';
+import type { LookupContext } from './role-lookup-context.ts';
 
 // The role lookups of E11-S02 and E11-S03 with the role cache in front of them (E11-S04). A request that needs a role
 // fact asks one of these, never the bare lookup: a hit costs GitHub nothing and spends neither a probe of the request's

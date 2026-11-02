@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
-import { declaredAccess } from '../route-access.ts';
+import { declaredAccess } from '../route-access-model.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
 // `CROSS_TENANT_CASES`; every route that is open to any signed-in person and still returns tenant data by design has one in

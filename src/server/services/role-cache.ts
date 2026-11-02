@@ -5,6 +5,7 @@ import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Clock } from './ports/clock.ts';
 import { RoleEntries } from './role-cache-entries.ts';
 import { type RoleKey, roleKeyText } from './role-key.ts';
+import type { LookupContext } from './role-lookup-context.ts';
 
 // The role cache (E11-S04): what GitHub said a person may do in a tenant, kept for a minute so that a page that makes
 // several guarded requests does not ask GitHub every time. The facts it holds are the role lookups of E11-S02 and E11-S03
@@ -34,20 +35,6 @@ export interface ResolveOptions {
    * (E11-S05), so a person who was demoted a second ago cannot still write. Defaults to false.
    */
   readonly fresh?: boolean;
-}
-
-/**
- * What a lookup is told by the cache that runs it. A lookup that does more than answer (E11-S07 writes the ledger of org
- * admins from what it finds) asks {@link LookupContext.isCurrent} right before it does, so that an older answer cannot undo
- * a newer one.
- */
-export interface LookupContext {
-  /**
-   * Whether this lookup is still the current one of its key: false once a fresh lookup displaced it or an invalidation
-   * dropped it. A lookup that is not current answers its own callers and the cache keeps nothing of it; whatever else it
-   * would write must not outlive it either. Ask after the first `await` of the lookup, not before.
-   */
-  readonly isCurrent: () => boolean;
 }
 
 /** A lookup that is under way. `ticket` tells which one is the current for its key: a later one displaces an earlier. */
@@ -134,13 +121,7 @@ export class RoleCache {
     // Whether this lookup is still the current one of its key, which it stops being when it is displaced or invalidated.
     const isCurrent = (): boolean => this.#flights.get(id)?.ticket === ticket;
     // A lookup that is current ends here; one that is not leaves the map as it found it.
-    const settle = (): boolean => {
-      const current = isCurrent();
-      if (current) {
-        this.#flights.delete(id);
-      }
-      return current;
-    };
+    const settle = (): boolean => isCurrent() && this.#flights.delete(id);
     // `Promise.try` turns a `load` that throws at once into a rejection too, so no failure skips the bookkeeping below.
     const promise = Promise.try(load, { isCurrent }).then(
       (allowed) => {

@@ -4,7 +4,8 @@ import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
 import { testApp } from '../../test-support.ts';
-import { accessProblem, declaredAccess, PUBLIC_ROUTES, WEBHOOK_ROUTES } from './route-access.ts';
+import { declaredAccess, PUBLIC_ROUTES, WEBHOOK_ROUTES } from './route-access-model.ts';
+import { accessProblem } from './route-access-problems.ts';
 import { tenantAccess } from './tenant-access.ts';
 
 // The route table of the real application (E11-S01): every route registered while the app is built, collected twice. Once by

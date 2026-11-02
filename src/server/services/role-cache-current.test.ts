@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
-import { type LookupContext, RoleCache } from './role-cache.ts';
+import { RoleCache } from './role-cache.ts';
 import { deferred, roleKey } from './role-fixture/test-support.ts';
+import type { LookupContext } from './role-lookup-context.ts';
 import { FakeClock } from './test-support.ts';
 
 // Whether a lookup is still the current one of its key (E11-S07 asks it before it writes the ledger): true from the start

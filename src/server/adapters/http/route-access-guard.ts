@@ -5,7 +5,7 @@ import type { OperatorPolicies } from '../../services/operator-policies.ts';
 import { requireAuth } from './auth-request.ts';
 import { AppError } from './errors.ts';
 import { guardOperator } from './operator-guard.ts';
-import { declaredAccess } from './route-access.ts';
+import { declaredAccess } from './route-access-model.ts';
 import { clearSessionCookie } from './session-cookie.ts';
 import { guardTenant, type TenantGuardDeps } from './tenant-guard.ts';
 

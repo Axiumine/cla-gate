@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { PUBLIC_ROUTE, testApp } from '../../test-support.ts';
-import { accessProblem, declaredAccess, PUBLIC_ROUTES, RouteAccessError, WEBHOOK_ROUTES } from './route-access.ts';
+import { RouteAccessError } from './route-access.ts';
+import { declaredAccess, PUBLIC_ROUTES, WEBHOOK_ROUTES } from './route-access-model.ts';
+import { accessProblem } from './route-access-problems.ts';
 import { tenantAccess } from './tenant-access.ts';
 
 // The access declarations (E11-S01): what a route may declare, what is refused, and that an app with a route that declares
