@@ -4,5 +4,7 @@
 // joins here and in index.test.ts, which pins the list.
 export * from './actor-types.ts';
 export * from './actors.ts';
+export * from './allowlist.ts';
+export * from './classify.ts';
 export * from './github-identities.ts';
 export * from './types.ts';

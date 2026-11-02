@@ -10,10 +10,12 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'ADVISORY_CODES',
     'ALLOWLIST_KINDS',
     'ALLOWLIST_SCOPES',
+    'classifyAccount',
     'extractActors',
     'FAILURE_CODES',
     'FIX_CODES',
     'GITHUB_WEB_FLOW_ID',
+    'matchAllowlist',
     'ROLES',
   ]);
 });
