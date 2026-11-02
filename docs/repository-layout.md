@@ -13,15 +13,17 @@ Items marked (planned) do not exist yet.
 │   ├── adapters/db/             Kysely over node-postgres, hand-written schema types, migration runner and CLI,
 │   │                            PGlite dialect and test helpers (test only, outside the build)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (also for failures that never
-│   │                            reach a route), HTTP limits, health routes
+│   │                            reach a route), HTTP limits, health routes, trust-proxy conversion, the /api
+│   │                            route-audit guard (audit-routes.ts)
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
 │   │                            its public surface
-│   └── services/                (planned) orchestration
-├── src/shared/                  zod schemas shared by server and web (health, error body, the PR evaluation codes,
-│                                parts and stored-details schema `pr-evaluation-*.ts`)
+│   └── services/                audit.ts (appendAudit, the one public entry), audit-entry.ts (AuditEntry, validation)
+├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, the audit
+│                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
+│                                codes, parts and stored-details schema `pr-evaluation-*.ts`)
 ├── src/web/                     (planned) React SPA
-├── migrations/                  forward-only SQL, never edited after merge (001_initial.sql)
+├── migrations/                  forward-only SQL, never edited after merge (001_initial.sql, 002_audit_metadata_allowlist.sql)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
 ├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
 ├── docs/ci-runners.md           CI runner policy: shared self-hosted runners, fork approval, ports, job rules

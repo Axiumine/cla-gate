@@ -7,7 +7,8 @@
     "src/server/main.ts!",
     "src/server/migrate.ts!",
     "src/server/domain/evaluation/index.ts!",
-    "src/shared/pr-evaluation-details.ts!"
+    "src/shared/pr-evaluation-details.ts!",
+    "src/server/services/audit.ts!"
   ],
   "project": [
     "scripts/**/*.ts!",

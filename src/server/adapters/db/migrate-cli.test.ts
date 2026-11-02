@@ -44,7 +44,8 @@ test('the real migrations apply cleanly through the CLI', async () => {
   const { out, io } = sinks();
   const db = await openPgliteDatabase();
   expect(await runMigrateCli({ env: ENV, directory: MIGRATIONS_DIRECTORY, connect: () => db, ...io })).toBe(0);
-  expect(out).toEqual(['migrations applied: 001_initial.sql']);
+  const names = (await loadMigrationFiles(MIGRATIONS_DIRECTORY)).map((file) => file.name);
+  expect(out).toEqual([`migrations applied: ${names.join(', ')}`]);
 });
 
 test('the owner connection (MIGRATION_DATABASE_URL) wins over the runtime one (DATABASE_URL)', async () => {

@@ -5,6 +5,7 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import type { Database } from './adapters/db/schema.ts';
+import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
@@ -12,21 +13,10 @@ import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { securityHeaders } from './adapters/http/security.ts';
+import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import type { AppConfig } from './config/env.ts';
-import type { TrustProxy } from './config/trust-proxy.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
-
-/**
- * Fastify accepts a hop count at runtime but its types do not list one, so a count becomes the equivalent function.
- * @returns the setting in a form Fastify's types accept: a boolean, a list of addresses or a trust function.
- */
-function fastifyTrustProxy(setting: TrustProxy): boolean | string[] | ((address: string, hop: number) => boolean) {
-  if (typeof setting === 'number') {
-    return (_address, hop) => hop < setting;
-  }
-  return typeof setting === 'boolean' ? setting : [...setting];
-}
 
 export interface AppOptions {
   readonly config: AppConfig;
@@ -58,6 +48,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   registerErrorHandlers(app);
+  requireAuditedRoutes(app);
 
   await app.register(helmet, securityHeaders(config));
   app.addHook('onRequest', async (request, reply) => {

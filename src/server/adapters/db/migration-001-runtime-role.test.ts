@@ -99,5 +99,6 @@ test('migrating without the runtime role present skips the grants and still succ
   });
   const role = await sql`select 1 from pg_roles where rolname = 'cla_app'`.execute(db);
   expect(role.rows).toEqual([]);
-  expect(await migrate(db, await loadMigrationFiles(MIGRATIONS_DIRECTORY))).toEqual(['001_initial.sql']);
+  const files = await loadMigrationFiles(MIGRATIONS_DIRECTORY);
+  expect(await migrate(db, files)).toEqual(files.map((file) => file.name));
 });
