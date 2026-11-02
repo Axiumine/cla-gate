@@ -5,9 +5,15 @@ import { compareText } from './order.ts';
 
 // E08-S07: the commits of a large pull request, read from the repository's commit list. That list is ordered by commit
 // date and holds the whole history behind the head, and commit dates are not topological: a parent can be listed
-// before its child, after it, or pages later. So the list is never cut at the merge base. The walk starts at the head,
-// follows `parents` through the commits fetched so far, and stops on each path at the merge base, which is excluded.
-// A parent that has not been fetched yet means more pages are needed, never a shorter pull request.
+// before its child, after it, or pages later. So the list is never cut at the merge base. The pull request is what the
+// head reaches and the merge base does not: `git rev-list base..head`. The walk starts at the head and follows
+// `parents` through the commits fetched so far, and it stops on each path at the merge base or at any commit behind it.
+// Stopping at the merge base alone is not enough: a branch that merged the base branch back in (a long-lived feature
+// branch does this all the time) reaches old base-branch commits by a path that never passes the merge base, and those
+// commits are not part of the pull request. A parent that has not been fetched yet means more pages are needed, never
+// a shorter pull request. Two things the walk cannot see, and `verifyListing` (the count GitHub reports) catches: a
+// history with more than one merge base (a criss-cross merge) and a commit date so skewed that a descendant of a
+// commit is listed pages after it. Both end as a count mismatch, which fails closed.
 
 /** What the walk needs to know about a commit: its SHA and its parent SHAs. `CommitFacts` has both. */
 export interface WalkCommit {
@@ -56,19 +62,35 @@ function indexParents(commits: readonly WalkCommit[]): ParentIndex | null {
   return index;
 }
 
+/**
+ * The merge base and every commit behind it among the fetched ones. A parent that is not fetched ends its path: nothing
+ * is known behind it. The merge base itself need not be fetched; then only it is excluded.
+ */
+function mergeBaseAncestry(mergeBase: string, index: ParentIndex): ReadonlySet<string> {
+  const reached = new Set<string>();
+  const pending = [mergeBase];
+  for (let sha = pending.pop(); sha !== undefined; sha = pending.pop()) {
+    if (!reached.has(sha)) {
+      reached.add(sha);
+      pending.push(...(index.get(sha) ?? []));
+    }
+  }
+  return reached;
+}
+
 interface Walked {
   readonly collected: ReadonlySet<string>;
   /** True when a commit the walk needed (the head or a parent) is not among the fetched ones. */
   readonly missing: boolean;
 }
 
-/** Every commit reachable from the head without passing the merge base, or `null` once there are too many of them. */
-function walkFromHead(head: string, mergeBase: string, index: ParentIndex): Walked | null {
+/** Every commit reachable from the head without entering `excluded`, or `null` once there are too many of them. */
+function walkFromHead(head: string, excluded: ReadonlySet<string>, index: ParentIndex): Walked | null {
   const collected = new Set<string>();
   const pending = [head];
   let missing = false;
   for (let sha = pending.pop(); sha !== undefined; sha = pending.pop()) {
-    if (sha === mergeBase || collected.has(sha)) {
+    if (excluded.has(sha) || collected.has(sha)) {
       continue;
     }
     const parents = index.get(sha);
@@ -101,11 +123,11 @@ function whenStuck(pagesFetched: number, exhausted: boolean): RepoWalkResult {
 
 /**
  * Walks the commits fetched so far from the head to the merge base (E08-S07). The result is `complete` with the sorted
- * SHAs of the pull request (merge base excluded), `need_next_page` while a needed commit is not fetched yet,
- * `exceeded` when more than 2,000 commits are collected or when the 25th page (of 100) is fetched and the walk is
- * still stuck, and `inconsistent` when the repository has no more pages and a needed commit is still missing, or two
- * entries disagree about one commit. A head equal to the merge base is complete with no commits (the walk stops on it
- * at once); a root commit reached first ends its path (unrelated histories). A walk that finishes within the limits is
+ * SHAs of the pull request (the merge base and every commit behind it excluded), `need_next_page` while a needed commit
+ * is not fetched yet, `exceeded` when more than 2,000 commits are collected or when the 25th page (of 100) is fetched
+ * and the walk is still stuck, and `inconsistent` when the repository has no more pages and a needed commit is still
+ * missing, or two entries disagree about one commit. A head equal to the merge base (or behind it) is complete with no
+ * commits; a root commit reached first ends its path (unrelated histories). A walk that finishes within the limits is
  * complete, however many pages it took. The result never depends on the order of `commits`.
  */
 export function collectRepoWalk(input: RepoWalkInput): RepoWalkResult {
@@ -115,7 +137,7 @@ export function collectRepoWalk(input: RepoWalkInput): RepoWalkResult {
   if (index === null) {
     return { status: 'inconsistent' };
   }
-  const walked = walkFromHead(head, mergeBase, index);
+  const walked = walkFromHead(head, mergeBaseAncestry(mergeBase, index), index);
   if (walked === null) {
     return { status: 'exceeded' };
   }

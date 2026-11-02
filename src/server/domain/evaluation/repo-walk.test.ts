@@ -42,21 +42,30 @@ test('the SHAs are returned sorted, whatever order the commits and parents come 
   expect(result).toEqual({ status: 'complete', shas: [sha(2), sha(9), sha(0xa), sha(0xf)] });
 });
 
+// The SHAs have letters in them (0xa1 is `...00a1`), so the upper-case form really is another string.
+const A1 = sha(0xa1);
+const A2 = sha(0xa2);
+const A3 = sha(0xa3);
+const A4 = sha(0xa4);
+const chainA = [walkCommit(0xa4, 0xa3), walkCommit(0xa3, 0xa2), walkCommit(0xa2, 0xa1)];
+const upperCommit = (commit: ReturnType<typeof walkCommit>) => ({
+  sha: commit.sha.toUpperCase(),
+  parents: commit.parents.map((parent) => parent.toUpperCase()),
+});
+
 test.each([
-  ['the head', sha(4).toUpperCase(), sha(1), [walkCommit(4, 3), walkCommit(3, 2), walkCommit(2, 1)]],
+  ['the head', A4.toUpperCase(), A1, chainA],
+  ['the commits and their parents', A4, A1, chainA.map(upperCommit)],
   [
-    'the commits and their parents',
-    sha(4),
-    sha(1),
-    [
-      { sha: sha(4).toUpperCase(), parents: [sha(3).toUpperCase()] },
-      { sha: sha(3).toUpperCase(), parents: [sha(2).toUpperCase()] },
-      { sha: sha(2), parents: [sha(1).toUpperCase()] },
-    ],
+    'the parents only',
+    A4,
+    A1,
+    chainA.map((commit) => ({ ...commit, parents: commit.parents.map((p) => p.toUpperCase()) })),
   ],
-  ['the merge base', sha(4), sha(1).toUpperCase(), [walkCommit(4, 3), walkCommit(3, 2), walkCommit(2, 1)]],
+  ['the commits only', A4, A1, chainA.map((commit) => ({ ...commit, sha: commit.sha.toUpperCase() }))],
+  ['the merge base', A4, A1.toUpperCase(), chainA],
 ])('SHAs in upper case are compared in lower case: %s', (_name, head, mergeBase, commits) => {
-  expect(walk(head, mergeBase, commits)).toEqual({ status: 'complete', shas: [sha(2), sha(3), sha(4)] });
+  expect(walk(head, mergeBase, commits)).toEqual({ status: 'complete', shas: [A2, A3, A4] });
 });
 
 test('a linear history of 300 commits is read from three pages and lists all 300', () => {
@@ -189,12 +198,17 @@ test('exhausted does not matter when nothing is missing', () => {
 
 test('a commit repeated across pages, even in a different case, counts once', () => {
   const commits = [
-    walkCommit(3, 2),
-    walkCommit(2, 1),
-    walkCommit(3, 2),
-    { sha: sha(2).toUpperCase(), parents: [sha(1).toUpperCase()] },
+    walkCommit(0xa3, 0xa2),
+    walkCommit(0xa2, 0xa1),
+    walkCommit(0xa3, 0xa2),
+    { sha: A2.toUpperCase(), parents: [A1.toUpperCase()] },
   ];
-  expect(walk(sha(3), sha(1), commits)).toEqual({ status: 'complete', shas: [sha(2), sha(3)] });
+  expect(walk(A3, A1, commits)).toEqual({ status: 'complete', shas: [A2, A3] });
+});
+
+test('the same commit in two cases with two different parent lists is inconsistent', () => {
+  const commits = [walkCommit(0xa3, 0xa2), { sha: A3.toUpperCase(), parents: [sha(0xa9)] }, walkCommit(0xa2, 0xa1)];
+  expect(walk(A3, A1, commits)).toEqual({ status: 'inconsistent' });
 });
 
 test('the same commit with two different parent lists is inconsistent, whichever came first', () => {
