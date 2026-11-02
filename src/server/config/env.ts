@@ -20,6 +20,8 @@ export interface AppConfig {
   /** How long a session lives (E10-S01), in seconds; idle is never above absolute and neither is below 300. */
   readonly session: { readonly idleSeconds: number; readonly absoluteSeconds: number };
   readonly github: GithubConfig;
+  /** The directory the single-page app is served from (E17-S03): absolute, `dist/web` unless `WEB_ROOT` says otherwise. */
+  readonly webRoot: string;
 }
 
 /** Thrown for an invalid environment. Carries variable NAMES only: a value must never reach an error message or log. */
@@ -45,6 +47,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     sessionSecret: env.SESSION_SECRET,
     session: { idleSeconds: env.SESSION_IDLE_SECONDS, absoluteSeconds: env.SESSION_ABSOLUTE_SECONDS },
     github: toGithubConfig(env),
+    webRoot: env.WEB_ROOT,
   };
 }
 

@@ -21,6 +21,7 @@ import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
 import { requireRouteAccess } from './adapters/http/route-access.ts';
 import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
+import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
 import { webhookRoutes } from './adapters/http/webhook-routes.ts';
@@ -156,6 +157,9 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     enqueuer: options.enqueuer ?? notWiredEnqueuer,
     deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
+
+  // Last: the app's files answer every path that no route above does (E17-S03).
+  await registerWeb(app, config);
 
   app.addHook('onClose', async () => {
     await db.destroy();

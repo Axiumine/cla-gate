@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authProblems, sessionFields } from './auth-fields.ts';
 import { databaseUrlField, originField, portField, sessionSecretField, trustProxyField } from './env-fields.ts';
 import { githubFields, githubProblems } from './env-github.ts';
+import { DEFAULT_WEB_ROOT, webRootField } from './web-root.ts';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 const DEFAULT_PORT = 3000;
@@ -19,6 +20,7 @@ export const envSchema = z
     PUBLIC_BASE_URL: originField.optional(),
     TRUST_PROXY: trustProxyField.default(false),
     SESSION_SECRET: sessionSecretField.optional(),
+    WEB_ROOT: webRootField.default(DEFAULT_WEB_ROOT),
     ...githubFields,
     ...sessionFields,
   })

@@ -991,6 +991,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fastify/accept-negotiator@npm:^2.0.0":
+  version: 2.1.2
+  resolution: "@fastify/accept-negotiator@npm:2.1.2"
+  checksum: 10c0/244b1f7553fe5d6ac6d9fa4ac38440babcc39f99847c62a0acfea1d0f1f78d40a15abf8f35e0c5eb6265ee12901f5c400f58ea581a447772ede571847068e51d
+  languageName: node
+  linkType: hard
+
 "@fastify/ajv-compiler@npm:^4.0.5":
   version: 4.0.7
   resolution: "@fastify/ajv-compiler@npm:4.0.7"
@@ -1080,6 +1087,34 @@ __metadata:
     ip-address: "npm:^10.2.0"
     toad-cache: "npm:^3.7.0"
   checksum: 10c0/a0501a7fe27b83048d54d71295d54dcbb6227599bc2506c3fd86f0f9c6d426ef45a2838aa17163353aa2973260088f6fbb24b16f29986427dac4ea9794dde922
+  languageName: node
+  linkType: hard
+
+"@fastify/send@npm:^4.2.0":
+  version: 4.2.0
+  resolution: "@fastify/send@npm:4.2.0"
+  dependencies:
+    "@lukeed/ms": "npm:^2.0.2"
+    escape-html: "npm:~1.0.3"
+    fast-decode-uri-component: "npm:^1.0.1"
+    http-errors: "npm:^2.0.0"
+    mime: "npm:^3"
+  checksum: 10c0/6a7e447594f360981b3f817977cbb57f8fd55e82f4a913e3403f54940c581fc84df7782ab938fa64fbd05646ca290cc7d8b6ba75548345aa7955880a6c35f4ec
+  languageName: node
+  linkType: hard
+
+"@fastify/static@npm:^10.1.8":
+  version: 10.1.8
+  resolution: "@fastify/static@npm:10.1.8"
+  dependencies:
+    "@fastify/accept-negotiator": "npm:^2.0.0"
+    "@fastify/error": "npm:^4.0.0"
+    "@fastify/send": "npm:^4.2.0"
+    content-disposition: "npm:^3.0.0"
+    fastify-plugin: "npm:^6.0.0"
+    fastq: "npm:^1.17.1"
+    glob: "npm:^13.0.0"
+  checksum: 10c0/4d969fcbd922ebade2b05a9f0bb8ea64992cbe2b5308bf6f342d833dbaa3f236d696314111c07867eb2d6cb73cea11c36b268bc1f3baa245e1eecbd3f3d27115
   languageName: node
   linkType: hard
 
@@ -3495,6 +3530,7 @@ __metadata:
     "@fastify/cookie": "npm:^11.1.5"
     "@fastify/helmet": "npm:^13.2.0"
     "@fastify/rate-limit": "npm:^11.2.1"
+    "@fastify/static": "npm:^10.1.8"
     "@memlab/api": "npm:2.0.6"
     "@playwright/test": "npm:1.64.1"
     "@stryker-mutator/api": "npm:10.1.1"
@@ -3527,6 +3563,7 @@ __metadata:
     memlab: "npm:2.0.6"
     msw: "npm:^3.0.3"
     octokit: "npm:^5.0.5"
+    parse5: "npm:^8.1.0"
     pg: "npm:^8.23.1"
     pino: "npm:^10.4.0"
     react: "npm:19.3.1"
@@ -3597,6 +3634,13 @@ __metadata:
   version: 14.0.3
   resolution: "commander@npm:14.0.3"
   checksum: 10c0/755652564bbf56ff2ff083313912b326450d3f8d8c85f4b71416539c9a05c3c67dbd206821ca72635bf6b160e2afdefcb458e86b317827d5cb333b69ce7f1a24
+  languageName: node
+  linkType: hard
+
+"content-disposition@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "content-disposition@npm:3.0.0"
+  checksum: 10c0/6b35c4e1f28eda550852b049b92aeb36d56a002fe534d1f58b86b19ac29e25a8ff2d3ce723942a5573c3667a2f4b3fd9cb6cc58385ad96cd1236278f7d624bab
   languageName: node
   linkType: hard
 
@@ -4053,6 +4097,13 @@ __metadata:
   version: 3.2.0
   resolution: "escalade@npm:3.2.0"
   checksum: 10c0/ced4dd3a78e15897ed3be74e635110bbf3b08877b0a41be50dcb325ee0e0b5f65fc2d50e9845194d7c4633f327e2e1c6cce00a71b617c5673df0374201d67f65
+  languageName: node
+  linkType: hard
+
+"escape-html@npm:~1.0.3":
+  version: 1.0.3
+  resolution: "escape-html@npm:1.0.3"
+  checksum: 10c0/524c739d776b36c3d29fa08a22e03e8824e3b2fd57500e5e44ecf3cc4707c34c60f9ca0781c0e33d191f2991161504c295e98f68c78fe7baa6e57081ec6ac0a3
   languageName: node
   linkType: hard
 
@@ -4802,6 +4853,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"glob@npm:^13.0.0":
+  version: 13.0.6
+  resolution: "glob@npm:13.0.6"
+  dependencies:
+    minimatch: "npm:^10.2.2"
+    minipass: "npm:^7.1.3"
+    path-scurry: "npm:^2.0.2"
+  checksum: 10c0/269c236f11a9b50357fe7a8c6aadac667e01deb5242b19c84975628f05f4438d8ee1354bb62c5d6c10f37fd59911b54d7799730633a2786660d8c69f1d18120a
+  languageName: node
+  linkType: hard
+
 "globals@npm:^17.12.0":
   version: 17.13.0
   resolution: "globals@npm:17.13.0"
@@ -4955,7 +5017,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"http-errors@npm:~2.0.1":
+"http-errors@npm:^2.0.0, http-errors@npm:~2.0.1":
   version: 2.0.1
   resolution: "http-errors@npm:2.0.1"
   dependencies:
@@ -5871,7 +5933,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lru-cache@npm:^11.5.3":
+"lru-cache@npm:^11.0.0, lru-cache@npm:^11.5.3":
   version: 11.5.3
   resolution: "lru-cache@npm:11.5.3"
   checksum: 10c0/2ad9bce6343a3544a1fd15364d8b35609aa52b2593d21fdc4877cabfe003b0f3deca4f9d6e9d13262f06e9e3d159de45c0a2f3edfc3adb46192333b5f146d8ed
@@ -5963,6 +6025,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"mime@npm:^3":
+  version: 3.0.0
+  resolution: "mime@npm:3.0.0"
+  bin:
+    mime: cli.js
+  checksum: 10c0/402e792a8df1b2cc41cb77f0dcc46472b7944b7ec29cb5bbcd398624b6b97096728f1239766d3fdeb20551dd8d94738344c195a6ea10c4f906eb0356323b0531
+  languageName: node
+  linkType: hard
+
 "min-indent@npm:^1.0.0":
   version: 1.0.1
   resolution: "min-indent@npm:1.0.1"
@@ -5993,7 +6064,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minipass@npm:^7.0.4, minipass@npm:^7.1.2":
+"minipass@npm:^7.0.4, minipass@npm:^7.1.2, minipass@npm:^7.1.3":
   version: 7.1.3
   resolution: "minipass@npm:7.1.3"
   checksum: 10c0/539da88daca16533211ea5a9ee98dc62ff5742f531f54640dd34429e621955e91cc280a91a776026264b7f9f6735947629f920944e9c1558369e8bf22eb33fbb
@@ -6512,7 +6583,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"parse5@npm:^8.0.1":
+"parse5@npm:^8.0.1, parse5@npm:^8.1.0":
   version: 8.1.0
   resolution: "parse5@npm:8.1.0"
   dependencies:
@@ -6539,6 +6610,16 @@ __metadata:
   version: 4.0.0
   resolution: "path-key@npm:4.0.0"
   checksum: 10c0/794efeef32863a65ac312f3c0b0a99f921f3e827ff63afa5cb09a377e202c262b671f7b3832a4e64731003fa94af0263713962d317b9887bd1e0c48a342efba3
+  languageName: node
+  linkType: hard
+
+"path-scurry@npm:^2.0.2":
+  version: 2.0.2
+  resolution: "path-scurry@npm:2.0.2"
+  dependencies:
+    lru-cache: "npm:^11.0.0"
+    minipass: "npm:^7.1.2"
+  checksum: 10c0/b35ad37cf6557a87fd057121ce2be7695380c9138d93e87ae928609da259ea0a170fac6f3ef1eb3ece8a068e8b7f2f3adf5bb2374cf4d4a57fe484954fcc9482
   languageName: node
   linkType: hard
 
