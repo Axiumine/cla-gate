@@ -3,6 +3,7 @@
 import type { z } from 'zod';
 import { databaseUrlField } from './env-fields.ts';
 import { envSchema, type ValidEnv } from './env-schema.ts';
+import type { GitHubPrivateKey } from './github-key.ts';
 import type { Secret } from './secret.ts';
 import type { TrustProxy } from './trust-proxy.ts';
 
@@ -17,10 +18,13 @@ export interface AppConfig {
   readonly publicBaseUrl: string;
   readonly trustProxy: TrustProxy;
   readonly sessionSecret: Secret | undefined;
-  /** Placeholders: later slices make these required. */
+  /** The App id and key are required in production; the rest are placeholders for the slices that use them. */
   readonly github: {
     readonly appId: string | undefined;
-    readonly privateKey: Secret | undefined;
+    /** The signing key. With {@link previousPrivateKey}, the key list of the JWT signer (E05-S02): current first. */
+    readonly privateKey: GitHubPrivateKey | undefined;
+    /** The key kept during a rotation; never equal to {@link privateKey}. */
+    readonly previousPrivateKey: GitHubPrivateKey | undefined;
     readonly webhookSecret: Secret | undefined;
     readonly clientId: string | undefined;
     readonly clientSecret: Secret | undefined;
@@ -51,6 +55,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     github: {
       appId: env.GITHUB_APP_ID,
       privateKey: env.GITHUB_APP_PRIVATE_KEY,
+      previousPrivateKey: env.GITHUB_APP_PRIVATE_KEY_PREVIOUS,
       webhookSecret: env.GITHUB_WEBHOOK_SECRET,
       clientId: env.GITHUB_CLIENT_ID,
       clientSecret: env.GITHUB_CLIENT_SECRET,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { testRsaKey } from './config/test-support.ts';
 import { testApp } from './test-support.ts';
 
 test('request logs hold the method, path and status, and never the client address, headers, bodies, cookies or query strings', async () => {
@@ -20,13 +21,15 @@ test('request logs hold the method, path and status, and never the client addres
 });
 
 test('configuration secrets never appear in the logs', async () => {
+  const key = testRsaKey().pkcs8;
   const { app, logs } = await testApp({
     env: {
       SESSION_SECRET: 's3ssion-'.repeat(8),
       GITHUB_WEBHOOK_SECRET: 'whsec-value',
-      GITHUB_APP_PRIVATE_KEY: 'pem-value',
+      GITHUB_APP_PRIVATE_KEY: key,
     },
   });
   await app.inject('/healthz');
-  expect(logs.text()).not.toMatch(/s3ssion|whsec-value|pem-value|user:pw/);
+  expect(logs.text()).not.toMatch(/s3ssion|whsec-value|user:pw|PRIVATE KEY/);
+  expect(logs.text()).not.toContain(key.split('\n')[1] ?? 'missing');
 });

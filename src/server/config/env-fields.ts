@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { type GitHubPrivateKey, parseGitHubPrivateKey } from './github-key.ts';
 import { Secret } from './secret.ts';
 import { parseTrustProxy, type TrustProxy } from './trust-proxy.ts';
 
@@ -59,14 +60,55 @@ export const sessionSecretField = z
   .min(32)
   .transform((value) => new Secret(value));
 
-/** Placeholders for the GitHub App: later slices make them required. */
+/** @returns the key; for text that is not an RSA private key of 2048 bits or more it records an issue and returns `z.NEVER`. */
+function toPrivateKey(value: string, ctx: z.core.$RefinementCtx<string>): GitHubPrivateKey {
+  const key = parseGitHubPrivateKey(value);
+  if (key === undefined) {
+    // The input stays out of the issue: the text is key material.
+    ctx.issues.push({ code: 'custom', message: 'invalid', input: '' });
+    return z.NEVER;
+  }
+  return key;
+}
+/** A GitHub App private key (PEM, real or escaped newlines): see {@link parseGitHubPrivateKey}. */
+const privateKeyField = z.string().transform(toPrivateKey);
+
+/**
+ * The GitHub App settings. The App id and the key are optional here and required in production by
+ * {@link githubProblems}; the previous key is the one kept during rotation (E05-S02). The webhook and client secrets
+ * stay placeholders for the slices that use them.
+ */
 export const githubFields = {
   GITHUB_APP_ID: z
     .string()
     .regex(/^\d{1,20}$/)
     .optional(),
-  GITHUB_APP_PRIVATE_KEY: secretField.optional(),
+  GITHUB_APP_PRIVATE_KEY: privateKeyField.optional(),
+  GITHUB_APP_PRIVATE_KEY_PREVIOUS: privateKeyField.optional(),
   GITHUB_WEBHOOK_SECRET: secretField.optional(),
   GITHUB_CLIENT_ID: z.string().min(1).optional(),
   GITHUB_CLIENT_SECRET: secretField.optional(),
 };
+
+type GithubEnv = z.output<z.ZodObject<typeof githubFields>> & { readonly NODE_ENV: string };
+
+/**
+ * The cross-field rules of the GitHub settings, by variable name: production needs the App id and the signing key
+ * (elsewhere the GitHub adapter is simply not built without them), and the previous key must be a different key from
+ * the current one. Keys are compared by fingerprint, so one key in PKCS#1 and in PKCS#8, or with escaped newlines, is
+ * still the same key.
+ */
+export function githubProblems(env: GithubEnv): readonly string[] {
+  const problems: string[] = [];
+  if (env.NODE_ENV === 'production' && env.GITHUB_APP_ID === undefined) {
+    problems.push('GITHUB_APP_ID');
+  }
+  if (env.NODE_ENV === 'production' && env.GITHUB_APP_PRIVATE_KEY === undefined) {
+    problems.push('GITHUB_APP_PRIVATE_KEY');
+  }
+  const current = env.GITHUB_APP_PRIVATE_KEY?.fingerprint;
+  if (current !== undefined && current === env.GITHUB_APP_PRIVATE_KEY_PREVIOUS?.fingerprint) {
+    problems.push('GITHUB_APP_PRIVATE_KEY_PREVIOUS');
+  }
+  return problems;
+}

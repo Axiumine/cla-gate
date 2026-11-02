@@ -2,12 +2,13 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
 import type { Kysely } from 'kysely';
-import type { Logger } from 'pino';
+import type { DestinationStream, Logger } from 'pino';
 import { createPgDatabase } from './adapters/db/pg.ts';
 import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
+import { logGithubApp } from './config/github-app.ts';
 import { closeOnSignals, DEFAULT_SHUTDOWN_TIMEOUT_MS, type ProcessLike } from './shutdown.ts';
 
 export interface BootOptions {
@@ -17,6 +18,8 @@ export interface BootOptions {
   readonly createDb?: (config: AppConfig, logger: Logger) => Kysely<Database> | Promise<Kysely<Database>>;
   /** Where an invalid configuration is reported. Defaults to stderr. */
   readonly err?: (line: string) => void;
+  /** Where the log lines go. Defaults to stdout; tests pass a capture. */
+  readonly logDestination?: DestinationStream;
   /** Milliseconds a shutdown waits for open requests before it drops their connections. Defaults to 10 s. */
   readonly shutdownTimeoutMs?: number;
 }
@@ -52,7 +55,8 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
     options.signals.exitCode = 1;
     return undefined;
   }
-  const logger = createLogger(config);
+  const logger = createLogger(config, options.logDestination);
+  logGithubApp(logger, config.github);
   const db = await (options.createDb ?? createPgDb)(config, logger);
   const app = await buildApp({ config, db, logger });
   try {
