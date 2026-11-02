@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import process from 'node:process';
 import type { Kysely } from 'kysely';
 import type { DestinationStream, Logger } from 'pino';
 import type { Database } from './adapters/db/schema.ts';
 import type { GitHubApp } from './adapters/github/start.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
+import { loadConfigOrReport } from './boot-config.ts';
 import type { InstallationWiring } from './boot-installations.ts';
+import { reconcileInBackground } from './boot-reconcile.ts';
 import { startGitHubAndDatabase } from './boot-services.ts';
-import { type AppConfig, loadConfig } from './config/env.ts';
+import type { AppConfig } from './config/env.ts';
 import { logGithubApp } from './config/github-app.ts';
 import type { Clock } from './services/ports/clock.ts';
 import { closeOnSignals, DEFAULT_SHUTDOWN_TIMEOUT_MS, type ProcessLike } from './shutdown.ts';
@@ -29,6 +30,8 @@ export interface BootOptions {
   readonly clock?: Clock;
   /** How requests to GitHub are sent (E05-S02). Defaults to the global `fetch`; tests intercept it with MSW. */
   readonly fetch?: typeof fetch;
+  /** Whether the installations are reconciled with GitHub once, in the background, after start-up (E05-S08). Defaults to true. */
+  readonly reconcileOnStart?: boolean;
 }
 
 export interface RunningServer extends InstallationWiring {
@@ -41,10 +44,11 @@ export interface RunningServer extends InstallationWiring {
   close(): Promise<void>;
   /** The GitHub App's signer and identity check; undefined when the App id or key is not configured (E05-S02). */
   readonly github: GitHubApp | undefined;
-}
-
-function writeStderr(line: string): void {
-  process.stderr.write(`${line}\n`);
+  /**
+   * The start-up reconciliation of the installations (E05-S08), settled when it is over and never rejected; undefined
+   * when there is no GitHub App or `reconcileOnStart` is false.
+   */
+  readonly reconciliation: Promise<void> | undefined;
 }
 
 /**
@@ -52,12 +56,8 @@ function writeStderr(line: string): void {
  * that cannot be bound is reported, sets the exit code to 1 and returns undefined; nothing is left running.
  */
 export async function boot(options: BootOptions): Promise<RunningServer | undefined> {
-  let config: AppConfig;
-  try {
-    config = loadConfig(options.env);
-  } catch (error) {
-    (options.err ?? writeStderr)(String(error));
-    options.signals.exitCode = 1;
+  const config = loadConfigOrReport(options);
+  if (config === undefined) {
     return undefined;
   }
   const logger = createLogger(config, options.logDestination);
@@ -78,7 +78,14 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
   try {
     const address = await app.listen({ host: config.host, port: config.port });
     const timeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
-    return { address, close: closeOnSignals(app, logger, options.signals, timeoutMs), github, ...wiring };
+    const reconciliation = options.reconcileOnStart === false ? undefined : reconcileInBackground(wiring.sync, logger);
+    return {
+      address,
+      close: closeOnSignals(app, logger, options.signals, timeoutMs),
+      github,
+      reconciliation,
+      ...wiring,
+    };
   } catch (error) {
     logger.fatal({ err: error }, 'failed to start');
     await app.close();

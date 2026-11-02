@@ -54,3 +54,18 @@ export async function findActiveRepositoryByGithubId(
     .executeTakeFirst();
   return row ?? null;
 }
+
+/**
+ * The GitHub ids of the installation's active repositories, ascending: what the sync (E05-S08) compares with GitHub's
+ * list to find the ones GitHub no longer shows. Another tenant's repositories are never in it.
+ */
+export async function listActiveRepositoryIds(db: Kysely<Database>, installationId: number): Promise<GithubId[]> {
+  const rows = await db
+    .selectFrom('repositories')
+    .select('github_repo_id')
+    .where('installation_id', '=', installationId)
+    .where('removed_at', 'is', null)
+    .orderBy('github_repo_id')
+    .execute();
+  return rows.map((row) => parseGithubId(row.github_repo_id));
+}

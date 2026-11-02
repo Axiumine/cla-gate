@@ -37,6 +37,8 @@ async function start(env: Record<string, string>, extra: Partial<BootOptions> = 
     signals,
     createDb,
     logDestination: logs.destination,
+    // These tests are about the self-check; the reconciliation has its own (boot-reconcile.test.ts).
+    reconcileOnStart: false,
     ...extra,
   });
   onTestFinished(async () => {

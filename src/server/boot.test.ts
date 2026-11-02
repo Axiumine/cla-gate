@@ -183,6 +183,8 @@ async function startLogging(extra: Record<string, string>) {
     signals: new FakeProcess(),
     createDb: () => db,
     logDestination: logs.destination,
+    // These tests are about the log at start-up; the reconciliation has its own (boot-reconcile.test.ts).
+    reconcileOnStart: false,
   });
   onTestFinished(async () => {
     await server?.close();

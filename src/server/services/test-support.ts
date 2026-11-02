@@ -118,6 +118,7 @@ export class FakeGitHub implements GitHubClient {
   readonly #installations = new Map<GithubId, FakeInstallation>();
   readonly #memberships = new Map<string, GitHubOrgMembership>();
   readonly #failures: { method: GitHubMethod; error: Error }[] = [];
+  readonly #hooks: { method: GitHubMethod; run: () => Promise<void> }[] = [];
   #app: GitHubAppInfo = FAKE_APP;
 
   constructor(options: { gate?: InstallationGate } = {}) {
@@ -156,6 +157,14 @@ export class FakeGitHub implements GitHubClient {
   /** The next call of `method` throws `error` (once, after it is recorded). Several calls queue in order. */
   failNext(method: GitHubMethod, error: Error): void {
     this.#failures.push({ method, error });
+  }
+
+  /**
+   * `run` is awaited once, just before the next call of `method` is answered (and after it is recorded): the world can
+   * change while the caller waits for GitHub, as it does on the real network. Several hooks queue in order.
+   */
+  beforeNext(method: GitHubMethod, run: () => Promise<void>): void {
+    this.#hooks.push({ method, run });
   }
 
   getApp(): Promise<GitHubAppInfo> {
@@ -206,15 +215,17 @@ export class FakeGitHub implements GitHubClient {
     return entry;
   }
 
-  /** Records the call, then rejects with a scripted failure or answers with `read()` (which may throw: that rejects too). */
+  /** Records the call, runs a scripted hook, then rejects with a scripted failure or answers with `read()` (which may throw: that rejects too). */
   #serve<T>(method: GitHubMethod, installationId: GithubId | undefined, read: () => T): Promise<T> {
     this.calls.push({ method, installationId });
-    const index = this.#failures.findIndex((scripted) => scripted.method === method);
-    const scripted = index === -1 ? undefined : this.#failures.splice(index, 1)[0];
-    if (scripted !== undefined) {
-      return Promise.reject(scripted.error);
-    }
-    return Promise.resolve().then(read);
+    const hook = takeFirst(this.#hooks, method);
+    const scripted = takeFirst(this.#failures, method);
+    return (hook?.run() ?? Promise.resolve()).then(() => {
+      if (scripted !== undefined) {
+        throw scripted.error;
+      }
+      return read();
+    });
   }
 
   /** {@link FakeGitHub.#serve} for a method that acts with the installation's token: the gate and the token's answers first. */
@@ -235,6 +246,12 @@ export class FakeGitHub implements GitHubClient {
       return read(entry);
     });
   }
+}
+
+/** Removes and returns the first scripted entry for `method`, or undefined. */
+function takeFirst<T extends { readonly method: GitHubMethod }>(queue: T[], method: GitHubMethod): T | undefined {
+  const index = queue.findIndex((entry) => entry.method === method);
+  return index === -1 ? undefined : queue.splice(index, 1)[0];
 }
 
 /** GitHub compares organisation and login names without regard to case. */

@@ -51,6 +51,8 @@ async function start(env: Record<string, string> = {}, extra: Partial<BootOption
     createDb,
     clock: new FakeClock(START),
     logDestination: logs.destination,
+    // These tests are about the gate and the policy; the reconciliation has its own (boot-reconcile.test.ts).
+    reconcileOnStart: false,
     ...extra,
   });
   onTestFinished(async () => {

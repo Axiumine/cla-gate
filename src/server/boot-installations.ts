@@ -9,10 +9,12 @@ import { createAdmissionPolicies } from './services/admission-policies.ts';
 import { createInstallationAdmission, type InstallationAdmission } from './services/installation-admission.ts';
 import { createStoredGate, type LateBoundGate } from './services/installation-gate.ts';
 import { createInstallationStore, type InstallationStore } from './services/installation-store.ts';
+import { createInstallationSync, type InstallationSync } from './services/installation-sync.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 
 // What the start-up wires between the GitHub App and the database once both are open (E05-S07): the stored gate that
-// the installation token provider asks, and the admission policy with the App owner's account in it.
+// the installation token provider asks, the admission policy with the App owner's account in it and, on top of both,
+// the installation sync (E05-S08).
 
 export interface InstallationWiringOptions {
   readonly db: Kysely<Database>;
@@ -30,6 +32,8 @@ export interface InstallationWiring {
   readonly installations: InstallationStore;
   /** Undefined without a GitHub App: the policy needs the owner account the self-check names. */
   readonly admission: InstallationAdmission | undefined;
+  /** Keeps the stored installations in line with GitHub (E05-S08); undefined without a GitHub App. */
+  readonly sync: InstallationSync | undefined;
 }
 
 /**
@@ -44,7 +48,7 @@ export async function wireInstallations(options: InstallationWiringOptions): Pro
   const installations = createInstallationStore(db);
   gate.bind(createStoredGate((githubInstallationId) => installations.findInstallationByGithubId(githubInstallationId)));
   if (app === undefined) {
-    return { installations, admission: undefined };
+    return { installations, admission: undefined, sync: undefined };
   }
   const configured = config.github.allowedAccountIds;
   const policies = createAdmissionPolicies({
@@ -57,5 +61,10 @@ export async function wireInstallations(options: InstallationWiringOptions): Pro
   } else {
     await policies.current();
   }
-  return { installations, admission: createInstallationAdmission({ db, policies, clock, logger }) };
+  const admission = createInstallationAdmission({ db, policies, clock, logger });
+  return {
+    installations,
+    admission,
+    sync: createInstallationSync({ db, github: app.client, admission, clock, logger }),
+  };
 }
