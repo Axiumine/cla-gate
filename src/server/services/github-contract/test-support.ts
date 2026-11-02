@@ -7,8 +7,10 @@ import type {
   GitHubClient,
   GitHubCommit,
   GitHubInstallation,
+  GitHubIssueComment,
   GitHubOrgMembership,
   GitHubPullRequest,
+  GitHubPullRequestRef,
   GitHubRepository,
   GitHubRepositoryPermission,
 } from '../ports/github.ts';
@@ -64,6 +66,15 @@ export interface GitHubWorld {
     fullName: string,
     commits: { readonly baseSha: string; readonly headSha: string },
     mergeBaseSha: string,
+  ) => void;
+  /** A comment of a repository (`owner/name`) of an installation. */
+  readonly addIssueComment: (githubInstallationId: GithubId, fullName: string, comment: GitHubIssueComment) => void;
+  /** What `listPullRequestsForCommit` lists for a commit. */
+  readonly setCommitPullRequests: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    pulls: readonly GitHubPullRequestRef[],
   ) => void;
   /** The instance does not serve this installation: its gate refuses it. */
   readonly refuse: (githubInstallationId: GithubId, reason: NotAdmittedReason) => void;
@@ -133,23 +144,32 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
     setMergeBase: (githubInstallationId, fullName, commits, mergeBaseSha) => {
       fake.setMergeBase(githubInstallationId, fullName, commits, mergeBaseSha);
     },
+    addIssueComment: (githubInstallationId, fullName, comment) => {
+      fake.addIssueComment(githubInstallationId, fullName, comment);
+    },
+    setCommitPullRequests: (githubInstallationId, fullName, headSha, pulls) => {
+      fake.setCommitPullRequests(githubInstallationId, fullName, headSha, pulls);
+    },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);
     },
     reached: () => fake.calls.length,
-    stallGetInstallation: () => {
-      const arrived = Promise.withResolvers<undefined>();
-      const released = Promise.withResolvers<undefined>();
-      fake.beforeNext('getInstallation', () => {
-        arrived.resolve(undefined);
-        return released.promise;
-      });
-      return {
-        arrived: arrived.promise,
-        release: () => {
-          released.resolve(undefined);
-        },
-      };
+    stallGetInstallation: () => stallNext(fake),
+  };
+}
+
+/** The next `getInstallation` of `fake` waits until the test lets it go; `arrived` settles when it is waiting. */
+function stallNext(fake: FakeGitHub): { readonly arrived: Promise<void>; readonly release: () => void } {
+  const arrived = Promise.withResolvers<undefined>();
+  const released = Promise.withResolvers<undefined>();
+  fake.beforeNext('getInstallation', () => {
+    arrived.resolve(undefined);
+    return released.promise;
+  });
+  return {
+    arrived: arrived.promise,
+    release: () => {
+      released.resolve(undefined);
     },
   };
 }

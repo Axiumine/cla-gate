@@ -21,7 +21,7 @@ import { pullRequest } from './services/github-pull-contract/test-support.ts';
 import type { InstallationSync } from './services/installation-sync.ts';
 import { HandlerUnavailableError } from './services/job-handlers.ts';
 import { FakePendingJobs } from './services/job-run-fixture/test-support.ts';
-import { createJobsTable, deliveryRows, fakeEnqueuer } from './services/jobs-fixture/test-support.ts';
+import { createJobsTable, deliveryRows, droppingEnqueuer, fakeEnqueuer } from './services/jobs-fixture/test-support.ts';
 import { FakeClock } from './services/test-support.ts';
 import { createWebhookDeliveries } from './services/webhook-deliveries.ts';
 import { testConfig } from './test-support.ts';
@@ -37,6 +37,7 @@ const CONTEXT = {
   attempt: 0,
   logger: createLogger({ logLevel: 'silent' }),
   pending: new FakePendingJobs(),
+  enqueuer: droppingEnqueuer,
 };
 
 async function wiring(syncFor: InstallationWiring['syncFor'], env: Record<string, string> = {}) {

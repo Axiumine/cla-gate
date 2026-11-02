@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { GitHubClient } from '../../services/ports/github.ts';
+import { fetchIssueComment, fetchPullRequestsForCommit } from './octokit-comment-calls.ts';
 import type { Dispatch } from './octokit-dispatch.ts';
 import {
   fetchMergeBase,
@@ -11,12 +12,18 @@ import {
 } from './octokit-pull-calls.ts';
 
 // The reads of the evaluation job (E07-S10) of the Octokit adapter: a pull request, its commits, the history behind a head and
-// the merge base of two commits. They are the installation-level methods of the port that the evaluation needs, kept in a
-// class of their own that `OctokitGitHubClient` extends, so that no file of the adapter grows past what is easy to read.
+// the merge base of two commits, and (E07-S07) a comment and the pull requests of a commit. They are the installation-level
+// methods of the port that the evaluation needs, kept in a class of their own that `OctokitGitHubClient` extends, so that no
+// file of the adapter grows past what is easy to read.
 
 type PullReads = Pick<
   GitHubClient,
-  'getPullRequest' | 'listPullRequestCommits' | 'listRepositoryCommits' | 'compareCommits'
+  | 'getPullRequest'
+  | 'listPullRequestCommits'
+  | 'listRepositoryCommits'
+  | 'compareCommits'
+  | 'getIssueComment'
+  | 'listPullRequestsForCommit'
 >;
 
 export class OctokitPullReads implements PullReads {
@@ -48,6 +55,18 @@ export class OctokitPullReads implements PullReads {
   compareCommits(githubInstallationId: GithubId, fullName: string, baseSha: string, headSha: string) {
     return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       fetchMergeBase(channel, headers, fullName, { baseSha, headSha }),
+    );
+  }
+
+  getIssueComment(githubInstallationId: GithubId, fullName: string, commentId: GithubId) {
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+      fetchIssueComment(channel, headers, fullName, commentId),
+    );
+  }
+
+  listPullRequestsForCommit(githubInstallationId: GithubId, fullName: string, headSha: string) {
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+      fetchPullRequestsForCommit(channel, headers, fullName, headSha),
     );
   }
 }

@@ -7,6 +7,7 @@ import { DELIVERY_ID, IDS, JOBS } from '../../domain/test-support.ts';
 import { captureLogs } from '../../test-support.ts';
 import { HandlerRegistry, type JobHandler } from '../job-registry.ts';
 import type { JobRunDeps, QueuedJob } from '../job-run.ts';
+import { droppingEnqueuer } from '../jobs-fixture/test-support.ts';
 import type { PendingJobs, PendingWorkTarget } from '../ports/jobs.ts';
 import { FakeClock } from '../test-support.ts';
 
@@ -57,6 +58,7 @@ export function runWorld(
     registry,
     clock,
     pending,
+    enqueuer: droppingEnqueuer,
     logger: createLogger({ logLevel: 'info' }, logs.destination),
     markDeliveryProcessed:
       mark ??

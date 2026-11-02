@@ -4,7 +4,7 @@ import type { Logger } from 'pino';
 import { type JobEnvelope, type JobType, jobEnvelopeSchema, logFieldsOf } from '../domain/job-envelope.ts';
 import type { HandlerRegistry } from './job-registry.ts';
 import type { Clock } from './ports/clock.ts';
-import type { PendingJobs } from './ports/jobs.ts';
+import type { JobEnqueuer, PendingJobs } from './ports/jobs.ts';
 
 // What runs around every handler (E07-S03): the validation of the job's data, the log lines with the job id, type and
 // ids, the delivery that a finished job marks processed, and the verdict the queue settles the job with. It knows
@@ -38,6 +38,8 @@ export interface JobRunDeps {
   readonly logger: Logger;
   /** The queue the job runs on, as the handlers may use it (E07-S06). */
   readonly pending: PendingJobs;
+  /** Where the handlers send the jobs they start (E07-S07). */
+  readonly enqueuer: JobEnqueuer;
 }
 
 /**
@@ -107,6 +109,7 @@ export async function runJob(type: JobType, job: QueuedJob, deps: JobRunDeps): P
       signal: job.signal,
       logger,
       pending: deps.pending,
+      enqueuer: deps.enqueuer,
     });
     job.signal.throwIfAborted();
     const deliveryId = deliveryOf(envelope);

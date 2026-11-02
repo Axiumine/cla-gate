@@ -3,6 +3,19 @@
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
+import {
+  abortable,
+  COMMIT_SHA,
+  commentKey,
+  commitKey,
+  membershipKey,
+  mergeKey,
+  pageOf,
+  permissionKey,
+  pullKey,
+  repositoryKey,
+  takeFirst,
+} from './fake-github/test-support.ts';
 import type { Clock } from './ports/clock.ts';
 import type {
   GitHubAppInfo,
@@ -10,8 +23,10 @@ import type {
   GitHubCommit,
   GitHubCommitPage,
   GitHubInstallation,
+  GitHubIssueComment,
   GitHubOrgMembership,
   GitHubPullRequest,
+  GitHubPullRequestRef,
   GitHubRepository,
   GitHubRepositoryPermission,
 } from './ports/github.ts';
@@ -90,7 +105,9 @@ export type GitHubMethod =
   | 'getPullRequest'
   | 'listPullRequestCommits'
   | 'listRepositoryCommits'
-  | 'compareCommits';
+  | 'compareCommits'
+  | 'getIssueComment'
+  | 'listPullRequestsForCommit';
 
 /** One call the fake served: the method and the installation id it was made for (undefined: not about one). */
 export interface RecordedCall {
@@ -122,10 +139,32 @@ interface FakeState {
   readonly pullCommits: Map<string, readonly GitHubCommit[]>;
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
   readonly mergeBases: Map<string, string>;
+  readonly comments: Map<string, GitHubIssueComment>;
+  readonly commitPulls: Map<string, readonly GitHubPullRequestRef[]>;
   readonly observers: ((call: RecordedCall) => void)[];
   readonly failures: { method: GitHubMethod; error: Error }[];
   readonly hooks: { method: GitHubMethod; run: () => Promise<void> }[];
   app: GitHubAppInfo;
+}
+
+/** A world that holds the App and nothing else. */
+function freshState(): FakeState {
+  return {
+    calls: [],
+    installations: new Map(),
+    memberships: new Map(),
+    permissions: new Map(),
+    pullRequests: new Map(),
+    pullCommits: new Map(),
+    repositoryCommits: new Map(),
+    mergeBases: new Map(),
+    comments: new Map(),
+    commitPulls: new Map(),
+    observers: [],
+    failures: [],
+    hooks: [],
+    app: FAKE_APP,
+  };
 }
 
 /**
@@ -140,20 +179,7 @@ interface FakeState {
 export class FakeGitHub implements GitHubClient {
   readonly #gate: InstallationGate | undefined;
   /** What a view made by {@link FakeGitHub.withSignal} shares with the fake it was made from. */
-  #state: FakeState = {
-    calls: [],
-    installations: new Map(),
-    memberships: new Map(),
-    permissions: new Map(),
-    pullRequests: new Map(),
-    pullCommits: new Map(),
-    repositoryCommits: new Map(),
-    mergeBases: new Map(),
-    observers: [],
-    failures: [],
-    hooks: [],
-    app: FAKE_APP,
-  };
+  #state: FakeState = freshState();
   #signal: AbortSignal | undefined;
 
   constructor(options: { gate?: InstallationGate } = {}) {
@@ -244,6 +270,21 @@ export class FakeGitHub implements GitHubClient {
     mergeBaseSha: string,
   ): void {
     this.#state.mergeBases.set(mergeKey(githubInstallationId, fullName, commits), mergeBaseSha);
+  }
+
+  /** Adds, or replaces, a comment of a repository (`owner/name`) of an installation. */
+  addIssueComment(githubInstallationId: GithubId, fullName: string, comment: GitHubIssueComment): void {
+    this.#state.comments.set(commentKey(githubInstallationId, fullName, comment.id), comment);
+  }
+
+  /** The pull requests `GET .../commits/{sha}/pulls` lists for a commit of a repository. */
+  setCommitPullRequests(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    pulls: readonly GitHubPullRequestRef[],
+  ): void {
+    this.#state.commitPulls.set(commitKey(githubInstallationId, fullName, headSha), pulls);
   }
 
   /** `listener` is told of every call the fake serves, in order, as it is recorded: what a test uses to order GitHub's calls among other events. */
@@ -378,6 +419,30 @@ export class FakeGitHub implements GitHubClient {
     });
   }
 
+  getIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commentId: GithubId,
+  ): Promise<GitHubIssueComment | null> {
+    return this.#serveInstallation(
+      'getIssueComment',
+      githubInstallationId,
+      () => this.#state.comments.get(commentKey(githubInstallationId, fullName, commentId)) ?? null,
+    );
+  }
+
+  listPullRequestsForCommit(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+  ): Promise<GitHubPullRequestRef[]> {
+    return this.#serveInstallation('listPullRequestsForCommit', githubInstallationId, () => [
+      ...(COMMIT_SHA.test(headSha)
+        ? (this.#state.commitPulls.get(commitKey(githubInstallationId, fullName, headSha)) ?? [])
+        : []),
+    ]);
+  }
+
   #known(githubInstallationId: GithubId): FakeInstallation {
     const entry = this.#state.installations.get(githubInstallationId);
     if (entry === undefined) {
@@ -429,67 +494,5 @@ export class FakeGitHub implements GitHubClient {
     });
   }
 }
-
-/** `work`, or a rejection with the reason of `signal` as soon as it aborts, whichever comes first. */
-function abortable<T>(signal: AbortSignal | undefined, work: Promise<T>): Promise<T> {
-  if (signal === undefined) {
-    return work;
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
-      try {
-        signal.throwIfAborted();
-      } catch (reason) {
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the reason of a signal is whatever the aborter passed, and the caller must get exactly that
-        reject(reason);
-      }
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    work.then(resolve, reject).finally(() => {
-      signal.removeEventListener('abort', onAbort);
-    });
-  });
-}
-
-/** Removes and returns the first scripted entry for `method`, or undefined. */
-function takeFirst<T extends { readonly method: GitHubMethod }>(queue: T[], method: GitHubMethod): T | undefined {
-  const index = queue.findIndex((entry) => entry.method === method);
-  return index === -1 ? undefined : queue.splice(index, 1)[0];
-}
-
-/** A commit id GitHub can hold: the adapter sends nothing else in a path or a query, and so the fake knows nothing else. */
-const COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-
-/** Commits per page of a listing: the most GitHub gives. */
-const COMMITS_PER_PAGE = 100;
-
-/** Page `page` (1-based) of `commits`; a listing nobody scripted is a 404, as for a repository GitHub does not have. */
-function pageOf(commits: readonly GitHubCommit[] | undefined, page: number, route: string): GitHubCommitPage {
-  if (commits === undefined) {
-    throw new GitHubNotFoundError(route);
-  }
-  const from = (page - 1) * COMMITS_PER_PAGE;
-  return { commits: commits.slice(from, from + COMMITS_PER_PAGE), last: from + COMMITS_PER_PAGE >= commits.length };
-}
-
-/** GitHub compares repository names without regard to case too. */
-const repositoryKey = (githubInstallationId: GithubId, fullName: string): string =>
-  `${githubInstallationId}/${fullName.toLowerCase()}`;
-
-const pullKey = (githubInstallationId: GithubId, fullName: string, prNumber: number): string =>
-  `${repositoryKey(githubInstallationId, fullName)}#${prNumber}`;
-
-const mergeKey = (
-  githubInstallationId: GithubId,
-  fullName: string,
-  { baseSha, headSha }: { readonly baseSha: string; readonly headSha: string },
-): string => `${repositoryKey(githubInstallationId, fullName)}@${baseSha}...${headSha}`;
-
-/** GitHub compares organisation and login names without regard to case. */
-const membershipKey = (githubInstallationId: GithubId, org: string, login: string): string =>
-  `${githubInstallationId}/${org.toLowerCase()}/${login.toLowerCase()}`;
-
-const permissionKey = (githubInstallationId: GithubId, fullName: string, login: string): string =>
-  `${githubInstallationId}/${fullName.toLowerCase()}/${login.toLowerCase()}`;
 
 const OPEN_GATE: InstallationGate = { assertAdmitted: () => Promise.resolve() };

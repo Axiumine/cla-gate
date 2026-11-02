@@ -175,3 +175,42 @@ export const commitPageSchema = z.array(commitSchema);
 export const comparisonSchema = z
   .object({ merge_base_commit: z.object({ sha: commitShaSchema }) })
   .transform(({ merge_base_commit }) => ({ mergeBaseSha: merge_base_commit.sha }));
+
+/**
+ * The kind of account that wrote a comment. A type the platform has no word for (an enterprise account) reads as `Other`
+ * instead of failing the answer: only `Bot` matters, and a comment of an unknown kind is not a bot's.
+ */
+const commentAuthorTypeSchema = z.union([
+  z.enum(['User', 'Bot', 'Organization', 'Mannequin']),
+  z.unknown().transform(() => 'Other' as const),
+]);
+
+/**
+ * `GET /repos/{owner}/{repo}/issues/comments/{comment_id}` (E07-S07): the text, the author and the number of the issue the comment is
+ * on, which is the last segment of `issue_url`. A missing body reads as empty, which is no command. An answer without a
+ * usable `issue_url` is not read: the number is what ties a comment to a pull request.
+ */
+export const issueCommentSchema = z
+  .object({
+    id: githubIdSchema,
+    body: z.string().default(''),
+    user: z.object({ id: githubIdSchema, type: commentAuthorTypeSchema }).nullable(),
+    issue_url: z.string().regex(/\/issues\/[1-9]\d{0,9}$/),
+  })
+  .transform(({ id, body, user, issue_url }) => ({
+    id,
+    body,
+    author: user,
+    issueNumber: Number(issue_url.slice(issue_url.lastIndexOf('/') + 1)),
+  }));
+
+/** `GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls` (E07-S07): one page, as the pull requests' number, state and head SHA. */
+export const pullRequestRefPageSchema = z.array(
+  z
+    .object({
+      number: z.int().positive(),
+      state: z.enum(['open', 'closed']),
+      head: z.object({ sha: commitShaSchema }),
+    })
+    .transform(({ number, state, head }) => ({ number, state, headSha: head.sha })),
+);

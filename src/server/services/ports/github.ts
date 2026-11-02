@@ -89,6 +89,34 @@ export interface GitHubAccountRef {
   readonly type: GitHubCommitAccountType;
 }
 
+/**
+ * The kinds of account that can write a comment: the types of {@link GitHubCommitAccountType}, and `Other` for any type
+ * GitHub names that the platform has no word for (an enterprise). Only `Bot` is ever treated differently.
+ */
+type GitHubCommentAuthorType = GitHubCommitAccountType | 'Other';
+
+/**
+ * A comment on an issue or a pull request (`GET /repos/{owner}/{repo}/issues/comments/{comment_id}`, E07-S07). A
+ * pull request's conversation is its issue's, so the same comment shape serves both. The text is what somebody typed: it is
+ * only ever compared with the command, never stored or logged.
+ */
+export interface GitHubIssueComment {
+  readonly id: GithubId;
+  /** The number of the issue or pull request the comment is on, read from the comment's `issue_url`. */
+  readonly issueNumber: number;
+  readonly body: string;
+  /** The account that wrote it, or null when GitHub shows none. The numeric id is the identity; there is no login. */
+  readonly author: { readonly id: GithubId; readonly type: GitHubCommentAuthorType } | null;
+}
+
+/** A pull request as a listing names it (E07-S07): enough to tell whether a commit is the head of an open one. */
+export interface GitHubPullRequestRef {
+  readonly number: number;
+  readonly state: 'open' | 'closed';
+  /** Lower-case commit SHA of the head. */
+  readonly headSha: string;
+}
+
 /** A pull request as the evaluation reads it (`GET /repos/{owner}/{repo}/pulls/{pull_number}`). */
 export interface GitHubPullRequest {
   readonly number: number;
@@ -177,6 +205,28 @@ export interface GitHubClient {
    * as GitHub shows it now. Resolves null for a pull request GitHub does not have, and for a name GitHub cannot hold.
    */
   getPullRequest(githubInstallationId: GithubId, fullName: string, prNumber: number): Promise<GitHubPullRequest | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/issues/comments/{comment_id}` with the installation's token (E07-S07). Resolves null for a
+   * comment GitHub does not have (deleted), and for a name GitHub cannot hold.
+   */
+  getIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commentId: GithubId,
+  ): Promise<GitHubIssueComment | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls?per_page=100` with the installation's token (E07-S07): the pull
+   * requests GitHub associates with a commit, open or closed, whatever repository their head is in (a fork's included),
+   * the first 100 of them. Resolves an empty list for a commit or repository GitHub does not have and for a name or SHA
+   * GitHub cannot hold.
+   */
+  listPullRequestsForCommit(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+  ): Promise<GitHubPullRequestRef[]>;
 
   /**
    * One page (1-based, 100 commits) of `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits`: the commits of the pull

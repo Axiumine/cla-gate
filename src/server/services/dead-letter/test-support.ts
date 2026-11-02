@@ -5,6 +5,7 @@ import { type EvaluateWorld, evaluateWorld } from '../evaluate-pr/test-support.t
 import type { JobOutcome } from '../job-registry.ts';
 import type { QueuedJob } from '../job-run.ts';
 import { FakePendingJobs } from '../job-run-fixture/test-support.ts';
+import { droppingEnqueuer } from '../jobs-fixture/test-support.ts';
 import { deadLetterRegistry } from './dead-letter-registry.ts';
 import { runDeadLetter } from './dead-letter-run.ts';
 
@@ -33,7 +34,7 @@ export async function deadWorld(options: { evaluation?: boolean } = {}): Promise
     runDead: (data, overrides = {}) =>
       runDeadLetter(
         { id: 'dead-1', data, retryCount: 0, signal: new AbortController().signal, ...overrides },
-        { registry, logger, pending: new FakePendingJobs() },
+        { registry, logger, pending: new FakePendingJobs(), enqueuer: droppingEnqueuer },
       ),
   };
 }

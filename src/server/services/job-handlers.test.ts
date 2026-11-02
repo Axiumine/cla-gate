@@ -5,14 +5,26 @@ import { parseGithubId } from '../../shared/github-id.ts';
 import { JOB_TYPES } from '../domain/job-envelope.ts';
 import { CLOSE_JOB, closeWorld, seedEvaluation } from './close-pr/test-support.ts';
 import { evaluateWorld, JOB } from './evaluate-pr/test-support.ts';
+import { comment, pullRef } from './github-comment-contract/test-support.ts';
 import type { SyncOutcome } from './installation-sync-model.ts';
 import { type HandlerDeps, HandlerUnavailableError, registerHandlers } from './job-handlers.ts';
 import { HandlerRegisteredError, HandlerRegistry } from './job-registry.ts';
 import { runJob } from './job-run.ts';
 import { completing, DELIVERY_ID, IDS, JOBS, queuedJob, runWorld } from './job-run-fixture/test-support.ts';
+import {
+  COMMENT_ID,
+  COMMENT_JOB,
+  FULL_NAME,
+  HEAD,
+  HEAD_JOB,
+  INSTALLATION,
+  PR_NUMBER,
+  recheckWorld,
+} from './recheck/test-support.ts';
 
 // The handlers `registerHandlers` binds (E07-S03): the five of the deliveries and the two of the scheduler, with the
-// sync of an installation wired to E05-S08 and the others failing their jobs until their stories land.
+// sync of an installation wired to E05-S08, the evaluation, the close and the manual re-evaluation (E07-S04, E07-S06, E07-S07)
+// wired to their code, and the others failing their jobs until their stories land.
 
 const DELIVERY_DRIVEN = ['evaluate-pr', 'evaluate-head-sha', 'close-pr', 'recheck-comment', 'sync-installation'];
 const SYNCED: SyncOutcome = {
@@ -206,9 +218,82 @@ test('a close-pr job whose payload is not an envelope is dead-lettered before th
   expect(evaluatePorts).not.toHaveBeenCalled();
 });
 
+test.each([
+  ['evaluate-head-sha', JOBS.evaluateHeadSha],
+  ['recheck-comment', JOBS.recheckComment],
+] as const)(
+  'without an evaluation reporter a %s job fails and keeps its delivery, like an evaluate-pr job: what it sends could not be evaluated',
+  async (type, data) => {
+    const { deps, marked } = runWorld((registry) => {
+      registerHandlers(registry, { syncInstallation: undefined, evaluatePr: undefined });
+    });
+    await expect(runJob(type, queuedJob(data), deps)).rejects.toThrow(
+      new HandlerUnavailableError(type, 'no GitHub App or no evaluation reporter (E09) is configured'),
+    );
+    expect(marked).toEqual([]);
+  },
+);
+
+test('recheck-comment reads the comment with the ports it is given for the signal of the job, sends the evaluation on the queue the job runs on, and marks its delivery', async () => {
+  const world = await recheckWorld();
+  const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>(() => world.ports);
+  const { deps, marked } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+  });
+  const signal = new AbortController().signal;
+  const job = queuedJob({ ...COMMENT_JOB, deliveryId: DELIVERY_ID }, { signal });
+  const verdict = await runJob('recheck-comment', job, { ...deps, enqueuer: world.enqueuer });
+  expect(verdict).toEqual({ status: 'completed', output: { outcome: 'enqueued' } });
+  expect(evaluatePorts).toHaveBeenCalledExactlyOnceWith(signal);
+  expect((await world.queued()).map((sent) => [sent.idempotencyKey, sent.job.type])).toEqual([
+    [`recheck-comment:${COMMENT_ID}`, 'evaluate-pr'],
+  ]);
+  expect(marked).toEqual([DELIVERY_ID]);
+});
+
+test('a comment that is no command completes its job as skipped and still marks its delivery: there is nothing left to retry', async () => {
+  const world = await recheckWorld();
+  world.fake.addIssueComment(INSTALLATION, FULL_NAME, comment(COMMENT_ID, { body: 'thanks' }));
+  const { deps, marked } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: () => world.ports });
+  });
+  const verdict = await runJob('recheck-comment', queuedJob({ ...COMMENT_JOB, deliveryId: DELIVERY_ID }), {
+    ...deps,
+    enqueuer: world.enqueuer,
+  });
+  expect(verdict).toEqual({ status: 'completed', output: { outcome: 'skipped:not_a_command' } });
+  expect(marked).toEqual([DELIVERY_ID]);
+});
+
+test('evaluate-head-sha sends an evaluation for each open pull request of the head SHA, named after the job, and marks its delivery', async () => {
+  const world = await recheckWorld();
+  world.fake.setCommitPullRequests(INSTALLATION, FULL_NAME, HEAD, [pullRef(PR_NUMBER)]);
+  const { deps, marked } = runWorld((registry) => {
+    registerHandlers(registry, { syncInstallation: undefined, evaluatePr: () => world.ports });
+  });
+  const job = queuedJob({ ...HEAD_JOB, deliveryId: DELIVERY_ID }, { id: 'job-9' });
+  const verdict = await runJob('evaluate-head-sha', job, { ...deps, enqueuer: world.enqueuer });
+  expect(verdict).toEqual({ status: 'completed', output: { outcome: 'enqueued' } });
+  expect((await world.queued()).map((sent) => sent.idempotencyKey)).toEqual([`evaluate-head-sha:job-9:${PR_NUMBER}`]);
+  expect(marked).toEqual([DELIVERY_ID]);
+});
+
+test.each([
+  ['recheck-comment', { type: 'recheck-comment', prNumber: 'seven' }],
+  ['evaluate-head-sha', { type: 'evaluate-head-sha', headSha: 'main' }],
+] as const)(
+  'a %s job whose payload is not an envelope is dead-lettered before the ports are asked for anything',
+  async (type, data) => {
+    const evaluatePorts = vi.fn<NonNullable<HandlerDeps['evaluatePr']>>();
+    const { deps } = runWorld((registry) => {
+      registerHandlers(registry, { syncInstallation: undefined, evaluatePr: evaluatePorts });
+    });
+    expect((await runJob(type, queuedJob(data), deps)).status).toBe('deadletter');
+    expect(evaluatePorts).not.toHaveBeenCalled();
+  },
+);
+
 const NOT_BUILT = [
-  ['evaluate-head-sha', JOBS.evaluateHeadSha, 'E07-S07'],
-  ['recheck-comment', JOBS.recheckComment, 'E07-S07'],
   ['sweep', { type: 'sweep' }, 'E07-S08'],
   ['sweep-installation', { type: 'sweep-installation', githubInstallationId: IDS.installation }, 'E07-S08'],
 ] as const;
