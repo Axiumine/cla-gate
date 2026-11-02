@@ -66,6 +66,5 @@ export function allCommands(): string[] {
 
 /** A repository file parsed as YAML (an untyped tree: the caller validates it with zod). */
 export function yamlOf(file: string): unknown {
-  const parsed: unknown = parse(repoText(file));
-  return parsed;
+  return parse(repoText(file));
 }

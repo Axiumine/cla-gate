@@ -19,6 +19,8 @@ const HEADER = encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
  * Signs the JSON Web Token an App presents to GitHub (E05-S02): RS256 over `header.claims` with `node:crypto`, no JWT
  * library. `iss` is the App id, `iat` and `exp` are integer seconds. This is the one place that calls `reveal()` on a
  * signing key, and the token it returns is a credential: callers keep it out of logs and errors.
+ * @param appId the numeric id of the GitHub App, as the text of the `iss` claim.
+ * @param key the signing key; its PEM is revealed here and nowhere else.
  * @param nowSeconds whole seconds since the epoch, from the injected clock.
  */
 export function signAppJwt(appId: string, key: GitHubPrivateKey, nowSeconds: number): string {

@@ -238,14 +238,15 @@ export const CONTRACT_CASES: readonly ContractCase[] = [
     async ({ client, addInstallation, refuse, reached }) => {
       addInstallation(installation(11, 'acme'), [repository(101, 'acme/api')]);
       refuse(id(11), 'rejected');
+      // Thunks, so that each call is made and awaited in turn: no promise waits unobserved while another one is awaited.
       const refused = [
-        client.listInstallationRepositories(id(11)),
-        client.getRepositoryById(id(11), id(101)),
-        client.getOrgMembership(id(11), 'acme', 'alice'),
-        client.getOrgMembership(id(11), '../orgs/other', '..'),
+        () => client.listInstallationRepositories(id(11)),
+        () => client.getRepositoryById(id(11), id(101)),
+        () => client.getOrgMembership(id(11), 'acme', 'alice'),
+        () => client.getOrgMembership(id(11), '../orgs/other', '..'),
       ];
       for (const call of refused) {
-        await expect(call).rejects.toEqual(new InstallationNotAdmittedError('rejected'));
+        await expect(call()).rejects.toEqual(new InstallationNotAdmittedError('rejected'));
       }
       expect(reached()).toBe(0);
     },

@@ -32,8 +32,7 @@ function parseWorkflow(root: string, file: string): unknown {
   const text = fs.readFileSync(path.join(root, file), 'utf8');
   try {
     // The parser rejects duplicate keys, several documents and alias bombs, which is what we want from untrusted input.
-    const parsed: unknown = parse(text);
-    return parsed;
+    return parse(text);
   } catch (error) {
     throw new WorkflowError(`${printable(file)}: not valid YAML: ${messageOf(error).split('\n', 1).join('')}`);
   }
