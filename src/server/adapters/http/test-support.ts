@@ -59,15 +59,51 @@ export function watchCreateHmac() {
   return spy;
 }
 
-/** The headers of a delivery as GitHub sends them: JSON, signed with `secret` unless `signature` is given. */
+/** The delivery id the tests send unless they say otherwise: a UUID, as GitHub's are. */
+const DELIVERY_ID = '5b8f2c1e-3d4a-4f6b-9a7c-0e1d2f3a4b5c';
+
+/**
+ * The headers of a delivery as GitHub sends them: JSON, signed with `secret` unless `signature` is given, an event and
+ * a delivery id. `headers` adds to or replaces those (a value of `undefined` removes the header).
+ */
 export function deliveryHeaders(
   body: Buffer | string,
-  options: { readonly secret?: string; readonly signature?: string } = {},
+  options: {
+    readonly secret?: string;
+    readonly signature?: string | undefined;
+    readonly headers?: Readonly<Record<string, string | undefined>>;
+  } = {},
 ): Record<string, string> {
-  return {
+  const merged: Record<string, string | undefined> = {
     'content-type': 'application/json',
     'x-hub-signature-256': options.signature ?? sign(options.secret ?? SECRET_CURRENT, body),
+    'x-github-event': 'pull_request',
+    'x-github-delivery': DELIVERY_ID,
+    ...options.headers,
   };
+  return Object.fromEntries(
+    Object.entries(merged).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
+}
+
+/** The header lines of a raw HTTP request that carry the event and the delivery id, for tests that write the request by hand. */
+export const GITHUB_HEADER_LINES = ['X-GitHub-Event: pull_request', `X-GitHub-Delivery: ${DELIVERY_ID}`] as const;
+
+/**
+ * A whole HTTP/1.1 `POST` to the webhook route as text, for {@link sendRaw}: `headerLines` are written as they are (so a
+ * header can be repeated), `body` goes out byte for byte (Latin-1), and `declaredLength` is the `Content-Length` when
+ * it should differ from the body's.
+ */
+export function rawPost(headerLines: readonly string[], body: Buffer, declaredLength = body.length): string {
+  return [
+    `POST ${WEBHOOK_PATH} HTTP/1.1`,
+    'Host: 127.0.0.1',
+    `Content-Length: ${declaredLength}`,
+    ...headerLines,
+    'Connection: close',
+    '',
+    body.toString('latin1'),
+  ].join('\r\n');
 }
 
 /** Posts `body` to the webhook route, signed with the current secret unless `headers` say otherwise. */

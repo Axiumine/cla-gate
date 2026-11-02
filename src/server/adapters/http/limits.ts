@@ -20,3 +20,9 @@ export const HTTP_LIMITS = {
   /** Bytes. A route that needs more (a webhook payload can reach 25 MB) raises it on that route only. */
   bodyLimit: 1_048_576,
 } as const;
+
+/**
+ * Bytes. The body limit of the webhook route alone (E06-S02): 10 MiB, well under the 25 MB GitHub may send, so a
+ * delivery that large is refused with `413` and never buffered. Every other route keeps {@link HTTP_LIMITS.bodyLimit}.
+ */
+export const WEBHOOK_BODY_LIMIT = 10_485_760;

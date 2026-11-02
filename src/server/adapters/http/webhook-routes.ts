@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
+import type { IncomingMessage } from 'node:http';
+import type { FastifyInstance, FastifyReply, FastifyRequest, HookHandlerDoneFunction } from 'fastify';
 import fastifyRawBody from 'fastify-raw-body';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import type { Clock } from '../../services/ports/clock.ts';
-import { AppError } from './errors.ts';
+import { AppError, rejectRequest } from './errors.ts';
+import { WEBHOOK_BODY_LIMIT } from './limits.ts';
+import { readEnvelope } from './webhook-envelope.ts';
 import { matchWebhookSignature, type WebhookSecrets } from './webhook-signature.ts';
 
 export interface WebhookRoutesOptions {
   readonly secrets: WebhookSecrets;
   /** Where the once-a-minute limit of the rotation warning takes its time from. */
   readonly clock: Clock;
+  /** `GITHUB_APP_ID`: the App a delivery that names its target must have been sent for (E06-S02). */
+  readonly appId: string | undefined;
 }
 
 /** The rotation warning is logged at most this often, so a busy instance does not drown the log in it. */
@@ -21,6 +26,32 @@ const WARNING_INTERVAL_MS = 60_000;
 const verifiedSchema = z.object({ status: z.literal('verified') });
 
 const NO_BODY = Buffer.alloc(0);
+
+/** The bytes GitHub sent. A request with no body at all is never read by the framework, so the plugin may not have seen its end. */
+function rawBodyOf(request: FastifyRequest): Buffer {
+  return Buffer.isBuffer(request.rawBody) ? request.rawBody : NO_BODY;
+}
+
+/**
+ * Fastify answers a `Content-Type` that is not a well-formed media type (`application`, `a/b/c`, an empty value) with
+ * its own `415` before any `preValidation` hook, which would let an unsigned request see something other than the
+ * `401` (E06-S02). The scope therefore takes the header off the request in `onRequest` and keeps it here, by request,
+ * for the media type check that follows the signature; a request with no `Content-Type` is read by the catch-all parser.
+ */
+function holdContentType(app: FastifyInstance): WeakMap<IncomingMessage, string | undefined> {
+  const held = new WeakMap<IncomingMessage, string | undefined>();
+  app.addHook('onRequest', (request, _reply, done) => {
+    held.set(request.raw, request.headers['content-type']);
+    delete request.headers['content-type'];
+    done();
+  });
+  return held;
+}
+
+/** Fastify's error for a body past the route's limit, by its stable code. */
+function isBodyTooLarge(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'FST_ERR_CTP_BODY_TOO_LARGE';
+}
 
 /**
  * The `preValidation` hook that checks the signature, with the state of the rotation warning (when it was last logged).
@@ -40,9 +71,7 @@ function signatureHook(options: WebhookRoutesOptions) {
 
   /** The failure every refused signature gets, identical whatever the cause; `undefined` when the delivery is signed. */
   function refusal(request: FastifyRequest): AppError | undefined {
-    // A request with no body at all is never read by the framework, so the plugin may not have seen its end yet.
-    const body = Buffer.isBuffer(request.rawBody) ? request.rawBody : NO_BODY;
-    const match = matchWebhookSignature(body, request.headers['x-hub-signature-256'], options.secrets);
+    const match = matchWebhookSignature(rawBodyOf(request), request.headers['x-hub-signature-256'], options.secrets);
     if (match === 'none') {
       return new AppError(401, 'webhook_signature_invalid');
     }
@@ -66,28 +95,39 @@ function signatureHook(options: WebhookRoutesOptions) {
  * The plugin owns an encapsulated scope, which is how `fastify-raw-body` applies to this route only: the plugin keeps
  * the bytes GitHub sent (`encoding: false`, a Buffer; `global: false`, and only a route with `config.rawBody`), and the
  * scope has no content type parser that reads the body: every media type reaches the route as bytes, whatever its
- * `Content-Type`. The signature is checked in `preValidation`, the first hook after the body is read, so nothing
- * parses a body whose signature is wrong (an unsigned request with broken JSON or a form body is a `401`, never a
- * `400` or `415`).
+ * `Content-Type`. The checks run in a fixed order (E06-S02): the body size (`413`, by the route's own limit, before
+ * any hook), the signature in `preValidation` (`401`, the first hook after the body is read), then in the handler the
+ * headers (`400`), the media type (`415`) and the JSON (`400`). Nothing parses a body whose signature is wrong (an
+ * unsigned request with broken JSON or a form body is a `401`, never a `400` or `415`).
  */
 export const webhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async (app, options) => {
+  const contentTypes = holdContentType(app);
   // The scope's parsers are replaced, not extended: the default JSON and text parsers would read the body before the hook.
   app.removeAllContentTypeParsers();
   app.addContentTypeParser('*', { parseAs: 'buffer' }, (_request, _body, done) => {
     done(null, undefined);
   });
   await app.register(fastifyRawBody, { global: false, encoding: false, runFirst: true, jsonContentTypes: [] });
+  // Fastify's own 413 says `payload_too_large`; this route gives it its own code. Every other error is left to the app's handler.
+  app.setErrorHandler((error, request, reply) =>
+    rejectRequest(isBodyTooLarge(error) ? new AppError(413, 'webhook_payload_too_large') : error, request, reply),
+  );
 
   app.post(
     WEBHOOK_PATH,
     {
       config: { rawBody: true, auditExempt: 'webhook' },
+      bodyLimit: WEBHOOK_BODY_LIMIT,
       preValidation: signatureHook(options),
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
       schema: { response: { 200: verifiedSchema } },
     },
-    // The end of the chain so far: the envelope checks (S02), the event schemas (S03) and the rest come after the
-    // signature, so an authenticated delivery is acknowledged here and nothing more is done with it yet.
-    (): z.infer<typeof verifiedSchema> => ({ status: 'verified' }),
+    // The end of the chain so far: the event schemas (S03) and the rest come after the envelope, so a delivery that
+    // passes it is acknowledged here and nothing more is done with it yet.
+    (request): z.infer<typeof verifiedSchema> => {
+      const headers = { ...request.headers, 'content-type': contentTypes.get(request.raw) };
+      readEnvelope(headers, rawBodyOf(request), options.appId);
+      return { status: 'verified' };
+    },
   );
 };

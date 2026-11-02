@@ -24,14 +24,15 @@ const ENV = { GITHUB_WEBHOOK_SECRET: SECRET_CURRENT, GITHUB_WEBHOOK_SECRET_PREVI
 const PAYLOAD = '{"action":"opened","number":7,"pull_request":{"number":7}}';
 const START = '2026-11-02T10:00:00.000Z';
 
-test('GitHub documented example is accepted: the known secret, body and header', async () => {
+test('GitHub documented example passes the signature check: it is refused later, as not JSON, never as a 401', async () => {
   const { app } = await webhookTestApp({ env: { GITHUB_WEBHOOK_SECRET: GITHUB_EXAMPLE.secret } });
-  const response = await postDelivery(app, GITHUB_EXAMPLE.body, {
-    'content-type': 'application/json',
-    'x-hub-signature-256': GITHUB_EXAMPLE.signature,
-  });
-  expect(response.statusCode).toBe(200);
-  expect(response.json()).toEqual({ status: 'verified' });
+  const response = await postDelivery(
+    app,
+    GITHUB_EXAMPLE.body,
+    deliveryHeaders(GITHUB_EXAMPLE.body, { signature: GITHUB_EXAMPLE.signature }),
+  );
+  expect(response.statusCode).toBe(400);
+  expect(errorResponseSchema.parse(response.json()).error.code).toBe('webhook_payload_invalid');
 });
 
 test('a delivery signed with the current secret is accepted and logs no rotation warning', async () => {
@@ -96,16 +97,19 @@ test('with no secret configured every delivery is refused, whatever it is signed
   }
 });
 
-test('the empty body with the valid signature of the empty string passes the signature check', async () => {
+test('the empty body with the valid signature of the empty string passes the signature and is refused as a payload', async () => {
   const { app } = await webhookTestApp({ env: ENV });
-  const withType = await postDelivery(app, '', deliveryHeaders(''));
-  const withoutType = await app.inject({
+  const withHeaders = await postDelivery(app, '', deliveryHeaders(''));
+  const bare = await app.inject({
     method: 'POST',
     url: WEBHOOK_PATH,
     headers: { 'x-hub-signature-256': sign(SECRET_CURRENT, '') },
   });
-  expect(withType.statusCode).toBe(200);
-  expect(withoutType.statusCode).toBe(200);
+  expect(withHeaders.statusCode).toBe(400);
+  expect(errorResponseSchema.parse(withHeaders.json()).error.code).toBe('webhook_payload_invalid');
+  // No delivery headers at all: refused by the header check, which only a signed request reaches.
+  expect(bare.statusCode).toBe(400);
+  expect(errorResponseSchema.parse(bare.json()).error.code).toBe('webhook_header_invalid');
 });
 
 test('the empty body is refused when the signature is that of any other body', async () => {
@@ -173,20 +177,17 @@ test('no body parser runs on a refused delivery: broken JSON, deep nesting and a
   expect(parse).not.toHaveBeenCalled();
 });
 
-test('a signed form body, text body and body without a content type reach the route as bytes', async () => {
+test('a signed body of any media type reaches the envelope checks as bytes: only JSON passes them', async () => {
   const { app } = await webhookTestApp({ env: ENV });
-  for (const type of [
-    'application/x-www-form-urlencoded',
-    'text/plain',
-    'application/xml',
-    'application/json; charset=latin1',
-  ]) {
-    const headers = { 'content-type': type, 'x-hub-signature-256': sign(SECRET_CURRENT, PAYLOAD) };
-    expect((await postDelivery(app, PAYLOAD, headers)).statusCode).toBe(200);
+  for (const type of ['application/x-www-form-urlencoded', 'text/plain', 'application/xml']) {
+    const headers = deliveryHeaders(PAYLOAD, { headers: { 'content-type': type } });
+    expect((await postDelivery(app, PAYLOAD, headers)).statusCode).toBe(415);
   }
-  const bare = { 'x-hub-signature-256': sign(SECRET_CURRENT, PAYLOAD) };
+  const latin1 = deliveryHeaders(PAYLOAD, { headers: { 'content-type': 'application/json; charset=latin1' } });
+  expect((await postDelivery(app, PAYLOAD, latin1)).statusCode).toBe(200);
+  const bare = deliveryHeaders(PAYLOAD, { headers: { 'content-type': undefined } });
   expect((await app.inject({ method: 'POST', url: WEBHOOK_PATH, headers: bare, payload: PAYLOAD })).statusCode).toBe(
-    200,
+    415,
   );
 });
 
@@ -242,7 +243,11 @@ test('the route sits outside /api, so the audit guard does not apply, and it dec
   app.addHook('onRoute', ({ method, url, config }) => {
     declared.push({ method, url, config });
   });
-  await app.register(webhookRoutes, { secrets: { current: undefined, previous: undefined }, clock: systemClock });
+  await app.register(webhookRoutes, {
+    secrets: { current: undefined, previous: undefined },
+    clock: systemClock,
+    appId: undefined,
+  });
   expect(declared).toHaveLength(1);
   expect(declared[0]).toMatchObject({
     method: 'POST',
