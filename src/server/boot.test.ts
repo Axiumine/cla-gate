@@ -9,7 +9,7 @@ import { mockApp } from './adapters/github/test-support.ts';
 import { type BootOptions, boot, type RunningServer } from './boot.ts';
 import { publicKeyFingerprint } from './config/github-key.ts';
 import { testRsaKey } from './config/test-support.ts';
-import { captureLogs, FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, FakeProcess, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 const BASE_ENV = { DATABASE_URL: UNREACHABLE_DATABASE_URL, HOST: '127.0.0.1', LOG_LEVEL: 'silent' };
 
@@ -25,6 +25,7 @@ async function start(given?: Record<string, string>, shutdownTimeoutMs?: number)
     env,
     signals,
     createDb,
+    createJobQueue: startFakeJobQueue,
     ...(shutdownTimeoutMs === undefined ? {} : { shutdownTimeoutMs }),
   });
   onTestFinished(async () => {
@@ -159,19 +160,9 @@ test('a port that is taken is logged as fatal, with the error that stopped the s
     return db;
   };
   const env = { ...BASE_ENV, PORT: new URL(first.server?.address ?? '').port };
-  expect(await boot({ env, signals: new FakeProcess(), createDb })).toBeUndefined();
+  expect(await boot({ env, signals: new FakeProcess(), createDb, createJobQueue: startFakeJobQueue })).toBeUndefined();
   expect(fatalCalls).toHaveLength(1);
   expect(fatalCalls[0]).toMatchObject([{ err: { code: 'EADDRINUSE' } }, 'failed to start']);
-});
-
-test('by default it connects with node-postgres, so an unreachable database means live but not ready', async () => {
-  const signals = new FakeProcess();
-  const server = await boot({ env: await freshEnv(), signals });
-  onTestFinished(async () => {
-    await server?.close();
-  });
-  expect(await status(server, '/healthz')).toBe(200);
-  expect(await status(server, '/readyz')).toBe(503);
 });
 
 /** Boots on PGlite with `LOG_LEVEL=info`, collecting the log lines. */
@@ -182,6 +173,7 @@ async function startLogging(extra: Record<string, string>) {
     env: { ...(await freshEnv()), LOG_LEVEL: 'info', ...extra },
     signals: new FakeProcess(),
     createDb: () => db,
+    createJobQueue: startFakeJobQueue,
     logDestination: logs.destination,
     // These tests are about the log at start-up; the reconciliation has its own (boot-reconcile.test.ts).
     reconcileOnStart: false,

@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import type { Logger } from 'pino';
+import { MissingQueuesError } from './adapters/jobs/queue-check.ts';
+import { startJobQueue } from './adapters/jobs/runtime.ts';
+import type { AppConfig } from './config/env.ts';
+import type { JobQueue } from './services/ports/jobs.ts';
+
+// Starting the job queue at boot (E07-S01), after the database is open.
+
+/** Starts the job queue of `config`. Defaults to pg-boss on `DATABASE_URL`; tests pass a fake, because pg-boss needs a real PostgreSQL. */
+export type CreateJobQueue = (config: AppConfig, logger: Logger) => Promise<JobQueue>;
+
+const startPgBoss: CreateJobQueue = (config, logger) =>
+  startJobQueue({ connectionString: config.databaseUrl.reveal(), logger });
+
+/**
+ * Starts the queue. A queue that cannot start is fatal: a server without one would acknowledge no webhook (`503`) and run
+ * no job. The reason is logged and the answer is undefined; the log names the missing queues, never a connection string.
+ */
+export async function startQueueOrReport(
+  config: AppConfig,
+  logger: Logger,
+  create: CreateJobQueue = startPgBoss,
+): Promise<JobQueue | undefined> {
+  try {
+    return await create(config, logger);
+  } catch (error) {
+    if (error instanceof MissingQueuesError) {
+      logger.fatal({ queues: error.queues }, `${error.message}: run yarn db:migrate`);
+    } else {
+      logger.fatal({ err: error }, 'jobs.queue_start_failed');
+    }
+    return undefined;
+  }
+}

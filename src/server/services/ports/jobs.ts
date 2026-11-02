@@ -10,19 +10,19 @@ import type { Job } from '../../domain/jobs.ts';
 /**
  * What `enqueue` did. `queued`: the job is on the queue. `already_queued`: nothing was sent because a job sent under the
  * same idempotency key is still alive, so that job will finish what this send was for. `deduplicated`: nothing was sent
- * because a `dedupeKey` was used less than its window ago, so no job will ever run for this send. An implementation
+ * because a `dedupeKey` was used in the same window, so no job will ever run for this send. An implementation
  * answers `already_queued` before `deduplicated` when both apply. The two must not be confused: the first leaves a
  * delivery to its live job, the second leaves it to nobody.
- * @internal Exported for the adapters that implement the port (E07-S01) and the tests (Knip ignores `@internal` exports in production mode).
  */
 export type EnqueueOutcome = 'queued' | 'already_queued' | 'deduplicated';
 
 /**
  * How a send is made idempotent and, optionally, throttled. `idempotencyKey` names the send: while a job sent under
  * the same key is alive, another send under it creates nothing. `dedupeKey` and `dedupeWindowSeconds` go together: a
- * send under a `dedupeKey` that was used less than `dedupeWindowSeconds` ago is dropped, which is how a burst of events
- * about one pull request becomes one job. Neither of the two is optional on its own.
- * @internal Exported for the adapters that implement the port (E07-S01) and the tests (Knip ignores `@internal` exports in production mode).
+ * send under a `dedupeKey` that was already used in the same window is dropped, which is how a burst of events about one
+ * pull request becomes one job. A window is pg-boss's throttle slot of `dedupeWindowSeconds` seconds, starting at a
+ * multiple of that length counted from the epoch (E07-S01): two sends a second apart on either side of a slot boundary
+ * are both accepted, which the burst case does not mind. Neither of the two is optional on its own.
  */
 export type EnqueueOptions = { readonly idempotencyKey: string } & (
   | { readonly dedupeKey?: undefined; readonly dedupeWindowSeconds?: undefined }
@@ -36,4 +36,16 @@ export interface JobEnqueuer {
    * `'deduplicated'` when nothing was sent because of `options`; rejects when the send failed, and the caller rolls back.
    */
   enqueue(tx: Transaction<Database>, job: Job, options: EnqueueOptions): Promise<EnqueueOutcome>;
+}
+
+/**
+ * The running queue (E07-S01), as the composition root and the HTTP app see it: where the intake sends its jobs, whether
+ * the queue works, and how it stops with the app.
+ */
+export interface JobQueue {
+  readonly enqueuer: JobEnqueuer;
+  /** False once the queue reported an error that a read of its queues has not cleared, and after `stop`. */
+  isReady(): Promise<boolean>;
+  /** Stops the workers, waiting for the jobs that run, and closes the queue's connections. Safe to call twice. */
+  stop(): Promise<void>;
 }

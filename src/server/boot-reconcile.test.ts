@@ -14,7 +14,7 @@ import { testGitHubKey } from './config/test-support.ts';
 import { id, installation, repositories } from './services/github-contract/test-support.ts';
 import type { InstallationSync } from './services/installation-sync.ts';
 import { FakeGate } from './services/test-support.ts';
-import { captureLogs, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // The reconciliation of the installations that runs once in the background after start-up (E05-S08).
 
@@ -44,6 +44,7 @@ async function start(env: Record<string, string> = {}, extra: Partial<BootOption
     },
     signals: new FakeProcess(),
     createDb: () => db,
+    createJobQueue: startFakeJobQueue,
     logDestination: logs.destination,
     ...extra,
   });

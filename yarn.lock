@@ -1716,6 +1716,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@opentelemetry/api@npm:1.9.1":
+  version: 1.9.1
+  resolution: "@opentelemetry/api@npm:1.9.1"
+  checksum: 10c0/c608485fc8b5a91e1f7e05e843b45b509307456b31cd2ad365933d90813e40ebfedf179f1451c762037e82d7c76aa8500e95d2da3609f640a1206cde5322cd14
+  languageName: node
+  linkType: hard
+
 "@oxc-parser/binding-android-arm-eabi@npm:0.155.0":
   version: 0.155.0
   resolution: "@oxc-parser/binding-android-arm-eabi@npm:0.155.0"
@@ -3140,6 +3147,7 @@ __metadata:
     "@fastify/helmet": "npm:^13.2.0"
     "@fastify/rate-limit": "npm:^11.2.1"
     "@memlab/api": "npm:2.0.6"
+    "@opentelemetry/api": "npm:1.9.1"
     "@playwright/test": "npm:1.64.1"
     "@stryker-mutator/api": "npm:10.1.1"
     "@stryker-mutator/core": "npm:10.1.1"
@@ -3163,6 +3171,7 @@ __metadata:
     msw: "npm:^3.0.3"
     octokit: "npm:^5.0.5"
     pg: "npm:^8.23.1"
+    pg-boss: "npm:12.38.0"
     pino: "npm:^10.4.0"
     type-coverage: "npm:^2.31.1"
     typescript: "npm:~6.0.3"
@@ -3268,6 +3277,15 @@ __metadata:
     typescript:
       optional: true
   checksum: 10c0/132d32863c0b3d9ace7010a10011e09089532b36e3b11e02004d671dcbd8b8f2f16293b82d510d9c15890f30358baf8722127c7b1c011449c90b6a178f9c6594
+  languageName: node
+  linkType: hard
+
+"cron-parser@npm:^5.10.2":
+  version: 5.10.3
+  resolution: "cron-parser@npm:5.10.3"
+  dependencies:
+    luxon: "npm:^3.7.2"
+  checksum: 10c0/b993e803b3662e89e2af50a81d922e01e6bbf24f861576160d0cf22caf8dcd20231cc2e67d1d941ba47c78c39b8afe6df7b9c795c24de3be3ecab54adc706f3f
   languageName: node
   linkType: hard
 
@@ -5362,6 +5380,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"luxon@npm:^3.7.2":
+  version: 3.7.2
+  resolution: "luxon@npm:3.7.2"
+  checksum: 10c0/ed8f0f637826c08c343a29dd478b00628be93bba6f068417b1d8896b61cb61c6deacbe1df1e057dbd9298334044afa150f9aaabbeb3181418ac8520acfdc2ae2
+  languageName: node
+  linkType: hard
+
 "magic-string@npm:^1.4.3":
   version: 1.4.5
   resolution: "magic-string@npm:1.4.5"
@@ -5596,6 +5621,13 @@ __metadata:
   version: 2.0.63
   resolution: "node-releases@npm:2.0.63"
   checksum: 10c0/857ce981b26449a6f369d72f3c9c6d82aa7255a7b16a50ff7bd8ab1baea3754e24a8f9fbbdf9ccf05e97d9525d8ebfb7430b5fd822bc530656b84d70a6660e21
+  languageName: node
+  linkType: hard
+
+"non-error@npm:^0.1.0":
+  version: 0.1.0
+  resolution: "non-error@npm:0.1.0"
+  checksum: 10c0/acaba9060f2682037b85241d914bbbf17210024e5bcce9f80ce104fec8f2946a19222b0503e3c1a5ed6d172354cf772f474211680c9d8559e4868cdd8e9d878d
   languageName: node
   linkType: hard
 
@@ -5982,6 +6014,22 @@ __metadata:
   version: 1.2.0
   resolution: "pend@npm:1.2.0"
   checksum: 10c0/8a87e63f7a4afcfb0f9f77b39bb92374afc723418b9cb716ee4257689224171002e07768eeade4ecd0e86f1fa3d8f022994219fb45634f2dbd78c6803e452458
+  languageName: node
+  linkType: hard
+
+"pg-boss@npm:12.38.0":
+  version: 12.38.0
+  resolution: "pg-boss@npm:12.38.0"
+  dependencies:
+    cron-parser: "npm:^5.10.2"
+    pg: "npm:^8.23.1"
+    rrule-temporal: "npm:^2.2.8"
+    serialize-error: "npm:^13.0.2"
+  peerDependencies:
+    "@opentelemetry/api": ^1.9.0
+  bin:
+    pg-boss: dist/cli.js
+  checksum: 10c0/615ddab505fb8e72b949ee36c30da73277609a4eb4f1f45d5f2ebb770b3a5d83852684a87ee405643035ba540c17c91eb119d5593b203afc758734ed46095e2e
   languageName: node
   linkType: hard
 
@@ -6509,6 +6557,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"rrule-temporal@npm:^2.2.8":
+  version: 2.2.8
+  resolution: "rrule-temporal@npm:2.2.8"
+  dependencies:
+    temporal-spec: "npm:^1.0.0"
+  checksum: 10c0/d290ce519d202a50e005ecd3cb1f5a9e36a493d1827cf1db66ec0a832b33a51c81bed027d523abbffd6e384e1ffae77ff639af07899544a31990e3cc295cfdd0
+  languageName: node
+  linkType: hard
+
 "rxjs@npm:~7.8.1":
   version: 7.8.2
   resolution: "rxjs@npm:7.8.2"
@@ -6610,6 +6667,16 @@ __metadata:
   bin:
     semver: bin/semver.js
   checksum: 10c0/b1f3127a5be8125a94f37188b361c212466c292c6910adce3ec106cff5dc211ccaedc4739c11bb70fda59d6fc1f040a9bca289f4e093451521a2372e5231fe0c
+  languageName: node
+  linkType: hard
+
+"serialize-error@npm:^13.0.2":
+  version: 13.0.2
+  resolution: "serialize-error@npm:13.0.2"
+  dependencies:
+    non-error: "npm:^0.1.0"
+    type-fest: "npm:^5.4.1"
+  checksum: 10c0/38f6f212a2b8bd60629b5567c6729bc5a344d3c2af3385eb9613b7d36c31f8ad50d5fae653d9049cd86143c541edcfb4c95cf44ee04124c9b8bb84daf7b99cd5
   languageName: node
   linkType: hard
 
@@ -7022,6 +7089,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"temporal-spec@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "temporal-spec@npm:1.0.1"
+  checksum: 10c0/99f6bfe4a8e59cd0664d0e97706798a1e10d42b1b682da9b60778a4cb9a23362da01ea3d83a674ef426ed743bbab835e2e3d1acea5d2d4a9eabe33863237b014
+  languageName: node
+  linkType: hard
+
 "text-decoder@npm:^1.1.0":
   version: 1.2.7
   resolution: "text-decoder@npm:1.2.7"
@@ -7205,7 +7279,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"type-fest@npm:^5.5.0":
+"type-fest@npm:^5.4.1, type-fest@npm:^5.5.0":
   version: 5.10.0
   resolution: "type-fest@npm:5.10.0"
   dependencies:

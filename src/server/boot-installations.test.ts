@@ -14,7 +14,7 @@ import { githubInstallation, OWNER } from './services/admission-fixture/test-sup
 import { id } from './services/github-contract/test-support.ts';
 import { InstallationNotAdmittedError } from './services/ports/github-errors.ts';
 import { FakeClock } from './services/test-support.ts';
-import { captureLogs, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // What start-up wires between the GitHub App and the database (E05-S07): the stored gate behind the installation tokens,
 // the admission policy with the App owner in it, and the log line that names the effective account ids.
@@ -49,6 +49,7 @@ async function start(env: Record<string, string> = {}, extra: Partial<BootOption
     },
     signals,
     createDb,
+    createJobQueue: startFakeJobQueue,
     clock: new FakeClock(START),
     logDestination: logs.destination,
     // These tests are about the gate and the policy; the reconciliation has its own (boot-reconcile.test.ts).

@@ -4,14 +4,21 @@ import process from 'node:process';
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
-// main.ts runs on import: these tests are its boot test. It is imported fresh each time, from the environment.
+// main.ts runs on import: these tests are its boot test. It is imported fresh each time, from the environment. Its job
+// queue is pg-boss on DATABASE_URL, which needs a real PostgreSQL: the module that starts it is replaced by a fake queue
+// (the default is tested in boot-queue.test.ts).
 
 async function importMain(env: Record<string, string>) {
   for (const [name, value] of Object.entries(env)) {
     vi.stubEnv(name, value);
   }
   vi.resetModules();
+  vi.doMock('./adapters/jobs/runtime.ts', async () => {
+    const { fakeJobQueue } = await import('./test-support.ts');
+    return { startJobQueue: () => Promise.resolve(fakeJobQueue()) };
+  });
   onTestFinished(() => {
+    vi.doUnmock('./adapters/jobs/runtime.ts');
     vi.unstubAllEnvs();
     process.exitCode = undefined;
   });
