@@ -37,7 +37,7 @@
     "trivy:dev": "trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --include-dev-deps .",
     "trivy:secrets": "trivy fs --scanners secret --exit-code 1 .",
     "e2e": "playwright test",
-    "e2e:update": "docker run --rm --init --ipc=host --network host --user \"$(id -u):$(id -g)\" --volume \"$PWD:/work\" --workdir /work --env E2E_CONTAINER=1 --env HOME=/tmp --env SKIP_YARN_COREPACK_CHECK=1 --env CI --env DATABASE_URL mcr.microsoft.com/playwright:v1.64.1-noble yarn e2e --update-snapshots",
+    "e2e:update": "docker run --rm --init --ipc=host --network host --user \"$(id -u):$(id -g)\" --volume \"$PWD:/work\" --workdir /work --env E2E_CONTAINER=1 --env HOME=/tmp --env SKIP_YARN_COREPACK_CHECK=1 --env CI --env DATABASE_URL mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f yarn e2e --update-snapshots",
     "leaks": "node tests/leaks/run.ts",
     "leaks:control": "node tests/leaks/control/run.ts",
     "ci:port": "node scripts/ci/free-port.ts",

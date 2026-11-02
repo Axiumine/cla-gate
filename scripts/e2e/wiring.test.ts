@@ -33,7 +33,9 @@ test('yarn e2e:update runs the pinned image with the repository mounted, as the 
   expect(script).toContain('--volume "$PWD:/work" --workdir /work');
   expect(script).toContain('--user "$(id -u):$(id -g)"');
   expect(script).toContain('--network host');
-  expect(script).toMatch(/ mcr\.microsoft\.com\/playwright:v\d+\.\d+\.\d+-noble yarn e2e --update-snapshots$/);
+  expect(script).toMatch(
+    / mcr\.microsoft\.com\/playwright:v\d+\.\d+\.\d+-noble@sha256:[0-9a-f]{64} yarn e2e --update-snapshots$/,
+  );
 });
 
 test('yarn e2e:update gives the container the database of the caller and nothing else of the caller environment', () => {

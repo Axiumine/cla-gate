@@ -6,7 +6,7 @@ import process from 'node:process';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { exists, expression, findOnPath, readText, writeExecutable } from '../ci/lib/test-support.ts';
-import { tempDir } from '../code-caps/test-support.ts';
+import { git, makeRepo, tempDir } from '../code-caps/test-support.ts';
 import { compareNames } from '../code-caps/types.ts';
 import { ciJob, ciTextOnSharedRunners, repoText } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from '../trivy-gate/test-support.ts';
@@ -118,8 +118,11 @@ test('the e2e job needs no tool beyond the common three and a Docker daemon', ()
   expect(preflight).toContain('-lt 4096');
 });
 
-/** Runs the stability step in a scratch workspace; the n-th stubbed `yarn` call writes `outputs[n]` as the one baseline file. */
-function stabilityRun(outputs: readonly string[]) {
+/**
+ * Runs the stability step in a scratch git workspace whose committed baseline holds `committed` (`undefined`: no
+ * baseline is committed); the n-th stubbed `yarn` call writes `outputs[n]` as the one baseline file.
+ */
+function stabilityRun(outputs: readonly string[], committed?: string) {
   const workspace = tempDir();
   const bin = tempDir();
   const calls = path.join(bin, 'calls');
@@ -135,6 +138,12 @@ function stabilityRun(outputs: readonly string[]) {
     'exit 0',
   ].join('\n');
   writeExecutable(path.join(bin, 'yarn'), script);
+  git(workspace, 'init', '-q');
+  if (committed !== undefined) {
+    makeRepo(workspace, { 'e2e/__screenshots__/canary.png': committed });
+    git(workspace, 'add', '.');
+    git(workspace, '-c', 'user.name=t', '-c', 'user.email=t@example.org', 'commit', '-q', '-m', 'baseline');
+  }
   const result = spawnSync(findOnPath('bash'), ['--noprofile', '--norc', '-e', '-c', step(BYTE_STABLE).run ?? ''], {
     cwd: workspace,
     env: { PATH: `${bin}${path.delimiter}${process.env['PATH'] ?? ''}` },
@@ -145,9 +154,9 @@ function stabilityRun(outputs: readonly string[]) {
 }
 
 test('two updates that write the same bytes pass, and both go through the container helper with --update-snapshots=all', () => {
-  const { code, out, calls } = stabilityRun(['png-bytes', 'png-bytes']);
+  const { code, out, calls } = stabilityRun(['png-bytes', 'png-bytes'], 'png-bytes');
   expect(code).toBe(0);
-  expect(out).toContain('byte-stable: 1 baseline file(s) identical after the second update');
+  expect(out).toContain('byte-stable: 1 baseline file(s) identical after the second update and equal to the committed');
   expect(calls).toEqual([
     'yarn ci:e2e run yarn e2e --update-snapshots=all',
     'yarn ci:e2e run yarn e2e --update-snapshots=all',
@@ -155,9 +164,23 @@ test('two updates that write the same bytes pass, and both go through the contai
 });
 
 test('two updates that write different bytes fail with an annotation', () => {
-  const { code, out } = stabilityRun(['first-bytes', 'second-bytes']);
+  const { code, out } = stabilityRun(['first-bytes', 'second-bytes'], 'first-bytes');
   expect(code).toBe(1);
   expect(out).toContain('::error title=Visual baselines::two update runs in a row wrote different files');
+});
+
+test('two updates that agree with each other but not with the committed baseline fail: the baseline was not written by this image', () => {
+  const { code, out } = stabilityRun(['new-render', 'new-render'], 'old-render');
+  expect(code).toBe(1);
+  expect(out).toContain('M e2e/__screenshots__/canary.png');
+  expect(out).toContain('::error title=Visual baselines::the update runs left files under e2e/__screenshots__');
+});
+
+test('two updates that write a baseline nobody committed fail instead of passing as stable', () => {
+  const { code, out } = stabilityRun(['png-bytes', 'png-bytes']);
+  expect(code).toBe(1);
+  expect(out).toContain('?? e2e/__screenshots__/canary.png');
+  expect(out).toContain('::error title=Visual baselines::the update runs left files under e2e/__screenshots__');
 });
 
 test('a run that finds no baseline file fails instead of calling nothing stable', () => {

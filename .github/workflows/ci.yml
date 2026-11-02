@@ -644,7 +644,8 @@ jobs:
   # gets random throw-away secrets from playwright.config.ts: no repository secret exists and none is used. The application
   # connects as the container's superuser, like the `postgres` job's tests do. The report and the traces are uploaded when a
   # step fails. The second Playwright step regenerates the baselines twice and fails when the two results differ, which is
-  # the proof that a baseline is byte-stable; it never compares with, or changes, what is committed.
+  # the proof that a baseline is byte-stable, and then fails when git status of the baseline directory is not clean, which
+  # is the proof that the files are the committed ones, written by this image (nothing is committed from the job).
   e2e:
     name: e2e
     needs: static
@@ -729,6 +730,8 @@ jobs:
           MIGRATION_DATABASE_URL: ${{ env.DATABASE_URL }}
       - name: Playwright tests in the pinned container
         run: yarn ci:e2e run yarn e2e
+      # Two updates in a row must agree with each other, and the files they leave must be the committed ones: git status of
+      # the baseline directory stays clean, so a baseline that was not written by this image cannot pass.
       - name: Visual baselines are byte-stable (two updates in a row give the same files)
         run: |
           set -eu
@@ -745,7 +748,12 @@ jobs:
             echo "::error title=Visual baselines::two update runs in a row wrote different files: the baselines are not byte-stable"
             exit 1
           fi
-          echo "byte-stable: $(printf '%s\n' "$after" | wc -l) baseline file(s) identical after the second update"
+          if [ -n "$(git status --porcelain --untracked-files=all -- "$shots")" ]; then
+            git status --short --untracked-files=all -- "$shots"
+            echo "::error title=Visual baselines::the update runs left files under $shots that differ from the committed ones: commit the baselines written by yarn e2e:update in the pinned image"
+            exit 1
+          fi
+          echo "byte-stable: $(printf '%s\n' "$after" | wc -l) baseline file(s) identical after the second update and equal to the committed files"
       - name: Upload the Playwright report and traces
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
