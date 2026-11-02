@@ -41,6 +41,12 @@ interface InstallationsTable {
   account_login: string;
   account_type: 'Organization' | 'User';
   suspended_at: Date | null;
+  /** The default is `rejected`: a row without a decision is never evaluated (migration 003, E05-S06). */
+  admission_status: Generated<'admitted' | 'rejected'>;
+  admission_reason: 'account_not_allowed' | 'policy_changed' | null;
+  admission_decided_at: Date | null;
+  deleted_at: Date | null;
+  last_synced_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -52,6 +58,8 @@ interface RepositoriesTable {
   full_name: string;
   enabled: Generated<boolean>;
   cla_document_id: number | null;
+  /** Set when GitHub no longer lists the repository for the installation; the row itself stays (E05-S06). */
+  removed_at: Date | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -159,7 +167,7 @@ interface AuditLogTable {
   metadata: JsonObject<true>;
 }
 
-/** Every table created by migrations/001_initial.sql except schema_migrations, which only the runner touches. */
+/** Every table created by the migrations except schema_migrations, which only the runner touches. */
 export interface Database {
   users: UsersTable;
   sessions: SessionsTable;

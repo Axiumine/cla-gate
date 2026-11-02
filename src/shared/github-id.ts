@@ -10,10 +10,7 @@ export const githubIdSchema = z.int().positive().brand<'GithubId'>();
 
 export type GithubId = z.infer<typeof githubIdSchema>;
 
-/**
- * Brands `value` as a GitHub id. @throws ZodError when it is not a positive safe integer.
- * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
- */
+/** Brands `value` as a GitHub id. @throws ZodError when it is not a positive safe integer. */
 export function parseGithubId(value: unknown): GithubId {
   return githubIdSchema.parse(value);
 }

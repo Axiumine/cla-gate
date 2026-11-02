@@ -25,6 +25,7 @@ export interface AuditEntry {
  * The entry broke the audit contract: an action outside the closed set, a missing tenant or actor, a metadata key or
  * value outside the allowlist. A programming error, so it surfaces as a 500 and rolls the caller's transaction back. The
  * message names fields and rules and never repeats a value, because values can be what must not be logged.
+ * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode); production code lets it propagate.
  */
 export class AuditEntryInvalid extends Error {
   override readonly name = 'AuditEntryInvalid';

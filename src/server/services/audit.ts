@@ -4,7 +4,9 @@ import type { Transaction } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import { type AuditEntry, toAuditRow } from './audit-entry.ts';
 
-export { type AuditEntry, AuditEntryInvalid } from './audit-entry.ts';
+export type { AuditEntry } from './audit-entry.ts';
+/** @internal Re-exported for the unit tests (Knip ignores `@internal` exports in production mode). */
+export { AuditEntryInvalid } from './audit-entry.ts';
 
 /**
  * Appends one audit row inside the caller's transaction (E04-S09). It takes a `Transaction` and not the database handle,
