@@ -34,6 +34,30 @@ export const inlineTextSelectors: { selector: string; message: string }[] = [
   },
 ];
 
+const storageNames = ['localStorage', 'sessionStorage'];
+const storageMessage =
+  'The app keeps no token and no session data in the browser (E17-S04): Web Storage is for src/web/theme/storage.ts, which stores the theme name only.';
+
+/**
+ * E17-S04: no token storage. The two Web Storage globals are barred in src/web, and so are the same objects reached through
+ * the global object (`window.localStorage`, `globalThis['sessionStorage']`), which the globals rule alone would let by. The
+ * theme module is the one place that may use them. Tests and their support code are exempt: they read the storage to prove
+ * it stays empty (E17-S08) and to seed the theme module's cases (E17-S05).
+ */
+const noWebStorage: Linter.Config = {
+  files: ['src/web/**/*.{ts,tsx}'],
+  ignores: ['**/*.test.{ts,tsx}', 'src/web/test-support/**', 'src/web/theme/storage.ts'],
+  rules: {
+    'no-restricted-globals': ['error', ...storageNames.map((name) => ({ name, message: storageMessage }))],
+    'no-restricted-properties': [
+      'error',
+      ...['window', 'globalThis', 'self'].flatMap((object) =>
+        storageNames.map((property) => ({ object, property, message: storageMessage })),
+      ),
+    ],
+  },
+};
+
 /**
  * The Rules of Hooks and the React Compiler's rules, as the plugin recommends them. Some are shipped as `warn`; `yarn
  * lint:eslint` runs with --max-warnings 0, so every one of them fails the gate all the same. Then the inline-text rule
@@ -42,6 +66,7 @@ export const inlineTextSelectors: { selector: string; message: string }[] = [
  */
 export const webConfigs: Linter.Config[] = [
   { files: ['src/web/**/*.{ts,tsx}'], ...reactHooks.configs.flat.recommended },
+  noWebStorage,
   {
     files: ['src/web/**/*.tsx'],
     ignores: ['**/*.test.tsx', 'src/web/test-support/**'],

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { useQuery } from '@tanstack/react-query';
 import { screen } from '@testing-library/react';
 import { useState } from 'react';
 import { expect, test } from 'vitest';
+import { sessionRoute } from '../../shared/auth-contract.ts';
 import { errorResponseSchema } from '../../shared/errors.ts';
 import { renderWithProviders } from './render.tsx';
 
@@ -66,4 +68,33 @@ test('without a session option the visitor is anonymous: 401 with the standard e
 test('a session the server could never send fails the test that uses it', () => {
   expect(() => renderWithProviders(<p>page</p>, { session: { ...SESSION, csrfToken: 'short' } })).toThrow();
   expect(screen.queryByText('page')).not.toBeInTheDocument();
+});
+
+test('the session endpoint the helper answers is the path of the shared route descriptor', async () => {
+  renderWithProviders(<p>page</p>, { session: SESSION });
+  const reply = await fetch(sessionRoute.path);
+  expect(await reply.json()).toEqual(SESSION);
+});
+
+test('the render gives the UI the query client it returns, with the defaults of the app except that nothing retries', () => {
+  const { queryClient } = renderWithProviders(<p>page</p>);
+  expect(queryClient.getDefaultOptions().queries).toMatchObject({ retry: false, staleTime: 30_000, gcTime: 300_000 });
+  expect(queryClient.getDefaultOptions().mutations).toEqual({ retry: false });
+});
+
+function Seeded() {
+  const { data } = useQuery({ queryKey: ['seeded'], queryFn: () => 'from the server' });
+  return <p>{data ?? 'loading'}</p>;
+}
+
+test('a query of the rendered UI runs in that client, so a test can seed or read its cache', async () => {
+  const { queryClient } = renderWithProviders(<Seeded />);
+  expect(await screen.findByText('from the server')).toBeInTheDocument();
+  expect(queryClient.getQueryData(['seeded'])).toBe('from the server');
+});
+
+test('every render has a cache of its own', () => {
+  const first = renderWithProviders(<p>page</p>);
+  const second = renderWithProviders(<p>page</p>);
+  expect(second.queryClient).not.toBe(first.queryClient);
 });

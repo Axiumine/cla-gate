@@ -152,10 +152,45 @@ function syntaxSelectors(file: string): string[] {
   return options.flatMap((option) => (typeof option === 'string' ? [] : option.selector));
 }
 
+// Each call starts ESLint in a child process (a second or two; several seconds on a busy runner), hence the long timeout.
 test('ESLint refuses inline text in a component of src/web, keeps the layering selectors there, and spares the tests', () => {
   const component = syntaxSelectors('src/web/App.tsx');
   expect(component).toEqual(expect.arrayContaining(inlineTextSelectors.map((entry) => entry.selector)));
   expect(component).toEqual(expect.arrayContaining(webLayerSelectors.map((entry) => entry.selector)));
   const spared = syntaxSelectors('src/web/App.test.tsx');
   expect(spared).toEqual(webLayerSelectors.map((entry) => entry.selector));
-});
+}, 60_000);
+
+// E17-S04: the repository config bars Web Storage in the app's source and spares the one theme module.
+
+const STORAGE_NAMES = ['localStorage', 'sessionStorage'];
+
+/** The Web Storage names that the repository ESLint config restricts on `file`, by global name and by property of a global object. */
+function storageRestrictions(file: string): { readonly globals: string[]; readonly properties: string[] } {
+  const result = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'node_modules/eslint/bin/eslint.js'), '--print-config', file],
+    { cwd: ROOT, encoding: 'utf8' },
+  );
+  expect(result.status).toBe(0);
+  const restricted = z.object({ name: z.string().optional(), property: z.string().optional() }).array();
+  const { rules } = z
+    .object({
+      rules: z.object({
+        'no-restricted-globals': z.array(z.unknown()).optional(),
+        'no-restricted-properties': z.array(z.unknown()).optional(),
+      }),
+    })
+    .parse(JSON.parse(result.stdout));
+  // The first entry of a rule is its severity; the others are the restricted names.
+  const names = (entries: unknown[] | undefined) =>
+    restricted.parse((entries ?? []).slice(1)).flatMap((option) => option.name ?? option.property ?? []);
+  return { globals: names(rules['no-restricted-globals']), properties: names(rules['no-restricted-properties']) };
+}
+
+test('ESLint bars localStorage and sessionStorage in the source of src/web, but not in its tests or the theme module', () => {
+  expect(storageRestrictions('src/web/App.tsx').globals).toEqual(STORAGE_NAMES);
+  expect(new Set(storageRestrictions('src/web/App.tsx').properties)).toEqual(new Set(STORAGE_NAMES));
+  expect(storageRestrictions('src/web/App.test.tsx')).toEqual({ globals: [], properties: [] });
+  expect(storageRestrictions('src/web/theme/storage.ts')).toEqual({ globals: [], properties: [] });
+}, 60_000);

@@ -10,6 +10,7 @@
     "src/server/migrate.ts!",
     "src/web/main.tsx!",
     "src/web/i18n/index.ts!",
+    "src/web/api/index.ts!",
     "src/server/domain/evaluation/index.ts!",
     "src/shared/pr-evaluation-details.ts!",
     "tests/leaks/scenarios/*.ts",

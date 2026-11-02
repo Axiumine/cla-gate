@@ -125,3 +125,58 @@ test('the layering rule still holds in a component: the new selectors add to it,
   const rules = violations('src/web/Panel.tsx', imports);
   expect(rules).toEqual([SYNTAX, SYNTAX]);
 });
+
+// E17-S04: the app keeps no token in the browser. Web Storage is barred in src/web, by its global name and through the
+// global object, except in the theme module (E17-S05).
+
+const GLOBALS = 'no-restricted-globals';
+const PROPERTIES = 'no-restricted-properties';
+
+test.each([
+  ['localStorage.setItem', "localStorage.setItem('token', value);", GLOBALS],
+  ['sessionStorage.getItem', "export const read = () => sessionStorage.getItem('token');", GLOBALS],
+  ['a bare reference', 'export const store = localStorage;', GLOBALS],
+  ['window.localStorage', "window.localStorage.setItem('k', 'v');", PROPERTIES],
+  ['globalThis.sessionStorage', "globalThis.sessionStorage.setItem('k', 'v');", PROPERTIES],
+  ['self.localStorage', 'export const store = self.localStorage;', PROPERTIES],
+  ['window["sessionStorage"]', "export const store = window['sessionStorage'];", PROPERTIES],
+])('src/web may not use %s', (_what, code, rule) => {
+  expect(violations('src/web/auth/token.ts', code)).toEqual([rule]);
+  expect(violations('src/web/auth/Token.tsx', code)).toContain(rule);
+});
+
+test('the message says why and where Web Storage is allowed', () => {
+  const [finding] = linter.verify(
+    'localStorage.clear();',
+    [{ files: ['**/*.ts'], languageOptions: { parser: tseslint.parser } }, ...webConfigs],
+    { filename: 'src/web/auth/token.ts' },
+  );
+  expect(finding?.message).toContain(
+    'The app keeps no token and no session data in the browser (E17-S04): Web Storage is for src/web/theme/storage.ts, which stores the theme name only.',
+  );
+});
+
+test.each([
+  ['the theme storage module', 'src/web/theme/storage.ts'],
+  ['a test', 'src/web/auth/session.test.ts'],
+  ['a component test', 'src/web/auth/Session.test.tsx'],
+  ['the test support', 'src/web/test-support/storage.ts'],
+])(
+  '%s may use Web Storage: it is the one that stores the theme name, or it proves the storage stays empty',
+  (_what, filename) => {
+    expect(violations(filename, "localStorage.setItem('cla.theme', 'dark'); window.sessionStorage.clear();")).toEqual(
+      [],
+    );
+  },
+);
+
+test("other code with the same names is not the rule's business: outside src/web, and a local variable of that name", () => {
+  expect(violations('src/server/thing.ts', "localStorage.setItem('k', 'v');")).toEqual([]);
+  expect(violations('src/shared/thing.ts', 'window.localStorage.clear();')).toEqual([]);
+  expect(
+    violations(
+      'src/web/auth/token.ts',
+      "export function read(localStorage: Map<string, string>) { return localStorage.get('k'); }",
+    ),
+  ).toEqual([]);
+});
