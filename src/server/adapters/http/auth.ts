@@ -37,7 +37,10 @@ export async function registerAuth(app: FastifyInstance, options: AuthOptions): 
   const store = createSessionStore(options.db, options.settings.session);
   await app.register(fastifyCookie, { secret: options.settings.sessionSecret.reveal() });
   app.decorateRequest('sessionCookiePresented', false);
-  app.addHook('onRequest', (request) => authenticate(request, store, options.clock));
+  // The lookup is a database query, so it runs after the rate limit of the route (an `onRequest` hook of the route, which
+  // answers an over-budget request with a 429 first), and after the body is read: a request that is refused for its
+  // content type or its size costs no query either.
+  app.addHook('preValidation', (request) => authenticate(request, store, options.clock));
   await app.register(authRoutes, { sessionSecret: options.settings.sessionSecret });
   await app.register(loginRoutes, {
     clientId: options.settings.clientId,

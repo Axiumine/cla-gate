@@ -88,10 +88,10 @@ interface RateLimitOptionsOfApp {
 /**
  * Registers the registration check, the plugin (the global budget and the `429` in the standard error body) and the
  * warning for a misconfigured `TRUST_PROXY`, on `app` and everything registered after this call. A request that no route
- * answers is limited too, from an early hook: it has no route to carry the plugin's own hook, and it must not reach the
- * session lookup unlimited. A route is limited by the plugin's own hook, which runs after the hooks of the app, the
- * session lookup among them, so a route can key its budget on the caller (E13). Call it before any route is registered
- * and before the session hook.
+ * answers is limited too, from an early hook: it has no route to carry the plugin's own hook. A route is limited by the
+ * plugin's own `onRequest` hook, which runs before the session lookup (a `preValidation` hook), so a request over its
+ * budget costs no query. A route that keys its budget on the caller (E13) sets `hook` to `'preHandler'` in its
+ * `config.rateLimit`, which runs after the lookup. Call it before any route is registered and before the session hook.
  */
 export async function registerRateLimit(app: FastifyInstance, options: RateLimitOptionsOfApp): Promise<void> {
   app.addHook('onRoute', (route) => {
