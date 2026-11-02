@@ -82,7 +82,7 @@ test('an error event of pg-boss is logged once with its error, and never the con
   expect(logs.text()).not.toContain('made-up-pw');
 });
 
-test('the queue is ready until pg-boss reports an error, and again when the queues can be read', async () => {
+test('the queue is ready while its queues can be read, not ready after an error until they can again', async () => {
   const { boss, queue } = start();
   const running = await queue;
   expect(await running.isReady()).toBe(true);
@@ -92,15 +92,15 @@ test('the queue is ready until pg-boss reports an error, and again when the queu
   boss.getQueues.mockResolvedValueOnce([{ name: 'evaluate-pr' }]);
   expect(await running.isReady()).toBe(false);
   expect(await running.isReady()).toBe(true);
-  expect(boss.getQueues).toHaveBeenCalledTimes(4);
+  expect(boss.getQueues).toHaveBeenCalledTimes(5);
 });
 
-test('a queue that is ready costs no read: the queues are read only after an error', async () => {
+test('a queue that has lost a queue of the application is not ready, and is ready when the queue is back (E07-S03)', async () => {
   const { boss, queue } = start();
   const running = await queue;
-  await running.isReady();
-  await running.isReady();
-  expect(boss.getQueues).toHaveBeenCalledOnce();
+  boss.getQueues.mockResolvedValueOnce(QUEUES.filter((name) => name !== 'sweep').map((name) => ({ name })));
+  expect(await running.isReady()).toBe(false);
+  expect(await running.isReady()).toBe(true);
 });
 
 test('an error that arrives while the queues are being read is not cleared by that read', async () => {

@@ -104,6 +104,17 @@ const FAKE_APP: GitHubAppInfo = {
   permissions: { checks: 'write', metadata: 'read', pull_requests: 'read' },
 };
 
+/** The world of a {@link FakeGitHub}, shared by the fake and its views. */
+interface FakeState {
+  readonly calls: RecordedCall[];
+  readonly installations: Map<GithubId, FakeInstallation>;
+  readonly memberships: Map<string, GitHubOrgMembership>;
+  readonly permissions: Map<string, GitHubRepositoryPermission>;
+  readonly failures: { method: GitHubMethod; error: Error }[];
+  readonly hooks: { method: GitHubMethod; run: () => Promise<void> }[];
+  app: GitHubAppInfo;
+}
+
 /**
  * The GitHub client port in memory (E05-S04). A test scripts installations, repositories and memberships, runs the code
  * under test, and reads {@link FakeGitHub.calls}: every call served, with its method and installation id. Behaves like
@@ -114,27 +125,47 @@ const FAKE_APP: GitHubAppInfo = {
  * be sent). The same contract suite runs against this and against the adapter.
  */
 export class FakeGitHub implements GitHubClient {
-  /** Every call served, in order. A call the gate refused is not here. */
-  readonly calls: RecordedCall[] = [];
   readonly #gate: InstallationGate | undefined;
-  readonly #installations = new Map<GithubId, FakeInstallation>();
-  readonly #memberships = new Map<string, GitHubOrgMembership>();
-  readonly #permissions = new Map<string, GitHubRepositoryPermission>();
-  readonly #failures: { method: GitHubMethod; error: Error }[] = [];
-  readonly #hooks: { method: GitHubMethod; run: () => Promise<void> }[] = [];
-  #app: GitHubAppInfo = FAKE_APP;
+  /** What a view made by {@link FakeGitHub.withSignal} shares with the fake it was made from. */
+  #state: FakeState = {
+    calls: [],
+    installations: new Map(),
+    memberships: new Map(),
+    permissions: new Map(),
+    failures: [],
+    hooks: [],
+    app: FAKE_APP,
+  };
+  #signal: AbortSignal | undefined;
 
   constructor(options: { gate?: InstallationGate } = {}) {
     this.#gate = options.gate;
   }
 
+  /** Every call served, in order. A call the gate refused is not here. */
+  get calls(): RecordedCall[] {
+    return this.#state.calls;
+  }
+
+  /**
+   * A view of this fake for one unit of work (E07-S03): it serves from the same world and records into the same
+   * {@link FakeGitHub.calls}, and with `signal` aborted a call rejects with the reason of the signal, whether it was made
+   * after the abort (nothing is recorded) or is waiting for a {@link FakeGitHub.beforeNext} hook.
+   */
+  withSignal(signal: AbortSignal): GitHubClient {
+    const view = new FakeGitHub(this.#gate === undefined ? {} : { gate: this.#gate });
+    view.#state = this.#state;
+    view.#signal = signal;
+    return view;
+  }
+
   setApp(app: GitHubAppInfo): void {
-    this.#app = app;
+    this.#state.app = app;
   }
 
   /** Adds, or replaces, an installation with the repositories it can reach. */
   addInstallation(installation: GitHubInstallation, repositories: readonly GitHubRepository[] = []): void {
-    this.#installations.set(installation.id, { installation, repositories: [...repositories] });
+    this.#state.installations.set(installation.id, { installation, repositories: [...repositories] });
   }
 
   /** Replaces the repositories an installation can reach. @throws Error for an installation never added. */
@@ -150,11 +181,11 @@ export class FakeGitHub implements GitHubClient {
 
   /** The installation is gone from GitHub (uninstalled). */
   removeInstallation(githubInstallationId: GithubId): void {
-    this.#installations.delete(githubInstallationId);
+    this.#state.installations.delete(githubInstallationId);
   }
 
   addMembership(githubInstallationId: GithubId, org: string, login: string, membership: GitHubOrgMembership): void {
-    this.#memberships.set(membershipKey(githubInstallationId, org, login), membership);
+    this.#state.memberships.set(membershipKey(githubInstallationId, org, login), membership);
   }
 
   /** Scripts what `GET /repos/{owner}/{repo}/collaborators/{username}/permission` answers to `login` for `fullName` (`owner/name`). */
@@ -164,12 +195,12 @@ export class FakeGitHub implements GitHubClient {
     login: string,
     permission: GitHubRepositoryPermission,
   ): void {
-    this.#permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
+    this.#state.permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
   }
 
   /** The next call of `method` throws `error` (once, after it is recorded). Several calls queue in order. */
   failNext(method: GitHubMethod, error: Error): void {
-    this.#failures.push({ method, error });
+    this.#state.failures.push({ method, error });
   }
 
   /**
@@ -177,24 +208,24 @@ export class FakeGitHub implements GitHubClient {
    * change while the caller waits for GitHub, as it does on the real network. Several hooks queue in order.
    */
   beforeNext(method: GitHubMethod, run: () => Promise<void>): void {
-    this.#hooks.push({ method, run });
+    this.#state.hooks.push({ method, run });
   }
 
   getApp(): Promise<GitHubAppInfo> {
-    return this.#serve('getApp', undefined, () => this.#app);
+    return this.#serve('getApp', undefined, () => this.#state.app);
   }
 
   getInstallation(githubInstallationId: GithubId): Promise<GitHubInstallation | null> {
     return this.#serve(
       'getInstallation',
       githubInstallationId,
-      () => this.#installations.get(githubInstallationId)?.installation ?? null,
+      () => this.#state.installations.get(githubInstallationId)?.installation ?? null,
     );
   }
 
   listInstallations(): Promise<GitHubInstallation[]> {
     return this.#serve('listInstallations', undefined, () =>
-      [...this.#installations.values()].map((entry) => entry.installation),
+      [...this.#state.installations.values()].map((entry) => entry.installation),
     );
   }
 
@@ -216,7 +247,7 @@ export class FakeGitHub implements GitHubClient {
     return this.#serveInstallation(
       'getOrgMembership',
       githubInstallationId,
-      () => this.#memberships.get(membershipKey(githubInstallationId, org, login)) ?? null,
+      () => this.#state.memberships.get(membershipKey(githubInstallationId, org, login)) ?? null,
     );
   }
 
@@ -229,29 +260,35 @@ export class FakeGitHub implements GitHubClient {
     return this.#serveInstallation(
       'getRepositoryPermission',
       githubInstallationId,
-      () => this.#permissions.get(permissionKey(githubInstallationId, `${owner}/${repo}`, login)) ?? null,
+      () => this.#state.permissions.get(permissionKey(githubInstallationId, `${owner}/${repo}`, login)) ?? null,
     );
   }
 
   #known(githubInstallationId: GithubId): FakeInstallation {
-    const entry = this.#installations.get(githubInstallationId);
+    const entry = this.#state.installations.get(githubInstallationId);
     if (entry === undefined) {
       throw new Error(`FakeGitHub has no installation ${githubInstallationId}: add it first`);
     }
     return entry;
   }
 
-  /** Records the call, runs a scripted hook, then rejects with a scripted failure or answers with `read()` (which may throw: that rejects too). */
-  #serve<T>(method: GitHubMethod, installationId: GithubId | undefined, read: () => T): Promise<T> {
-    this.calls.push({ method, installationId });
-    const hook = takeFirst(this.#hooks, method);
-    const scripted = takeFirst(this.#failures, method);
-    return (hook?.run() ?? Promise.resolve()).then(() => {
-      if (scripted !== undefined) {
-        throw scripted.error;
-      }
-      return read();
-    });
+  /**
+   * Records the call, runs a scripted hook, then rejects with a scripted failure or answers with `read()` (which may
+   * throw: that rejects too). A view with an aborted signal rejects with its reason before the call is recorded, and
+   * while the hook is awaited.
+   */
+  async #serve<T>(method: GitHubMethod, installationId: GithubId | undefined, read: () => T): Promise<T> {
+    const signal = this.#signal;
+    signal?.throwIfAborted();
+    const { calls, hooks, failures } = this.#state;
+    calls.push({ method, installationId });
+    const hook = takeFirst(hooks, method);
+    const scripted = takeFirst(failures, method);
+    await abortable(signal, hook?.run() ?? Promise.resolve());
+    if (scripted !== undefined) {
+      throw scripted.error;
+    }
+    return read();
   }
 
   /** {@link FakeGitHub.#serve} for a method that acts with the installation's token: the gate and the token's answers first. */
@@ -260,9 +297,10 @@ export class FakeGitHub implements GitHubClient {
     githubInstallationId: GithubId,
     read: (entry: FakeInstallation) => T,
   ): Promise<T> {
+    this.#signal?.throwIfAborted();
     await (this.#gate ?? OPEN_GATE).assertAdmitted(githubInstallationId);
     return this.#serve(method, githubInstallationId, () => {
-      const entry = this.#installations.get(githubInstallationId);
+      const entry = this.#state.installations.get(githubInstallationId);
       if (entry === undefined) {
         throw new InstallationGoneError(githubInstallationId);
       }
@@ -272,6 +310,27 @@ export class FakeGitHub implements GitHubClient {
       return read(entry);
     });
   }
+}
+
+/** `work`, or a rejection with the reason of `signal` as soon as it aborts, whichever comes first. */
+function abortable<T>(signal: AbortSignal | undefined, work: Promise<T>): Promise<T> {
+  if (signal === undefined) {
+    return work;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      try {
+        signal.throwIfAborted();
+      } catch (reason) {
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the reason of a signal is whatever the aborter passed, and the caller must get exactly that
+        reject(reason);
+      }
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
 }
 
 /** Removes and returns the first scripted entry for `method`, or undefined. */

@@ -1,17 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { type ConstructorOptions, type Db, PgBoss, type SendOptions, type StopOptions } from 'pg-boss';
+import {
+  type ConstructorOptions,
+  type Db,
+  type Job,
+  type JobResult,
+  PgBoss,
+  type SendOptions,
+  type StopOptions,
+} from 'pg-boss';
 import { PGBOSS_SCHEMA, type QueuePolicy } from './queues.ts';
 
 // The part of pg-boss this application uses, and the two ways it is started (E07-S01). The queue code depends on
 // {@link Boss}, not on the class, so a test hands it a fake and the 100% gate holds on PGlite (pg-boss itself needs a
 // real PostgreSQL: the behaviour tests run in the advisory `postgres` job).
 
+/** What a worker settles one job with: pg-boss's `JobResult`, whose `output` is an object (pg-boss types it `any`). */
+export type WorkerResult = JobResult<object>;
+
+/** A job as the handler of a worker receives it: what the wrapper of E07-S03 reads of pg-boss's own `Job`. */
+export type WorkerJob = Pick<Job, 'id' | 'data' | 'retryCount' | 'signal'>;
+
+/**
+ * How a queue is worked (E07-S03): `localConcurrency` jobs of the queue at once in this process, one job per fetch, and
+ * the handler settles every job itself, so a job can fail for good (`deadletter`) without a retry.
+ */
+export interface WorkerOptions {
+  readonly localConcurrency: number;
+  readonly batchSize: 1;
+  readonly perJobResults: true;
+  /** Seconds between two looks at an empty queue (pg-boss reads at least 0.5). Defaults to pg-boss's own, 2. */
+  readonly pollingIntervalSeconds?: number;
+}
+
 /** pg-boss as the application uses it; `PgBoss` satisfies it. */
 export interface Boss {
   start(): Promise<unknown>;
-  /** Stops the workers (waiting for the running jobs, up to the default of 30 s) and closes pg-boss's own pool. */
+  /**
+   * Stops the workers and closes pg-boss's own pool. With `graceful` (the default) the jobs that run are given `timeout`
+   * ms to finish; after that they are failed, their signals abort and they are retried by whoever works the queue next.
+   */
   stop(options?: StopOptions): Promise<void>;
+  /** Starts working `name`: `handler` gets the jobs fetched and answers how each one is settled. */
+  work(name: string, options: WorkerOptions, handler: (jobs: WorkerJob[]) => Promise<WorkerResult[]>): Promise<string>;
   on(event: 'error', listener: (error: Error) => void): unknown;
   /** Creates the queue with the policy and the expiry of `options` (E07-S02); a policy cannot be changed afterwards. */
   createQueue(name: string, options: { readonly policy: QueuePolicy; readonly expireInSeconds: number }): Promise<void>;

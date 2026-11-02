@@ -18,6 +18,7 @@ export function fakeBoss(): FakeBoss {
   return {
     start: vi.fn<Boss['start']>(() => Promise.resolve()),
     stop: vi.fn<Boss['stop']>(() => Promise.resolve()),
+    work: vi.fn<Boss['work']>(() => Promise.resolve('worker-id')),
     on: vi.fn<Boss['on']>((_event, listener) => {
       listeners.push(listener);
     }),

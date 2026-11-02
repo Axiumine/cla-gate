@@ -19,6 +19,8 @@ export interface AppConfig {
   readonly sessionSecret: Secret | undefined;
   /** How long a session lives (E10-S01), in seconds; idle is never above absolute and neither is below 300. */
   readonly session: { readonly idleSeconds: number; readonly absoluteSeconds: number };
+  /** How many jobs of one queue run at once in this process (E07-S03), 1 to 32. */
+  readonly workerConcurrency: number;
   readonly github: GithubConfig;
 }
 
@@ -44,6 +46,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     trustProxy: env.TRUST_PROXY,
     sessionSecret: env.SESSION_SECRET,
     session: { idleSeconds: env.SESSION_IDLE_SECONDS, absoluteSeconds: env.SESSION_ABSOLUTE_SECONDS },
+    workerConcurrency: env.WORKER_CONCURRENCY,
     github: toGithubConfig(env),
   };
 }

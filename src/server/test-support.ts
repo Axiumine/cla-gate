@@ -17,7 +17,7 @@ import { type AppConfig, loadConfig } from './config/env.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import type { OperatorPolicies } from './services/operator-policies.ts';
 import type { Clock } from './services/ports/clock.ts';
-import type { JobEnqueuer, JobQueue } from './services/ports/jobs.ts';
+import type { JobEnqueuer, JobQueue, StopOutcome } from './services/ports/jobs.ts';
 import type { RoleCache } from './services/role-cache.ts';
 import type { RoleGitHub } from './services/tenant-authorizer.ts';
 
@@ -115,19 +115,20 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
  */
 export const PUBLIC_ROUTE = { config: { access: 'public' } } satisfies RouteShorthandOptions;
 
-/** A job queue that is only a script (E07-S01): a test flips `ready` and counts the stops. */
-export type FakeJobQueue = JobQueue & { ready: boolean; stops: number };
+/** A job queue that is only a script (E07-S01): a test flips `ready`, sets how a stop ends (E07-S03) and counts the stops. */
+export type FakeJobQueue = JobQueue & { ready: boolean; stops: number; stopOutcome: StopOutcome };
 
-/** A queue that is ready and counts how often it was stopped; its enqueuer is the one given, by default the one that fails every send. */
+/** A queue that is ready, stops `drained` and counts how often it was stopped; its enqueuer is the one given, by default the one that fails every send. */
 export function fakeJobQueue(enqueuer: JobEnqueuer = notWiredEnqueuer): FakeJobQueue {
   const queue: FakeJobQueue = {
     enqueuer,
     ready: true,
     stops: 0,
+    stopOutcome: 'drained',
     isReady: () => Promise.resolve(queue.ready),
     stop: () => {
       queue.stops += 1;
-      return Promise.resolve();
+      return Promise.resolve(queue.stopOutcome);
     },
   };
   return queue;

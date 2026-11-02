@@ -44,6 +44,8 @@ export interface GitHubWorld {
   readonly refuse: (githubInstallationId: GithubId, reason: NotAdmittedReason) => void;
   /** How many requests reached GitHub (the fake: how many calls it served). */
   readonly reached: () => number;
+  /** The next `getInstallation` waits for GitHub's answer until `release` is called; `arrived` settles when it is waiting. */
+  readonly stallGetInstallation: () => { readonly arrived: Promise<void>; readonly release: () => void };
 }
 
 export const id = parseGithubId;
@@ -98,6 +100,20 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
       gate.refuse(githubInstallationId, reason);
     },
     reached: () => fake.calls.length,
+    stallGetInstallation: () => {
+      const arrived = Promise.withResolvers<undefined>();
+      const released = Promise.withResolvers<undefined>();
+      fake.beforeNext('getInstallation', () => {
+        arrived.resolve(undefined);
+        return released.promise;
+      });
+      return {
+        arrived: arrived.promise,
+        release: () => {
+          released.resolve(undefined);
+        },
+      };
+    },
   };
 }
 
@@ -300,6 +316,51 @@ export const CONTRACT_CASES: readonly ContractCase[] = [
         expect(await client.getRepositoryPermission(id(11), 'acme', repo, 'alice')).toBeNull();
       }
       expect(await client.getRepositoryPermission(id(11), '../orgs/other', 'api', 'alice')).toBeNull();
+    },
+  ],
+  [
+    'withSignal answers as the client does while the signal has not aborted, from the same world',
+    async ({ client, addInstallation, addMembership }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, 'acme/api')]);
+      addMembership(id(11), 'acme', 'alice', MEMBER);
+      const view = client.withSignal(new AbortController().signal);
+      expect(await view.getInstallation(id(11))).toEqual(installation(11, 'acme'));
+      expect(await view.getRepositoryById(id(11), id(101))).toEqual(repository(101, 'acme/api'));
+      expect(await view.getOrgMembership(id(11), 'acme', 'alice')).toEqual(MEMBER);
+    },
+  ],
+  [
+    'withSignal sends nothing, not even a token request, once the signal has aborted, and rejects with its reason',
+    async ({ client, addInstallation, reached }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, 'acme/api')]);
+      const reason = new Error('the job was aborted');
+      const view = client.withSignal(AbortSignal.abort(reason));
+      for (const call of [
+        () => view.getApp(),
+        () => view.getInstallation(id(11)),
+        () => view.listInstallations(),
+        () => view.listInstallationRepositories(id(11)),
+        () => view.getRepositoryById(id(11), id(101)),
+        () => view.getOrgMembership(id(11), 'acme', 'alice'),
+      ]) {
+        await expect(call()).rejects.toBe(reason);
+      }
+      expect(reached()).toBe(0);
+    },
+  ],
+  [
+    'withSignal rejects a call that is waiting for GitHub with the reason of the signal when it aborts, and leaves the client alone',
+    async ({ client, addInstallation, stallGetInstallation }) => {
+      addInstallation(installation(11, 'acme'));
+      const stalled = stallGetInstallation();
+      const reason = new Error('the job was aborted at its deadline');
+      const abort = new AbortController();
+      const waiting = expect(client.withSignal(abort.signal).getInstallation(id(11))).rejects.toBe(reason);
+      await stalled.arrived;
+      abort.abort(reason);
+      await waiting;
+      stalled.release();
+      expect(await client.getInstallation(id(11))).toEqual(installation(11, 'acme'));
     },
   ],
   [

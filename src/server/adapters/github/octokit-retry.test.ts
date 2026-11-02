@@ -155,3 +155,45 @@ test('without an injected sleep the wait is a real timer of 1 s plus jitter', as
     vi.useRealTimers();
   }
 });
+
+test('the signal of the caller is part of the signal of every attempt: it aborts it, and the timeout still does (E07-S03)', async () => {
+  const caller = new AbortController();
+  const { send, seen } = scripted(new Response('bad', { status: 502 }));
+  const running = guarded(send)('https://api.github.com/x', { method: 'GET', signal: caller.signal });
+  await running;
+  expect(seen).toHaveLength(2);
+  expect(seen[0]?.signal?.aborted).toBe(false);
+  caller.abort();
+  expect(seen.map((init) => init.signal?.aborted)).toEqual([true, true]);
+});
+
+test('an attempt that the caller aborted is not repeated, even for a GET that met a 502 (E07-S03)', async () => {
+  const caller = new AbortController();
+  const attempts: RequestInit[] = [];
+  const send: typeof fetch = (_input, init) => {
+    attempts.push(init ?? {});
+    caller.abort();
+    return Promise.resolve(new Response('bad', { status: 502 }));
+  };
+  const response = await guarded(send)('https://api.github.com/x', { method: 'GET', signal: caller.signal });
+  expect(response.status).toBe(502);
+  expect(attempts).toHaveLength(1);
+});
+
+test('a caller that aborts an attempt that is in flight gets the failure of that attempt, not another try (E07-S03)', async () => {
+  const caller = new AbortController();
+  const failure = new DOMException('the attempt was aborted', 'AbortError');
+  let attempts = 0;
+  const send: typeof fetch = (_input, init) =>
+    new Promise((_resolve, reject) => {
+      attempts += 1;
+      init?.signal?.addEventListener('abort', () => {
+        reject(failure);
+      });
+      caller.abort();
+    });
+  await expect(guarded(send)('https://api.github.com/x', { method: 'GET', signal: caller.signal })).rejects.toBe(
+    failure,
+  );
+  expect(attempts).toBe(1);
+});

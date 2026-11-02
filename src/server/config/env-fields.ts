@@ -40,6 +40,13 @@ export const portField = z
   .transform(Number)
   .pipe(z.number().max(65_535));
 
+/** How many jobs of one queue run at once (E07-S03): a whole number from 1 to 32, no sign, no leading zero, no spaces. */
+export const workerConcurrencyField = z
+  .string()
+  .regex(/^[1-9]\d?$/)
+  .transform(Number)
+  .pipe(z.number().max(32));
+
 /** @returns the parsed setting; for text that is not a setting it records an issue and returns `z.NEVER`. */
 function toTrustProxy(value: string, ctx: z.core.$RefinementCtx<string>): TrustProxy {
   const parsed = parseTrustProxy(value);

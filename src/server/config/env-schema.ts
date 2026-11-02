@@ -2,11 +2,19 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
 import { authProblems, sessionFields } from './auth-fields.ts';
-import { databaseUrlField, originField, portField, sessionSecretField, trustProxyField } from './env-fields.ts';
+import {
+  databaseUrlField,
+  originField,
+  portField,
+  sessionSecretField,
+  trustProxyField,
+  workerConcurrencyField,
+} from './env-fields.ts';
 import { githubFields, githubProblems } from './env-github.ts';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 const DEFAULT_PORT = 3000;
+const DEFAULT_WORKER_CONCURRENCY = 4;
 
 /** The environment as validated, still under the variable names. {@link loadConfig} maps it to `AppConfig`. */
 export const envSchema = z
@@ -19,6 +27,7 @@ export const envSchema = z
     PUBLIC_BASE_URL: originField.optional(),
     TRUST_PROXY: trustProxyField.default(false),
     SESSION_SECRET: sessionSecretField.optional(),
+    WORKER_CONCURRENCY: workerConcurrencyField.default(DEFAULT_WORKER_CONCURRENCY),
     ...githubFields,
     ...sessionFields,
   })

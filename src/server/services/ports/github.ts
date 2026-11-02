@@ -122,4 +122,12 @@ export interface GitHubClient {
     repo: string,
     login: string,
   ): Promise<GitHubRepositoryPermission | null>;
+
+  /**
+   * The same client for one unit of work, such as a job (E07-S03): a request is abandoned, and rejects with the reason of
+   * `signal`, when `signal` aborts, and one made after it aborted is not sent. The rate limits, the installation tokens
+   * and the gate are those of this client, so a view is as cheap as an object. The signal reaches the requests of the
+   * methods above; the token an installation needs is minted under its own timeout.
+   */
+  withSignal(signal: AbortSignal): GitHubClient;
 }

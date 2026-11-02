@@ -43,13 +43,21 @@ export interface OctokitClientOptions {
   readonly withJwt: WithJwt;
   readonly tokens: Tokens;
   readonly limiter: RateLimiter;
+  /** The abort signal of the job these requests belong to (E07-S03); {@link OctokitGitHubClient.withSignal} sets it. */
+  readonly signal?: AbortSignal | undefined;
 }
 
 export class OctokitGitHubClient implements GitHubClient {
+  readonly #options: OctokitClientOptions;
   readonly #dispatch: Dispatch;
 
   constructor(options: OctokitClientOptions) {
+    this.#options = options;
     this.#dispatch = new Dispatch(options);
+  }
+
+  withSignal(signal: AbortSignal): GitHubClient {
+    return new OctokitGitHubClient({ ...this.#options, signal });
   }
 
   getApp(): Promise<GitHubAppInfo> {

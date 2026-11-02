@@ -41,13 +41,23 @@ export interface JobEnqueuer {
 }
 
 /**
+ * How a shutdown of the queue ended (E07-S03): `drained` when every running job finished inside the grace period,
+ * `aborted` when one was still running at its end and was aborted (it is retried after a restart). The process exit code
+ * is 0 for the first and 1 for the second.
+ */
+export type StopOutcome = 'drained' | 'aborted';
+
+/**
  * The running queue (E07-S01), as the composition root and the HTTP app see it: where the intake sends its jobs, whether
  * the queue works, and how it stops with the app.
  */
 export interface JobQueue {
   readonly enqueuer: JobEnqueuer;
-  /** False once the queue reported an error that a read of its queues has not cleared, and after `stop`. */
+  /** False once the queue reported an error that a read of its queues has not cleared, when a queue of the application is missing, and after `stop`. */
   isReady(): Promise<boolean>;
-  /** Stops the workers, waiting for the jobs that run, and closes the queue's connections. Safe to call twice. */
-  stop(): Promise<void>;
+  /**
+   * Stops the workers, waiting for the jobs that run (30 s at most, E07-S03), and closes the queue's connections. Safe to
+   * call twice: every call answers the first one's outcome.
+   */
+  stop(): Promise<StopOutcome>;
 }

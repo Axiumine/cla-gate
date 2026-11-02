@@ -68,6 +68,24 @@ function settle(outcome: Attempt): Response {
   return outcome.response;
 }
 
+/**
+ * The signal of one attempt: the timeout, and the caller's when it gave one (a job that is being shut down, E07-S03), so
+ * the attempt ends at whichever comes first.
+ */
+function signalOf(timeoutMs: number, caller: AbortSignal | undefined): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return caller === undefined ? timeout : AbortSignal.any([timeout, caller]);
+}
+
+/** What to do after an attempt of a request: nothing for one the caller aborted, or {@link planRepeat} for an idempotent one. */
+function repeatOf(
+  outcome: Attempt,
+  repeats: number,
+  request: { readonly idempotent: boolean; readonly caller: AbortSignal | undefined },
+): { reason: string; wait: number } | undefined {
+  return request.idempotent && request.caller?.aborted !== true ? planRepeat(outcome, repeats) : undefined;
+}
+
 /** Drops the failed answer, says so, and waits out the backoff plus jitter. */
 async function backOff(
   outcome: Attempt,
@@ -82,19 +100,19 @@ async function backOff(
 }
 
 /**
- * `fetch` as the adapter needs it: every attempt has a timeout and refuses a redirect (the token goes to api.github.com
- * and nowhere else), and an idempotent GET that ends in a network error, a timeout, a 502, a 503 or a 504 is repeated
+ * `fetch` as the adapter needs it: every attempt has a timeout (and ends when the caller's signal aborts) and refuses a
+ * redirect (the token goes to api.github.com and nowhere else), and an idempotent GET that ends in a network error, a timeout, a 502, a 503 or a 504 is repeated
  * twice, after 1 s and after 2 s, each plus up to 250 ms. Any other request is sent once, whatever happens: write
  * idempotency is not the adapter's to decide (E09).
  * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode); {@link createOctokit} uses it.
  */
 export function guardedFetch(options: TransportOptions): typeof fetch {
   return async (input, init) => {
-    const idempotent = methodOf(input, init) === 'GET';
+    const request = { idempotent: methodOf(input, init) === 'GET', caller: init?.signal ?? undefined };
     for (let repeats = 0; ; repeats += 1) {
-      const signal = AbortSignal.timeout(options.timeoutMs);
+      const signal = signalOf(options.timeoutMs, request.caller);
       const outcome = await attempt(options.fetch, input, { ...init, redirect: 'error', signal });
-      const repeat = idempotent ? planRepeat(outcome, repeats) : undefined;
+      const repeat = repeatOf(outcome, repeats, request);
       if (repeat === undefined) {
         return settle(outcome);
       }

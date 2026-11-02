@@ -46,6 +46,8 @@ interface State {
   readonly memberships: Map<string, GitHubOrgMembership>;
   readonly permissions: Map<string, GitHubRepositoryPermission>;
   readonly requests: string[];
+  /** The next `GET /app/installations/{id}` is answered when this settles; `arrived` is called as it comes in. */
+  stall?: { readonly arrived: () => void; readonly released: Promise<void> } | undefined;
 }
 
 /** What a test can look at after the run. */
@@ -120,7 +122,11 @@ function installationOf(state: State, request: Request): Entry | undefined {
 function appRoutes(state: State) {
   return [
     http.get(`${GITHUB_API_ORIGIN}/app`, () => HttpResponse.json(appBody())),
-    http.get(`${GITHUB_API_ORIGIN}/app/installations/:id`, ({ params }) => {
+    http.get(`${GITHUB_API_ORIGIN}/app/installations/:id`, async ({ params }) => {
+      const { stall } = state;
+      state.stall = undefined;
+      stall?.arrived();
+      await stall?.released;
       const entry = state.entries.get(idOf(params['id']));
       return entry === undefined ? notFound() : HttpResponse.json(installationBody(entry.installation));
     }),
@@ -236,6 +242,22 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
       gate.refuse(githubInstallationId, reason);
     },
     reached: () => state.requests.length,
+    stallGetInstallation: () => {
+      const arrived = Promise.withResolvers<undefined>();
+      const released = Promise.withResolvers<undefined>();
+      state.stall = {
+        arrived: () => {
+          arrived.resolve(undefined);
+        },
+        released: released.promise,
+      };
+      return {
+        arrived: arrived.promise,
+        release: () => {
+          released.resolve(undefined);
+        },
+      };
+    },
   };
 }
 

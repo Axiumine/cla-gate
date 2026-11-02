@@ -116,3 +116,37 @@ test('a port that is taken stops the queue that was started', async () => {
   expect(second.server).toBeUndefined();
   expect(queue.stops).toBe(1);
 });
+
+test('the queue is given the handlers, the delivery marker, the clock and the concurrency of the server to work the jobs with (E07-S03)', async () => {
+  const createJobQueue = vi.fn<NonNullable<BootOptions['createJobQueue']>>(() => Promise.resolve(fakeJobQueue()));
+  await start(createJobQueue, { WORKER_CONCURRENCY: '6' });
+  const workers = createJobQueue.mock.calls[0]?.[2];
+  expect(workers?.concurrency).toBe(6);
+  expect(workers?.registry.types()).toContain('sync-installation');
+  expect(workers?.registry.types()).not.toContain('revoke-user-sessions');
+  expect(typeof workers?.markDeliveryProcessed).toBe('function');
+  expect(workers?.clock.now()).toBeInstanceOf(Date);
+});
+
+test('a shutdown that drained the running jobs leaves the exit code at 0 (E07-S03)', async () => {
+  const queue = fakeJobQueue();
+  const { server, signals, logs } = await start(() => Promise.resolve(queue));
+  signals.emit('SIGTERM');
+  await server?.close();
+  expect(queue.stops).toBe(1);
+  expect(signals.exitCode).toBeUndefined();
+  expect(logs.lines().filter((line) => line['level'] === 50)).toEqual([]);
+});
+
+test('a shutdown that had to abort running jobs logs it and ends with exit code 1 (E07-S03)', async () => {
+  const queue = fakeJobQueue();
+  queue.stopOutcome = 'aborted';
+  const { server, signals, logs } = await start(() => Promise.resolve(queue));
+  signals.emit('SIGINT');
+  await server?.close();
+  expect(queue.stops).toBe(1);
+  expect(signals.exitCode).toBe(1);
+  expect(logs.lines().filter((line) => line['level'] === 50)).toMatchObject([
+    { msg: 'jobs still running at the end of the grace period were aborted, and run again after a restart' },
+  ]);
+});

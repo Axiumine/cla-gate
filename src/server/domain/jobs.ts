@@ -47,7 +47,7 @@ const headShaField = { headSha: z.string().regex(/^[0-9a-f]{40}$/) };
  * re-run names none for a fork); `close-pr` prunes the pending work of a closed pull request; `recheck-comment`
  * re-reads a comment that may be a `/recheck`; `sync-installation` re-reads an installation and its repositories;
  * `revoke-user-sessions` ends the sessions of a user who revoked the App's authorisation.
- * @internal Exported for the tests and for E07-S03, which validates the data of a job against it (Knip ignores `@internal` exports in production mode); the router builds typed {@link Job}s.
+ * The router builds typed {@link Job}s; the envelope of E07-S03 (`job-envelope.ts`) validates the data of a job against it.
  */
 export const jobSchema = z.discriminatedUnion('type', [
   z.strictObject({
