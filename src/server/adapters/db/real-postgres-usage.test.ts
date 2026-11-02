@@ -18,17 +18,25 @@ const RUN_CALL = ['run', 'If'].join('');
 const TIMER = ['set', 'Timeout'].join('');
 const ENGINE = ['real', 'Postgres'].join('');
 const URL_FLAG = ['test', 'DatabaseUrl'].join('');
+const KIND_FLAG = ['DATABASE', 'KIND'].join('_');
+const ENGINE_OF = ['engine', 'Of'].join('');
+const KIND_FIELD = ['ki', 'nd'].join('');
 const HARNESS = ['with', 'Connections'].join('');
 
 // Written so that their own source text does not match them (`(?:skip|run)If` is not `skipIf`).
-const DIRECT_USE =
-  /\.(?:skip|run)If\([^)]*\b(?:real(?:Postgres)|test(?:DatabaseUrl)|DATABASE_URL)\b|\bskip:\s{0,4}!?\s{0,4}real(?:Postgres)\b/g;
+// The engine is named by the flag, the injected URL, the environment variable, the exported kind, its helper or the
+// `kind` of an open database: any of them in a skip or run condition, or in the skip option, is a gate that skips silently.
+const IN_CONDITION =
+  /\.(?:skip|run)If\([^)]*\b(?:real(?:Postgres)|test(?:DatabaseUrl)|DATABASE_URL|DATABASE_(?:KIND)|engine(?:Of)|kind)\b/g;
+const IN_OPTION = /\bskip:\s{0,4}!?\s{0,4}(?:real(?:Postgres)|DATABASE_(?:KIND)|\w{1,40}\.kind)\b/g;
 const SLEEPS = /\bset(?:Timeout)\b/;
 const USES_HARNESS = /\bwith(?:Connections)\(/;
 
 /** 1-based lines of `text` that start a direct engine condition. */
 function directUses(text: string): number[] {
-  return [...text.matchAll(DIRECT_USE)].map((match) => text.slice(0, match.index).split('\n').length);
+  return [...text.matchAll(IN_CONDITION), ...text.matchAll(IN_OPTION)]
+    .map((match) => text.slice(0, match.index).split('\n').length)
+    .sort((a, b) => a - b);
 }
 
 /** True when `text` builds connections and also waits with a timer. */
@@ -44,11 +52,19 @@ test.each([
   ['the injected URL', `test.${GATE_CALL}(inject('${URL_FLAG}') === undefined)('x');`, [1]],
   ['the environment variable', `test.${GATE_CALL}(!process.env['DATABASE_URL'])('x');`, [1]],
   ['the skip option', `test('x', { skip: !${ENGINE} }, () => {});`, [1]],
+  ['the exported kind', `test.${GATE_CALL}(${KIND_FLAG} === 'pglite')('x', () => {});`, [1]],
+  ['the exported kind in the run condition', `describe.${RUN_CALL}(${KIND_FLAG} !== 'pglite')('x');`, [1]],
+  ['the engine helper', `test.${GATE_CALL}(${ENGINE_OF}(url) === 'pglite')('x');`, [1]],
+  ['the kind of an open database', `test.${RUN_CALL}(database.${KIND_FIELD} === 'postgres')('x');`, [1]],
+  ['the skip option with the exported kind', `test('x', { skip: ${KIND_FLAG} === 'pglite' }, () => {});`, [1]],
+  ['the skip option with the kind of a database', `test('x', { skip: db.${KIND_FIELD} === 'pglite' }, () => {});`, [1]],
   ['two uses', `test.${GATE_CALL}(!${ENGINE})('a');\ntest.${RUN_CALL}(${ENGINE})('b');`, [1, 2]],
   ['the helper', `${ENGINE}Only('x', async () => {});`, []],
   ['another condition', `test.${GATE_CALL}(process.platform !== 'linux')('x');`, []],
   ['an expectation on the flag', `expect(kind).toBe(${ENGINE} ? 'postgres' : 'pglite');`, []],
   ['a skip option unrelated to the engine', `test('x', { skip: slow }, () => {});`, []],
+  ['an expectation on the exported kind', `expect(${KIND_FLAG}).toBe('pglite');`, []],
+  ['the kind of something else outside a condition', `expect(row.kind).toBe('individual');`, []],
 ])('a direct engine condition is found in: %s', (_name, source, lines) => {
   expect(directUses(source)).toEqual(lines);
 });
