@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
 import { expect, test } from 'vitest';
+import type { InstallationRowId } from './installation-row-id.ts';
 import type { Database } from './schema.ts';
 import {
   asRuntimeRole,
@@ -19,7 +20,12 @@ const DENIED = { code: '42501' };
 
 const REMOVED = new Date('2026-05-02T08:00:00Z');
 
-function insertRepository(db: Kysely<Database>, installationId: number, githubRepoId: number, removedAt?: Date) {
+function insertRepository(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  githubRepoId: number,
+  removedAt?: Date,
+) {
   return db
     .insertInto('repositories')
     .values({

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ColumnType, Generated } from 'kysely';
+import type { InstallationRowId } from './installation-row-id.ts';
 
 // Hand-written to match migrations/*.sql; schema.test.ts compares the column names with the live schema, so a
 // drift in either direction fails a test. GitHub ids and identity keys are bigint in Postgres and `number` here: the
@@ -35,7 +36,7 @@ interface SessionsTable {
 }
 
 interface InstallationsTable {
-  id: Generated<number>;
+  id: Generated<InstallationRowId>;
   github_installation_id: number;
   account_id: number;
   account_login: string;
@@ -54,7 +55,7 @@ interface InstallationsTable {
 
 interface RepositoriesTable {
   id: Generated<number>;
-  installation_id: number;
+  installation_id: InstallationRowId;
   github_repo_id: number;
   full_name: string;
   enabled: Generated<boolean>;

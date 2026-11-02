@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { listInstallationsForOperator, type OperatorInstallation } from './installation-operator.ts';
 import { findInstallationByGithubId, upsertInstallation } from './installation-queries.ts';
@@ -25,14 +26,20 @@ export interface InstallationStore {
   upsertInstallation(input: InstallationUpsert): Promise<InstallationRow>;
   findInstallationByGithubId(githubInstallationId: GithubId): Promise<InstallationRow | null>;
   /** Stores the listed repositories, new ones with `enabled = false`; see {@link upsertRepositories}. */
-  upsertRepositories(installationId: number, repositories: readonly RepositorySnapshot[]): Promise<RepositoryChanges>;
+  upsertRepositories(
+    installationId: InstallationRowId,
+    repositories: readonly RepositorySnapshot[],
+  ): Promise<RepositoryChanges>;
   /** Marks active repositories removed, never deletes them; resolves to the ids that changed. */
   markRepositoriesRemoved(
-    installationId: number,
+    installationId: InstallationRowId,
     githubRepoIds: readonly GithubId[],
     removedAt: Date,
   ): Promise<GithubId[]>;
-  findActiveRepositoryByGithubId(installationId: number, githubRepoId: GithubId): Promise<RepositoryRow | null>;
+  findActiveRepositoryByGithubId(
+    installationId: InstallationRowId,
+    githubRepoId: GithubId,
+  ): Promise<RepositoryRow | null>;
   /**
    * Every installation with its admission decision and repository counts, for the operator's view (E05-S07). The one
    * read that spans tenants, by design: it returns counts and states, no repository, signature or person.
@@ -40,7 +47,7 @@ export interface InstallationStore {
   listInstallationsForOperator(): Promise<OperatorInstallation[]>;
   /** Turns enforcement on or off and audits the change; see {@link setRepositoryEnabled}. */
   setRepositoryEnabled(
-    installationId: number,
+    installationId: InstallationRowId,
     githubRepoId: GithubId,
     enabled: boolean,
     actorGithubId: GithubId,

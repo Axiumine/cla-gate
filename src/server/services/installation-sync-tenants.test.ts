@@ -97,10 +97,13 @@ test('once A no longer lists the shared repository, B stores it and the queries 
   await world.sync.syncInstallation(id(11));
   await world.sync.syncInstallation(id(12));
   const [a, b] = await installationRows(world.db);
-  expect(await findActiveRepositoryByGithubId(world.db, a?.id ?? 0, id(300))).toBeNull();
-  expect(await findActiveRepositoryByGithubId(world.db, b?.id ?? 0, id(300))).toMatchObject({ installation_id: b?.id });
+  if (a === undefined || b === undefined) {
+    throw new Error('the syncs stored no installation');
+  }
+  expect(await findActiveRepositoryByGithubId(world.db, a.id, id(300))).toBeNull();
+  expect(await findActiveRepositoryByGithubId(world.db, b.id, id(300))).toMatchObject({ installation_id: b.id });
   const rowsOfA = (await repositoryRows(world.db)).filter(
-    (row) => row.installation_id === a?.id && row.github_repo_id === 300,
+    (row) => row.installation_id === a.id && row.github_repo_id === 300,
   );
   expect(rowsOfA).toHaveLength(1);
   expect(rowsOfA[0]?.removed_at).not.toBeNull();

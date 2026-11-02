@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Transaction } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { appendAudit } from './audit.ts';
 import type { RepositoryChanges } from './repository-rows.ts';
@@ -22,7 +23,7 @@ export function appendRepositoryAudit(
   trx: Transaction<Database>,
   entry: {
     readonly action: 'repository.added' | 'repository.renamed' | 'repository.removed';
-    readonly installationId: number;
+    readonly installationId: InstallationRowId;
     readonly githubRepoId: GithubId;
     readonly reasonCode?: RemovalReason;
   },
@@ -38,7 +39,7 @@ export function appendRepositoryAudit(
 
 export async function auditRepositoryChanges(
   trx: Transaction<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   changes: RepositoryChanges & { readonly removed: readonly GithubId[] },
 ): Promise<void> {
   const rows = [

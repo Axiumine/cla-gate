@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { type InstallationRow, type InstallationUpsert, stateColumns } from './installation-state.ts';
 
@@ -56,7 +57,11 @@ export async function listLiveInstallationIds(db: Kysely<Database>): Promise<Git
 }
 
 /** Records that a sync wrote this installation's state at `at`. Touches the one row `installationId` names (`installations.id`). */
-export async function markInstallationSynced(db: Kysely<Database>, installationId: number, at: Date): Promise<void> {
+export async function markInstallationSynced(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  at: Date,
+): Promise<void> {
   await db
     .updateTable('installations')
     .set({ last_synced_at: at, updated_at: sql`now()` })
@@ -65,7 +70,11 @@ export async function markInstallationSynced(db: Kysely<Database>, installationI
 }
 
 /** Marks the installation uninstalled at `at` (E05-S08); the row, its repositories and its signatures stay. */
-export async function markInstallationDeleted(db: Kysely<Database>, installationId: number, at: Date): Promise<void> {
+export async function markInstallationDeleted(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  at: Date,
+): Promise<void> {
   await db
     .updateTable('installations')
     .set({ deleted_at: at, last_synced_at: at, updated_at: sql`now()` })
@@ -77,6 +86,6 @@ export async function markInstallationDeleted(db: Kysely<Database>, installation
  * The installation row `installationId` (`installations.id`) names, read again under the sync's lock.
  * @throws NoResultError when it is not there; nothing deletes an installation, so that is a broken database.
  */
-export function getInstallationById(db: Kysely<Database>, installationId: number): Promise<InstallationRow> {
+export function getInstallationById(db: Kysely<Database>, installationId: InstallationRowId): Promise<InstallationRow> {
   return db.selectFrom('installations').selectAll().where('id', '=', installationId).executeTakeFirstOrThrow();
 }

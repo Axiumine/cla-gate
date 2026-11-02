@@ -3,6 +3,7 @@
 import type { Transaction } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
 import { lockInstallation } from '../adapters/db/advisory-lock.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
 import { findInstallationByGithubId, upsertInstallation } from './installation-queries.ts';
@@ -27,7 +28,7 @@ import type { GitHubInstallation } from './ports/github.ts';
 export interface StateStep {
   readonly outcome: SyncOutcome;
   /** Set only for an admitted, active installation: the sync goes on to list its repositories. */
-  readonly repositoriesOf?: number;
+  readonly repositoriesOf?: InstallationRowId;
 }
 
 const ended = (outcome: SyncOutcome): StateStep => ({ outcome });

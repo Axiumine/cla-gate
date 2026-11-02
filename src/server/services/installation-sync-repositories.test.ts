@@ -24,7 +24,10 @@ async function synced() {
   world.fake.addInstallation(remoteInstallation(11, OWNER), remoteRepositories(100, 3));
   await world.sync.syncInstallation(id(11));
   const [installation] = await installationRows(world.db);
-  return { ...world, installationId: installation?.id ?? 0 };
+  if (installation === undefined) {
+    throw new Error('the sync stored no installation');
+  }
+  return { ...world, installationId: installation.id };
 }
 
 const actionsAfter = async (world: Awaited<ReturnType<typeof synced>>, skip: number) =>

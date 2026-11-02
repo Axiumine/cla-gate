@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
 import { classify, distinct } from './repository-plan.ts';
@@ -21,7 +22,7 @@ import { storedStates, writeChanged } from './repository-statements.ts';
  */
 export function upsertRepositories(
   db: Kysely<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   repositories: readonly RepositorySnapshot[],
 ): Promise<RepositoryChanges> {
   return withTransaction(db, async (trx) => {

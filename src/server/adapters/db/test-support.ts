@@ -8,6 +8,7 @@ import process from 'node:process';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import { afterAll, afterEach, expect, inject, test, vi } from 'vitest';
+import { type InstallationRowId, installationRowIdSchema } from './installation-row-id.ts';
 import { loadMigrationFiles } from './migration-files.ts';
 import { migrate } from './migrator.ts';
 import { createPgDatabase, typeParser } from './pg.ts';
@@ -115,13 +116,16 @@ export async function writeMigrationDirectory(files: Readonly<Record<string, str
 
 /** One tenant: an installation with a repository, an individual CLA document and its published version 1.0. */
 export interface Tenant {
-  readonly installationId: number;
+  readonly installationId: InstallationRowId;
   readonly repositoryId: number;
   readonly documentId: number;
   readonly versionId: number;
   readonly publisherId: number;
   readonly contentSha256: string;
 }
+
+/** An `installations.id` for a row that may not exist (a stranger), or one read from a row plus an offset. */
+export const rowId = (n: number): InstallationRowId => installationRowIdSchema.parse(n);
 
 export const CLA_TEXT = 'I grant the project a perpetual licence to my contributions.';
 

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { InsertQueryNode, type Kysely, type KyselyPlugin } from 'kysely';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
+import type { InstallationRowId } from '../../adapters/db/installation-row-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import { CLA_TEXT, publishVersion, seedSignature, sha256, type Tenant } from '../../adapters/db/test-support.ts';
 import { type AdmissionWorld, admissionWorld, auditRows, OWNER } from '../admission-fixture/test-support.ts';
@@ -96,7 +97,7 @@ export const repositoryRows = (db: Kysely<Database>) =>
   db.selectFrom('repositories').selectAll().orderBy('installation_id').orderBy('github_repo_id').execute();
 
 /** The surrogate key (`installations.id`) of the installation GitHub knows by this id. */
-export async function rowIdOf(db: Kysely<Database>, githubInstallationId: number): Promise<number> {
+export async function rowIdOf(db: Kysely<Database>, githubInstallationId: number): Promise<InstallationRowId> {
   const row = await db
     .selectFrom('installations')
     .select('id')
@@ -139,7 +140,7 @@ export async function tenantData(db: Kysely<Database>, installationId: number) {
 /** The document of a repository, with a published version 1.0 that is its active one, and the repository switched on. */
 async function attachDocument(
   db: Kysely<Database>,
-  target: { readonly installationId: number; readonly repositoryId: number },
+  target: { readonly installationId: InstallationRowId; readonly repositoryId: number },
   publisherId: number,
 ): Promise<Tenant> {
   const { installationId, repositoryId } = target;
@@ -189,7 +190,7 @@ async function attachEvaluationInputs(db: Kysely<Database>, tenant: Tenant): Pro
  */
 async function attachTenantData(
   db: Kysely<Database>,
-  target: { readonly installationId: number; readonly repositoryId: number },
+  target: { readonly installationId: InstallationRowId; readonly repositoryId: number },
   n = 1,
 ): Promise<Tenant> {
   const publisher = await db
@@ -233,7 +234,7 @@ export interface TransferWorld extends SyncWorld {
   /** What tenant A has attached to the repository that is about to move: ids of its document, version and so on. */
   readonly shared: Tenant;
   /** `installations.id` of tenant B. */
-  readonly bId: number;
+  readonly bId: InstallationRowId;
 }
 
 /**

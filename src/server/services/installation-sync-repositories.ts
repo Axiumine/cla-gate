@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../shared/github-id.ts';
 import { lockInstallation } from '../adapters/db/advisory-lock.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
 import { type InstallationIneligibleReason, installationEligibility } from '../domain/eligibility.ts';
 import { getInstallationById } from './installation-queries.ts';
@@ -28,7 +29,7 @@ const STATUS_OF: Readonly<Record<InstallationIneligibleReason, SyncStatus>> = {
  */
 export function syncRepositories(
   ctx: SyncContext,
-  installation: { readonly installationId: number; readonly githubInstallationId: GithubId },
+  installation: { readonly installationId: InstallationRowId; readonly githubInstallationId: GithubId },
   listed: readonly GitHubRepository[],
 ): Promise<SyncOutcome> {
   return withTransaction(ctx.db, async (trx) => {

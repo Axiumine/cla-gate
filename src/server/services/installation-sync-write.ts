@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Transaction } from 'kysely';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { markInstallationSynced } from './installation-queries.ts';
 import type { SyncContext, SyncOutcome } from './installation-sync-model.ts';
@@ -21,7 +22,7 @@ import { upsertRepositories } from './repository-upsert.ts';
 export async function reconcile(
   ctx: SyncContext,
   trx: Transaction<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   listed: readonly GitHubRepository[],
 ): Promise<SyncOutcome> {
   const snapshots = listed.map((repository) => ({ githubRepoId: repository.id, fullName: repository.fullName }));

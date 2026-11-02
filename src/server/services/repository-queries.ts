@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
 import { batches, type RepositoryRow } from './repository-rows.ts';
@@ -18,7 +19,7 @@ import { batches, type RepositoryRow } from './repository-rows.ts';
  */
 export function markRepositoriesRemoved(
   db: Kysely<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   githubRepoIds: readonly GithubId[],
   removedAt: Date,
 ): Promise<GithubId[]> {
@@ -48,7 +49,7 @@ export function markRepositoriesRemoved(
  */
 export async function renameActiveRepository(
   db: Kysely<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   githubRepoId: GithubId,
   fullName: string,
 ): Promise<boolean> {
@@ -67,7 +68,7 @@ export async function renameActiveRepository(
 /** The repository stored for this installation that is not removed, or `null`: at most one row, never another tenant's. */
 export async function findActiveRepositoryByGithubId(
   db: Kysely<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   githubRepoId: GithubId,
 ): Promise<RepositoryRow | null> {
   const row = await db
@@ -84,7 +85,10 @@ export async function findActiveRepositoryByGithubId(
  * The GitHub ids of the installation's active repositories, ascending: what the sync (E05-S08) compares with GitHub's
  * list to find the ones GitHub no longer shows. Another tenant's repositories are never in it.
  */
-export async function listActiveRepositoryIds(db: Kysely<Database>, installationId: number): Promise<GithubId[]> {
+export async function listActiveRepositoryIds(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+): Promise<GithubId[]> {
   const rows = await db
     .selectFrom('repositories')
     .select('github_repo_id')

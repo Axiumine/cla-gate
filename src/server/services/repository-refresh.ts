@@ -3,6 +3,7 @@
 import type { Kysely, Transaction } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
 import { lockInstallation } from '../adapters/db/advisory-lock.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
 import { installationEligibility } from '../domain/eligibility.ts';
@@ -53,7 +54,7 @@ const outcome = (status: SnapshotStatus): SnapshotOutcome => ({
 async function removeLostRepository(
   ctx: SnapshotContext,
   trx: Transaction<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   githubRepoId: GithubId,
 ): Promise<SnapshotStatus> {
   const removed = await markRepositoriesRemoved(trx, installationId, [githubRepoId], ctx.clock.now());
@@ -72,7 +73,7 @@ async function removeLostRepository(
 /** The stored name differs from GitHub's: it is replaced and `repository.renamed` is audited with the numeric ids only. */
 async function renameChangedRepository(
   trx: Transaction<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   githubRepoId: GithubId,
   fullName: string,
 ): Promise<SnapshotStatus> {

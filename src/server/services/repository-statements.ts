@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { StoredState } from './repository-plan.ts';
 import type { RepositorySnapshot } from './repository-rows.ts';
@@ -11,7 +12,7 @@ import type { RepositorySnapshot } from './repository-rows.ts';
 /** The name and removal state of the installation's rows among `batch`, by GitHub repository id. */
 export async function storedStates(
   trx: Kysely<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   batch: readonly RepositorySnapshot[],
 ): Promise<Map<number, StoredState>> {
   const rows = await trx
@@ -30,7 +31,7 @@ export async function storedStates(
 /** Inserts the repositories as new rows with `enabled = false`, or refreshes the name of the stored row and clears its removal. */
 export async function writeChanged(
   trx: Kysely<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   changed: readonly RepositorySnapshot[],
 ): Promise<void> {
   await trx

@@ -4,6 +4,7 @@ import { type Kysely, sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { AuditEntryInvalid } from './audit-entry.ts';
 import { createInstallationStore } from './installation-store.ts';
@@ -21,7 +22,11 @@ async function audit(db: Kysely<Database>) {
     .execute();
 }
 
-async function enabledOf(db: Kysely<Database>, installationId: number, githubRepoId: number): Promise<boolean> {
+async function enabledOf(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  githubRepoId: number,
+): Promise<boolean> {
   const row = await db
     .selectFrom('repositories')
     .select('enabled')
@@ -32,7 +37,11 @@ async function enabledOf(db: Kysely<Database>, installationId: number, githubRep
 }
 
 /** Attaches a new CLA document to repository `githubRepoId` of the installation; returns the document id. */
-async function attachDocument(db: Kysely<Database>, installationId: number, githubRepoId: number): Promise<number> {
+async function attachDocument(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  githubRepoId: number,
+): Promise<number> {
   const document = await db
     .insertInto('cla_documents')
     .values({
@@ -53,7 +62,11 @@ async function attachDocument(db: Kysely<Database>, installationId: number, gith
   return document.id;
 }
 
-async function repositoryIdOf(db: Kysely<Database>, installationId: number, githubRepoId: number): Promise<number> {
+async function repositoryIdOf(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  githubRepoId: number,
+): Promise<number> {
   const row = await db
     .selectFrom('repositories')
     .select('id')

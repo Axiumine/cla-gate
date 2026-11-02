@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { InsertQueryNode, type Kysely, type KyselyPlugin, ValuesNode } from 'kysely';
 import { expect, test } from 'vitest';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { createInstallationStore } from './installation-store.ts';
 import { renameActiveRepository } from './repository-queries.ts';
@@ -11,7 +12,7 @@ import { listed, repoId, worldOfTwoTenants } from './store-fixture/test-support.
 const REMOVED_AT = new Date('2026-06-01T12:00:00Z');
 const UNIQUE = { code: '23505' };
 
-async function repositoriesOf(db: Kysely<Database>, installationId: number) {
+async function repositoriesOf(db: Kysely<Database>, installationId: InstallationRowId) {
   return await db
     .selectFrom('repositories')
     .selectAll()

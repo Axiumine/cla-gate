@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { rowId } from '../adapters/db/test-support.ts';
 import {
   getInstallationById,
   listLiveInstallationIds,
@@ -44,7 +45,7 @@ test('an installation is read by its own id, and a missing one is an error, not 
   const { db, a, b } = await worldOfTwoTenants();
   expect((await getInstallationById(db, a.installation.id)).github_installation_id).toBe(100);
   expect((await getInstallationById(db, b.installation.id)).github_installation_id).toBe(200);
-  await expect(getInstallationById(db, b.installation.id + 1000)).rejects.toThrow('no result');
+  await expect(getInstallationById(db, rowId(b.installation.id + 1000))).rejects.toThrow('no result');
 });
 
 test('the active repository ids of A are its own, ascending, without the removed ones and without any of B', async () => {
@@ -53,5 +54,5 @@ test('the active repository ids of A are its own, ascending, without the removed
   expect(await listActiveRepositoryIds(db, b.installation.id)).toEqual([repoId(2, 1), repoId(2, 2)]);
   await store.markRepositoriesRemoved(a.installation.id, [repoId(1, 1)], AT);
   expect(await listActiveRepositoryIds(db, a.installation.id)).toEqual([repoId(1, 2)]);
-  expect(await listActiveRepositoryIds(db, b.installation.id + 1000)).toEqual([]);
+  expect(await listActiveRepositoryIds(db, rowId(b.installation.id + 1000))).toEqual([]);
 });

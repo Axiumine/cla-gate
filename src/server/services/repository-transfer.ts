@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Transaction } from 'kysely';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { appendRepositoryAudit } from './repository-audit.ts';
 import { batches } from './repository-rows.ts';
@@ -27,7 +28,7 @@ import { batches } from './repository-rows.ts';
  */
 export async function releaseTransferred(
   trx: Transaction<Database>,
-  installationId: number,
+  installationId: InstallationRowId,
   githubRepoIds: readonly GithubId[],
   removedAt: Date,
 ): Promise<void> {

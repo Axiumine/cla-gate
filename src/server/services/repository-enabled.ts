@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
 import { appendAudit } from './audit.ts';
@@ -18,7 +19,7 @@ export class RepositoryNotFoundError extends Error {
 /** One request to turn enforcement on or off for a repository of a tenant (E14-S03, E14-S04). */
 export interface RepositoryEnabledChange {
   /** `installations.id`: the tenant. A repository stored under another installation is not found. */
-  readonly installationId: number;
+  readonly installationId: InstallationRowId;
   readonly githubRepoId: GithubId;
   readonly enabled: boolean;
   /** The person who asked: the audit row names them by their numeric GitHub id. */
