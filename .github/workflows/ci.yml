@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Giovanni Manzoni
 #
 # CI is the authority: git hooks (lefthook.yml) are bypassable, this workflow repeats every check.
-# `static` and `coverage` are the exact job names that branch protection requires on main (CLAUDE.md,
+# `static` and `coverage` are the exact job names that branch protection requires on main (CONTRIBUTING.md,
 # "Repository protection"): renaming a job breaks the rule.
 #
 # Runners: every job runs on the maintainer's persistent, shared, self-hosted runners, spelled as the literal list

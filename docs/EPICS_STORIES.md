@@ -6,9 +6,9 @@ This file is the work queue for the CLA Gate platform. Each epic has one file in
 
 The CI runs on shared, self-hosted runners under the policy in [`ci-runners.md`](ci-runners.md) (E23). A story that writes a CI job, a workflow, a container, a port or a test database ends its acceptance criteria with a link to that policy, so the policy is a contract the story must meet.
 
-The files are living documents. When a story is finished, its status (and, if the work changed it, its wording) is updated in the same change as the code, and the header status of the epic follows its stories: all done is Done, all todo is Todo, anything else is In progress. A new story is appended with the next sequential id, ids are never renumbered, and a decision that changes is recorded in `README.md` and `CLAUDE.md` in the same change.
+The files are living documents. When a story is finished, its status (and, if the work changed it, its wording) is updated in the same change as the code, and the header status of the epic follows its stories: all done is Done, all todo is Todo, anything else is In progress. A new story is appended with the next sequential id, ids are never renumbered, and a decision that changes is recorded in the document that owns it (the table in [`CLAUDE.md`](../CLAUDE.md) lists them) in the same change.
 
-**Definition of done for a story:** every acceptance criterion is met, all gates listed under Thresholds in [`CLAUDE.md`](../CLAUDE.md) are green, and the documentation (`README.md`, `CLAUDE.md`, the epic file and this index) is kept true. CI jobs follow the [CI runners policy](ci-runners.md): shared self-hosted runners, a literal `runs-on`, random free loopback ports, timeouts and cleanup, and the fork pull request approval checklist for anything that comes from a fork.
+**Definition of done for a story:** every acceptance criterion is met, all gates listed under Thresholds in [`docs/quality-gates.md`](quality-gates.md) are green, and the documentation (`README.md`, `CLAUDE.md` and the documents it lists, the epic file and this index) is kept true. CI jobs follow the [CI runners policy](ci-runners.md): shared self-hosted runners, a literal `runs-on`, random free loopback ports, timeouts and cleanup, and the fork pull request approval checklist for anything that comes from a fork.
 
 ## Legend
 

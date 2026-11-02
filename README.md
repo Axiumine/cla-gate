@@ -2,7 +2,7 @@
 
 Contributor License Agreements for GitHub projects. Maintainers publish a CLA, contributors sign it once with their GitHub account, and every pull request gets an automatic `license/cla` check.
 
-> **Status: server foundation.** The toolchain (Yarn 4, TypeScript, Biome, ESLint, Vitest at 100%, type-coverage, Knip, FTA, the caps ratchet, Lefthook hooks, GitHub Actions CI) is in place and green on everything that exists: the code-caps tool and the server foundation (configuration, structured logging, security headers, health routes, the PostgreSQL schema with its migration runner, and a Postgres 18 test setup). The GitHub App, webhooks, jobs, login, signing and the web UI are not built yet. This README and [`CLAUDE.md`](CLAUDE.md) are the source of truth for scope, stack and quality gates. Version numbers, flags and config keys below were verified against live sources on 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
+> **Status: server foundation.** The toolchain (Yarn 4, TypeScript, Biome, ESLint, Vitest at 100%, type-coverage, Knip, FTA, the caps ratchet, Lefthook hooks, GitHub Actions CI) is in place and green on everything that exists: the code-caps tool and the server foundation (configuration, structured logging, security headers, health routes, the PostgreSQL schema with its migration runner, and a Postgres 18 test setup). The GitHub App, webhooks, jobs, login, signing and the web UI are not built yet. This README, [`CLAUDE.md`](CLAUDE.md) (the operating contract) and the documents it lists are the source of truth for scope, stack and quality gates. Version numbers, flags and config keys below were verified against live sources on 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
 
 ## Why another CLA tool
 
@@ -124,10 +124,15 @@ Items marked (planned) do not exist yet.
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
 ├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
 ├── docs/ci-runners.md           CI runner policy: shared self-hosted runners, fork approval, ports, job rules
+├── docs/development.md          status and the package.json scripts (exists or deferred)
+├── docs/quality-gates.md        thresholds, TypeScript setup, testing conventions, escape hatches
+├── docs/architecture.md         architecture rules (layering, webhooks, evaluation, auth, cookies, start-up)
+├── docs/tooling-gotchas.md      tool facts and traps, GitNexus, open tool verifications
+├── docs/EPICS_STORIES.md        work queue index; the stories are in docs/epics/
 ├── scripts/eslint-layers.ts     the layering rules of the ESLint config, and their test
 ├── scripts/check-code-caps.ts   structure-cap ratchet, entry (runs natively on Node 26)
 ├── scripts/code-caps/           its modules (types, naming, nesting, collector, measure, files, baseline,
-│                                report, cli) and tests; a port of the Python tool
+│                                report, cli) and tests; a port of the Python tool; README.md describes the tool
 ├── scripts/ci/                  CI helpers, run natively: free-port, postgres (start/stop the CI database container),
 │                                check-runners (the workflow guard); logic and tests in lib/
 ├── scripts/dev/                 db.ts: local database on a random port (up, down, url, run); install-hooks.ts: the postinstall; logic and tests in lib/
@@ -146,7 +151,7 @@ Items marked (planned) do not exist yet.
 ├── tsconfig.json                solution-style root (files: [])
 ├── tsconfig.base.json  tsconfig.server.json  tsconfig.server.test.json
 ├── tsconfig.scripts.json  tsconfig.node.json
-├── README.md  CLAUDE.md
+├── README.md  CLAUDE.md  CONTRIBUTING.md  CHANGELOG.md
 ```
 
 The server compiles with `tsconfig.server.json` (composite, emits `dist/`, excludes tests, test helpers and the PGlite adapter). `tsconfig.server.test.json` type-checks the same sources plus every test, and ESLint and type-coverage run over both.
@@ -208,6 +213,17 @@ Revocation is prospective: `revoked_at` marks the signature invalid for *future*
 | Branch protection | Pin the required check to this app (ruleset `integration_id`) |
 
 Gotchas worth remembering: the required check must have reported within 7 days to be selectable; passing conclusions are `success`, `skipped`, `neutral`; webhook response budget is 10 s so handlers only verify, dedupe and enqueue; installation tokens give 5,000 requests/hour (more on larger installs) so use Octokit throttling and honour `retry-after`.
+
+### Rules
+
+- Minimum permissions are in the table above. Do not add permissions without a reason recorded in that table.
+- User tokens (`ghu_`) expire in 8 h and refresh tokens are single-use. We do not store them.
+- Installation tokens: 1 h. App JWT: max 10 min. Honour `retry-after` on 403/429 (secondary limits: 100 concurrent requests, 900 points/min per endpoint).
+- A check and a commit status with the same name must both pass; we only create Check Runs. CLA Assistant posts a legacy status with context `license/cla`: repos migrating from it must disable it first, or use a distinct check name.
+- Checks must be reported on the latest head SHA. "Re-run all checks" sends `check_suite.rerequested`, a single re-run sends `check_run.rerequested`: handle both (Checks: write covers them).
+- Supporting PR comments needs only Pull requests: write; `issue_comment` events need Issues: read.
+- The App supports multiple private keys: deploy the new key before deleting the old one.
+- Verify the noreply email form (`ID+login@users.noreply.github.com`) and the `web-flow` committer identity before using them to map emails.
 
 ## Security and privacy
 
@@ -272,7 +288,7 @@ Order is cheap and deterministic first, expensive and flaky last, and each step 
 
 Today `lefthook.yml` has no Trivy or Semgrep job: they land with their CI jobs (a hook job must have a CI counterpart), and the `pre-push` hook calls the same `package.json` scripts as CI and `yarn gate` (`yarn lint:biome`, `yarn typecheck`, `yarn lint:eslint`, `yarn type-coverage`, `yarn knip`, `yarn fta`, `yarn caps`, `yarn ci:runners`, `yarn coverage`). `pre-commit` runs staged-file variants of the binaries (`biome check --write`, `eslint`, `vitest related`) and shares only `yarn caps`. `skip: [merge, rebase]` is set on the slow `pre-commit` jobs only; on `pre-push` it would let `yarn gate` pass without running during a rebase. Budgets are targets, not measurements. `lefthook.yml` uses `piped: true` so a failed step stops the rest, with `group: parallel` for the independent static checks in step 3. Formatting runs before linting so lint sees the final text; types run before tests; coverage is last in the hook because it is the most expensive and meaningless if static gates fail. `CI=1` makes Vitest refuse to write new snapshots, so a push cannot go green with uncommitted snapshot files. Mutation, e2e, leak and Qodana runs are nondeterministic or slow and stay in CI.
 
-Network-bound jobs (Trivy vulnerability DB, Semgrep registry rules) can be skipped offline with `LEFTHOOK_EXCLUDE=trivy,semgrep`; that is the only sanctioned hook exclusion, and CI still enforces them. Downloading Semgrep rules into a git-ignored `rules/` cache removes the registry dependency; do not commit them (see CLAUDE.md, Semgrep).
+Network-bound jobs (Trivy vulnerability DB, Semgrep registry rules) can be skipped offline with `LEFTHOOK_EXCLUDE=trivy,semgrep`; that is the only sanctioned hook exclusion, and CI still enforces them. Downloading Semgrep rules into a git-ignored `rules/` cache removes the registry dependency; do not commit them (see [`docs/tooling-gotchas.md`](docs/tooling-gotchas.md), Semgrep).
 
 ### CI (authoritative)
 
@@ -289,7 +305,7 @@ Network-bound jobs (Trivy vulnerability DB, Semgrep registry rules) can be skipp
 | `leaks` (deferred) | `coverage` | memlab; nightly and release only |
 | `qodana` (deferred) | `coverage` | Maintainer-side; needs a token, skipped for fork PRs |
 
-Branch protection on `main` requires `static` and `coverage` today (`postgres` is informative until the team decides to require it); `mutation`, `e2e`, `semgrep` and `trivy` become required once they are stable in CI (see CLAUDE.md, Repository protection). `yarn gate` is the local equivalent of `static` plus `coverage`. Dependabot (`.github/dependabot.yml`) keeps the SHA-pinned Actions and the npm dependencies current, with a one-week cooldown, grouped; TypeScript stays on 6.0.x.
+Branch protection on `main` requires `static` and `coverage` today (`postgres` is informative until the team decides to require it); `mutation`, `e2e`, `semgrep` and `trivy` become required once they are stable in CI (see [`CONTRIBUTING.md`](CONTRIBUTING.md), Repository protection). `yarn gate` is the local equivalent of `static` plus `coverage`. Dependabot (`.github/dependabot.yml`) keeps the SHA-pinned Actions and the npm dependencies current, with a one-week cooldown, grouped; TypeScript stays on 6.0.x.
 
 ## Decisions
 
@@ -339,7 +355,7 @@ DATABASE_URL="$(yarn db:url owner)" yarn test
 
 The CI `postgres` job does the same with a throw-away container (`yarn ci:postgres start`, then `yarn test`, then `yarn ci:postgres stop`). A random port: `yarn ci:port`. Check the workflows against the runner policy: `yarn ci:runners`.
 
-Optional: `gitnexus analyze --skip-agents-md` builds a code knowledge graph (dev tooling only). A webhook tunnel (smee.io or similar) arrives with the GitHub App slice. Script names and their state (exists or deferred) are in [`CLAUDE.md`](CLAUDE.md).
+Optional: `gitnexus analyze --skip-agents-md` builds a code knowledge graph (dev tooling only). A webhook tunnel (smee.io or similar) arrives with the GitHub App slice. Script names and their state (exists or deferred) are in [`docs/development.md`](docs/development.md).
 
 ### Configuration
 
@@ -377,6 +393,7 @@ Resolved: self-hosted only (one instance per server, serving several orgs, no ho
 
 - AGPLv3 "only" or "or later"? `AGPL-3.0-only` is assumed. GitNexus (dev tooling) is PolyForm Noncommercial, which matters if this becomes a commercial product.
 - Is a Qodana licence and token available? Until then Qodana stays an optional maintainer-side check (epic E20).
+- Legal: e-signature validity (ESIGN, eIDAS) and GDPR retention choices need counsel; this repo contains no legal advice.
 
 ## License
 
