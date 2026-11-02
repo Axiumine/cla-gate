@@ -21,7 +21,7 @@ const DISCOVERY_CONCURRENCY = 5;
  * a caller that lists things shows what it found and says the list may be incomplete, and one that must decide (the
  * denial path) treats it as no role.
  */
-export interface RoleDiscovery {
+interface RoleDiscovery {
   readonly role: 'repo_admin' | 'none';
   readonly truncated: boolean;
 }

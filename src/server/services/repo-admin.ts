@@ -17,7 +17,10 @@ import { withRoleDeadline } from './role-deadline.ts';
 // The owner and the name of the repository are `repositories.full_name`, a display snapshot that E05 keeps fresh, and the
 // login of the viewer is `users.login` as the last login wrote it: both are only the handle of the lookup. A repository
 // that was renamed or transferred since the last sync, or a login that was renamed since the last login, answers 404 and
-// so fails closed until the next sync or login refreshes the name. Nothing is ever keyed on a name.
+// so fails closed until the next sync or login refreshes the name. Nothing is ever keyed on a name. One gap remains: GitHub
+// may give a repository's old name to a new repository before that sync, and the call is then answered about the new one
+// (the answer names no repository id to check). Addressing the repository by its id fixes it, once that call is checked
+// against the real App; the open questions of docs/decisions.md say so.
 
 /** The columns of a stored installation the lookup reads. */
 export type RepoAdminInstallation = Pick<InstallationRow, 'github_installation_id'>;

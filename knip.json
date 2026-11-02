@@ -13,18 +13,11 @@
     "tests/leaks/scenarios/*.ts",
     "tests/leaks/control/*.ts",
     "src/server/domain/eligibility.ts!",
-    "src/server/domain/authz.ts!",
     "src/server/adapters/http/tenant-access.ts!",
     "src/server/adapters/db/tenant-scope.ts!",
     "src/server/adapters/http/tenant-resolvers.ts!",
     "src/server/services/installation-store.ts!",
-    "src/server/services/org-admin.ts!",
-    "src/server/services/probe-budget.ts!",
-    "src/server/services/repo-admin.ts!",
-    "src/server/services/repo-admin-discovery.ts!",
-    "src/server/services/revoke-user-sessions.ts!",
-    "src/server/services/role-lookup-budget.ts!",
-    "src/server/services/role-lookups.ts!"
+    "src/server/services/revoke-user-sessions.ts!"
   ],
   "project": [
     "scripts/**/*.ts!",
