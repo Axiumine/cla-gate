@@ -5,6 +5,7 @@ import type { GithubId } from '../../shared/github-id.ts';
 import { parseAllowedAccountIds } from './allowed-accounts.ts';
 import { secretField } from './env-fields.ts';
 import { type GitHubPrivateKey, parseGitHubPrivateKey } from './github-key.ts';
+import { parseOperatorGithubIds } from './operator-ids.ts';
 import { Secret } from './secret.ts';
 
 // The GitHub App part of the environment schema in env-schema.ts: the variables and the rules that tie them together.
@@ -36,6 +37,21 @@ function toAllowedAccountIds(value: string, ctx: z.core.$RefinementCtx<string>):
 /** The numeric account ids the instance serves besides the App owner's: see {@link parseAllowedAccountIds}. */
 const allowedAccountIdsField = z.string().transform(toAllowedAccountIds);
 
+/**
+ * @returns the ids; undefined for blank text (the variable is then unset, E11-S08); for text that is not a list of user ids
+ * it records an issue and returns `z.NEVER`.
+ */
+function toOperatorIds(value: string, ctx: z.core.$RefinementCtx<string>): readonly GithubId[] | undefined {
+  const ids = parseOperatorGithubIds(value);
+  if (ids === undefined) {
+    ctx.issues.push({ code: 'custom', message: 'invalid', input: value });
+    return z.NEVER;
+  }
+  return ids.length === 0 ? undefined : ids;
+}
+/** The numeric ids of the instance operators (E11-S08): see {@link parseOperatorGithubIds}. */
+const operatorIdsField = z.string().transform(toOperatorIds);
+
 /** A webhook secret: at least 16 characters, as a Secret (E06-S01). GitHub's own advice is a long random string. */
 const webhookSecretField = z
   .string()
@@ -56,6 +72,7 @@ export const githubFields = {
   GITHUB_APP_PRIVATE_KEY: privateKeyField.optional(),
   GITHUB_APP_PRIVATE_KEY_PREVIOUS: privateKeyField.optional(),
   GITHUB_ALLOWED_ACCOUNT_IDS: allowedAccountIdsField.optional(),
+  OPERATOR_GITHUB_IDS: operatorIdsField.optional(),
   GITHUB_WEBHOOK_SECRET: webhookSecretField.optional(),
   GITHUB_WEBHOOK_SECRET_PREVIOUS: webhookSecretField.optional(),
   GITHUB_CLIENT_ID: z.string().min(1).optional(),

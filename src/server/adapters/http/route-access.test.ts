@@ -183,6 +183,7 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
   expect(app.routeAccess.map((entry) => `${entry.method} ${entry.url}`)).toEqual([
     'GET /healthz',
     'GET /readyz',
+    'GET /api/operator/installations',
     'POST /webhooks/github',
   ]);
 });

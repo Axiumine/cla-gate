@@ -20,6 +20,11 @@ export interface GithubConfig {
    * admission policy adds the owner once the self-check has named it.
    */
   readonly allowedAccountIds: readonly GithubId[];
+  /**
+   * The numeric GitHub ids of the instance operators (E11-S08); undefined when `OPERATOR_GITHUB_IDS` is unset, which leaves
+   * the default: the App owner when it is a user, nobody when it is an organisation.
+   */
+  readonly operatorGithubIds: readonly GithubId[] | undefined;
   /** Signs every webhook delivery (E06-S01); at least 16 characters. */
   readonly webhookSecret: Secret | undefined;
   /** The secret kept during a rotation: a delivery signed with it is still accepted; never equal to {@link webhookSecret}. */
@@ -37,6 +42,7 @@ export function toGithubConfig(env: GithubVariables): GithubConfig {
     privateKey: env.GITHUB_APP_PRIVATE_KEY,
     previousPrivateKey: env.GITHUB_APP_PRIVATE_KEY_PREVIOUS,
     allowedAccountIds: env.GITHUB_ALLOWED_ACCOUNT_IDS ?? [],
+    operatorGithubIds: env.OPERATOR_GITHUB_IDS,
     webhookSecret: env.GITHUB_WEBHOOK_SECRET,
     previousWebhookSecret: env.GITHUB_WEBHOOK_SECRET_PREVIOUS,
     clientId: env.GITHUB_CLIENT_ID,

@@ -13,6 +13,7 @@ import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { buildApp } from './app.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
+import type { OperatorPolicies } from './services/operator-policies.ts';
 import type { Clock } from './services/ports/clock.ts';
 import type { JobEnqueuer } from './services/ports/jobs.ts';
 import type { RoleCache } from './services/role-cache.ts';
@@ -85,6 +86,8 @@ export interface TestAppOptions {
   readonly roleCache?: RoleCache;
   /** Where the guard of a tenant route reads the roles (E11-S05); defaults to the app's own, which fails every call as an outage. */
   readonly github?: RoleGitHub;
+  /** Who operates the instance (E11-S08); defaults to the app's own, from `OPERATOR_GITHUB_IDS` in `env`. */
+  readonly operators?: OperatorPolicies;
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */

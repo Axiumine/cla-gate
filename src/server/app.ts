@@ -13,6 +13,7 @@ import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
 import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
+import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
@@ -26,6 +27,7 @@ import { webhookRoutes } from './adapters/http/webhook-routes.ts';
 import { authSettings } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
+import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer } from './services/ports/jobs.ts';
 import { RoleCache } from './services/role-cache.ts';
@@ -57,6 +59,11 @@ export interface AppOptions {
    * to one that fails every call as an outage, so a server with no GitHub App never allows a tenant that needs a role from GitHub.
    */
   readonly github?: RoleGitHub | undefined;
+  /**
+   * Who operates the instance (E11-S08): `boot` passes the policy it built with the owner of the App. Defaults to the one
+   * `OPERATOR_GITHUB_IDS` names, or to none when it is unset (the owner of the App is not known without the GitHub client).
+   */
+  readonly operators?: OperatorPolicies | undefined;
 }
 
 /**
@@ -81,9 +88,13 @@ async function registerLoginChecks(
   // After the request guards, so the `Origin` and CSRF checks answer first; before the routes, which inherit the hook.
   // The guard of the tenant routes (E11-S05) reads the roles through the one role cache.
   const github = options.github ?? roleGitHubNotWired;
+  const operators =
+    options.operators ??
+    createOperatorPolicies({ configured: config.github.operatorGithubIds, owner: undefined, logger: app.log });
   guardRouteAccess(app, {
     db,
     authorize: createTenantAuthorizer({ db, github, cache: roleCache, clock, log: app.log }),
+    operators,
   });
   if (loginSettings !== undefined) {
     await registerAuth(app, {
@@ -134,6 +145,8 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     db,
     readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
   });
+
+  await app.register(operatorRoutes, { db });
 
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },

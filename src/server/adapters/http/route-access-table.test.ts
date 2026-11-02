@@ -112,7 +112,13 @@ test('the authenticated routes are the session read and the logout, and none has
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the application has no tenant or operator route yet, and every tenant route it gets is read or write and write when it changes data', async () => {
+test('the operator routes are exactly the list of the operator, and the application has no tenant route yet', async () => {
+  const { table } = await tableOfTheApp();
+  expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
+  expect(table.filter((entry) => typeof entry.access === 'object')).toEqual([]);
+});
+
+test('every tenant route the application gets is read or write and write when it changes data', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => declaredAccess(entry.access) === undefined)).toEqual([]);
   expect(tenantModeOffenders(table)).toEqual([]);

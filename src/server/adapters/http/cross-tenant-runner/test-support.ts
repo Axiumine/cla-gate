@@ -67,11 +67,12 @@ function headersOf(
 /**
  * The world of the matrix: the real app (routes are added before the first request), two tenants with five people who are
  * logged in, and a `StubRoleLookup` that answers what GitHub says about them. `ask(who, spec)` sends a request as `who`
- * (nobody: no cookie); a state-changing one carries the origin and the token the app demands.
+ * (nobody: no cookie); a state-changing one carries the origin and the token the app demands. `env` adds to the login
+ * settings of the app (the operator ids of E11-S08, for instance).
  */
-export async function matrixWorld() {
+export async function matrixWorld(env: Readonly<Record<string, string>> = {}) {
   const roles = new StubRoleLookup();
-  const world = await authWorld({}, { github: roles });
+  const world = await authWorld(env, { github: roles });
   const seeded = await twoTenants(world.db, roles);
   const sessions = {
     admin1: await world.login(seeded.people.admin1.githubId),
@@ -294,6 +295,54 @@ export async function assertInactiveCase(
   } else {
     const served = await world.ask('admin1', c.request(plan.ok));
     expect(served.statusCode, `${route} of a ${state} tenant as the admin the ledger remembers`).toBe(c.success ?? 200);
+  }
+  await setStateOfTenant1(world, null);
+}
+
+/**
+ * The world of the operator checks (E11-S08): the matrix world with `outsider` as the one operator of the instance. They
+ * are the person GitHub knows nothing about in either tenant, so the operator role is the only thing they have.
+ */
+export async function operatorWorld() {
+  const world = await matrixWorld({ OPERATOR_GITHUB_IDS: '31005' });
+  expect(world.people.outsider.githubId).toBe(31_005);
+  return world;
+}
+
+/** Every resource of the two tenants an operator may try, and the ids of the two tenants crossed. */
+const operatorTargets = (world: MatrixWorld): MatrixTarget[] => [
+  plainTarget(world.t1),
+  scopedTarget(world.t1),
+  plainTarget(world.t2),
+  scopedTarget(world.t2),
+  ...crossed(world),
+];
+
+/**
+ * Runs one case of the route table for the operator of `operatorWorld` (E11-S08), with tenant 1 in `state` (active when none
+ * is given), then puts it back. An operator who is neither org admin nor admin the ledger remembers is a stranger to every
+ * tenant: each resource of both tenants, and the crossed ids, get the `404` of an unknown id byte for byte, and no row of any
+ * tenant table changes. While tenant 1 is active the admin of its organisation is shown to get the success of the case, so
+ * the request is a valid one and the `404` is the operator's.
+ */
+export async function assertOperatorCase(
+  world: MatrixWorld,
+  route: string,
+  c: CrossTenantCase,
+  state: InactiveState | null = null,
+): Promise<void> {
+  await setStateOfTenant1(world, state);
+  const deny = denialProbe(world, route);
+  const unknown = await deny('outsider', c.request(UNKNOWN_TARGET), 404, ' (the operator)');
+  for (const target of operatorTargets(world)) {
+    expect(
+      await deny('outsider', c.request(target), 404, ' (the operator)'),
+      `${route} gives the operator more than the answer for an unknown id`,
+    ).toEqual(unknown);
+  }
+  if (state === null) {
+    const control = await world.ask('admin1', c.request(planOf(c.endpointClass, world.t1).ok));
+    expect(control.statusCode, `${route} as the admin of the tenant`).toBe(c.success ?? 200);
   }
   await setStateOfTenant1(world, null);
 }

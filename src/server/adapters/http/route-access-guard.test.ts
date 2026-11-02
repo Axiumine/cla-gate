@@ -7,8 +7,8 @@ import { tenantAccess } from './tenant-access.ts';
 
 // What the access declaration does to a request (E11-S01): `public` and `webhook` routes are left alone, an `authenticated`
 // route answers 401 without a live session (through requireAuth of E10) before anything else is looked up, a `tenant` route
-// whose resolver names nothing and an `operator` route, whose guard comes in E11-S08, let nobody through. The guard of a
-// tenant route is tested in tenant-guard.test.ts.
+// whose resolver names nothing and an `operator` route of an instance that has no operator let nobody through. The guard of
+// a tenant route is tested in tenant-guard.test.ts and the one of an operator route in operator-guard.test.ts.
 
 const CLEARED = `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`;
 
@@ -136,7 +136,7 @@ function shape(response: { statusCode: number; headers: Record<string, unknown>;
 test.each([
   ['a tenant read route whose resolver names nothing', 'GET', '/t/tenant/7'],
   ['a tenant write route whose resolver names nothing', 'POST', '/t/tenant/7'],
-  ['an operator route', 'GET', '/t/operator'],
+  ['an operator route of an instance with no operator', 'GET', '/t/operator'],
 ])(
   '%s refuses a caller with no session by 401, and one with a session by the 404 of a route that does not exist',
   async (_name, method, url) => {

@@ -130,6 +130,7 @@ test('a real secret in the environment of the developer never reaches the applic
     GITHUB_APP_PRIVATE_KEY: 'real-key',
     GITHUB_APP_ID: '4242',
     GITHUB_ALLOWED_ACCOUNT_IDS: '777',
+    OPERATOR_GITHUB_IDS: '778',
   };
   const env = appEnvironment({ env: { ...OPTIONS.env, ...real }, port: 41_234, randomHex: counting });
   expect(Object.values(env).join('\n')).not.toMatch(/real-/);
@@ -142,6 +143,7 @@ test('the GitHub App variables are blank, so the application starts without an A
     GITHUB_APP_PRIVATE_KEY: '',
     GITHUB_APP_PRIVATE_KEY_PREVIOUS: '',
     GITHUB_ALLOWED_ACCOUNT_IDS: '',
+    OPERATOR_GITHUB_IDS: '',
   });
 });
 
