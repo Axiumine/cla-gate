@@ -37,7 +37,7 @@ const coveringBasisSchema = z.discriminatedUnion('kind', [signatureBasisSchema, 
 export const actorSchema = z
   .strictObject({
     githubId: idSchema,
-    roles: z.array(z.enum(ROLES)).min(1),
+    roles: z.array(z.enum(ROLES)).min(1).max(ROLES.length),
     covered: z.boolean(),
     basis: coveringBasisSchema.nullable(),
   })

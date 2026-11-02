@@ -12,6 +12,17 @@ import { actorSchema, advisorySchema, countSchema, idSchema, unlinkedSchema } fr
 /** Version of the stored shape. Bump it, and keep reading the old one, when a field changes meaning. */
 const DETAILS_VERSION = 1;
 
+/**
+ * The most entries a stored value keeps in each list. A pull request has at most 2,000 commits, but each can bring two
+ * identities and twenty trailers, so the lists are bounded here, in the schema, rather than by a size we hope for: the
+ * largest value that passes this schema is under 256 KiB (a test builds it). The engine keeps the entries that explain
+ * a failure first (the uncovered actors, the findings without an override) and counts the rest in `omitted`.
+ */
+export const STORED_LIMITS = { actors: 500, unlinked: 500, advisories: 500 } as const;
+
+/** How many entries of each list were left out of the stored value to keep it small. Absent when nothing was. */
+const omittedSchema = z.strictObject({ actors: countSchema, unlinked: countSchema, advisories: countSchema });
+
 /** Both or neither: a repository without an active CLA has no document and no major. */
 const hasPolicyOrNeither = (details: { documentId: number | null; activeMajor: number | null }): boolean =>
   (details.documentId === null) === (details.activeMajor === null);
@@ -25,15 +36,16 @@ export const PrEvaluationDetails = z
   .strictObject({
     version: z.literal(DETAILS_VERSION),
     outcome: z.enum(OUTCOMES),
-    failureCodes: z.array(z.enum(FAILURE_CODES)),
+    failureCodes: z.array(z.enum(FAILURE_CODES)).max(FAILURE_CODES.length),
     documentId: idSchema.nullable(),
     activeMajor: idSchema.nullable(),
     commitCount: countSchema,
     mergeCommitsSkipped: countSchema,
     listing: z.enum(LISTING_STATES),
-    actors: z.array(actorSchema),
-    unlinked: z.array(unlinkedSchema),
-    advisories: z.array(advisorySchema),
+    actors: z.array(actorSchema).max(STORED_LIMITS.actors),
+    unlinked: z.array(unlinkedSchema).max(STORED_LIMITS.unlinked),
+    advisories: z.array(advisorySchema).max(STORED_LIMITS.advisories),
+    omitted: omittedSchema.optional(),
   })
   .refine(hasPolicyOrNeither, { message: 'documentId and activeMajor are both set or both null.' })
   .refine(outcomeMatchesCodes, { message: 'The outcome is success exactly when failureCodes is empty.' });

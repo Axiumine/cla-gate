@@ -7,7 +7,8 @@ import { storedDetailsSample } from './test-support.ts';
 // A JSON value, so that a sample can be copied and broken one field at a time without a single `any`.
 type Json = null | boolean | number | string | Json[] | JsonObject;
 interface JsonObject {
-  [key: string]: Json;
+  // `undefined` because the schema type has optional keys (`omitted?`), which a plain JSON value never has.
+  [key: string]: Json | undefined;
 }
 type Path = readonly (string | number)[];
 const REMOVE = Symbol('remove');
