@@ -3,6 +3,7 @@
 import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import type {
+  GitHubCheckRun,
   GitHubClient,
   GitHubCommit,
   GitHubInstallation,
@@ -75,6 +76,8 @@ export interface GitHubWorld {
     headSha: string,
     pulls: readonly GitHubPullRequestRef[],
   ) => void;
+  /** A Check Run of a repository (`owner/name`) of an installation, as somebody else posted it or with an id a test chooses. */
+  readonly addCheckRun: (githubInstallationId: GithubId, fullName: string, run: GitHubCheckRun) => void;
   /** The instance does not serve this installation: its gate refuses it. */
   readonly refuse: (githubInstallationId: GithubId, reason: NotAdmittedReason) => void;
   /** How many requests reached GitHub (the fake: how many calls it served). */
@@ -148,6 +151,9 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
     },
     setCommitPullRequests: (githubInstallationId, fullName, headSha, pulls) => {
       fake.setCommitPullRequests(githubInstallationId, fullName, headSha, pulls);
+    },
+    addCheckRun: (githubInstallationId, fullName, run) => {
+      fake.addCheckRun(githubInstallationId, fullName, run);
     },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);

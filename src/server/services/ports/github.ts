@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../../shared/github-id.ts';
+import type { CheckOutput } from '../../domain/reporting/check-view.ts';
 
 // The only door to GitHub for the services (E05-S04). The domain and src/shared never import it. The Octokit adapter
 // (src/server/adapters/github) implements it for production and `FakeGitHub` (src/server/services/test-support.ts) in
@@ -13,7 +14,7 @@ import type { GithubId } from '../../../shared/github-id.ts';
 // What a method throws is in `./github-errors.ts`: 401 is GitHubAuthError, 404 GitHubNotFoundError (unless the method
 // resolves null for it), another 403 GitHubForbiddenError, a 5xx or a network failure GitHubUnavailableError, a rate
 // limit that is too long to wait out (or that came back after two waits) GitHubRateLimitedError, an answer that is not
-// what the schema says GitHubResponseError, and an installation the instance does not serve
+// what the schema says GitHubResponseError, 422 GitHubUnprocessableError (E09-S05), and an installation the instance does not serve
 // InstallationNotAdmittedError (installation-level methods only, before any request).
 
 /** The account types an App can be owned by. */
@@ -107,6 +108,41 @@ export interface GitHubIssueComment {
   readonly body: string;
   /** The account that wrote it, or null when GitHub shows none. The numeric id is the identity; there is no login. */
   readonly author: { readonly id: GithubId; readonly type: GitHubCommentAuthorType } | null;
+}
+
+/**
+ * Where a Check Run is in its life, as the platform reads it (E09-S05). GitHub knows more states for the runs of other Apps
+ * (`waiting`, `requested`, `pending`); each of them reads as `queued`, which is not completed.
+ */
+type GitHubCheckStatus = 'queued' | 'in_progress' | 'completed';
+
+/**
+ * A Check Run as the reporter reads it: enough to find the run of this App for a head SHA, to tell whether it is finished and
+ * to record its id. The id is the identity. `appId` is the App that created the run (null when GitHub shows none), which is
+ * what tells our run from a run of the same name that somebody else posted.
+ */
+export interface GitHubCheckRun {
+  readonly id: GithubId;
+  /** Lower-case commit SHA the run is on. */
+  readonly headSha: string;
+  readonly status: GitHubCheckStatus;
+  readonly appId: GithubId | null;
+  /** What the creator of the run called it (the platform sets the id of its `pr_evaluations` row); null when it set none. */
+  readonly externalId: string | null;
+}
+
+/**
+ * What a Check Run is given when it is created or updated (E09-S05): the `status`, `conclusion` and `output` that
+ * `renderCheckOutput` makes, and the rest GitHub takes. A completed run carries a conclusion and `completedAt`; an
+ * `in_progress` one carries neither and may carry `startedAt`. The name of the run is the platform's `CHECK_RUN_NAME`, always.
+ */
+export interface CheckRunWrite extends CheckOutput {
+  readonly startedAt?: Date;
+  readonly completedAt?: Date;
+  /** A reference of ours to the run: the id of the `pr_evaluations` row, as text. */
+  readonly externalId?: string;
+  /** Where "Details" leads; absent for a run with nothing to link to. */
+  readonly detailsUrl?: string;
 }
 
 /** A pull request as a listing names it (E07-S07): enough to tell whether a commit is the head of an open one. */
@@ -278,6 +314,51 @@ export interface GitHubClient {
     baseSha: string,
     headSha: string,
   ): Promise<{ readonly mergeBaseSha: string }>;
+
+  /**
+   * `POST /repos/{owner}/{repo}/check-runs` with the installation's token (Checks: write; E09-S05): a new Check Run named
+   * `CHECK_RUN_NAME` on `headSha`, with the status, conclusion and output of `write`. Always a new run, never a reuse: the caller
+   * looks first.
+   * @throws GitHubNotFoundError for a repository GitHub does not have, one the installation does not reach and a name or SHA
+   * GitHub cannot hold; GitHubForbiddenError when the installation lacks Checks: write; GitHubUnprocessableError when GitHub
+   * refuses the body (or a commit it does not have).
+   */
+  createCheckRun(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    write: CheckRunWrite,
+  ): Promise<GitHubCheckRun>;
+
+  /**
+   * `PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}` with the installation's token (Checks: write; E09-S05): the
+   * status, conclusion and output of `write` on a run. A completed run is sent the same call; whether GitHub accepts it is not
+   * verified, and the caller falls back to a new run when it answers 404 or 422.
+   * @throws GitHubNotFoundError for a run, repository or name GitHub does not have; GitHubForbiddenError when the installation
+   * lacks Checks: write; GitHubUnprocessableError when GitHub refuses the update.
+   */
+  updateCheckRun(
+    githubInstallationId: GithubId,
+    fullName: string,
+    checkRunId: GithubId,
+    write: CheckRunWrite,
+  ): Promise<GitHubCheckRun>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/check-runs/{check_run_id}` with the installation's token (E09-S05). Resolves null for a run
+   * GitHub does not have, and for a name GitHub cannot hold.
+   */
+  getCheckRun(githubInstallationId: GithubId, fullName: string, checkRunId: GithubId): Promise<GitHubCheckRun | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/commits/{sha}/check-runs?check_name=license%2Fcla&filter=latest&per_page=100` with the
+   * installation's token (E09-S05): the runs named `CHECK_RUN_NAME` on a commit, whichever App posted them (the first
+   * page: the filter leaves the latest run of each App). Resolves an empty list for a commit with no such run and for a SHA
+   * GitHub cannot hold.
+   * @throws GitHubNotFoundError for a repository GitHub does not have, one the installation does not reach and a name GitHub
+   * cannot hold.
+   */
+  listCheckRunsForRef(githubInstallationId: GithubId, fullName: string, headSha: string): Promise<GitHubCheckRun[]>;
 
   /**
    * The same client for one unit of work, such as a job (E07-S03): a request is abandoned, and rejects with the reason of

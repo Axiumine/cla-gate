@@ -105,6 +105,22 @@ export class GitHubForbiddenError extends Error {
   }
 }
 
+/**
+ * GitHub answered 422 to a request: the request was understood and refused for what it says (E09-S05, a Check Run that
+ * cannot be updated or a body it will not take). The cases that use it, a Check Run `PATCH` that falls back to a new run
+ * and the minimal-output retry of E09-S06, tell it from an outage; the message names the route only.
+ */
+export class GitHubUnprocessableError extends Error {
+  override readonly name = 'GitHubUnprocessableError';
+  /** The route template, for example `PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}`. */
+  readonly route: string;
+
+  constructor(route: string) {
+    super(`GitHub answered 422 to ${route}`);
+    this.route = route;
+  }
+}
+
 // What the rate limits add (E05-S05). The adapter waits out a short limit itself; this is what is left for the caller.
 
 /**

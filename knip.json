@@ -37,7 +37,8 @@
     "src/server/services/installation-store.ts!",
     "src/server/services/revoke-user-sessions.ts!",
     "src/server/services/repository-job-enqueue.ts!",
-    "src/server/services/network-metadata-purge.ts!"
+    "src/server/services/network-metadata-purge.ts!",
+    "src/server/services/reporting/create-check-run-reporter.ts!"
   ],
   "project": [
     "scripts/**/*.ts!",

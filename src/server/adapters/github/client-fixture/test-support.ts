@@ -28,33 +28,40 @@ export interface RouteCall {
   /** The query string with its `?`, or an empty string. */
   readonly search: string;
   readonly headers: Headers;
+  /** The body as text: empty for a request that has none. */
+  readonly body: string;
 }
 
 /** How a mocked route answers. */
 export type RouteAnswer = (call: RouteCall) => Response | Promise<Response>;
 
-/** Answers by `"GET /path/:param"`; every other request to api.github.com is an error. */
+/** Answers by `"GET /path/:param"` (the method is `GET`, `POST` or `PATCH`); every other request to api.github.com is an error. */
 export type Routes = Readonly<Record<string, RouteAnswer>>;
 
 /** A request line as the tests spell it: `GET /repositories/101`, query included. */
 export const line = (call: RouteCall): string => `${call.method} ${call.path}${call.search}`;
 
-/** Serves `routes` until the test ends and returns the calls received, in order. Every route is a GET. */
+/** Serves `routes` until the test ends and returns the calls received, in order. A route answers the method its key names. */
 export function serveRoutes(routes: Routes): RouteCall[] {
   const calls: RouteCall[] = [];
-  const handlers = Object.entries(routes).map(([spec, answer]) =>
-    http.get(`${GITHUB_API_ORIGIN}${spec.replace(/^GET /, '')}`, ({ request }) => {
+  const handlers = Object.entries(routes).map(([spec, answer]) => {
+    const [method = '', path = ''] = spec.split(' ');
+    return http.all(`${GITHUB_API_ORIGIN}${path}`, async ({ request }) => {
+      if (request.method !== method) {
+        return undefined;
+      }
       const url = new URL(request.url);
       const call: RouteCall = {
         method: request.method,
         path: url.pathname,
         search: url.search,
         headers: request.headers,
+        body: await request.clone().text(),
       };
       calls.push(call);
       return answer(call);
-    }),
-  );
+    });
+  });
   const server = setupServer(...handlers, guardPublicMembers().handler);
   server.listen({ onUnhandledFrame: 'error' });
   onTestFinished(() => {

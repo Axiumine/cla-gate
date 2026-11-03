@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
+import { CheckRunStore } from '../fake-check-runs/test-support.ts';
 import type {
   GitHubAppInfo,
+  GitHubCheckRun,
   GitHubCommit,
   GitHubCommitPage,
   GitHubInstallation,
@@ -146,7 +148,11 @@ export type GitHubMethod =
   | 'compareCommits'
   | 'getIssueComment'
   | 'listPullRequestsForCommit'
-  | 'listOpenPullRequests';
+  | 'listOpenPullRequests'
+  | 'createCheckRun'
+  | 'updateCheckRun'
+  | 'getCheckRun'
+  | 'listCheckRunsForRef';
 
 /** One call the fake served: the method and the installation id it was made for (undefined: not about one). */
 export interface RecordedCall {
@@ -172,6 +178,7 @@ export interface FakeState {
   readonly mergeBases: Map<string, string>;
   readonly comments: Map<string, GitHubIssueComment>;
   readonly commitPulls: Map<string, readonly GitHubPullRequestRef[]>;
+  readonly checkRuns: CheckRunStore;
   readonly observers: ((call: RecordedCall) => void)[];
   readonly failures: { method: GitHubMethod; error: Error }[];
   readonly hooks: { method: GitHubMethod; run: () => Promise<void> }[];
@@ -191,6 +198,7 @@ function freshState(): FakeState {
     mergeBases: new Map(),
     comments: new Map(),
     commitPulls: new Map(),
+    checkRuns: new CheckRunStore(),
     observers: [],
     failures: [],
     hooks: [],
@@ -287,6 +295,11 @@ export class FakeWorld {
     pulls: readonly GitHubPullRequestRef[],
   ): void {
     this.state.commitPulls.set(commitKey(githubInstallationId, fullName, headSha), pulls);
+  }
+
+  /** Adds a Check Run that somebody else posted, or one of ours with an id a test chooses, to a repository (`owner/name`) of an installation. */
+  addCheckRun(githubInstallationId: GithubId, fullName: string, run: GitHubCheckRun): void {
+    this.state.checkRuns.seed({ installationId: githubInstallationId, fullName }, run);
   }
 
   /** `listener` is told of every call the fake serves, in order, as it is recorded: what a test uses to order GitHub's calls among other events. */

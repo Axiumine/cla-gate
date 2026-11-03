@@ -217,3 +217,39 @@ export const pullRequestRefPageSchema = z.array(
     })
     .transform(({ number, state, head }) => ({ number, state, headSha: head.sha })),
 );
+
+/**
+ * The state of a Check Run (E09-S05). GitHub names more than the three the platform tells apart for the runs of other Apps
+ * (`waiting`, `requested`, `pending`); a state nobody here has a word for reads as `queued`, which is not completed, instead
+ * of failing the listing of a head SHA that another App also reports on.
+ */
+const checkStatusSchema = z.union([
+  z.enum(['queued', 'in_progress', 'completed']),
+  z.unknown().transform(() => 'queued' as const),
+]);
+
+/**
+ * One Check Run, from `POST` and `PATCH .../check-runs`, `GET .../check-runs/{id}` and each entry of the listing of a commit
+ * (E09-S05): the id, the commit, the state, the App that posted it (`app` is null for a run whose App was deleted) and the
+ * `external_id` of the creator. The output, the conclusion and the times are dropped: nothing reads them back.
+ */
+export const checkRunSchema = z
+  .object({
+    id: githubIdSchema,
+    head_sha: commitShaSchema,
+    status: checkStatusSchema,
+    external_id: z.string().nullish(),
+    app: z.object({ id: githubIdSchema }).nullish(),
+  })
+  .transform(({ id, head_sha, status, external_id, app }) => ({
+    id,
+    headSha: head_sha,
+    status,
+    appId: app?.id ?? null,
+    externalId: external_id ?? null,
+  }));
+
+/** `GET /repos/{owner}/{repo}/commits/{ref}/check-runs`: one page, as its runs. `total_count` is not used. */
+export const checkRunPageSchema = z
+  .object({ check_runs: z.array(checkRunSchema) })
+  .transform((page) => page.check_runs);

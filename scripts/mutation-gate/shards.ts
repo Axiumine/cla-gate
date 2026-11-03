@@ -81,8 +81,9 @@ export const SERVER_SHARDS: readonly Shard[] = [
   { name: 'services-other', mutate: ['src/server/services/[!i]*.ts', 'src/server/services/export/**/*.ts'] },
   // The job queue and its workers (E07): pg-boss runtime, producer, queue policy, serialisation, workers and the sweep schedule.
   { name: 'jobs-adapter', mutate: ['src/server/adapters/jobs/**/*.ts'] },
-  // The evaluate-pr job (E07-S04): the pull request and commit reads, the policy facts and the evaluation protocol.
-  { name: 'evaluate-pr', mutate: ['src/server/services/evaluate-pr/**/*.ts'] },
+  // The evaluate-pr job (E07-S04): the pull request and commit reads, the policy facts and the evaluation protocol. The Check Run
+  // reporter it calls (E09-S05, services/reporting) joins it: it is the other half of that job's protocol.
+  { name: 'evaluate-pr', mutate: ['src/server/services/evaluate-pr/**/*.ts', 'src/server/services/reporting/**/*.ts'] },
   // The job handlers of E07-S05 to S07: the dead-letter handler, the close-pr job, and /recheck and Re-run.
   {
     name: 'job-handlers',

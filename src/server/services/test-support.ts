@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
+import { lacksConclusion, type StoredCheckRun } from './fake-check-runs/test-support.ts';
 import {
   abortable,
   COMMIT_SHA,
@@ -26,7 +27,9 @@ export type { GitHubMethod, RecordedCall };
 
 import type { Clock } from './ports/clock.ts';
 import type {
+  CheckRunWrite,
   GitHubAppInfo,
+  GitHubCheckRun,
   GitHubClient,
   GitHubCommitPage,
   GitHubInstallation,
@@ -40,6 +43,7 @@ import type {
 } from './ports/github.ts';
 import {
   GitHubNotFoundError,
+  GitHubUnprocessableError,
   InstallationGoneError,
   InstallationNotAdmittedError,
   InstallationSuspendedError,
@@ -122,6 +126,11 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
   /** Every call served, in order. A call the gate refused is not here. */
   get calls(): RecordedCall[] {
     return this.state.calls;
+  }
+
+  /** Every Check Run in the world with the last write it was given, in the order they were posted (E09-S05). */
+  get checkRuns(): readonly StoredCheckRun[] {
+    return this.state.checkRuns.runs;
   }
 
   /**
@@ -278,6 +287,60 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     ]);
   }
 
+  createCheckRun(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    write: CheckRunWrite,
+  ): Promise<GitHubCheckRun> {
+    const route = 'POST /repos/{owner}/{repo}/check-runs';
+    return this.#serveInstallation('createCheckRun', githubInstallationId, (entry) => {
+      reachable(entry, fullName, route, [headSha]);
+      refuseWithoutConclusion(route, write);
+      return this.state.checkRuns.create(
+        { installationId: githubInstallationId, fullName },
+        this.state.app.id,
+        headSha,
+        write,
+      );
+    });
+  }
+
+  updateCheckRun(
+    githubInstallationId: GithubId,
+    fullName: string,
+    checkRunId: GithubId,
+    write: CheckRunWrite,
+  ): Promise<GitHubCheckRun> {
+    const route = 'PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}';
+    return this.#serveInstallation('updateCheckRun', githubInstallationId, (entry) => {
+      reachable(entry, fullName, route);
+      refuseWithoutConclusion(route, write);
+      const run = this.state.checkRuns.update({ installationId: githubInstallationId, fullName }, checkRunId, write);
+      if (run === undefined) {
+        throw new GitHubNotFoundError(route);
+      }
+      return run;
+    });
+  }
+
+  getCheckRun(githubInstallationId: GithubId, fullName: string, checkRunId: GithubId): Promise<GitHubCheckRun | null> {
+    return this.#serveInstallation(
+      'getCheckRun',
+      githubInstallationId,
+      () => this.state.checkRuns.find({ installationId: githubInstallationId, fullName }, checkRunId) ?? null,
+    );
+  }
+
+  listCheckRunsForRef(githubInstallationId: GithubId, fullName: string, headSha: string): Promise<GitHubCheckRun[]> {
+    return this.#serveInstallation('listCheckRunsForRef', githubInstallationId, (entry) => {
+      reachable(entry, fullName, 'GET /repos/{owner}/{repo}/commits/{ref}/check-runs');
+      return COMMIT_SHA.test(headSha)
+        ? this.state.checkRuns.latest({ installationId: githubInstallationId, fullName }, headSha)
+        : [];
+    });
+  }
+
   /**
    * Records the call, runs a scripted hook, then rejects with a scripted failure or answers with `read()` (which may
    * throw: that rejects too). A view with an aborted signal rejects with its reason before the call is recorded, and
@@ -319,6 +382,25 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
       }
       return read(entry);
     });
+  }
+}
+
+/**
+ * A write to a repository the installation reaches, with SHAs GitHub can hold (E09-S05): the adapter sends nothing else to
+ * a path, and a repository the installation does not reach is a 404, as it is for GitHub. Names compare without regard to case.
+ * @throws GitHubNotFoundError naming `route`.
+ */
+function reachable(entry: FakeInstallation, fullName: string, route: string, shas: readonly string[] = []): void {
+  const known = entry.repositories.some((repository) => repository.fullName.toLowerCase() === fullName.toLowerCase());
+  if (!(known && shas.every((sha) => COMMIT_SHA.test(sha)))) {
+    throw new GitHubNotFoundError(route);
+  }
+}
+
+/** @throws GitHubUnprocessableError naming `route` for a completed run with no conclusion, as GitHub refuses it. */
+function refuseWithoutConclusion(route: string, write: CheckRunWrite): void {
+  if (lacksConclusion(write)) {
+    throw new GitHubUnprocessableError(route);
   }
 }
 

@@ -1,0 +1,135 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import type { Kysely } from 'kysely';
+import type { Logger } from 'pino';
+import { parseGithubId } from '../../../shared/github-id.ts';
+import { insertEvaluation, readAllEvaluations } from '../../adapters/db/pr-evaluation-links-fixture/test-support.ts';
+import type { Database } from '../../adapters/db/schema.ts';
+import { migratedTestDatabase, seedTenant, type Tenant } from '../../adapters/db/test-support.ts';
+import { createLogger } from '../../adapters/http/logger.ts';
+import { type Evaluation, evaluatePullRequest } from '../../domain/evaluation/index.ts';
+import { commitFacts, evaluationInput, signatureFact } from '../../domain/evaluation/test-support.ts';
+import type { DisplayNames } from '../../domain/reporting/display-names.ts';
+import { captureLogs, type LogCapture } from '../../test-support.ts';
+import { commitSha } from '../github-pull-contract/test-support.ts';
+import type { GitHubClient } from '../ports/github.ts';
+import type { ReportTarget } from '../ports/reporter.ts';
+import { FakeClock, FakeGitHub } from '../test-support.ts';
+import { CheckRunReporter } from './check-run-reporter.ts';
+import { CheckRunWriter } from './check-run-writer.ts';
+
+// The world of the tests of the Check Run reporter (E09-S05): a migrated database with the tenant `org-1` (installation 5000,
+// repository 9000 `org-1/repo`), a FakeGitHub that serves it, the reporter on both, and the verdicts of the real engine
+// to publish. Pull request 7 is the one the tests are about; its head SHA is `HEAD`.
+
+export const INSTALLATION = parseGithubId(5000);
+export const REPOSITORY = parseGithubId(9000);
+export const FULL_NAME = 'org-1/repo';
+export const BASE_URL = 'https://cla.example.org';
+/** The head SHA of the pull requests of the tests. */
+export const HEAD = commitSha(2);
+/** The App the FakeGitHub stands for: the id its runs carry. */
+export const APP = parseGithubId(4242);
+export const START = '2026-11-02T10:00:00Z';
+
+/** The login the job saw for user 1. */
+export const NAMES: DisplayNames = { logins: new Map([[1, 'octocat']]), coAuthors: new Map() };
+
+/** The verdict on a pull request whose one contributor (user 1) signed. */
+export const PASSING: Evaluation = evaluatePullRequest(
+  evaluationInput({ commits: [commitFacts(1)], signatures: [signatureFact(1, 1)] }),
+);
+
+/** The verdict on a pull request whose one contributor (user 1) did not sign. */
+export const FAILING: Evaluation = evaluatePullRequest(evaluationInput({ commits: [commitFacts(1)] }));
+
+export interface ReportingWorld {
+  readonly db: Kysely<Database>;
+  readonly tenant: Tenant;
+  readonly fake: FakeGitHub;
+  readonly reporter: CheckRunReporter;
+  readonly writer: CheckRunWriter;
+  readonly clock: FakeClock;
+  readonly logs: LogCapture;
+  /** The logger that writes into `logs`. */
+  readonly logger: Logger;
+  /** Stores the row of a pull request at a head SHA and returns the target of a report on it. */
+  readonly evaluation: (spec?: EvaluationSpec) => Promise<ReportTarget>;
+  /** The rows of `pr_evaluations`, oldest first. */
+  readonly rows: () => ReturnType<typeof readAllEvaluations>;
+}
+
+/** What a test chooses of a pull request: the rest is pull request 7 at `HEAD`, evaluated on a `pull_request` event. */
+interface EvaluationSpec {
+  readonly prNumber?: number;
+  readonly headSha?: string;
+  readonly result?: Database['pr_evaluations']['result'];
+  readonly checkRunId?: number;
+  readonly trigger?: ReportTarget['trigger'];
+}
+
+/** A FakeGitHub that serves the tenant `org-1`: its installation and the one repository. */
+function tenantGithub(): FakeGitHub {
+  const fake = new FakeGitHub();
+  fake.addInstallation(
+    {
+      id: INSTALLATION,
+      account: { id: parseGithubId(7000), login: 'org-1', type: 'Organization' },
+      suspendedAt: null,
+      permissions: {},
+    },
+    [{ id: REPOSITORY, fullName: FULL_NAME }],
+  );
+  return fake;
+}
+
+/** Stores the row of a pull request of the tenant and returns the target of a report on it. */
+async function storeEvaluation(db: Kysely<Database>, tenant: Tenant, spec: EvaluationSpec): Promise<ReportTarget> {
+  const prNumber = spec.prNumber ?? 7;
+  const headSha = spec.headSha ?? HEAD;
+  const evaluationId = await insertEvaluation(db, tenant, {
+    prNumber,
+    headSha,
+    result: spec.result ?? 'in_progress',
+    ...(spec.checkRunId === undefined ? {} : { checkRunId: spec.checkRunId }),
+  });
+  return {
+    githubInstallationId: INSTALLATION,
+    githubRepoId: REPOSITORY,
+    fullName: FULL_NAME,
+    prNumber,
+    headSha,
+    trigger: spec.trigger ?? 'pull_request',
+    evaluationId,
+  };
+}
+
+/**
+ * The world of a reporter. `db` is the handle the reporter reads and writes through (a recording one, say) and `github` the client
+ * it reports to: the FakeGitHub of the world by default, or the Octokit adapter behind MSW.
+ */
+export async function reportingWorld(
+  options: { readonly db?: Kysely<Database>; readonly github?: GitHubClient } = {},
+): Promise<ReportingWorld> {
+  const { db: raw } = await migratedTestDatabase();
+  const tenant = await seedTenant(raw, 1);
+  const fake = tenantGithub();
+  const logs = captureLogs();
+  const logger = createLogger({ logLevel: 'info' }, logs.destination);
+  const clock = new FakeClock(START);
+  const writer = new CheckRunWriter({ github: options.github ?? fake, appId: APP, clock, logger });
+  const db = options.db ?? raw;
+  const reporter = new CheckRunReporter({ db, writer, publicBaseUrl: BASE_URL, logger });
+  return {
+    db,
+    tenant,
+    fake,
+    reporter,
+    writer,
+    clock,
+    logs,
+    logger,
+    evaluation: (spec = {}) => storeEvaluation(raw, tenant, spec),
+    rows: () => readAllEvaluations(raw),
+  };
+}
