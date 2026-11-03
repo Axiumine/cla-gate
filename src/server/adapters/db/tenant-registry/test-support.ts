@@ -3,8 +3,6 @@
 import type { Kysely } from 'kysely';
 import { parseGithubId } from '../../../../shared/github-id.ts';
 import { forgetAdminSeen, recordAdminSeen, wasAdminSeenSince } from '../../../services/admin-ledger-queries.ts';
-import { findDocument, listDocuments, listRepositoryDocuments } from '../../../services/cla-document-queries.ts';
-import { countDocuments, insertDocument, updateDocumentName } from '../../../services/cla-document-writes.ts';
 import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
 import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
@@ -29,6 +27,7 @@ import {
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { JOB_TENANT_QUERIES } from '../tenant-jobs-fixture/test-support.ts';
+import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/test-support.ts';
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
 import {
   ENFORCING_READS,
@@ -165,12 +164,6 @@ async function ownersOfDocuments(db: Kysely<Database>, documentIds: readonly num
   return rows.map((row) => row.installation_id);
 }
 
-/** The installation that owns each document of the database, in any tenant. */
-async function ownersOfAllDocuments(db: Kysely<Database>): Promise<number[]> {
-  const rows = await db.selectFrom('cla_documents').select('installation_id').execute();
-  return rows.map((row) => row.installation_id);
-}
-
 /** The installation that owns each signature with these row ids. */
 async function ownersOfSignatures(db: Kysely<Database>, signatureIds: readonly number[]): Promise<number[]> {
   const rows = await db.selectFrom('signatures').select('installation_id').where('id', 'in', signatureIds).execute();
@@ -246,72 +239,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
           : [],
     }),
   },
-  'services/cla-document-queries.ts': {
-    findDocument: scoped({
-      takesIds: true,
-      activeOnly: false,
-      run: async (db, scope, ids) => {
-        const document = await findDocument(db, scope, ids.documentId);
-        return document === null ? [] : ownersOfDocuments(db, [document.id]);
-      },
-    }),
-    listDocuments: scoped({
-      takesIds: false,
-      activeOnly: false,
-      run: async (db, scope) => {
-        const documents = await listDocuments(db, scope, { limit: 100, from: null });
-        // Id 0 names no document: the query stays valid for a tenant that has none.
-        return ownersOfDocuments(db, [0, ...documents.map((document) => document.id)]);
-      },
-    }),
-    listRepositoryDocuments: scoped({
-      takesIds: true,
-      activeOnly: true,
-      run: async (db, scope, ids) => {
-        const documents = await listRepositoryDocuments(db, scope, ids.scoped.repositoryId);
-        const shown = [...(documents?.repositoryScoped ?? []), ...(documents?.installationScoped ?? [])];
-        return shown.length === 0
-          ? []
-          : ownersOfDocuments(
-              db,
-              shown.map((document) => document.id),
-            );
-      },
-    }),
-  },
-  'services/cla-document-writes.ts': {
-    countDocuments: scoped({
-      // The count belongs to the tenant it is asked for; there is no document of another tenant to name.
-      takesIds: false,
-      activeOnly: false,
-      run: async (db, scope) => {
-        const counted = await countDocuments(db, scope);
-        const owned = await ownersOfAllDocuments(db);
-        // A count that strayed into another tenant is more than the rows that tenant owns: the surplus moves the id to one that is another tenant's.
-        return [scope.installationId + counted - owned.filter((owner) => owner === scope.installationId).length];
-      },
-    }),
-    insertDocument: scoped({
-      takesIds: true,
-      activeOnly: true,
-      run: async (db, scope, ids) => {
-        const document = await insertDocument(db, scope, {
-          name: 'Registry document',
-          kind: 'individual',
-          repositoryId: ids.plain.repositoryId,
-        });
-        return document === null ? [] : ownersOfDocuments(db, [document.id]);
-      },
-    }),
-    updateDocumentName: scoped({
-      takesIds: true,
-      activeOnly: false,
-      run: async (db, scope, ids) => {
-        const document = await updateDocumentName(db, scope, ids.scoped.documentId, RENAMED);
-        return document === null ? [] : ownersOfDocuments(db, [document.id]);
-      },
-    }),
-  },
+  'services/cla-document-queries.ts': DOCUMENT_READS,
+  'services/cla-document-writes.ts': DOCUMENT_WRITES,
   'services/cla-draft-queries.ts': DRAFT_READS,
   'services/cla-draft-writes.ts': DRAFT_WRITES,
   'services/cla-enforcing-queries.ts': ENFORCING_READS,

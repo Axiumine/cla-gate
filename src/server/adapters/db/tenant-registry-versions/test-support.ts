@@ -8,6 +8,7 @@ import { insertVersion, setActiveVersion } from '../../../services/cla-version-w
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import type { ScopedQuery } from '../tenant-registry/test-support.ts';
+import { ownersOfDocuments } from '../tenant-registry-documents/test-support.ts';
 import { publishVersion as seedVersion, sha256 } from '../test-support.ts';
 
 // The entries of the registry of the tenant data access (E11-S06) for the statements that publish a version of a CLA document
@@ -20,12 +21,6 @@ import { publishVersion as seedVersion, sha256 } from '../test-support.ts';
 
 /** The text the entry that inserts a version stores. */
 const REGISTRY_TEXT = 'Text stored by the registry\n';
-
-/** The installation that owns each document with these row ids, found by reading the table. */
-async function ownersOfDocuments(db: Kysely<Database>, documentIds: readonly number[]): Promise<number[]> {
-  const rows = await db.selectFrom('cla_documents').select('installation_id').where('id', 'in', documentIds).execute();
-  return rows.map((row) => row.installation_id);
-}
 
 /** The installation that owns each version with these row ids, through its document. */
 async function ownersOfVersions(db: Kysely<Database>, versionIds: readonly number[]): Promise<number[]> {

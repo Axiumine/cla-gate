@@ -62,16 +62,16 @@ test('the thirteenth and fourteenth actions are the two document actions of E12-
   }
 });
 
-test('the fourteenth and fifteenth actions are the two draft actions of E12-S03, performed by a person and belonging to a tenant', () => {
-  expect(AUDIT_ACTIONS.slice(13, 15)).toEqual(['cla_draft.saved', 'cla_draft.discarded']);
+test('the fifteenth and sixteenth actions are the two draft actions of E12-S03, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS.slice(14, 16)).toEqual(['cla_draft.saved', 'cla_draft.discarded']);
   for (const action of ['cla_draft.saved', 'cla_draft.discarded'] as const) {
     expect(SYSTEM_ACTIONS.has(action)).toBe(false);
     expect(INSTANCE_ACTIONS.has(action)).toBe(false);
   }
 });
 
-test('the sixteenth action is the publication of a version, E12-S04, performed by a person and belonging to a tenant', () => {
-  expect(AUDIT_ACTIONS[15]).toBe('cla_version.published');
+test('the seventeenth action is the publication of a version, E12-S04, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS[16]).toBe('cla_version.published');
   expect(SYSTEM_ACTIONS.has('cla_version.published')).toBe(false);
   expect(INSTANCE_ACTIONS.has('cla_version.published')).toBe(false);
 });
