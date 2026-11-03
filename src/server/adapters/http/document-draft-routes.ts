@@ -14,7 +14,7 @@ import { requireAuth } from './auth-request.ts';
 import { presentDraft, presentSavedDraft } from './document-presenters.ts';
 import { CLA_BODY_LIMIT } from './limits.ts';
 import { setNoStore } from './no-store.ts';
-import { routeRateLimit } from './rate-limit.ts';
+import { userRateLimit } from './rate-limit.ts';
 import { parseInput } from './request-body.ts';
 import { requireTenant, tenantAccess } from './tenant-access.ts';
 import { byDocumentParam, documentIdOf } from './tenant-resolvers.ts';
@@ -48,7 +48,7 @@ export function readDraftRoute(app: Routes, db: Kysely<Database>): void {
 /**
  * `PUT .../documents/:documentId/draft`: audited as `cla_draft.saved`, in the transaction of the save. The budget of 30
  * saves a minute is the person's, keyed on the numeric GitHub id, and is spent after the guard has let the call in: a
- * denied call costs the person nothing.
+ * denied call costs the person nothing (`userRateLimit`, E16-S03).
  */
 export function saveDraftRoute(app: Routes, db: Kysely<Database>): void {
   app.put(
@@ -59,11 +59,7 @@ export function saveDraftRoute(app: Routes, db: Kysely<Database>): void {
       config: {
         access: tenantAccess({ mode: 'write', resolve: byDocumentParam(db) }),
         audit: 'cla_draft.saved',
-        rateLimit: {
-          ...routeRateLimit(DRAFT_SAVES_PER_MINUTE),
-          hook: 'preHandler',
-          keyGenerator: (request) => String(requireAuth(request).user.githubId),
-        },
+        rateLimit: userRateLimit(DRAFT_SAVES_PER_MINUTE),
       },
     },
     async (request, reply) => {

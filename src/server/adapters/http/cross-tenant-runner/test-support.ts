@@ -449,6 +449,9 @@ export async function assertIsolationCase(world: MatrixWorld, route: string, c: 
     ).toEqual([]);
     const injected = await world.ask(viewer.person, c.request(viewer.own, viewer.other));
     expect(injected.statusCode, `${route} with injected ids`).toBe(200);
-    expect(injected.body, `${route} does not ignore the ids ${viewer.person} injects`).toBe(clean.body);
+    const stable = (body: string): unknown => (c.stable === undefined ? body : c.stable(JSON.parse(body)));
+    expect(stable(injected.body), `${route} does not ignore the ids ${viewer.person} injects`).toEqual(
+      stable(clean.body),
+    );
   }
 }

@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import { findDocument, listDocuments, listRepositoryDocuments } from '../../../services/cla-document-queries.ts';
 import { countDocuments, insertDocument, updateDocumentName } from '../../../services/cla-document-writes.ts';
 import type { Database } from '../schema.ts';
+import { ownersOfDocuments } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery } from '../tenant-registry/test-support.ts';
 
 // The entries of the registry of the tenant data access (E11-S06) for the statements over the CLA documents (E12-S01), kept in a
@@ -12,12 +13,6 @@ import type { ScopedQuery } from '../tenant-registry/test-support.ts';
 // with that tenant's ids and with another tenant's, by the generated test of tenant-queries-matrix.test.ts.
 
 const RENAMED = 'renamed/by-test';
-
-/** The installation that owns each document with these row ids, found by reading the table. */
-export async function ownersOfDocuments(db: Kysely<Database>, documentIds: readonly number[]): Promise<number[]> {
-  const rows = await db.selectFrom('cla_documents').select('installation_id').where('id', 'in', documentIds).execute();
-  return rows.map((row) => row.installation_id);
-}
 
 /** The installation that owns each document of the database, in any tenant. */
 async function ownersOfAllDocuments(db: Kysely<Database>): Promise<number[]> {

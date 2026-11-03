@@ -105,7 +105,7 @@ test('the signatures of a version are those on exactly that version that are not
 test('a publisher whose personal data was erased shows the login erased-<id>, and the numeric id stays', async () => {
   const world = await publishWorld();
   await publishText(world, world.wide, 'Typo fixed\n', { bump: 'minor' });
-  await sql`select erase_signer_pii(${world.admin.githubId}, 9999)`.execute(world.db);
+  await sql`select erase_signer_pii(${world.admin.githubId}, 9999, ${world.scope.installationId})`.execute(world.db);
   const page = await listVersionPage(world.db, world.scope, world.wide, FIRST_PAGE);
   expect(page.versions.map((version) => version.publishedBy)).toEqual([
     { githubId: world.admin.githubId, login: `erased-${world.admin.githubId}` },

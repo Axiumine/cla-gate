@@ -82,9 +82,9 @@ test.each([
 });
 
 test('the runtime role erases personal data only through erase_signer_pii', async () => {
-  const { db } = await withRuntimeRole();
+  const { db, tenant } = await withRuntimeRole();
   const erased = await asRuntimeRole(db, (trx) =>
-    sql<{ n: number }>`select erase_signer_pii(111, 9999) as n`.execute(trx),
+    sql<{ n: number }>`select erase_signer_pii(111, 9999, ${tenant.installationId}) as n`.execute(trx),
   );
   expect(erased.rows).toEqual([{ n: 1 }]);
   expect(await db.selectFrom('signer_pii').select('signature_id').execute()).toEqual([]);

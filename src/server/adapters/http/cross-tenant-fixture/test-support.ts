@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
+import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
+import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
+import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
+import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
 import { sha256 } from '../../db/test-support.ts';
@@ -96,6 +100,11 @@ export interface IsolationCase {
   readonly rows: (body: unknown) => readonly RowRef[];
   /** Whether the viewer may be shown the row: the case says what is theirs (their signature, the tenant of the repository they asked about). */
   readonly mayShow: (owner: RowOwner, viewer: IsolationViewer) => boolean;
+  /**
+   * The part of an answer that must be the same with and without the injected ids, for a route whose answer also holds what
+   * the first call changed (the export of the own data lists its own audit row, E16-S06). Absent: the whole body.
+   */
+  readonly stable?: (body: unknown) => unknown;
 }
 
 let documentNumber = 0;
@@ -186,7 +195,14 @@ async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Prom
   return `${versionsUrl(target)}/${version.id}`;
 }
 
-/** The `tenant` routes of the application, keyed `METHOD path`. A story that adds one adds its case here (E13 to E16). */
+/**
+ * The person the erasure cases (E16-S04) ask about: `member1`, the signer of tenant 1 (E11-S06 fixture). Erasing them ends
+ * their session, so the erasure case is the last entry of {@link CROSS_TENANT_CASES}, and its route the last one registered:
+ * a case that comes after it would meet a `member1` who is logged out. A case added later goes before it.
+ */
+const ERASED_IN_THE_MATRIX = 31_004;
+
+/** The `tenant` routes of the application, keyed `METHOD path`. A story that adds a route (E12 to E16) adds its case here. */
 export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
   // E12-S01. The case creates a document that covers the installation (org admin only); the repository-scoped body is shown in document-routes-create.test.ts.
   'POST /api/installations/:installationId/documents': {
@@ -271,10 +287,61 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
     urlFor: firstVersionUrl,
     request: (target) => ({ method: 'GET', url: `${versionsUrl(target)}/${target.documentId}` }),
   },
+  [`GET ${AUDIT_LOG_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: AUDIT_LOG_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  [`GET ${SIGNATURES_CSV_PATH}`]: {
+    endpointClass: 'document_read',
+    request: (target) => ({
+      method: 'GET',
+      url: SIGNATURES_CSV_PATH.replace(':installationId', String(target.installationId)).replace(
+        ':documentId',
+        String(target.documentId),
+      ),
+    }),
+  },
+  [`GET ${ERASURE_PREVIEW_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: `${ERASURE_PREVIEW_PATH.replace(':installationId', String(target.installationId))}?githubUserId=${ERASED_IN_THE_MATRIX}`,
+    }),
+  },
+  [`POST ${ERASURES_PATH}`]: {
+    endpointClass: 'installation_write',
+    request: (target) => ({
+      method: 'POST',
+      url: ERASURES_PATH.replace(':installationId', String(target.installationId)),
+      payload: { githubUserId: ERASED_IN_THE_MATRIX, expectedRows: 1 },
+    }),
+  },
 };
 
-/** The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `GET /api/me/signatures`). */
-export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {};
+/**
+ * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `GET /api/me/signatures`; E16:
+ * `GET /api/me/export`). The export of a person's own data names the signatures of the person in every tenant, and the
+ * personal data kept for each; the route takes no parameter at all (a query parameter is a `400`, shown in
+ * data-export-routes.test.ts), so there is nothing of another tenant to inject and the request is the same with or without it.
+ */
+export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
+  [`GET ${DATA_EXPORT_PATH}`]: {
+    request: () => ({ method: 'GET', url: DATA_EXPORT_PATH }),
+    rows: (body) =>
+      dataExportSchema
+        .parse(body)
+        .signatures.flatMap((signature) => [
+          { table: 'signatures' as const, id: signature.id },
+          ...(signature.personalData === null ? [] : [{ table: 'signer_pii' as const, id: signature.id }]),
+        ]),
+    mayShow: (owner, viewer) => owner.userId === viewer.userId,
+    // Every export appends an audit row that the next one lists, so the second answer holds one entry more than the first.
+    stable: (body) => ({ ...dataExportSchema.parse(body), auditEntries: [] }),
+  },
+};
 
 /** The `authenticated` routes that return no tenant data, each with the reason, so a new one is a decision somebody reads. */
 export const NO_TENANT_DATA: Readonly<Record<string, string>> = {

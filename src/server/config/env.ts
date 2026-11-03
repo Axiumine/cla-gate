@@ -29,6 +29,8 @@ export interface AppConfig {
   readonly webRoot: string;
   /** Where the corresponding source of the running version is (E17-S09, AGPL section 13): the repository and, when the build knows it, the commit. */
   readonly source: { readonly url: string; readonly commit: string | null };
+  /** How many days the IP address and user agent of a signature are kept (E16-S05), 1 to 90. */
+  readonly networkMetadataRetentionDays: number;
 }
 
 /** Thrown for an invalid environment. Carries variable NAMES only: a value must never reach an error message or log. */
@@ -58,6 +60,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     github: toGithubConfig(env),
     webRoot: env.WEB_ROOT,
     source: { url: env.SOURCE_URL, commit: env.SOURCE_COMMIT },
+    networkMetadataRetentionDays: env.NETWORK_METADATA_RETENTION_DAYS,
   };
 }
 

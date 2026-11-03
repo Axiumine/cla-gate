@@ -28,6 +28,13 @@ async function tenantRoutes(world: MatrixWorld): Promise<string[]> {
     .map((entry) => `${entry.method} ${entry.url}`);
 }
 
+/**
+ * A person may cost the tenants 30 uncached role lookups a minute (E11-S04), and each write route spends seven of them here, so
+ * the clock moves on a minute after every route, as time would pass between the calls of a person: the check is about what the
+ * operator is shown, not about that budget.
+ */
+const PERSON_BUDGET_WINDOW_SECONDS = 61;
+
 const STATES: readonly (InactiveState | null)[] = [null, 'suspended', 'deleted', 'rejected'];
 
 test.each(STATES)(
@@ -44,6 +51,7 @@ test.each(STATES)(
         throw new Error(`tenant route ${route} has no case: add it to CROSS_TENANT_CASES`);
       }
       await assertOperatorCase(world, route, c, state);
+      world.advance(PERSON_BUDGET_WINDOW_SECONDS);
     }
   },
 );
@@ -56,6 +64,7 @@ test('every case of the application holds for the operator', async () => {
       throw new Error(`tenant route ${route} has no case: add it to CROSS_TENANT_CASES`);
     }
     await assertOperatorCase(world, route, c);
+    world.advance(PERSON_BUDGET_WINDOW_SECONDS);
   }
   expect(world.app.routeAccess.some((entry) => entry.access === 'operator')).toBe(true);
 });

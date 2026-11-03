@@ -20,6 +20,7 @@
     "src/shared/cla-text.ts!",
     "src/shared/cla-markdown.ts!",
     "src/server/services/cla-content.ts!",
+    "src/shared/hostile-names.ts!",
     "tests/leaks/scenarios/*.ts",
     "tests/leaks/control/*.ts",
     "src/server/domain/eligibility.ts!",
@@ -28,7 +29,8 @@
     "src/server/adapters/http/tenant-resolvers.ts!",
     "src/server/services/installation-store.ts!",
     "src/server/services/revoke-user-sessions.ts!",
-    "src/server/services/repository-job-enqueue.ts!"
+    "src/server/services/repository-job-enqueue.ts!",
+    "src/server/services/network-metadata-purge.ts!"
   ],
   "project": [
     "scripts/**/*.ts!",

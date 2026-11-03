@@ -16,7 +16,7 @@ export const sessionResponseSchema = z.object({
     avatarUrl: z.string().nullable(),
   }),
   /** When the session ends unless it is used again: the earlier of the idle and the absolute expiry, ISO 8601. */
-  expiresAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime({ offset: false }),
   /**
    * The CSRF token of this session (E10-S03): 43 base64url characters the SPA sends back in the `x-csrf-token` header on
    * every POST, PUT, PATCH and DELETE. It is derived from a per-session secret, so it changes with a new session.

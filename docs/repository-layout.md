@@ -77,14 +77,19 @@ Items marked (planned) do not exist yet.
 │   │                            document-history-routes.ts, document-resolvers.ts, document-presenters.ts, cursor.ts (the opaque page
 │   │                            cursor), request-body.ts (`parseInput`), cla-rule-errors.ts; document-fixture/ is test only;
 │   │                            test-support.ts, webhook-table-fixture/, auth-fixture/, login-fixture/, callback-fixture/,
-│   │                            tenant-guard-fixture/, cross-tenant-fixture/, cross-tenant-runner/ and cross-tenant-canary/ are test only
+│   │                            tenant-guard-fixture/, cross-tenant-fixture/, cross-tenant-runner/ and cross-tenant-canary/ are test only;
+│   │                            E16: audit-log-routes.ts (with audit-log-query.ts), signature-csv-routes.ts (with signature-csv-query.ts and
+│   │                            signature-csv-log.ts), erasure-routes.ts (with erasure-request.ts) and data-export-routes.ts; the
+│   │                            api-snapshots/ directory (the JSON of the own-data export) and the fixtures audit-route-state/,
+│   │                            signature-csv-fixture/, erasure-fixture/ and data-export-fixture/ are test only
 │   ├── domain/                  admission.ts (who is served, pure), eligibility.ts (when an installation or repository
 │   │                            is evaluated), permissions.ts (the missing-permission check), jobs.ts (the job
 │   │                            catalogue), delivery-id.ts, webhook-routing*.ts (the routing table: delivery to job or
 │   │                            ignore), webhook-tenant.ts (the tenant and admission verdict), session.ts (session
 │   │                            lifetimes), return-to.ts (`safeReturnTo`), github-profile.ts (what is kept of a profile),
 │   │                            authz.ts (`decide`, the role decision table), tenant-state.ts (`tenantState`), operator.ts
-│   │                            (`isOperator`, `createOperatorPolicy`); the job envelopes (job-envelope.ts), the retry bounds (job-retry.ts),
+│   │                            (`isOperator`, `createOperatorPolicy`); audit-cursor.ts (the cursor of the audit viewer), csv.ts (the
+│   │                            RFC 4180 encoder with the formula guard), signature-state.ts and network-retention.ts (the cutoff); the job envelopes (job-envelope.ts), the retry bounds (job-retry.ts),
 │   │                            recheck.ts (the `/recheck` rules and the rate limit key), sweep.ts and repository-jobs.ts (the
 │   │                            coalesce keys and reasons of the sweep and the repository-level jobs); version-number.ts (the next version number of a document);
 │   │                            test-support.ts is test only
@@ -115,6 +120,10 @@ Items marked (planned) do not exist yet.
 │                                tenant-authorization.ts and tenant-authorizer.ts (the guard's reads and decision), admin-ledger.ts and
 │                                admin-ledger-queries.ts (the ledger of org admins), document-placement.ts, operator-policies.ts;
 │                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only;
+│                                E16: audit-log-queries.ts, signer-erasure.ts (with signer-erasure-errors.ts), network-metadata-purge.ts (the
+│                                handler of the daily purge) and export/ (signature-export*.ts, signature-queries.ts, signature-stream.ts,
+│                                signature-rows.ts, signature-filter.ts, own-data*.ts, own-signatures-query.ts and signer-network-columns.ts;
+│                                csv-snapshots/ and the fixtures are test only); audit-scan/, audit-conformance/ and audit-log-fixture/ are test only
 │                                the CLA documents (E12): cla-documents.ts, cla-document-changes.ts, cla-document-queries.ts, cla-document-writes.ts,
 │                                cla-document-rows.ts and cla-document-types.ts; cla-drafts.ts, cla-draft-queries.ts and cla-draft-writes.ts;
 │                                cla-publish.ts, cla-publish-checks.ts, cla-publish-source.ts, cla-publish-types.ts, cla-version-queries.ts,
@@ -130,7 +139,8 @@ Items marked (planned) do not exist yet.
 │                                cla-markdown-nesting.ts and the line scan cla-markdown-containers.ts, -items.ts, -leaf.ts and -lines.ts,
 │                                snapshots/ (the rendered files); the route
 │                                descriptors the SPA calls (`defineRoute`): contract.ts, auth-contract.ts, meta.ts (`GET /api/meta`); error-codes.ts
-│                                (the codes the SPA can see); hostile-names.ts (the hostile-name corpus, test only))
+│                                (the codes the SPA can see); hostile-names.ts (the hostile-name corpus, test only); E16: audit-log.ts,
+│                                signature-export.ts, erasure.ts and data-export.ts (paths, shapes and limits of the compliance routes))
 ├── src/web/                     the React 19 SPA (Vite 8, Tailwind CSS 4); built to dist/web and served by the server; tests co-located
 │   ├── main.tsx  zod-config.ts  index.html
 │   │                            the entry (kept logic-free; zod-config.ts turns off Zod's eval probe and is its first import) and the page
@@ -161,7 +171,7 @@ Items marked (planned) do not exist yet.
 │   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
 │                                theme.ts, tailwind.ts and vitest.setup.ts
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; the numbers 006 and later go to the epics in order of merge)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
@@ -174,6 +184,7 @@ Items marked (planned) do not exist yet.
 ├── docs/repository-layout.md    this file
 ├── docs/data-model.md           tables, immutability, erasure, database roles
 ├── docs/security.md             auth model, role matrix, security and privacy rules
+├── docs/privacy.md              privacy notes for operators: data inventory, retention, erasure runbook, backups, several orgs (kept true by src/server/docs)
 ├── docs/github-app.md           App permissions, events, check name, rules
 ├── docs/operations.md           key rotation, backups, poison jobs, rate budget
 ├── docs/decisions.md            why this project, decisions and their reasons, open questions
@@ -191,6 +202,7 @@ Items marked (planned) do not exist yet.
 ├── scripts/qodana-gate/         tests of qodana.yaml, the token gate of the `qodana` job and the exclude-comment rule
 ├── scripts/ci-contract.test.ts  the CI contract test; scripts/ci-contract/ holds its parts (uses, workflow, required,
 │                                package-scripts, dependabot, test-support)
+├── src/server/docs/             tests that keep docs/privacy.md true (privacy-inventory, privacy-retention, privacy-sections; privacy-doc/ is test only)
 ├── scripts/docs/                doc-size.test.ts: README.md and CLAUDE.md stay under their byte ceilings
 ├── scripts/check-code-caps.ts   structure-cap ratchet, entry (runs natively on Node 26)
 ├── scripts/code-caps/           its modules (types, naming, nesting, collector, measure, files, baseline,

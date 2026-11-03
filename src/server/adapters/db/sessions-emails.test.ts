@@ -71,7 +71,7 @@ test("erasing a person deletes every session of theirs with the addresses in it,
   const bobs = await store.create({ userId: bob, verifiedEmails: [{ email: 'bob@example.test', primary: true }] }, T0);
   await store.create({ userId: alice }, T0);
 
-  await sql`select erase_signer_pii(3003, 9999)`.execute(db);
+  await sql`select erase_signer_pii(3003, 9999, ${tenant.installationId})`.execute(db);
 
   const left = await sql<{ user_id: number }>`select user_id from sessions order by id`.execute(db);
   expect(left.rows.map((row) => row.user_id)).toEqual([bob, alice]);

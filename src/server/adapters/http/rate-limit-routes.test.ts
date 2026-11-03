@@ -6,12 +6,14 @@ import { errorResponseSchema } from '../../../shared/errors.ts';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import { registerErrorHandlers } from './errors.ts';
 import {
+  HOUR_MS,
   RATE_LIMIT_EXEMPT,
   RATE_LIMITS,
   RateLimitRouteError,
   rateLimitProblem,
   registerRateLimit,
   routeRateLimit,
+  userRateLimit,
 } from './rate-limit.ts';
 import { postDelivery, SECRET_CURRENT, webhookTestApp } from './test-support.ts';
 
@@ -25,7 +27,23 @@ async function bare(): Promise<FastifyInstance> {
 }
 
 test('the budgets are the ones of the story, spelled out here on purpose', () => {
-  expect(RATE_LIMITS).toEqual({ global: 600, login: 20, callback: 20, logout: 20, session: 120 });
+  expect(RATE_LIMITS).toEqual({
+    global: 600,
+    login: 20,
+    callback: 20,
+    logout: 20,
+    session: 120,
+    signatureExport: 6,
+    dataExport: 5,
+  });
+});
+
+test('a budget lasts a minute unless the route names another window, and the budget of a person is checked after the guard', () => {
+  expect(HOUR_MS).toBe(3_600_000);
+  expect(routeRateLimit(5)).toEqual({ max: 5, timeWindow: 60_000, cache: 10_000 });
+  expect(routeRateLimit(5, HOUR_MS)).toEqual({ max: 5, timeWindow: 3_600_000, cache: 10_000 });
+  expect(userRateLimit(6)).toMatchObject({ max: 6, timeWindow: 60_000, cache: 10_000, hook: 'preHandler' });
+  expect(userRateLimit(5, HOUR_MS)).toMatchObject({ max: 5, timeWindow: 3_600_000, cache: 10_000, hook: 'preHandler' });
 });
 
 test('the exempt set is exactly the webhook route, spelled out here on purpose', () => {

@@ -7,8 +7,8 @@ import { countSignaturesAtMajor, findActiveVersion, lockDocument } from '../../.
 import { insertVersion, setActiveVersion } from '../../../services/cla-version-writes.ts';
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
+import { ownersOfDocuments } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery } from '../tenant-registry/test-support.ts';
-import { ownersOfDocuments } from '../tenant-registry-documents/test-support.ts';
 import { publishVersion as seedVersion, sha256 } from '../test-support.ts';
 
 // The entries of the registry of the tenant data access (E11-S06) for the statements that publish a version of a CLA document

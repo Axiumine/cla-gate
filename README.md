@@ -100,6 +100,7 @@ This README and the documents below are the source of truth for scope, stack and
 | [docs/repository-layout.md](docs/repository-layout.md) | The directory tree |
 | [docs/data-model.md](docs/data-model.md) | Tables, immutability, erasure, roles |
 | [docs/security.md](docs/security.md) | Auth model, role matrix, privacy |
+| [docs/privacy.md](docs/privacy.md) | Privacy notes for operators: inventory, retention, erasure, backups |
 | [docs/github-app.md](docs/github-app.md) | Permissions, events, check name, rules |
 | [docs/operations.md](docs/operations.md) | Key rotation, backups, poison jobs |
 | [docs/quality-gates.md](docs/quality-gates.md) | Thresholds, TypeScript, testing |

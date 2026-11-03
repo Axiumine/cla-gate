@@ -34,6 +34,8 @@ const SCOPED_QUERY_NAMES = [
   'services/admin-ledger-queries.ts recordAdminSeen',
   'services/admin-ledger-queries.ts forgetAdminSeen',
   'services/admin-ledger-queries.ts wasAdminSeenSince',
+  'services/audit-log-queries.ts auditLogRows',
+  'services/audit-log-queries.ts listAuditLog',
   'services/cla-document-queries.ts findDocument',
   'services/cla-document-queries.ts listDocuments',
   'services/cla-document-queries.ts listRepositoryDocuments',
@@ -66,6 +68,8 @@ const SCOPED_QUERY_NAMES = [
   'services/repository-queries.ts listEnabledRepositories',
   'services/repository-statements.ts storedStates',
   'services/repository-statements.ts writeChanged',
+  'services/signer-erasure.ts erasureCounts',
+  'services/signer-erasure.ts eraseSigner',
   'services/tenant-queries.ts findTenantRows',
   'services/tenant-queries.ts findAdmittedTenantRows',
   'services/close-pr/close-heads.ts headShasToCancel',
@@ -82,6 +86,8 @@ const SCOPED_QUERY_NAMES = [
   'services/evaluate-pr/signature-facts.ts readSignatures',
   'services/sweep/sweep-rows.ts evaluationStates',
   'services/sweep/sweep-rows.ts staleEvaluations',
+  'services/export/signature-queries.ts countSignatures',
+  'services/export/signature-queries.ts signatureBatch',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {
