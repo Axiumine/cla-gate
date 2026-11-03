@@ -50,6 +50,9 @@ test('a query that meets another tenant by design says why and names the test th
     'installationOfRepository',
     'isActiveRepositoryOfAnotherInstallation',
     'listInstallationsForOperator',
+    'ownAllowlistEntries',
+    'ownAuditEntries',
+    'ownSignatures',
     'releaseTransferred',
   ]);
   for (const { name, query } of byDesign) {

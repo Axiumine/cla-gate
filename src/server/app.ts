@@ -5,9 +5,12 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import type { Database } from './adapters/db/schema.ts';
+import { auditLogRoutes } from './adapters/http/audit-log-routes.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
 import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
+import { dataExportRoutes } from './adapters/http/data-export-routes.ts';
+import { erasureRoutes } from './adapters/http/erasure-routes.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
@@ -22,6 +25,7 @@ import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
 import { requireRouteAccess } from './adapters/http/route-access.ts';
 import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
+import { signatureCsvRoutes } from './adapters/http/signature-csv-routes.ts';
 import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
@@ -143,6 +147,8 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   });
   await app.register(operatorRoutes, { db });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
+  await registerTenantRoutes(app, db, clock);
+  await app.register(dataExportRoutes, { db, clock });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,
@@ -152,6 +158,17 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
     deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
   await registerWeb(app, config);
+}
+
+/**
+ * The routes of a tenant that need no wiring beyond the database (E16): the audit log, the signature export and the erasure
+ * of a signer. They are registered in this order, which the route tables of the tests spell out: the erasure comes last,
+ * because the cross-tenant matrix erases the signer of tenant 1 and so ends that person's session (E16-S04).
+ */
+async function registerTenantRoutes(app: FastifyInstance, db: Kysely<Database>, clock: Clock): Promise<void> {
+  await app.register(auditLogRoutes, { db });
+  await app.register(signatureCsvRoutes, { db, clock });
+  await app.register(erasureRoutes, { db });
 }
 
 /**

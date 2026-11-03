@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-11-02T10:00:00.000Z",
+  "user": {
+    "githubId": 4242,
+    "login": "ada",
+    "name": "Ada Lovelace",
+    "createdAt": "2026-09-01T08:00:00.000Z"
+  },
+  "signatures": [
+    {
+      "id": 5,
+      "installation": {
+        "githubInstallationId": 10000,
+        "accountLogin": "org-2"
+      },
+      "document": {
+        "id": 3,
+        "name": "Individual CLA"
+      },
+      "version": {
+        "id": 2,
+        "major": 1,
+        "minor": 0,
+        "contentSha256": "4aeb8a5267939c94982575866af4d9a699a83b0bf9ce6ae15597d90c9909b592"
+      },
+      "consentTextId": "consent-v1",
+      "signerType": "individual",
+      "signedAt": "2026-10-15T09:00:02.000Z",
+      "source": {
+        "repositoryFullName": null,
+        "prNumber": null
+      },
+      "revokedAt": null,
+      "revokeReasonCode": null,
+      "personalData": null
+    },
+    {
+      "id": 4,
+      "installation": {
+        "githubInstallationId": 5000,
+        "accountLogin": "org-1"
+      },
+      "document": {
+        "id": 1,
+        "name": "Individual CLA"
+      },
+      "version": {
+        "id": 1,
+        "major": 1,
+        "minor": 0,
+        "contentSha256": "4aeb8a5267939c94982575866af4d9a699a83b0bf9ce6ae15597d90c9909b592"
+      },
+      "consentTextId": "consent-v1",
+      "signerType": "individual",
+      "signedAt": "2026-10-15T09:00:01.000Z",
+      "source": {
+        "repositoryFullName": "org-1/repo",
+        "prNumber": 7
+      },
+      "revokedAt": "2026-10-15T09:00:06.000Z",
+      "revokeReasonCode": "maintainer_decision",
+      "personalData": {
+        "name": "A. Lovelace",
+        "email": "old@example.test",
+        "login": "ada-old",
+        "ipAddress": null,
+        "userAgent": null
+      }
+    },
+    {
+      "id": 3,
+      "installation": {
+        "githubInstallationId": 5000,
+        "accountLogin": "org-1"
+      },
+      "document": {
+        "id": 1,
+        "name": "Individual CLA"
+      },
+      "version": {
+        "id": 1,
+        "major": 1,
+        "minor": 0,
+        "contentSha256": "4aeb8a5267939c94982575866af4d9a699a83b0bf9ce6ae15597d90c9909b592"
+      },
+      "consentTextId": "consent-v1",
+      "signerType": "individual",
+      "signedAt": "2026-10-15T09:00:00.000Z",
+      "source": {
+        "repositoryFullName": "org-1/repo",
+        "prNumber": 7
+      },
+      "revokedAt": null,
+      "revokeReasonCode": null,
+      "personalData": {
+        "name": "Ada Lovelace",
+        "email": "ada@example.test",
+        "login": "ada",
+        "ipAddress": null,
+        "userAgent": null
+      }
+    }
+  ],
+  "allowlistEntries": [
+    {
+      "installation": {
+        "accountLogin": "org-2"
+      },
+      "scope": "repository",
+      "kind": "bot",
+      "createdAt": "2026-10-15T09:00:20.000Z"
+    },
+    {
+      "installation": {
+        "accountLogin": "org-1"
+      },
+      "scope": "installation",
+      "kind": "user",
+      "createdAt": "2026-10-15T09:00:10.000Z"
+    }
+  ],
+  "auditEntries": [
+    {
+      "occurredAt": "2026-10-15T09:01:00.000Z",
+      "action": "data_export.created",
+      "installationId": null,
+      "subject": {
+        "type": "user",
+        "id": 4242
+      }
+    },
+    {
+      "occurredAt": "2026-10-15T09:00:50.000Z",
+      "action": "repository.enabled",
+      "installationId": 10000,
+      "subject": null
+    },
+    {
+      "occurredAt": "2026-10-15T09:00:50.000Z",
+      "action": "signer_pii.erased",
+      "installationId": 5000,
+      "subject": {
+        "type": "user",
+        "id": 4242
+      }
+    },
+    {
+      "occurredAt": "2026-10-15T09:00:40.000Z",
+      "action": "signature.created",
+      "installationId": 5000,
+      "subject": {
+        "type": "signature",
+        "id": 9
+      }
+    }
+  ],
+  "truncated": false
+}

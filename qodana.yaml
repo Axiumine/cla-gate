@@ -20,3 +20,9 @@ exclude:
   # extension and the `/index` dropped (94 findings in src/web); doing that in one project would break the one style the
   # repository has, and ESLint and TypeScript already check that every import resolves.
   - name: ES6PreferShortImport
+  # Qodana's JavaScript analysis reports calls of zod's `z.iso.datetime(...)` as deprecated symbols: it picks the
+  # deprecated `z.string().datetime()` method by name, and which of the calls it flags changes from one run to the next
+  # (two on main with no argument, six on a branch that has a chained `z.iso\n.datetime(...)`). TypeScript and
+  # typescript-eslint's type-aware `no-deprecated` (part of strictTypeChecked, zero warnings) resolve the real symbol and
+  # report none, and they do report a deprecated API that really is one, so the exact check stays and this one goes.
+  - name: JSDeprecatedSymbols

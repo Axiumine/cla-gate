@@ -120,17 +120,26 @@ test('the route declared webhook is exactly POST /webhooks/github', async () => 
   expect(declared).toEqual(['POST /webhooks/github']);
 });
 
-test('the authenticated routes are the session read and the logout, and none has a tenant parameter', async () => {
+test('the authenticated routes are the session read, the logout and the export of the own data, and none has a tenant parameter', async () => {
   const { table } = await tableOfTheApp();
   const authenticated = table.filter((entry) => entry.access === 'authenticated');
-  expect(sorted(authenticated.map(nameOf))).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
+  expect(sorted(authenticated.map(nameOf))).toEqual([
+    'GET /api/auth/session',
+    'GET /api/me/export',
+    'POST /api/auth/logout',
+  ]);
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the application has no tenant route yet', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the ones the stories added', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
-  expect(table.filter((entry) => typeof entry.access === 'object')).toEqual([]);
+  expect(table.filter((entry) => typeof entry.access === 'object').map(nameOf)).toEqual([
+    'GET /api/installations/:installationId/audit-log',
+    'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+    'GET /api/installations/:installationId/erasure-preview',
+    'POST /api/installations/:installationId/erasures',
+  ]);
 });
 
 test('every tenant route the application gets is read or write and write when it changes data', async () => {
