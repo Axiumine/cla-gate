@@ -54,6 +54,7 @@ test('a major rollback sends one sweep-repository job to the enforcing repositor
     {
       idempotencyKey: `sweep-repository:cla_version_published:${published.version.id}:${world.t1.plain.githubRepoId}`,
       dedupeKey: null,
+      coalesceKey: `sweep-repository:${world.t1.plain.githubRepoId}`,
       job: {
         type: 'sweep-repository',
         githubInstallationId: world.t1.githubInstallationId,

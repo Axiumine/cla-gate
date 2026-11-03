@@ -3,7 +3,14 @@
 import { expect, test } from 'vitest';
 import { tenantChecksums } from '../adapters/db/tenant-fixture/test-support.ts';
 import { publishVersion } from './cla-publish.ts';
-import { dropJobs, droppingEnqueuer, failingAfterSend, jobCount, sentJobs } from './jobs-fixture/test-support.ts';
+import {
+  dropJobs,
+  droppingEnqueuer,
+  failingAfterSend,
+  jobCount,
+  sentJobs,
+  setJobStates,
+} from './jobs-fixture/test-support.ts';
 import {
   activeNumberOf,
   brokenBy,
@@ -65,6 +72,7 @@ test('a major version sends one sweep-repository job to each enabled repository 
     {
       idempotencyKey: `sweep-repository:cla_version_published:${published.version.id}:9100`,
       dedupeKey: null,
+      coalesceKey: 'sweep-repository:9100',
       job: {
         type: 'sweep-repository',
         githubInstallationId: world.t1.githubInstallationId,
@@ -75,6 +83,7 @@ test('a major version sends one sweep-repository job to each enabled repository 
     {
       idempotencyKey: `sweep-repository:cla_version_published:${published.version.id}:9101`,
       dedupeKey: null,
+      coalesceKey: 'sweep-repository:9101',
       job: {
         type: 'sweep-repository',
         githubInstallationId: world.t1.githubInstallationId,
@@ -120,10 +129,22 @@ test('a document no repository enforces sends nothing, and the publish succeeds'
   expect(world.enqueuer.calls).toEqual([]);
 });
 
-test('two major versions in a row each send their jobs: no window drops the second, since a run that began has read the first policy', async () => {
+test('a second major version while the first sweep still waits sends none: that run reads the newer policy when it starts', async () => {
   const world = await publishWorld();
   await addRepository(world, 9300, { documentId: world.wide, enabled: true });
   const first = await publishText(world, world.wide, 'Second major\n', { acknowledgeResigning: true });
+  await publishText(world, world.wide, 'Third major\n');
+  expect((await sentJobs(world.db)).map((sent) => sent.idempotencyKey)).toEqual([
+    `sweep-repository:cla_version_published:${first.version.id}:9300`,
+  ]);
+  expect(world.enqueuer.calls).toHaveLength(2);
+});
+
+test('a second major version after the first sweep has started sends another: the running sweep may have read the first policy', async () => {
+  const world = await publishWorld();
+  await addRepository(world, 9300, { documentId: world.wide, enabled: true });
+  const first = await publishText(world, world.wide, 'Second major\n', { acknowledgeResigning: true });
+  await setJobStates(world.db, 'active');
   const second = await publishText(world, world.wide, 'Third major\n');
   expect((await sentJobs(world.db)).map((sent) => sent.idempotencyKey)).toEqual([
     `sweep-repository:cla_version_published:${first.version.id}:9300`,

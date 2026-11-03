@@ -5,12 +5,13 @@ import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { listEnforcingRepositories } from './cla-enforcing-queries.ts';
 import type { JobEnqueuer } from './ports/jobs.ts';
+import { enqueueSweepRepository } from './repository-job-enqueue.ts';
 
 // The re-evaluation a new major version asks for (E12-S04). Pull requests that were green under the old major may be red under
 // the new one, so every repository that enforces the document gets one `sweep-repository` job, sent on the connection of the
 // publishing transaction: the version and its jobs commit or roll back together. The sweep itself (listing the open pull
-// requests and evaluating them) is E07-S09's. The job is E07-S09's too: until it lands in this tree the envelope is the
-// member of the job catalogue (`domain/jobs.ts`), and the options below are what the port takes.
+// requests and evaluating them) is E07-S09's, and so are the job and the way it is sent (`enqueueSweepRepository`): the send is
+// coalesced per repository while a run waits, and the key below names the send.
 
 /** The version that was just published and the document it belongs to. */
 export interface PublishedRef {
@@ -22,7 +23,8 @@ export interface PublishedRef {
  * Sends a `sweep-repository` job with the reason `cla_version_published` for each repository of the tenant that enforces the
  * document: attached to it, enabled and not removed. The send is keyed by the version and the repository, so a retry of the
  * same publish sends nothing twice, and a later version sends again. No time window is used: a second publish a few seconds
- * after the first must still be swept, because a run that has started has read the policy of the first.
+ * after the first must still be swept, because a run that has started has read the policy of the first (a run that still waits
+ * for a worker reads the newer policy when it starts, which is why E07-S09 coalesces the two).
  * @throws Error whatever the enqueuer rejects with; the caller's transaction is rolled back, and so is the publish.
  */
 export async function enqueueVersionSweeps(
@@ -32,10 +34,10 @@ export async function enqueueVersionSweeps(
   published: PublishedRef,
 ): Promise<void> {
   for (const repository of await listEnforcingRepositories(trx, scope, published.documentId)) {
-    await enqueuer.enqueue(
-      trx,
-      { type: 'sweep-repository', ...repository, reason: 'cla_version_published' },
-      { idempotencyKey: `sweep-repository:cla_version_published:${published.versionId}:${repository.githubRepoId}` },
-    );
+    await enqueueSweepRepository(trx, enqueuer, {
+      ...repository,
+      reason: 'cla_version_published',
+      idempotencyKey: `sweep-repository:cla_version_published:${published.versionId}:${repository.githubRepoId}`,
+    });
   }
 }

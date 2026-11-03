@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { publishVersionResponseSchema } from '../../../shared/cla-version.ts';
 import { errorResponseSchema } from '../../../shared/errors.ts';
-import { createJobsTable, fakeEnqueuer, jobCount, sentJobs } from '../../services/jobs-fixture/test-support.ts';
+import { sweepRepositoryCoalesceKey } from '../../domain/repository-jobs.ts';
+import {
+  createJobsTable,
+  fakeEnqueuer,
+  jobCount,
+  sentJobs,
+  setJobStates,
+} from '../../services/jobs-fixture/test-support.ts';
 import {
   type DocumentWorld,
   documentWorld,
@@ -49,14 +57,57 @@ test('a major version sends its sweep through the queue of the app, and the job 
   await saveDraftAs(world, 'admin1', wide(world), { contentMd: 'New terms\n', expectedRevision: null });
   const response = await publishAs(world, 'admin1', wide(world), publication(world.t1.versionId));
   expect(response.statusCode).toBe(201);
-  expect((await sentJobs(world.db)).map(({ job }) => job)).toEqual([
+  const version = parsed(response, publishVersionResponseSchema).version;
+  const repoId = world.t1.plain.githubRepoId;
+  expect(await sentJobs(world.db)).toEqual([
     {
-      type: 'sweep-repository',
-      githubInstallationId: world.t1.githubInstallationId,
-      githubRepoId: world.t1.plain.githubRepoId,
-      reason: 'cla_version_published',
+      idempotencyKey: `sweep-repository:cla_version_published:${version.id}:${repoId}`,
+      dedupeKey: null,
+      coalesceKey: sweepRepositoryCoalesceKey(repoId),
+      job: {
+        type: 'sweep-repository',
+        githubInstallationId: world.t1.githubInstallationId,
+        githubRepoId: repoId,
+        reason: 'cla_version_published',
+      },
     },
   ]);
+});
+
+test('a second major version while the first sweep still waits sends none: that run reads the newer policy when it starts', async () => {
+  const world = await documentWorld({ enqueuer: fakeEnqueuer() });
+  await createJobsTable(world.db);
+  await enforceWide(world);
+  await saveDraftAs(world, 'admin1', wide(world), { contentMd: 'Second terms\n', expectedRevision: null });
+  const first = await publishAs(world, 'admin1', wide(world), publication(world.t1.versionId));
+  expect(first.statusCode).toBe(201);
+  await saveDraftAs(world, 'admin1', wide(world), { contentMd: 'Third terms\n', expectedRevision: null });
+  const second = await publishAs(
+    world,
+    'admin1',
+    wide(world),
+    publication(parsed(first, publishVersionResponseSchema).version.id),
+  );
+  expect(second.statusCode).toBe(201);
+  expect(await jobCount(world.db)).toBe(1);
+});
+
+test('a second major version after the first sweep has started sends a new one: the running sweep may have read the old policy', async () => {
+  const world = await documentWorld({ enqueuer: fakeEnqueuer() });
+  await createJobsTable(world.db);
+  await enforceWide(world);
+  await saveDraftAs(world, 'admin1', wide(world), { contentMd: 'Second terms\n', expectedRevision: null });
+  const first = await publishAs(world, 'admin1', wide(world), publication(world.t1.versionId));
+  await setJobStates(world.db, 'active');
+  await saveDraftAs(world, 'admin1', wide(world), { contentMd: 'Third terms\n', expectedRevision: null });
+  const second = await publishAs(
+    world,
+    'admin1',
+    wide(world),
+    publication(parsed(first, publishVersionResponseSchema).version.id),
+  );
+  expect(second.statusCode).toBe(201);
+  expect(await jobCount(world.db)).toBe(2);
 });
 
 test('a queue that fails fails the publish: 500, and no version, no audit row, the pointer and the draft as they were', async () => {
