@@ -3,6 +3,7 @@
 import { expect, test } from 'vitest';
 import { AUDIT_LOG_PATH, auditLogPageSchema } from '../../../shared/audit-log.ts';
 import { errorResponseSchema } from '../../../shared/errors.ts';
+import { encodeAuditCursor } from '../../domain/audit-cursor.ts';
 import { insertAuditRows } from '../../services/audit-log-fixture/test-support.ts';
 import { type PersonName, tenantChecksums } from '../db/tenant-fixture/test-support.ts';
 import { matrixWorld } from './cross-tenant-runner/test-support.ts';
@@ -117,6 +118,10 @@ test.each([
   ['a limit of 201', 'limit=201'],
   ['a limit that is text', 'limit=all'],
   ['a cursor that is not ours', 'cursor=AAAA'],
+  [
+    'a cursor in the year 0000, which the database cannot store',
+    `cursor=${encodeAuditCursor({ occurredAt: '0000-01-01T00:00:00.000000Z', id: 1 })}`,
+  ],
   ['a repeated parameter', 'limit=10&limit=20'],
   ['a parameter nobody defined', 'installationId=2'],
 ])('%s is a 400 bad_request', async (_name, query) => {

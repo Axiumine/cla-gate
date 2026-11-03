@@ -42,11 +42,19 @@ test.each([
   ['a day that the month does not have', cursorOf(['2026-02-30T10:00:00.123456Z', 1])],
   ['an hour that the day does not have', cursorOf(['2026-11-02T25:00:00.123456Z', 1])],
   ['an instant in SQL', cursorOf(["2026-11-02T10:00:00.123456Z'; drop table audit_log; --", 1])],
+  ['an instant in the year 0000, which the database cannot store', cursorOf(['0000-06-01T00:00:00.000000Z', 1])],
   ['null', cursorOf(null)],
   ['a cursor of more than 128 characters', 'A'.repeat(129)],
 ])('%s is not a cursor', (_name, text) => {
   expect(auditCursorSchema.safeParse(text).success).toBe(false);
 });
+
+test.each(['0001-01-01T00:00:00.000000Z', '9999-12-31T23:59:59.999999Z'])(
+  'the instant %s, the first and the last the database stores, is a cursor',
+  (occurredAt) => {
+    expect(auditCursorSchema.parse(encodeAuditCursor({ occurredAt, id: 7 }))).toEqual({ occurredAt, id: 7 });
+  },
+);
 
 test('a text that differs from a cursor only in the unused bits of its last character is not a cursor either', () => {
   // 34 bytes of JSON: the last character carries four bits that no byte uses, so sixteen spellings decode to one value.

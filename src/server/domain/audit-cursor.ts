@@ -41,11 +41,14 @@ function decodeCursorText(text: string): unknown {
   }
 }
 
-const position = z.tuple([z.iso.datetime({ precision: 6 }), z.int().positive()]);
+/** The first year Postgres stores: `0000-…` is a calendar instant to zod and a statement that fails in the database. */
+const NO_YEAR_ZERO = /^(?!0000)/;
+
+const position = z.tuple([z.iso.datetime({ precision: 6 }).regex(NO_YEAR_ZERO), z.int().positive()]);
 
 /**
  * Reads the cursor a client sent back: base64url characters only, canonical, JSON, and a two-element array of a real
- * calendar instant with six decimals and a positive integer. Anything else fails, and the route answers `400`.
+ * calendar instant with six decimals, from the year 0001, and a positive integer. Anything else fails, and the route answers `400`.
  */
 export const auditCursorSchema = z
   .string()
