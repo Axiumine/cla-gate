@@ -13,14 +13,15 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 | [`README.md`](README.md) | Landing page: product, scope, quick start, documentation map |
 | [`docs/development.md`](docs/development.md) | Status, setup and run, every `package.json` script (exists or deferred) |
 | [`docs/configuration.md`](docs/configuration.md) | Environment variables |
-| [`docs/architecture.md`](docs/architecture.md) | Stack, layering, PR check flow, rules (webhooks, evaluation, auth, cookies, start-up) |
+| [`docs/architecture.md`](docs/architecture.md) | Stack, layering, PR check flow, rules |
 | [`docs/data-model.md`](docs/data-model.md) | Tables, immutability, erasure, database roles |
 | [`docs/security.md`](docs/security.md) | Auth model, role matrix, security and privacy |
+| [`docs/privacy.md`](docs/privacy.md) | Privacy notes: data inventory, retention, erasure, backups |
 | [`docs/github-app.md`](docs/github-app.md) | App permissions, events, check name, rules |
 | [`docs/operations.md`](docs/operations.md) | Key rotation, backups, poison jobs |
 | [`docs/decisions.md`](docs/decisions.md) | Decisions and reasons, open questions (legal) |
 | [`docs/repository-layout.md`](docs/repository-layout.md) | The directory tree |
-| [`docs/quality-gates.md`](docs/quality-gates.md) | Thresholds, TypeScript setup, testing conventions, escape hatches |
+| [`docs/quality-gates.md`](docs/quality-gates.md) | Thresholds, TypeScript, testing, escape hatches |
 | [`docs/toolchain.md`](docs/toolchain.md) | Tool evaluation, hook pipeline, CI jobs |
 | [`docs/tooling-gotchas.md`](docs/tooling-gotchas.md) | Tool facts and traps, GitNexus, open verifications |
 | [`scripts/code-caps/README.md`](scripts/code-caps/README.md) | The structure-cap ratchet tool (`yarn caps`) |
