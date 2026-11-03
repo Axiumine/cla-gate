@@ -10,6 +10,12 @@ import { codePointCount, isOneCodeSpan, ZWSP } from './test-support.ts';
 
 const FFFD = '\u{fffd}';
 const EMOJI = String.fromCodePoint(0x1f600);
+/** Characters of the tag block U+E0000 to U+E007F, and the two just outside the ends of what is removed. */
+const TAG_FIRST = String.fromCodePoint(0xe0000);
+const TAG_A = String.fromCodePoint(0xe0041);
+const TAG_LAST = String.fromCodePoint(0xe007f);
+const AFTER_TAGS = String.fromCodePoint(0xe0080);
+const VS17 = String.fromCodePoint(0xe0100);
 
 test.each([
   ['a plain login', 'octocat', '`octocat`'],
@@ -23,6 +29,14 @@ test.each([
   ['a line separator and a paragraph separator', 'a\u{2028}b\u{2029}c', '`abc`'],
   ['the bidi embeddings and the override', 'a\u{202a}b\u{202b}c\u{202c}d\u{202d}e\u{202e}f', '`abcdef`'],
   ['the bidi isolates', 'a\u{2066}b\u{2067}c\u{2068}d\u{2069}e', '`abcde`'],
+  ['a left-to-right mark', 'a\u{200e}b', '`ab`'],
+  ['a right-to-left mark', 'a\u{200f}b', '`ab`'],
+  ['an Arabic letter mark', 'a\u{61c}b', '`ab`'],
+  ['a tag letter, which draws nothing and can carry hidden text', `x${TAG_A}y`, '`xy`'],
+  ['the first and the last character of the tag block', `x${TAG_FIRST}${TAG_LAST}y`, '`xy`'],
+  ['a name made only of tag characters', `${TAG_A}${TAG_LAST}`, '`(unnamed)`'],
+  ['a character just after the tag block is kept', `x${AFTER_TAGS}y`, `\`x${AFTER_TAGS}y\``],
+  ['a variation selector of the supplement is kept, it is part of a character', `x${VS17}y`, `\`x${VS17}y\``],
   ['a fake list item', '\n- [x] Signed', '`- [x] Signed`'],
   ['a fake heading', '\r\n## Passed', `\`#${ZWSP}#${ZWSP} Passed\``],
 ])('renderName cleans %s', (_what, raw, expected) => {

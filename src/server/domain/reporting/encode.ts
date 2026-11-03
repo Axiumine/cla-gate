@@ -24,10 +24,21 @@ const ELLIPSIS = '…';
 
 /**
  * Characters that must not reach the output: C0 and C1 controls (`\p{Cc}`, which includes DEL), the line and paragraph
- * separators (`\p{Zl}` is U+2028, `\p{Zp}` is U+2029) and the bidirectional controls (U+202A to U+202E, U+2066 to U+2069,
- * written one by one: a range of braced escapes defeats the regular expression linter).
+ * separators (`\p{Zl}` is U+2028, `\p{Zp}` is U+2029) and every bidirectional control (`\p{Bidi_Control}`: U+061C, the marks
+ * U+200E and U+200F, U+202A to U+202E and U+2066 to U+2069). The property leaves U+200B, U+200C and U+200D, which names in
+ * several scripts and emoji need.
  */
-const UNSAFE = /[\p{Cc}\p{Zl}\p{Zp}\u{202a}\u{202b}\u{202c}\u{202d}\u{202e}\u{2066}\u{2067}\u{2068}\u{2069}]/gu;
+const UNSAFE = /[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/gu;
+
+/**
+ * The tag block, U+E0000 to U+E007F: it draws nothing and can carry hidden text. It is matched as the surrogate pair of each of
+ * its characters (a high surrogate U+DB40 and a low one from U+DC00 to U+DC7F), because a range of braced escapes defeats the
+ * regular expression linter. Run it on well-formed text only, where a high surrogate always has its low one.
+ */
+const TAG_BLOCK = /\uDB40[\uDC00-\uDC7F]/g;
+
+/** `text` without the characters of {@link UNSAFE} and of {@link TAG_BLOCK}. */
+const withoutUnsafe = (text: string): string => text.replace(UNSAFE, '').replace(TAG_BLOCK, '');
 
 /** Every kind of line break: CRLF counts once. */
 const LINE_BREAK = /\r\n|[\n\v\f\r\u0085\p{Zl}\p{Zp}]/gu;
@@ -67,7 +78,7 @@ export class InvalidIdError extends Error {
  * space each side. A name that is empty after cleaning is `(unnamed)`.
  */
 export function renderName(raw: string): string {
-  const cleaned = raw.toWellFormed().replace(UNSAFE, '').replace(/\s+/gu, ' ').trim();
+  const cleaned = withoutUnsafe(raw.toWellFormed()).replace(/\s+/gu, ' ').trim();
   if (cleaned === '') {
     return codeSpan(UNNAMED);
   }
@@ -82,7 +93,7 @@ export function renderName(raw: string): string {
  * made before the escaping, so an escape is never split.
  */
 export function neutraliseText(raw: string): string {
-  const flat = raw.toWellFormed().replace(LINE_BREAK, ' ').replace(UNSAFE, '');
+  const flat = withoutUnsafe(raw.toWellFormed().replace(LINE_BREAK, ' '));
   return escapeMarkdown(takeCodePoints(flat, TEXT_LIMIT).head);
 }
 

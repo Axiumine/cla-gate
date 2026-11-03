@@ -62,6 +62,14 @@ test.each([
   ['the first isolate', '\u{2066}', true],
   ['the last isolate', '\u{2069}', true],
   ['the character after the last isolate', '\u{206a}', false],
+  ['the Arabic letter mark', '\u{61c}', true],
+  ['the character before the Arabic letter mark', '\u{61b}', false],
+  ['the left-to-right mark', '\u{200e}', true],
+  ['the right-to-left mark', '\u{200f}', true],
+  ['the character before the two marks', '\u{200d}', false],
+  ['the first tag character', String.fromCodePoint(0xe0000), true],
+  ['the last tag character', String.fromCodePoint(0xe007f), true],
+  ['the character after the tag block', String.fromCodePoint(0xe0080), false],
   ['an emoji', String.fromCodePoint(0x1f600), false],
 ])('hasUnsafeCharacter: %s', (_what, text, expected) => {
   expect(hasUnsafeCharacter(text)).toBe(expected);

@@ -25,13 +25,19 @@ export const HOSTILE_ROWS: readonly (readonly [label: string, name: string])[] =
   ...HOSTILE_CONTROL_NAMES,
 ].map((name) => [JSON.stringify(name).slice(0, 40), name] as const);
 
-/** The code point ranges that must not reach the output, written as numbers: C0, DEL and C1, the separators and the bidi controls. */
+/**
+ * The code point ranges that must not reach the output, written as numbers: C0, DEL and C1, the Arabic letter mark, the
+ * left-to-right and right-to-left marks, the separators and the other bidi controls, and the tag block.
+ */
 const UNSAFE_RANGES: readonly (readonly [first: number, last: number])[] = [
   [0x0, 0x1f],
   [0x7f, 0x9f],
+  [0x61c, 0x61c],
+  [0x200e, 0x200f],
   [0x2028, 0x2029],
   [0x202a, 0x202e],
   [0x2066, 0x2069],
+  [0xe0000, 0xe007f],
 ];
 
 /** The number of Unicode code points in `text`. */
@@ -44,11 +50,10 @@ export function isOneLine(text: string): boolean {
   return !/[\n\r\u0085\p{Zl}\p{Zp}]/u.test(text);
 }
 
-/** True when `text` holds a control, a line or paragraph separator or a bidirectional control: nothing GitHub should be sent. */
+/** True when `text` holds a control, a line or paragraph separator, a bidirectional control or a tag character: nothing GitHub should be sent. */
 export function hasUnsafeCharacter(text: string): boolean {
   return Array.from(text).some((character) => {
-    // The first UTF-16 unit is the whole code point below U+10000, and a surrogate (in no range) above it.
-    const code = character.charCodeAt(0);
+    const code = character.codePointAt(0) ?? 0;
     return UNSAFE_RANGES.some(([first, last]) => code >= first && code <= last);
   });
 }

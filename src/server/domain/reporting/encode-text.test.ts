@@ -10,6 +10,9 @@ import { ZWSP } from './test-support.ts';
 const FFFD = '\u{fffd}';
 const EMOJI = String.fromCodePoint(0x1f600);
 
+/** The character of a code point, written as a number: a tag character is invisible, so in a file it would be too. */
+const tag = (codePoint: number): string => String.fromCodePoint(codePoint);
+
 /** The eighteen characters of the Markdown punctuation set, in the order of the story, one per test row. */
 const PUNCTUATION = ['\\', '`', '*', '_', '[', ']', '(', ')', '<', '>', '#', '+', '-', '.', '!', '|', '~', '&'];
 
@@ -63,6 +66,10 @@ test.each([
   ['DEL and a C1 control', 'a\u007Fb\u009Fc', 'abc'],
   ['the bidi override', `exe.\u202Elive`, 'exe\\.live'],
   ['the bidi isolates', 'a\u2066b\u2069c', 'abc'],
+  ['the left-to-right and right-to-left marks', 'a\u{200e}b\u{200f}c', 'abc'],
+  ['the Arabic letter mark', 'a\u{61c}b', 'ab'],
+  ['the tag block, first, last and one in between', `a${tag(0xe0000)}b${tag(0xe0041)}c${tag(0xe007f)}d`, 'abcd'],
+  ['a character just after the tag block', `a${tag(0xe0080)}b`, `a${tag(0xe0080)}b`],
   ['a lone high surrogate', 'a\uD800b', `a${FFFD}b`],
   ['a lone low surrogate', 'a\uDC00b', `a${FFFD}b`],
 ])('neutraliseText drops or repairs %s', (_what, raw, expected) => {
