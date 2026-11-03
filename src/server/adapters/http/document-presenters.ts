@@ -5,10 +5,14 @@ import type {
   activeVersionSchema,
   claDocumentDetailSchema,
   claDocumentSchema,
+  claDraftSchema,
   installationScopedEntrySchema,
+  savedDraftResponseSchema,
 } from '../../../shared/cla.ts';
 import type { DocumentPosition, StoredActiveVersion, StoredDocument } from '../../services/cla-document-types.ts';
 import type { DocumentDetail } from '../../services/cla-documents.ts';
+import type { StoredDraft } from '../../services/cla-draft-queries.ts';
+import type { SavedDraft } from '../../services/cla-draft-writes.ts';
 import { decodeCursor, encodeCursor } from './cursor.ts';
 
 // The documents of the API as the routes of document-routes.ts send them (E12-S01): the stored rows with their times as
@@ -43,6 +47,16 @@ export function presentDocument(document: StoredDocument): z.infer<typeof claDoc
 /** A document with its draft flag as `claDocumentDetailSchema` has it. */
 export function presentDetail(document: DocumentDetail): z.infer<typeof claDocumentDetailSchema> {
   return { ...presentDocument(document), hasDraft: document.hasDraft };
+}
+
+/** A stored draft as `claDraftSchema` has it: the canonical text, the revision and the time as ISO 8601. */
+export function presentDraft(draft: StoredDraft): z.infer<typeof claDraftSchema> {
+  return { contentMd: draft.contentMd, revision: draft.revision, updatedAt: draft.updatedAt.toISOString() };
+}
+
+/** What a save answers: the revision and the time, never the text. */
+export function presentSavedDraft(draft: SavedDraft): z.infer<typeof savedDraftResponseSchema>['draft'] {
+  return { revision: draft.revision, updatedAt: draft.updatedAt.toISOString() };
 }
 
 /** What a repository admin sees of an installation-wide document: the id, the name and the number of the active version. */

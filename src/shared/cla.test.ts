@@ -10,6 +10,7 @@ import {
   createDocumentRequestSchema,
   DOCUMENT_PATH,
   DOCUMENTS_PATH,
+  DRAFT_PATH,
   documentListResponseSchema,
   isKindSupported,
   listDocumentsQuerySchema,
@@ -35,6 +36,7 @@ test('the paths are the ones the routes, the tests and the screens share', () =>
   expect(DOCUMENTS_PATH).toBe('/api/installations/:installationId/documents');
   expect(DOCUMENT_PATH).toBe('/api/installations/:installationId/documents/:documentId');
   expect(REPOSITORY_DOCUMENTS_PATH).toBe('/api/installations/:installationId/repositories/:repositoryId/documents');
+  expect(DRAFT_PATH).toBe('/api/installations/:installationId/documents/:documentId/draft');
 });
 
 test('the schema accepts both kinds, and the corporate kind is off until E21 flips the constant', () => {
@@ -62,6 +64,7 @@ test('the limits and the status of each rule are the ones the story names', () =
     content_too_large: 422,
     content_empty: 422,
     content_invalid_characters: 422,
+    draft_conflict: 409,
     not_found: 404,
   });
 });

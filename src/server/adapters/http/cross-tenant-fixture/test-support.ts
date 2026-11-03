@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { Kysely } from 'kysely';
+import type { Database } from '../../db/schema.ts';
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
@@ -50,6 +52,11 @@ export interface CrossTenantCase {
   readonly request: (target: MatrixTarget) => RequestSpec;
   /** The status of the answer to the person the call is for. Defaults to 200. */
   readonly success?: number;
+  /**
+   * Puts the resource of `target` in the state the request expects. The runner calls it before each call that must succeed,
+   * for a request that succeeds once and not twice (a save that names the revision it read).
+   */
+  readonly prepare?: (db: Kysely<Database>, target: MatrixTarget) => Promise<void>;
 }
 
 /** A row a response names, by table and `id` (`signature_id` for `signer_pii`). */
@@ -89,6 +96,23 @@ const freshDocumentName = (): string => {
 
 const documentsUrl = (target: MatrixTarget): string => `/api/installations/${target.installationId}/documents`;
 
+const draftUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/draft`;
+
+/** Brings the draft of the document of `target` to revision 1, saving one first when it has none: the save of the matrix names revision 1. */
+async function draftAtFirstRevision(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
+  await db
+    .insertInto('cla_drafts')
+    .values({
+      document_id: target.documentId,
+      installation_id: target.installationId,
+      content_md: 'Matrix draft\n',
+      updated_by: person.id,
+    })
+    .onConflict((conflict) => conflict.column('document_id').doUpdateSet({ revision: 1 }))
+    .execute();
+}
+
 /** The `tenant` routes of the application, keyed `METHOD path`. A story that adds one adds its case here (E13 to E16). */
 export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
   // E12-S01. The case creates a document that covers the installation (org admin only); the repository-scoped body is shown in document-routes-create.test.ts.
@@ -123,6 +147,25 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       url: `${documentsUrl(target)}/${target.documentId}`,
       payload: { name: freshDocumentName() },
     }),
+  },
+  // E12-S03. The save names revision 1, which `prepare` restores before each call that must succeed.
+  'GET /api/installations/:installationId/documents/:documentId/draft': {
+    endpointClass: 'document_read',
+    request: (target) => ({ method: 'GET', url: draftUrl(target) }),
+  },
+  'PUT /api/installations/:installationId/documents/:documentId/draft': {
+    endpointClass: 'document_write',
+    prepare: draftAtFirstRevision,
+    request: (target) => ({
+      method: 'PUT',
+      url: draftUrl(target),
+      payload: { contentMd: 'Saved by the matrix\n', expectedRevision: 1 },
+    }),
+  },
+  'DELETE /api/installations/:installationId/documents/:documentId/draft': {
+    endpointClass: 'document_write',
+    success: 204,
+    request: (target) => ({ method: 'DELETE', url: draftUrl(target) }),
   },
 };
 

@@ -14,7 +14,8 @@ import { seedSignature, seedTenant, type Tenant } from '../test-support.ts';
 //
 //   tenant 1  organisation `org-1`, GitHub installation 5000, repositories `org-1/repo` and `org-1/scoped`
 //   tenant 2  organisation `org-2`, GitHub installation 10000, repositories `org-2/repo` and `org-2/scoped`
-// Each tenant's admin has an entry in the ledger of org admins (E11-S07), seen on 2026-05-01.
+// Each tenant's admin has an entry in the ledger of org admins (E11-S07), seen on 2026-05-01, and the repo-scoped document
+// of each tenant has a draft at revision 1 (E12-S03, `DRAFT_TEXT`), saved by the tenant's publisher.
 // People (GitHub knows them by the numeric id; the login is `login-<id>`):
 //   admin1 admin of the organisation 1;  admin2 admin of 2;  repoAdmin1 admin of `org-1/scoped` only;
 //   member1 plain member of 1;  outsider knows nothing.
@@ -41,11 +42,15 @@ export type RowTable = (typeof ROW_TABLES)[number];
  * The tables a tenant owns, or reaches through a composite foreign key: every statement over one of them names the
  * tenant (E11-S06). `cla_versions` and `signer_pii` carry no installation column of their own, they belong to it through
  * their document and their signature. `installations`, the root, is not in the list. The ledger of org admins (E11-S07)
- * is keyed by the pair (installation, person), so no route names one of its rows.
+ * is keyed by the pair (installation, person), so no route names one of its rows. The drafts (E12-S03) are keyed by their
+ * document, which the path of a route names; a response never names a row of them by an id of its own.
  */
-export const TENANT_TABLES = [...ROW_TABLES, 'installation_admin_seen'] as const;
+export const TENANT_TABLES = [...ROW_TABLES, 'installation_admin_seen', 'cla_drafts'] as const;
 
 export type TenantTable = (typeof TENANT_TABLES)[number];
+
+/** The text of the draft the repo-scoped document of tenant `n` holds, so a response that leaks it can be told by its words. */
+export const draftTextOf = (n: number): string => `Draft of the repository terms of tenant ${n}\n`;
 
 /** The GitHub ids of the five people. */
 const TWO_TENANT_PEOPLE = {
@@ -223,6 +228,15 @@ async function extendTenant(db: Kysely<Database>, tenant: Tenant, n: number, sig
     .executeTakeFirstOrThrow();
   await seedPolicyRows(db, tenant, n);
   await seedJobRows(db, tenant, n);
+  await db
+    .insertInto('cla_drafts')
+    .values({
+      document_id: document.id,
+      installation_id: tenant.installationId,
+      content_md: draftTextOf(n),
+      updated_by: tenant.publisherId,
+    })
+    .execute();
   const signature = await seedSignature(db, tenant, signerGithubId);
   return { scoped: { repositoryId: repository.id, githubRepoId, fullName, documentId: document.id }, signature };
 }

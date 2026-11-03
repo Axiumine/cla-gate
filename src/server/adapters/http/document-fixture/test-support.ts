@@ -17,6 +17,10 @@ export const documentWorld = (): Promise<DocumentWorld> => matrixWorld();
 /** The path of the documents of the installation `installationId` (`installations.id`). */
 export const documentsPath = (installationId: number): string => `/api/installations/${installationId}/documents`;
 
+/** The path of the draft of the document `documentId` of the installation `installationId`. */
+export const draftPath = (installationId: number, documentId: number): string =>
+  `${documentsPath(installationId)}/${documentId}/draft`;
+
 /** A name for a made-up document, so a test never meets the names the world already has. */
 export const nameOf = (n: number): string => `Test document ${String(n).padStart(3, '0')}`;
 
@@ -103,4 +107,29 @@ export async function fillDocuments(
     active_version_id: null,
   }));
   await world.db.insertInto('cla_documents').values(rows).execute();
+}
+
+/** Reads the draft of a document as `who`. */
+export function readDraftAs(world: DocumentWorld, who: PersonName | null, installationId: number, documentId: number) {
+  return world.ask(who, { method: 'GET', url: draftPath(installationId, documentId) });
+}
+
+/** Saves a draft as `who`: `expectedRevision` is the revision the editor read, or null when it read none. */
+export function saveDraftAs(
+  world: DocumentWorld,
+  who: PersonName | null,
+  target: { readonly installationId: number; readonly documentId: number },
+  payload: object,
+) {
+  return world.ask(who, { method: 'PUT', url: draftPath(target.installationId, target.documentId), payload });
+}
+
+/** Discards the draft of a document as `who`. */
+export function discardDraftAs(
+  world: DocumentWorld,
+  who: PersonName | null,
+  installationId: number,
+  documentId: number,
+) {
+  return world.ask(who, { method: 'DELETE', url: draftPath(installationId, documentId) });
 }

@@ -178,14 +178,20 @@ async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCa
   }
 }
 
+/** Sends the request of the case as `who` to a call that must succeed, after the case has put the resource in the state it expects. */
+async function askAllowed(world: MatrixWorld, c: CrossTenantCase, who: PersonName, target: MatrixTarget) {
+  await c.prepare?.(world.db, target);
+  return world.ask(who, c.request(target));
+}
+
 /** The calls that are allowed: the admin of the organisation, and the admin of the repository where the role matrix lets them. */
 async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
   const plan = planOf(c.endpointClass, world.t1);
   const success = c.success ?? 200;
-  expect((await world.ask('admin1', c.request(plan.ok))).statusCode, `${route} as its own admin`).toBe(success);
+  expect((await askAllowed(world, c, 'admin1', plan.ok)).statusCode, `${route} as its own admin`).toBe(success);
   if (plan.repoAdminPasses) {
     expect(
-      (await world.ask('repoAdmin1', c.request(plan.ok))).statusCode,
+      (await askAllowed(world, c, 'repoAdmin1', plan.ok)).statusCode,
       `${route} as the admin of the repository`,
     ).toBe(success);
   } else {
@@ -293,7 +299,7 @@ export async function assertInactiveCase(
     const refused = await denialProbe(world, route)('admin1', c.request(plan.ok), 409, ` of a ${state} tenant`);
     expect(refused.body, `${route} of a ${state} tenant`).toContain(`"code":"${conflictCode(state)}"`);
   } else {
-    const served = await world.ask('admin1', c.request(plan.ok));
+    const served = await askAllowed(world, c, 'admin1', plan.ok);
     expect(served.statusCode, `${route} of a ${state} tenant as the admin the ledger remembers`).toBe(c.success ?? 200);
   }
   await setStateOfTenant1(world, null);
@@ -344,7 +350,7 @@ export async function assertOperatorCase(
     ).toEqual(unknown);
   }
   if (state === null) {
-    const control = await world.ask('admin1', c.request(planOf(c.endpointClass, world.t1).ok));
+    const control = await askAllowed(world, c, 'admin1', planOf(c.endpointClass, world.t1).ok);
     expect(control.statusCode, `${route} as the admin of the tenant`).toBe(c.success ?? 200);
   }
   await setStateOfTenant1(world, null);

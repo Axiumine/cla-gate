@@ -224,6 +224,9 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /api/installations/:installationId/repositories/:repositoryId/documents',
     'GET /api/installations/:installationId/documents/:documentId',
     'PATCH /api/installations/:installationId/documents/:documentId',
+    'GET /api/installations/:installationId/documents/:documentId/draft',
+    'PUT /api/installations/:installationId/documents/:documentId/draft',
+    'DELETE /api/installations/:installationId/documents/:documentId/draft',
     'POST /webhooks/github',
   ]);
 });

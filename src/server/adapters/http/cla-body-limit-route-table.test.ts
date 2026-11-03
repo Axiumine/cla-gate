@@ -10,7 +10,8 @@ import { CLA_BODY_LIMIT } from './limits.ts';
 // The route table of the real application (E12-S02): every route registered while the app is built, collected by an
 // `onRoute` hook that is added to the Fastify instance the moment it is created, before any route exists. Every route of
 // the CLA documents that changes data sets the body limit of 512 KiB, so a draft or a version added by a later story of the
-// epic cannot take the 1 MiB of the other routes by leaving the option out.
+// epic cannot take the 1 MiB of the other routes by leaving the option out. A `DELETE` reads no body, but Fastify would parse
+// one of 1 MiB, so it sets the limit too (E12-S03).
 
 interface SeenRoute {
   readonly method: string | readonly string[];
@@ -32,7 +33,7 @@ vi.mock('fastify', async (importOriginal) => {
   return { ...actual, default: create };
 });
 
-const BODY_METHODS = ['POST', 'PUT', 'PATCH'];
+const BODY_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 function claRoutesThatReadABody(table: readonly SeenRoute[]): (readonly [name: string, bodyLimit: unknown])[] {
   return table
@@ -54,6 +55,8 @@ test('every route of the CLA documents that reads a body, those of later stories
     expect.arrayContaining([
       'PATCH /api/installations/:installationId/documents/:documentId',
       'POST /api/installations/:installationId/documents',
+      'PUT /api/installations/:installationId/documents/:documentId/draft',
+      'DELETE /api/installations/:installationId/documents/:documentId/draft',
     ]),
   );
   expect(routes.filter(([, limit]) => limit !== CLA_BODY_LIMIT)).toEqual([]);

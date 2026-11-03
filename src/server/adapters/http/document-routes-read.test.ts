@@ -43,7 +43,7 @@ test('the document comes back with its active version, the hash of the text and 
   );
 });
 
-test('a document without a version has no active version; the admin of its repository reads it, and the org admin too', async () => {
+test('a document without a version has no active version and the draft the fixture saved; the admin of its repository reads it, and the org admin too', async () => {
   const world = await documentWorld();
   const url = `${documentsPath(world.t1.installationId)}/${world.t1.scoped.documentId}`;
   const asRepoAdmin = await world.ask('repoAdmin1', { method: 'GET', url });
@@ -54,7 +54,7 @@ test('a document without a version has no active version; the admin of its repos
     scope: 'repository',
     repositoryId: world.t1.scoped.repositoryId,
     activeVersion: null,
-    hasDraft: false,
+    hasDraft: true,
   });
 });
 

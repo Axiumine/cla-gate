@@ -62,6 +62,14 @@ test('the thirteenth and fourteenth actions are the two document actions of E12-
   }
 });
 
+test('the fourteenth and fifteenth actions are the two draft actions of E12-S03, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS.slice(13, 15)).toEqual(['cla_draft.saved', 'cla_draft.discarded']);
+  for (const action of ['cla_draft.saved', 'cla_draft.discarded'] as const) {
+    expect(SYSTEM_ACTIONS.has(action)).toBe(false);
+    expect(INSTANCE_ACTIONS.has(action)).toBe(false);
+  }
+});
+
 test('no action and no metadata key is listed twice', () => {
   expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
   expect(new Set(AUDIT_METADATA_KEYS).size).toBe(AUDIT_METADATA_KEYS.length);

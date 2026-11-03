@@ -19,7 +19,7 @@ import { parseInput } from './request-body.ts';
 // it does what they will do, `prepareClaText` over the body.
 
 const PROBE = '/probe/cla-text';
-const SECRET_TEXT = 'MARKER-OF-A-HOSTILE-TEXT';
+const HOSTILE_TEXT = 'MARKER-OF-A-HOSTILE-TEXT';
 
 const probeBody = z.strictObject({ contentMd: z.string() });
 
@@ -53,19 +53,19 @@ async function probeWorld() {
 const bodyOf = (contentMd: string): string => JSON.stringify({ contentMd });
 
 const REFUSED = [
-  { label: 'a NUL', code: 'content_invalid_characters', details: undefined, text: `${SECRET_TEXT}\u0000` },
+  { label: 'a NUL', code: 'content_invalid_characters', details: undefined, text: `${HOSTILE_TEXT}\u0000` },
   {
     label: 'a lone surrogate',
     code: 'content_invalid_characters',
     details: undefined,
-    text: `${SECRET_TEXT}${String.fromCharCode(0xd800)}`,
+    text: `${HOSTILE_TEXT}${String.fromCharCode(0xd800)}`,
   },
   { label: 'nothing but white space', code: 'content_empty', details: undefined, text: ' \r\n\t\r\n' },
   {
     label: 'more bytes than the limit',
     code: 'content_too_large',
-    details: { limitBytes: 204_800, actualBytes: SECRET_TEXT.length + CLA_TEXT_MAX_BYTES + 1 },
-    text: `${SECRET_TEXT}${'a'.repeat(CLA_TEXT_MAX_BYTES)}`,
+    details: { limitBytes: 204_800, actualBytes: HOSTILE_TEXT.length + CLA_TEXT_MAX_BYTES + 1 },
+    text: `${HOSTILE_TEXT}${'a'.repeat(CLA_TEXT_MAX_BYTES)}`,
   },
 ] as const;
 
@@ -77,9 +77,9 @@ test('a text that breaks a rule is 422 with the code of the rule and its details
     const { error } = errorResponseSchema.parse(response.json());
     expect(error, label).toMatchObject({ code, message: 'Unprocessable Entity' });
     expect(error.details, label).toStrictEqual(details);
-    expect(response.body, label).not.toContain(SECRET_TEXT);
+    expect(response.body, label).not.toContain(HOSTILE_TEXT);
   }
-  expect(world.logs.text()).not.toContain(SECRET_TEXT);
+  expect(world.logs.text()).not.toContain(HOSTILE_TEXT);
 });
 
 test('a text of CRLF lines is answered with the hash of the canonical text', async () => {

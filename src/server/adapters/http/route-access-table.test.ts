@@ -127,7 +127,7 @@ test('the authenticated routes are the session read and the logout, and none has
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the tenant routes are the five of the documents', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the eight of the documents and their draft', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
   expect(sorted(table.filter((entry) => typeof entry.access === 'object').map(nameOf))).toEqual(
@@ -137,6 +137,9 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'GET /api/installations/:installationId/repositories/:repositoryId/documents',
       'GET /api/installations/:installationId/documents/:documentId',
       'PATCH /api/installations/:installationId/documents/:documentId',
+      'GET /api/installations/:installationId/documents/:documentId/draft',
+      'PUT /api/installations/:installationId/documents/:documentId/draft',
+      'DELETE /api/installations/:installationId/documents/:documentId/draft',
     ]),
   );
 });

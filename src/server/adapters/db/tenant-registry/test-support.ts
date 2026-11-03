@@ -29,6 +29,7 @@ import {
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { JOB_TENANT_QUERIES } from '../tenant-jobs-fixture/test-support.ts';
+import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
 import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from '../tenant-scope.ts';
 
 // The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
@@ -45,6 +46,8 @@ export const TENANT_MODULES = [
   'services/close-pr/close-rows.ts',
   'services/cla-document-queries.ts',
   'services/cla-document-writes.ts',
+  'services/cla-draft-queries.ts',
+  'services/cla-draft-writes.ts',
   'services/document-placement.ts',
   'services/evaluate-pr/evaluation-rows.ts',
   'services/evaluate-pr/policy-facts.ts',
@@ -294,6 +297,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       },
     }),
   },
+  'services/cla-draft-queries.ts': DRAFT_READS,
+  'services/cla-draft-writes.ts': DRAFT_WRITES,
   'services/document-placement.ts': {
     findDocumentPlacement: scoped({
       takesIds: true,

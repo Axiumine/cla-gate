@@ -5,6 +5,7 @@ import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { findDocument, listDocuments, listRepositoryDocuments } from './cla-document-queries.ts';
 import type { DocumentPosition, RepositoryDocuments, StoredDocument } from './cla-document-types.ts';
+import { findDraftRevision } from './cla-draft-queries.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 
 // What can be read of the CLA documents of a tenant (E12-S01): one document, a page of them, and those of a repository.
@@ -16,8 +17,8 @@ export interface DocumentDetail extends StoredDocument {
 }
 
 /**
- * The document `documentId` of the tenant with its active version. `hasDraft` is false for every document until the drafts
- * exist (E12-S03 adds the table and reads it here): there is nothing a draft could be saved in before that.
+ * The document `documentId` of the tenant with its active version. `hasDraft` says whether a draft is saved for it (E12-S03);
+ * the text of the draft is not read.
  * @throws ClaRuleError `not_found` when the tenant has no such document.
  */
 export async function readDocument(
@@ -25,11 +26,14 @@ export async function readDocument(
   scope: TenantScope,
   documentId: number,
 ): Promise<DocumentDetail> {
-  const document = await findDocument(db, scope, documentId);
+  const [document, draftRevision] = await Promise.all([
+    findDocument(db, scope, documentId),
+    findDraftRevision(db, scope, documentId),
+  ]);
   if (document === null) {
     throw new ClaRuleError('not_found');
   }
-  return { ...document, hasDraft: false };
+  return { ...document, hasDraft: draftRevision !== null };
 }
 
 /** One page of the documents of a tenant: the rows, and where the next page starts (null on the last page). */

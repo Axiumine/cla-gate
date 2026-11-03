@@ -33,6 +33,10 @@ export const AUDIT_ACTIONS = [
   // Added by E12-S01: a CLA document was created, or renamed (metadata ids and the kind only, never the name).
   'cla_document.created',
   'cla_document.renamed',
+  // Added by E12-S03: a draft of a CLA text was saved (metadata the document id and the new revision) or discarded (the document
+  // id and the revision that was discarded). The text is never in the row.
+  'cla_draft.saved',
+  'cla_draft.discarded',
   // Instance-wide actions: SYSTEM_ACTIONS and INSTANCE_ACTIONS must be subsets of this list.
   'data_export.created',
   'network_metadata.purged',
