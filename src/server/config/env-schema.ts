@@ -15,6 +15,7 @@ import {
 import { githubFields, githubProblems } from './env-github.ts';
 import { sourceCommitField, sourceUrlField } from './source-fields.ts';
 import { DEFAULT_WEB_ROOT, webRootField } from './web-root.ts';
+import { retentionFields } from './retention-fields.ts';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 const DEFAULT_PORT = 3000;
@@ -39,6 +40,7 @@ export const envSchema = z
     SOURCE_COMMIT: sourceCommitField.default(null),
     ...githubFields,
     ...sessionFields,
+    ...retentionFields,
   })
   .superRefine((env, ctx) => {
     // Session cookies are `Secure` and `__Host-` prefixed, so a production deployment is HTTPS by definition.
