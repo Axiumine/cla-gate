@@ -28,6 +28,7 @@ interface Probe {
   counts: number;
   failOnBatch: number;
   recountExtra: number;
+  failRecount: boolean;
   readonly settings: unknown[];
   readonly audited: unknown[];
 }
@@ -38,6 +39,7 @@ const probe = vi.hoisted<Probe>(() => ({
   counts: 0,
   failOnBatch: 0,
   recountExtra: 0,
+  failRecount: false,
   settings: [],
   audited: [],
 }));
@@ -48,6 +50,9 @@ vi.mock('./signature-queries.ts', async (importOriginal) => {
     ...actual,
     countSignatures: async (...args: Parameters<typeof actual.countSignatures>) => {
       probe.counts += 1;
+      if (probe.failRecount && probe.counts === 2) {
+        throw new Error('injected recount failure');
+      }
       const count = await actual.countSignatures(...args);
       return probe.counts === 2 ? count + probe.recountExtra : count;
     },
@@ -86,6 +91,7 @@ beforeEach(() => {
   probe.counts = 0;
   probe.failOnBatch = 0;
   probe.recountExtra = 0;
+  probe.failRecount = false;
 });
 
 async function world(signatures: number) {
@@ -199,6 +205,19 @@ test('when the count in the snapshot is not the one in the audit row nothing is 
     .where('action', '=', 'signatures.exported')
     .execute();
   expect(audit).toEqual([{ metadata: { state: 'all', row_count: 4 } }]);
+});
+
+test('a count that fails in the snapshot sends nothing, gives the connection back and reports the failure itself', async () => {
+  const { db, scope, filter } = await world(4);
+  probe.failRecount = true;
+  await expect(
+    openSignatureExport(db, scope, filter, { actor: ACTOR, onReleaseError: () => undefined }),
+  ).rejects.toThrow('injected recount failure');
+  expect(probe.batches).toEqual([]);
+  // The next statement would wait for ever if the snapshot were still open on the only connection.
+  expect(
+    await db.selectFrom('audit_log').select('id').where('action', '=', 'signatures.exported').execute(),
+  ).toHaveLength(1);
 });
 
 test('an audit row that cannot be written stops the export before any snapshot is taken, and leaves the connection free', async () => {
