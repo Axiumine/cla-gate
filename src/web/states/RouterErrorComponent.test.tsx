@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { screen, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ApiError } from '../api/errors.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { expectServerErrorFallback } from '../test-support/error-fallback.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { TestRoutes } from '../test-support/router.tsx';
 import { server } from '../test-support/server.ts';
@@ -57,10 +58,7 @@ test.each(['loader', 'render'] as const)(
   async (where) => {
     renderFailing(serverError(), where);
     const alert = await screen.findByRole('alert');
-    expect(within(alert).getByRole('heading', { level: 1, name: messages['states.error.title'] })).toBeInTheDocument();
-    expect(alert).toHaveTextContent(messages['errors.internal_server_error']);
-    expect(within(alert).getByText('req-00000001').tagName).toBe('CODE');
-    expect(within(alert).getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expectServerErrorFallback(alert);
     expect(screen.queryByText('The page')).toBeNull();
   },
 );

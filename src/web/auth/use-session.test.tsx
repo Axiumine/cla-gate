@@ -6,6 +6,7 @@ import { delay, HttpResponse, http } from 'msw';
 import { afterEach, expect, test, vi } from 'vitest';
 import { sessionRoute } from '../../shared/auth-contract.ts';
 import { ApiError, ContractError, createQueryClient, NetworkError } from '../api/index.ts';
+import { expectNoTokenInTheBrowser } from '../test-support/no-trace.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { server } from '../test-support/server.ts';
 import { ALICE, CSRF_TOKEN } from '../test-support/session.ts';
@@ -148,11 +149,7 @@ test('the token is held in the query cache and nowhere else: nothing in Web Stor
   await waitFor(() => {
     expect(screen.getByText('logged in as octocat')).toBeInTheDocument();
   });
-  expect(localStorage).toHaveLength(0);
-  expect(sessionStorage).toHaveLength(0);
-  expect(document.cookie).toBe('');
-  expect(document.documentElement.outerHTML).not.toContain(CSRF_TOKEN);
-  expect(window.location.href).not.toContain(CSRF_TOKEN);
+  expectNoTokenInTheBrowser();
 });
 
 test('the query is configured for 60 seconds of freshness and a new look when the window gets focus', () => {

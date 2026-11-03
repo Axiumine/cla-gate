@@ -6,6 +6,7 @@ import { DEFAULT_SOURCE_URL } from '../../shared/meta.ts';
 import { ApiError } from '../api/errors.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { expectServerErrorFallback } from '../test-support/error-fallback.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { server } from '../test-support/server.ts';
 import { RootErrorBoundary } from './RootErrorBoundary.tsx';
@@ -61,10 +62,7 @@ test('a render error shows the fallback in a main landmark: an h1, the generic m
   );
   const main = screen.getByRole('main');
   const alert = within(main).getByRole('alert');
-  expect(within(alert).getByRole('heading', { level: 1, name: messages['states.error.title'] })).toBeInTheDocument();
-  expect(alert).toHaveTextContent(messages['errors.internal_server_error']);
-  expect(within(alert).getByText('req-00000001').tagName).toBe('CODE');
-  expect(within(alert).getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+  expectServerErrorFallback(alert);
 });
 
 test.each([

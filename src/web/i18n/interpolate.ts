@@ -8,7 +8,7 @@ export type MessageValue = string | number;
  * A `{name}` placeholder: a lower-case letter, then letters and digits. Anything else with braces is not one.
  * @internal Read by the catalog checks of the tests too (test-support.ts).
  */
-export const PLACEHOLDER = /\{([a-z][A-Za-z0-9]*)\}/g;
+export const PLACEHOLDER = /\{([a-z][A-Za-z0-9]*)}/g;
 
 /**
  * Replaces each `{name}` in `message` with the value of `name`, in ONE pass over the message. A value is inserted as it

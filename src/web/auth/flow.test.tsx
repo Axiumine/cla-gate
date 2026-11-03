@@ -8,6 +8,7 @@ import { App } from '../App.tsx';
 import { answer } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { AppRouter } from '../router.tsx';
+import { expectNoTokenInTheBrowser } from '../test-support/no-trace.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { ALICE, CSRF_TOKEN } from '../test-support/session.ts';
 
@@ -39,11 +40,7 @@ function consoleText(): string {
 }
 
 function expectNoTraceOfTheSession(): void {
-  expect(localStorage).toHaveLength(0);
-  expect(sessionStorage).toHaveLength(0);
-  expect(document.cookie).toBe('');
-  expect(document.documentElement.outerHTML).not.toContain(CSRF_TOKEN);
-  expect(window.location.href).not.toContain(CSRF_TOKEN);
+  expectNoTokenInTheBrowser();
   expect(consoleText()).not.toContain(CSRF_TOKEN);
 }
 

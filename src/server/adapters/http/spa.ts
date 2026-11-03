@@ -79,7 +79,8 @@ function staticOptions(root: string): FastifyStaticOptions {
     cacheControl: false,
     setHeaders: (reply, file) => {
       const [top] = path.relative(root, file).split(path.sep);
-      reply.header('cache-control', top === ASSETS ? IMMUTABLE : REVALIDATE);
+      // The reply is a thenable that settles when the response is sent: the result of `header` is dropped, never awaited.
+      void reply.header('cache-control', top === ASSETS ? IMMUTABLE : REVALIDATE);
     },
   };
 }
