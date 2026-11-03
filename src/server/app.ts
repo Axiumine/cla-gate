@@ -117,6 +117,30 @@ async function registerLoginChecks(
 }
 
 /**
+ * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
+ * probes, the operator's list (E11-S08), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer
+ * every path that no route above does, so they are registered last.
+ */
+async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: Clock): Promise<void> {
+  const { config, db } = options;
+  await app.register(healthRoutes, {
+    db,
+    readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
+  });
+  await app.register(operatorRoutes, { db });
+  await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
+  await app.register(webhookRoutes, {
+    secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
+    clock,
+    appId: config.github.appId,
+    db,
+    enqueuer: options.enqueuer ?? notWiredEnqueuer,
+    deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
+  });
+  await registerWeb(app, config);
+}
+
+/**
  * The Fastify application, fully wired but not listening: tests call `app.inject()`, `boot()` calls `listen()`.
  * Routes are declared with zod schemas (fastify-type-provider-zod), so input is validated and output serialised
  * against the same contract that `src/shared` exports.
@@ -149,25 +173,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const roleCache = options.roleCache ?? new RoleCache({ clock });
   registerRoleCache(app, roleCache);
   await registerLoginChecks(app, options, clock, roleCache);
-  await app.register(healthRoutes, {
-    db,
-    readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
-  });
-
-  await app.register(operatorRoutes, { db });
-  await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
-
-  await app.register(webhookRoutes, {
-    secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
-    clock,
-    appId: config.github.appId,
-    db,
-    enqueuer: options.enqueuer ?? notWiredEnqueuer,
-    deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
-  });
-
-  // Last: the app's files answer every path that no route above does (E17-S03).
-  await registerWeb(app, config);
+  await registerRoutes(app, options, clock);
 
   app.addHook('onClose', async () => {
     await db.destroy();

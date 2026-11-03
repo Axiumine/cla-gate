@@ -84,8 +84,15 @@ function staticOptions(root: string): FastifyStaticOptions {
   };
 }
 
-/** What the file routes declare: they never read the session, so a page of the app loads while the database is down. */
-const NO_SESSION: { readonly session: 'none' } = { session: 'none' };
+/**
+ * What the file routes declare: nobody is asked who they are (`access: 'public'`, E11-S01: the page and its files are the same
+ * for everyone, and the API behind them has its own declarations) and they never read the session, so a page of the app
+ * loads while the database is down.
+ */
+const PUBLIC_NO_SESSION: { readonly access: 'public'; readonly session: 'none' } = {
+  access: 'public',
+  session: 'none',
+};
 
 /**
  * The routes of the files (`GET` and `HEAD` of every path that no other route has), in a scope of their own so that the
@@ -95,7 +102,16 @@ const NO_SESSION: { readonly session: 'none' } = { session: 'none' };
  */
 const fileRoutes: FastifyPluginAsync<{ readonly root: string }> = async (scope, { root }) => {
   scope.addHook('onRoute', (route) => {
-    route.config = { ...route.config, ...NO_SESSION };
+    route.config = { ...route.config, ...PUBLIC_NO_SESSION };
+    // The library answers a directory or a path it refuses with `reply.callNotFound()` and then resolves with nothing. The 404
+    // is sent after the `preHandler` hooks of the app have run again for it, and one of them is async (the access guard of
+    // E11-S01), so the 404 comes after the handler has resolved and Fastify would send an empty 200 first. Resolving with the
+    // reply makes Fastify wait until the reply is sent, whoever sends it.
+    const serve = route.handler;
+    route.handler = async (request, reply) => {
+      await serve.call(scope, request, reply);
+      return reply;
+    };
   });
   // Async on purpose: a Fastify hook that sends a reply hands the reply back (it resolves when the file has gone out); a sync two-argument hook would never finish.
   scope.addHook('preHandler', async (request, reply) => {

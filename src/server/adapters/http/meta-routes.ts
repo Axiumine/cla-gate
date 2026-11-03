@@ -17,14 +17,15 @@ export interface MetaRoutesOptions {
 /**
  * `GET /api/meta` (E17-S09): public, no session and no side effect. It tells the footer of every page where the corresponding
  * source of this running version is (AGPL section 13) and tells the dashboard where to install the App. The path and the
- * response schema are the descriptor's (`metaRoute`), the very value the web client calls it by. The session hook leaves it
- * alone (`session: 'none'`), so it costs no query and answers while the database is down.
+ * response schema are the descriptor's (`metaRoute`), the very value the web client calls it by. It is `public` (E11-S01:
+ * the footer of the login page shows it too) and the session hook leaves it alone (`session: 'none'`), so it costs no query
+ * and answers while the database is down.
  */
 export const metaRoutes: FastifyPluginCallbackZod<MetaRoutesOptions> = (app, options, done) => {
   app.get(
     metaRoute.path,
     // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
-    { schema: { response: metaRoute.responses }, config: { session: 'none' } },
+    { schema: { response: metaRoute.responses }, config: { access: 'public', session: 'none' } },
     (_request, reply): MetaResponse => {
       void reply.header('cache-control', META_CACHE_CONTROL);
       const slug = options.appSlug();
