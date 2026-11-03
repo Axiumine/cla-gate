@@ -59,3 +59,22 @@ test('the same key keeps the wait going, and unmounting stops the timer', () => 
   unmount();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+test('it rounds the time left up: with 995 ms of the wait left it still shows one second, so a retry never opens before the wait is over', () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useCountdown(2, 'a'));
+  // The clock runs 5 ms ahead of the timers, as it does when a tick is a little late.
+  vi.setSystemTime(Date.now() + 5);
+  advance(1000);
+  expect(result.current).toBe(1);
+  advance(1000);
+  expect(result.current).toBe(0);
+});
+
+test('it reads the clock at each tick, so a tab that was asleep catches up instead of counting the missed seconds one by one', () => {
+  vi.useFakeTimers();
+  const { result } = renderHook(() => useCountdown(30, 'a'));
+  vi.setSystemTime(Date.now() + 20_000);
+  advance(1000);
+  expect(result.current).toBe(9);
+});
