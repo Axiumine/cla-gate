@@ -69,7 +69,7 @@ export const signatureCsvRoutes: FastifyPluginCallbackZod<SignatureCsvRoutesOpti
       });
       setNoStore(reply);
       setAttachment(reply, `signatures-${documentId}-${options.clock.now().toISOString().slice(0, 10)}.csv`);
-      // nosemgrep: rules.javascript.express.security.audit.xss.direct-response-write.direct-response-write -- the answer is a text/csv attachment and never HTML, nosniff is set by helmet, and domain/csv.ts guards every cell (E16-S03)
+      // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write -- the answer is a text/csv attachment and never HTML, nosniff is set by helmet, and domain/csv.ts guards every cell (E16-S03)
       return reply.send(signatures.stream);
     },
   );
