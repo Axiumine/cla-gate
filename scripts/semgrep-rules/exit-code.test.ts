@@ -36,12 +36,24 @@ function scan(source: string) {
   return spawnSync(binary ?? '', args, { env, encoding: 'utf8' });
 }
 
-test.skipIf(binary === undefined)('a finding makes the semgrep command exit with 1', () => {
-  const result = scan('forbidden();\n');
-  expect(result.status).toBe(1);
-  expect(result.stdout + result.stderr).toContain('demo.forbidden-call');
-});
+// Each scan starts a Semgrep process, which takes a few seconds when the machine is busy; the default 5 s limit failed
+// pre-push runs without any wrong result. The limit only has to tell slow from hung.
+const SCAN_TIMEOUT_MS = 120_000;
 
-test.skipIf(binary === undefined)('a clean tree makes the semgrep command exit with 0', () => {
-  expect(scan('allowed();\n').status).toBe(0);
-});
+test.skipIf(binary === undefined)(
+  'a finding makes the semgrep command exit with 1',
+  () => {
+    const result = scan('forbidden();\n');
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).toContain('demo.forbidden-call');
+  },
+  SCAN_TIMEOUT_MS,
+);
+
+test.skipIf(binary === undefined)(
+  'a clean tree makes the semgrep command exit with 0',
+  () => {
+    expect(scan('allowed();\n').status).toBe(0);
+  },
+  SCAN_TIMEOUT_MS,
+);
