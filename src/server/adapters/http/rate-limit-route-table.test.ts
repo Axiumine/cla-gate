@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
+import { DATA_EXPORT_PATH } from '../../../shared/data-export.ts';
 import { SIGNATURES_CSV_PATH } from '../../../shared/signature-export.ts';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
 import { testApp } from '../../test-support.ts';
@@ -60,26 +61,36 @@ test('every route of the table that switches the limit off is on the RATE_LIMIT_
   expect(table.flatMap((route) => rateLimitProblem(route.method, route.url, route.config) ?? [])).toEqual([]);
 });
 
-test('the routes with a budget of their own are the four of the story and the signature CSV, each with the key cap, and none answers HEAD', async () => {
+test('the routes with a budget of their own are the four of the story, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
   const own = table.filter((route) => typeof limitOf(route) === 'object');
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
   const csv = `GET ${SIGNATURES_CSV_PATH}`;
+  const mine = `GET ${DATA_EXPORT_PATH}`;
   expect(Object.keys(budgets).toSorted((a, b) => a.localeCompare(b))).toEqual(
-    ['GET /api/auth/callback', 'GET /api/auth/login', 'GET /api/auth/session', 'POST /api/auth/logout', csv].toSorted(
-      (a, b) => a.localeCompare(b),
-    ),
+    [
+      'GET /api/auth/callback',
+      'GET /api/auth/login',
+      'GET /api/auth/session',
+      'POST /api/auth/logout',
+      csv,
+      mine,
+    ].toSorted((a, b) => a.localeCompare(b)),
   );
-  expect(Object.fromEntries(Object.entries(budgets).filter(([name]) => name !== csv))).toEqual({
+  expect(Object.fromEntries(Object.entries(budgets).filter(([name]) => name !== csv && name !== mine))).toEqual({
     'GET /api/auth/login': { max: 20, timeWindow: 60_000, cache: 10_000 },
     'GET /api/auth/callback': { max: 20, timeWindow: 60_000, cache: 10_000 },
     'POST /api/auth/logout': { max: 20, timeWindow: 60_000, cache: 10_000 },
     'GET /api/auth/session': { max: 120, timeWindow: 60_000, cache: 10_000 },
   });
-  // The export keys its budget on the person and checks it after the guard of the route access (E16-S03).
+  // The exports key their budget on the person and check it after the guard of the route access (E16-S03, E16-S06).
   expect(Object.entries(budgets)).toContainEqual([
     csv,
     expect.objectContaining({ max: 6, timeWindow: 60_000, cache: 10_000, hook: 'preHandler' }),
+  ]);
+  expect(Object.entries(budgets)).toContainEqual([
+    mine,
+    expect.objectContaining({ max: 5, timeWindow: 3_600_000, cache: 10_000, hook: 'preHandler' }),
   ]);
   expect(own.flatMap((route) => names(route)).filter((name) => name.startsWith('HEAD '))).toEqual([]);
 });

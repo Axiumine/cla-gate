@@ -70,6 +70,10 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { state: 'revoked', row_count: 1001 },
     },
   ],
+  'services/export/own-data.ts#data_export.created': [
+    { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 0 } },
+    { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 3 } },
+  ],
   'services/installation-sync-checks.ts#installation.suspended|installation.unsuspended': [
     { action: 'installation.suspended', subject: { type: 'installation', id: 77 }, metadata: ORGANISATION },
     { action: 'installation.unsuspended', subject: { type: 'installation', id: 77 }, metadata: ORGANISATION },

@@ -5,6 +5,8 @@ import { parseGithubId } from '../../../../shared/github-id.ts';
 import { forgetAdminSeen, recordAdminSeen, wasAdminSeenSince } from '../../../services/admin-ledger-queries.ts';
 import { auditLogRows, listAuditLog } from '../../../services/audit-log-queries.ts';
 import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
+import { ownAllowlistEntries, ownAuditEntries } from '../../../services/export/own-data-queries.ts';
+import { ownSignatures } from '../../../services/export/own-signatures-query.ts';
 import { countSignatures, signatureBatch } from '../../../services/export/signature-queries.ts';
 import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
@@ -58,6 +60,8 @@ export const TENANT_MODULES = [
   'services/evaluate-pr/evaluation-rows.ts',
   'services/evaluate-pr/policy-facts.ts',
   'services/evaluate-pr/signature-facts.ts',
+  'services/export/own-data-queries.ts',
+  'services/export/own-signatures-query.ts',
   'services/export/signature-queries.ts',
   'services/installation-operator.ts',
   'services/repo-admin-candidates.ts',
@@ -233,6 +237,42 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
         return placement === null ? [] : ownersOfSignatures(db, [ids.signatureId]);
       },
     }),
+  },
+  // The export of a person's own data (E16-S06) reads the person's rows in every tenant, on purpose: a data subject belongs to no
+  // tenant. Each statement names the person's own key and nothing else, so called for the signer of tenant 1 it finds tenant
+  // 1's rows and for the signer of tenant 2 tenant 2's. The seed gives each tenant one signature by its own signer, an allowlist
+  // entry that names `n * 100` (installation `n * 5000`) and an audit row whose actor is `n * 1000 + 1`.
+  'services/export/own-data-queries.ts': {
+    ownAllowlistEntries: {
+      kind: 'by_design',
+      reason:
+        "the export of a person's own data lists the allowlist entries that name the person in every tenant (E16-S06); the statement filters on the numeric GitHub id of the person and on nothing the caller supplies",
+      pinnedBy: 'services/export/own-data-queries.test.ts',
+      run: async (db, _scope, ids) =>
+        (await ownAllowlistEntries(db, parseGithubId(ids.githubInstallationId / 50))).map((row) => row.account_login),
+      answers: (own, other) => ({ own: [own.accountLogin], foreign: [other.accountLogin] }),
+    },
+    ownAuditEntries: {
+      kind: 'by_design',
+      reason:
+        "the export of a person's own data lists the audit rows in which the person is the actor or the subject, in every tenant (E16-S06); the statement filters on the numeric GitHub id of the person and on nothing the caller supplies",
+      pinnedBy: 'services/export/own-data-queries.test.ts',
+      run: async (db, _scope, ids) => {
+        const rows = await ownAuditEntries(db, parseGithubId(ids.githubInstallationId / 5 + 1), 10);
+        return [...new Set(rows.map((row) => row.github_installation_id))];
+      },
+      answers: (own, other) => ({ own: [own.githubInstallationId], foreign: [other.githubInstallationId] }),
+    },
+  },
+  'services/export/own-signatures-query.ts': {
+    ownSignatures: {
+      kind: 'by_design',
+      reason:
+        "the export of a person's own data lists the person's signatures in every tenant (E16-S06); the person is a data subject and belongs to no tenant, and the statement filters on the person's own key and on nothing the caller supplies",
+      pinnedBy: 'services/export/own-data-queries.test.ts',
+      run: async (db, _scope, ids) => (await ownSignatures(db, ids.signer.userId)).map((row) => row.id),
+      answers: (own, other) => ({ own: [own.signatureId], foreign: [other.signatureId] }),
+    },
   },
   'services/export/signature-queries.ts': {
     // The seed gives each tenant one signature on its installation-wide document, so the export of that document finds the

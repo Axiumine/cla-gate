@@ -41,11 +41,13 @@ test('every tenant route of the application has a case and every authenticated r
 
 test('every case of the two tables holds for the application: tenant 2 learns nothing of tenant 1, and no denied call changes a row', async () => {
   const world = await matrixWorld();
-  for (const [route, c] of Object.entries(CROSS_TENANT_CASES)) {
-    await assertCrossTenantCase(world, route, c);
-  }
+  // The isolation cases come first: the last cross-tenant case erases `member1`, the signer of tenant 1 (E16-S04), which ends that
+  // person's session, and the export of their own data (E16-S06) is asked for as `member1`.
   for (const [route, c] of Object.entries(ISOLATION_CASES)) {
     await assertIsolationCase(world, route, c);
+  }
+  for (const [route, c] of Object.entries(CROSS_TENANT_CASES)) {
+    await assertCrossTenantCase(world, route, c);
   }
   await world.app.ready();
   expect(world.app.routeAccess.length).toBeGreaterThan(0);
@@ -57,7 +59,7 @@ test('the canary routes are the tenant and authenticated routes the canary table
   await world.app.ready();
   const tables = {
     cross: { ...CROSS_TENANT_CASES, ...CANARY_CASES, ...LEAKY_CROSS_TENANT },
-    isolation: { ...CANARY_ISOLATION, ...LEAKY_ISOLATION },
+    isolation: { ...ISOLATION_CASES, ...CANARY_ISOLATION, ...LEAKY_ISOLATION },
     noTenantData: NO_TENANT_DATA,
   };
   expect(matrixGaps(world.app.routeAccess, tables)).toEqual([]);

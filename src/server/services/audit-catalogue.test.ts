@@ -56,7 +56,6 @@ const RESERVED_ACTIONS: Readonly<Partial<Record<AuditAction, string>>> = {
   'signer_pii.erased': 'written by the SQL function erase_signer_pii, not by a call of appendAudit (E16-S04)',
   'network_metadata.purged':
     'written by the SQL function purge_signer_network_metadata, not by a call of appendAudit (E16-S05)',
-  'data_export.created': 'written by the data subject export (E16-S06)',
 };
 
 const sites = auditCallSites(SERVER, serverSources(SERVER));

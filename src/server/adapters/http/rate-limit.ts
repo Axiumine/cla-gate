@@ -13,13 +13,17 @@ import { warnWhenProxyIsSuspected } from './trust-proxy-warning.ts';
 // from `TRUST_PROXY` (E04-S03); nothing here reads `X-Forwarded-For` or `Forwarded`. The store is the plugin's in-memory
 // LRU, right for one process (the instance runs as one).
 
-/** Every budget lasts one minute. */
+/** Every budget lasts one minute unless its route says otherwise. */
 const WINDOW_MS = 60_000;
+
+/** The window of the data subject export (E16-S06): the budget is per hour. */
+export const HOUR_MS = 3_600_000;
 
 /**
  * The budget of each client address per minute: the global one, and the overrides of the login routes (E10-S08). A route
  * takes its override through {@link routeRateLimit}. `signatureExport` is the budget of each signed-in person for the
- * signature CSV (E16-S03), taken through {@link userRateLimit}.
+ * signature CSV (E16-S03) per minute, and `dataExport` the budget for their own data (E16-S06) per hour, both taken through
+ * {@link userRateLimit}.
  */
 export const RATE_LIMITS = {
   global: 600,
@@ -28,6 +32,7 @@ export const RATE_LIMITS = {
   logout: 20,
   session: 120,
   signatureExport: 6,
+  dataExport: 5,
 } as const;
 
 /**
@@ -37,22 +42,24 @@ export const RATE_LIMITS = {
 const RATE_LIMIT_MAX_KEYS = 10_000;
 
 /**
- * The `config.rateLimit` of a route with its own budget of `max` requests per minute per client address. A route that
- * keys on something else (E13 keys signing on the session user) spreads this and adds a `keyGenerator`.
+ * The `config.rateLimit` of a route with its own budget of `max` requests per client address in `timeWindow` milliseconds
+ * (a minute unless the route says otherwise). A route that keys on something else (E13 keys signing on the session user)
+ * spreads this and adds a `keyGenerator`.
  */
-export function routeRateLimit(max: number): RateLimitOptions {
-  return { max, timeWindow: WINDOW_MS, cache: RATE_LIMIT_MAX_KEYS };
+export function routeRateLimit(max: number, timeWindow: number = WINDOW_MS): RateLimitOptions {
+  return { max, timeWindow, cache: RATE_LIMIT_MAX_KEYS };
 }
 
 /**
- * The `config.rateLimit` of a route with a budget of `max` requests per minute for each signed-in person, keyed on the
- * numeric GitHub id of the session and not on the client address (E16-S03): a person behind another address, or two people
- * behind one, keep a budget each. The check runs in the `preHandler`, after the guard of the route access, so a request the
- * guard refuses (no session, no role, another tenant's document) costs nobody a request of their budget.
+ * The `config.rateLimit` of a route with a budget of `max` requests in `timeWindow` milliseconds (a minute unless the route
+ * says otherwise) for each signed-in person, keyed on the numeric GitHub id of the session and not on the client address
+ * (E16-S03): a person behind another address, or two people behind one, keep a budget each. The check runs in the
+ * `preHandler`, after the guard of the route access, so a request the guard refuses (no session, no role, another tenant's
+ * document) costs nobody a request of their budget.
  */
-export function userRateLimit(max: number): RateLimitOptions {
+export function userRateLimit(max: number, timeWindow: number = WINDOW_MS): RateLimitOptions {
   return {
-    ...routeRateLimit(max),
+    ...routeRateLimit(max, timeWindow),
     hook: 'preHandler',
     keyGenerator: (request) => `user:${requireAuth(request).user.githubId}`,
   };

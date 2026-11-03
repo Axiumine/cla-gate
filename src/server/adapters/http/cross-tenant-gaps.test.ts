@@ -106,9 +106,61 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);
-  expect(ISOLATION_CASES).toEqual({});
+  expect(Object.keys(ISOLATION_CASES)).toEqual(['GET /api/me/export']);
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
+});
+
+test('the isolation case of the export names the signature rows of an answer, and the personal data row of the ones that still have it', () => {
+  const signature = (id: number, personalData: unknown) => ({
+    id,
+    installation: { githubInstallationId: 5000, accountLogin: 'org-1' },
+    document: { id: 1, name: 'Individual CLA' },
+    version: { id: 1, major: 1, minor: 0, contentSha256: 'a'.repeat(64) },
+    consentTextId: 'consent-v1',
+    signerType: 'individual',
+    signedAt: '2026-11-02T10:00:00.000Z',
+    source: { repositoryFullName: null, prNumber: null },
+    revokedAt: null,
+    revokeReasonCode: null,
+    personalData,
+  });
+  const pii = { name: 'Ada', email: 'ada@example.test', login: 'ada', ipAddress: null, userAgent: null };
+  const body = {
+    schemaVersion: 1,
+    exportedAt: '2026-11-02T10:00:00.000Z',
+    user: { githubId: 7, login: 'ada', name: null, createdAt: '2026-11-01T00:00:00.000Z' },
+    signatures: [signature(4, pii), signature(3, null)],
+    allowlistEntries: [],
+    auditEntries: [],
+    truncated: false,
+  };
+  expect(ISOLATION_CASES['GET /api/me/export']?.rows(body)).toEqual([
+    { table: 'signatures', id: 4 },
+    { table: 'signer_pii', id: 4 },
+    { table: 'signatures', id: 3 },
+  ]);
+});
+
+test('the isolation case of the export compares two answers without their audit entries and with everything else', () => {
+  const document = (auditEntries: unknown[], login: string) => ({
+    schemaVersion: 1,
+    exportedAt: '2026-11-02T10:00:00.000Z',
+    user: { githubId: 7, login, name: null, createdAt: '2026-11-01T00:00:00.000Z' },
+    signatures: [],
+    allowlistEntries: [],
+    auditEntries,
+    truncated: false,
+  });
+  const entry = {
+    occurredAt: '2026-11-02T10:00:00.000Z',
+    action: 'data_export.created',
+    installationId: null,
+    subject: null,
+  };
+  const stable = ISOLATION_CASES['GET /api/me/export']?.stable;
+  expect(stable?.(document([entry], 'ada'))).toEqual(stable?.(document([], 'ada')));
+  expect(stable?.(document([], 'ada'))).not.toEqual(stable?.(document([], 'eve')));
 });
 
 type Db = Awaited<ReturnType<typeof migratedTestDatabase>>['db'];

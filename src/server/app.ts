@@ -9,6 +9,7 @@ import { auditLogRoutes } from './adapters/http/audit-log-routes.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
 import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
+import { dataExportRoutes } from './adapters/http/data-export-routes.ts';
 import { erasureRoutes } from './adapters/http/erasure-routes.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
@@ -147,6 +148,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await app.register(operatorRoutes, { db });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await registerTenantRoutes(app, db, clock);
+  await app.register(dataExportRoutes, { db, clock });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,
