@@ -139,9 +139,7 @@ test('an administrator exports their own data and no more: the role of an org ad
   const document = await exported('admin1');
   expect(document.user.githubId).toBe(people.admin1.githubId);
   expect(document.signatures).toEqual([]);
-  expect(document.auditEntries).toEqual([
-    expect.objectContaining({ action: 'signer_pii.erased', subject: { type: 'user', id: 31_002 } }),
-  ]);
+  expect(document.auditEntries).toEqual([expect.objectContaining({ action: 'signer_pii.erased', subject: null })]);
 });
 
 test('after the erasure of one tenant the signatures there show no personal data and the other tenant still does', async () => {

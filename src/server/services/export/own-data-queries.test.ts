@@ -159,6 +159,39 @@ test('ownAuditEntries: the rows where the person is the actor, or the subject of
   ]);
 });
 
+test('ownAuditEntries: an action of the person on another person comes back with no subject, and one on a row keeps it', async () => {
+  const { db, t1 } = await world();
+  await seedAudit(db, [
+    {
+      action: 'a.erased_other',
+      installationId: t1.installationId,
+      actorGithubId: PERSON,
+      atMs: 1000,
+      subject: { type: 'user', id: OTHER },
+    },
+    {
+      action: 'a.signature',
+      installationId: t1.installationId,
+      actorGithubId: PERSON,
+      atMs: 2000,
+      subject: { type: 'signature', id: OTHER },
+    },
+    {
+      action: 'a.self',
+      installationId: t1.installationId,
+      actorGithubId: PERSON,
+      atMs: 3000,
+      subject: { type: 'user', id: PERSON },
+    },
+  ]);
+  const rows = await ownAuditEntries(db, PERSON, 10);
+  expect(rows.map((row) => [row.action, row.subject_type, row.subject_id])).toEqual([
+    ['a.self', 'user', PERSON],
+    ['a.signature', 'signature', OTHER],
+    ['a.erased_other', null, null],
+  ]);
+});
+
 test.each([
   [0, []],
   [2, ['a.e5', 'a.e4']],

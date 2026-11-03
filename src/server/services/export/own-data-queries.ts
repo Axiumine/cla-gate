@@ -24,13 +24,24 @@ export function ownAllowlistEntries(db: Kysely<Database>, githubId: GithubId) {
 /**
  * The newest `limit` audit rows in which the person is the actor, or the subject of a `user` row (`subject_type = 'user'`
  * with their GitHub id), newest first. The installation is GitHub's id of it, `null` for an action of the whole instance.
- * The metadata and the other party of a row are not selected.
+ * The metadata and the other party of a row are not selected, and neither is a subject that is another person: when the
+ * person is the actor of an action on someone else (an org admin who erased a signer), `subject_type` and `subject_id`
+ * come back `null`, so the id of that other person never leaves the database.
  */
 export function ownAuditEntries(db: Kysely<Database>, githubId: GithubId, limit: number) {
   return db
     .selectFrom('audit_log as a')
     .leftJoin('installations as i', 'i.id', 'a.installation_id')
-    .select(['a.occurred_at', 'a.action', 'i.github_installation_id', 'a.subject_type', 'a.subject_id'])
+    .select((eb) => {
+      const anotherPerson = eb.and([eb('a.subject_type', '=', 'user'), eb('a.subject_id', '<>', githubId)]);
+      return [
+        'a.occurred_at',
+        'a.action',
+        'i.github_installation_id',
+        eb.case().when(anotherPerson).then(null).else(eb.ref('a.subject_type')).end().as('subject_type'),
+        eb.case().when(anotherPerson).then(null).else(eb.ref('a.subject_id')).end().as('subject_id'),
+      ];
+    })
     .where((eb) =>
       eb.or([
         eb('a.actor_github_id', '=', githubId),

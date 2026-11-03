@@ -210,6 +210,42 @@ test('the audit entries are the rows where the person is the actor or the subjec
   ]);
 });
 
+test('an admin who erased someone gets the row of the erasure with no subject: the id of the person erased is not theirs to take', async () => {
+  const { db, t1, getAda, exportedAda } = await adaWorld();
+  const ERASED = 31_005;
+  await seedAudit(db, [
+    {
+      action: 'signer_pii.erased',
+      installationId: t1.installationId,
+      actorGithubId: ADA,
+      atMs: 1000,
+      subject: { type: 'user', id: ERASED },
+    },
+    {
+      action: 'signer_pii.erased',
+      installationId: t1.installationId,
+      actorGithubId: ERASED,
+      atMs: 2000,
+      subject: { type: 'user', id: ADA },
+    },
+  ]);
+  expect((await exportedAda()).auditEntries).toEqual([
+    {
+      occurredAt: '2026-10-15T09:00:02.000Z',
+      action: 'signer_pii.erased',
+      installationId: t1.githubInstallationId,
+      subject: { type: 'user', id: ADA },
+    },
+    {
+      occurredAt: '2026-10-15T09:00:01.000Z',
+      action: 'signer_pii.erased',
+      installationId: t1.githubInstallationId,
+      subject: null,
+    },
+  ]);
+  expect((await getAda()).body).not.toContain(String(ERASED));
+});
+
 test.each([
   [DATA_EXPORT_AUDIT_LIMIT, false],
   [DATA_EXPORT_AUDIT_LIMIT + 1, true],
