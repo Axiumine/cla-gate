@@ -17,6 +17,10 @@ const realPostgres = (process.env['DATABASE_URL'] ?? '') !== '';
 export default defineConfig({
   test: {
     fileParallelism: !realPostgres,
+    // The tooling tests start real processes (Semgrep, Trivy, ESLint, git, Stryker); on a busy machine that takes longer than
+    // the default 5 s and failed whole pre-push runs without a wrong result. The limit only tells slow from hung. The `server`
+    // project sets its own, and the scripts scope of the mutation gate does not read this file.
+    testTimeout: 60_000,
     projects: [scriptsProject, serverProject, webProject],
     coverage: {
       provider: 'v8',
