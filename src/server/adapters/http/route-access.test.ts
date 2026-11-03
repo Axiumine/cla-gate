@@ -221,6 +221,8 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /api/meta',
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+    'GET /api/installations/:installationId/erasure-preview',
+    'POST /api/installations/:installationId/erasures',
     'POST /webhooks/github',
   ]);
 });

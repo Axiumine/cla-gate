@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
+import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
@@ -81,6 +82,13 @@ export interface IsolationCase {
   readonly mayShow: (owner: RowOwner, viewer: IsolationViewer) => boolean;
 }
 
+/**
+ * The person the erasure cases (E16-S04) ask about: `member1`, the signer of tenant 1 (E11-S06 fixture). Erasing them ends
+ * their session, so the erasure case is the last entry of {@link CROSS_TENANT_CASES}, and its route the last one registered:
+ * a case that comes after it would meet a `member1` who is logged out. A case added later goes before it.
+ */
+const ERASED_IN_THE_MATRIX = 31_004;
+
 /** The `tenant` routes of the application, keyed `METHOD path`. A story that adds a route (E12 to E16) adds its case here. */
 export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
   [`GET ${AUDIT_LOG_PATH}`]: {
@@ -98,6 +106,21 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
         ':documentId',
         String(target.documentId),
       ),
+    }),
+  },
+  [`GET ${ERASURE_PREVIEW_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: `${ERASURE_PREVIEW_PATH.replace(':installationId', String(target.installationId))}?githubUserId=${ERASED_IN_THE_MATRIX}`,
+    }),
+  },
+  [`POST ${ERASURES_PATH}`]: {
+    endpointClass: 'installation_write',
+    request: (target) => ({
+      method: 'POST',
+      url: ERASURES_PATH.replace(':installationId', String(target.installationId)),
+      payload: { githubUserId: ERASED_IN_THE_MATRIX, expectedRows: 1 },
     }),
   },
 };

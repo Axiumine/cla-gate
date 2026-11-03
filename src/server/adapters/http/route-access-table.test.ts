@@ -133,6 +133,8 @@ test('the operator routes are exactly the list of the operator, and the tenant r
   expect(table.filter((entry) => typeof entry.access === 'object').map(nameOf)).toEqual([
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+    'GET /api/installations/:installationId/erasure-preview',
+    'POST /api/installations/:installationId/erasures',
   ]);
 });
 

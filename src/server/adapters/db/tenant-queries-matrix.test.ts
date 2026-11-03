@@ -48,6 +48,8 @@ test('the registry holds the scoped queries the story lists, so the matrix below
     'services/repository-queries.ts listEnabledRepositories',
     'services/repository-statements.ts storedStates',
     'services/repository-statements.ts writeChanged',
+    'services/signer-erasure.ts erasureCounts',
+    'services/signer-erasure.ts eraseSigner',
     'services/tenant-queries.ts findTenantRows',
     'services/tenant-queries.ts findAdmittedTenantRows',
     'services/close-pr/close-heads.ts headShasToCancel',

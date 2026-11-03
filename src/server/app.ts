@@ -9,6 +9,7 @@ import { auditLogRoutes } from './adapters/http/audit-log-routes.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
 import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
+import { erasureRoutes } from './adapters/http/erasure-routes.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
@@ -145,8 +146,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   });
   await app.register(operatorRoutes, { db });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
-  await app.register(auditLogRoutes, { db });
-  await app.register(signatureCsvRoutes, { db, clock });
+  await registerTenantRoutes(app, db, clock);
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,
@@ -156,6 +156,17 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
     deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
   await registerWeb(app, config);
+}
+
+/**
+ * The routes of a tenant that need no wiring beyond the database (E16): the audit log, the signature export and the erasure
+ * of a signer. They are registered in this order, which the route tables of the tests spell out: the erasure comes last,
+ * because the cross-tenant matrix erases the signer of tenant 1 and so ends that person's session (E16-S04).
+ */
+async function registerTenantRoutes(app: FastifyInstance, db: Kysely<Database>, clock: Clock): Promise<void> {
+  await app.register(auditLogRoutes, { db });
+  await app.register(signatureCsvRoutes, { db, clock });
+  await app.register(erasureRoutes, { db });
 }
 
 /**

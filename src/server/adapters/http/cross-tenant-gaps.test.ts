@@ -103,6 +103,8 @@ test('the tables of the application hold the cases of the routes the stories add
   expect(Object.keys(CROSS_TENANT_CASES)).toEqual([
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+    'GET /api/installations/:installationId/erasure-preview',
+    'POST /api/installations/:installationId/erasures',
   ]);
   expect(ISOLATION_CASES).toEqual({});
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
