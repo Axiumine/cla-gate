@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, expectTypeOf, test } from 'vitest';
-import type { Requirement } from '../../domain/authz.ts';
+import type { Role } from '../../domain/authz.ts';
 import type { InstallationRowId } from '../db/installation-row-id.ts';
 import { authWorld } from './auth-fixture/test-support.ts';
 import {
@@ -43,15 +43,18 @@ test('a tenant route hands its handler the installation, the repository and the 
   });
 });
 
-test('the role of a tenant is a requirement of the decision table, and a repo_admin target cannot be written with no repository', () => {
-  expectTypeOf<TenantRole>().toEqualTypeOf<Requirement>();
+test('the role of a tenant is a role of the decision table, and a repo_admin target cannot be written with no repository', () => {
+  expectTypeOf<TenantRole>().toEqualTypeOf<Role>();
   expectTypeOf<TenantContext['repositoryId']>().toEqualTypeOf<number | null>();
   interface Target {
     installationId: InstallationRowId;
     repositoryId: number | null;
-    requirement: Requirement;
+    requirement: Role | 'any_role';
   }
   expectTypeOf<Target & { repositoryId: null; requirement: 'repo_admin' }>().not.toExtend<TenantTarget>();
   expectTypeOf<Target & { repositoryId: null; requirement: 'org_admin' }>().toExtend<TenantTarget>();
+  // The call that any role in the installation may make names the installation and no repository (E14-S01).
+  expectTypeOf<Target & { repositoryId: null; requirement: 'any_role' }>().toExtend<TenantTarget>();
+  expectTypeOf<Target & { repositoryId: number; requirement: 'any_role' }>().not.toExtend<TenantTarget>();
   expectTypeOf<Target & { repositoryId: number; requirement: 'repo_admin' }>().toExtend<TenantTarget>();
 });

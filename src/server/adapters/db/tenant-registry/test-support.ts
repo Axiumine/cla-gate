@@ -42,6 +42,7 @@ import {
 } from '../tenant-owners/test-support.ts';
 import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/test-support.ts';
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
+import { COUNT_READS, LISTING_READS } from '../tenant-registry-listing/test-support.ts';
 import {
   ENFORCING_READS,
   HISTORY_READS,
@@ -81,7 +82,9 @@ export const TENANT_MODULES = [
   'services/export/signature-queries.ts',
   'services/installation-operator.ts',
   'services/repo-admin-candidates.ts',
+  'services/repository-count-queries.ts',
   'services/repository-enabled.ts',
+  'services/repository-list-queries.ts',
   'services/repository-queries.ts',
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
@@ -309,6 +312,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       },
     }),
   },
+  'services/repository-count-queries.ts': COUNT_READS,
+  'services/repository-list-queries.ts': LISTING_READS,
   'services/repository-queries.ts': {
     markRepositoriesRemoved: scoped({
       takesIds: true,

@@ -44,14 +44,18 @@ export function paramsOf<T extends z.ZodType>(schema: T, request: FastifyRequest
 
 /**
  * The resolver of a route under `/…/:installationId/…` that acts on the installation itself: the requirement is
- * `org_admin`. An unknown installation, and one the admission policy rejected, resolve to null.
+ * `org_admin`, or `any_role` for the one call that every person with a role in the installation may make (the list of its
+ * repositories, E14-S01). An unknown installation, and one the admission policy rejected, resolve to null.
  * @throws AppError 400 when `:installationId` is not a positive integer in plain digits.
  */
-export function byInstallationParam(db: Kysely<Database>): TenantResolver {
+export function byInstallationParam(
+  db: Kysely<Database>,
+  requirement: 'org_admin' | 'any_role' = 'org_admin',
+): TenantResolver {
   return async (request) => {
     const { installationId } = paramsOf(installationParams, request);
     const rows = await findAdmittedTenantRows(db, { installationId }, null);
-    return rows === null ? null : { installationId, repositoryId: null, requirement: 'org_admin' };
+    return rows === null ? null : { installationId, repositoryId: null, requirement };
   };
 }
 

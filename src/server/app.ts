@@ -15,11 +15,13 @@ import { erasureRoutes } from './adapters/http/erasure-routes.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
+import { installationRoutes } from './adapters/http/installation-routes.ts';
 import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
+import { repositoryListRoutes } from './adapters/http/repository-list-routes.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
@@ -38,7 +40,8 @@ import { createOperatorPolicies, type OperatorPolicies } from './services/operat
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer, JobQueue } from './services/ports/jobs.ts';
 import { RoleCache } from './services/role-cache.ts';
-import { createTenantAuthorizer, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
+import { createTenantAuthorization, type TenantAuthorizationDeps } from './services/tenant-authorization.ts';
+import { createTenantAuthorizationDeps, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
 
@@ -93,7 +96,7 @@ async function registerLoginChecks(
   options: AppOptions,
   clock: Clock,
   roleCache: RoleCache,
-): Promise<void> {
+): Promise<TenantAuthorizationDeps> {
   const { config, db } = options;
   // Before the rate limit, so that its 429 for a path no route answers carries the header too.
   app.addHook('onRequest', noStoreForAuth);
@@ -106,11 +109,9 @@ async function registerLoginChecks(
   const operators =
     options.operators ??
     createOperatorPolicies({ configured: config.github.operatorGithubIds, owner: undefined, logger: app.log });
-  guardRouteAccess(app, {
-    db,
-    authorize: createTenantAuthorizer({ db, github, cache: roleCache, clock, log: app.log }),
-    operators,
-  });
+  // What the guard decides with, kept for the routes that list what a person may see (E14-S01): one cache, one budget of the person.
+  const roles = createTenantAuthorizationDeps({ db, github, cache: roleCache, clock, log: app.log });
+  guardRouteAccess(app, { db, authorize: createTenantAuthorization(roles), operators });
   if (loginSettings !== undefined) {
     await registerAuth(app, {
       db,
@@ -121,6 +122,7 @@ async function registerLoginChecks(
       githubTimeoutMs: options.githubTimeoutMs,
     });
   }
+  return roles;
 }
 
 /** On close the job queue stops before the database is destroyed (E07-S01), so no job runs against a closed database. */
@@ -136,10 +138,16 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
- * probes, the operator's list (E11-S08), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer
+ * probes, the operator's list (E11-S08), the documents (E12), the lists of what a person administers (E14-S01), the public
+ * `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer
  * every path that no route above does, so they are registered last.
  */
-async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: Clock): Promise<void> {
+async function registerRoutes(
+  app: FastifyInstance,
+  options: AppOptions,
+  clock: Clock,
+  roles: TenantAuthorizationDeps,
+): Promise<void> {
   const { config, db } = options;
   const enqueuer = options.enqueuer ?? options.jobQueue?.enqueuer ?? notWiredEnqueuer;
   await app.register(healthRoutes, {
@@ -149,6 +157,8 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   });
   await app.register(operatorRoutes, { db });
   await app.register(documentRoutes, { db, enqueuer });
+  await app.register(installationRoutes, { db, roles });
+  await app.register(repositoryListRoutes, { db, roles });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });
@@ -206,8 +216,8 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const clock = options.clock ?? systemClock;
   const roleCache = options.roleCache ?? new RoleCache({ clock });
   registerRoleCache(app, roleCache);
-  await registerLoginChecks(app, options, clock, roleCache);
-  await registerRoutes(app, options, clock);
+  const roles = await registerLoginChecks(app, options, clock, roleCache);
+  await registerRoutes(app, options, clock, roles);
 
   closeQueueThenDatabase(app, db, options.jobQueue);
   return app;

@@ -4,9 +4,14 @@ import type { Kysely } from 'kysely';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
+import {
+  INSTALLATION_REPOSITORIES_PATH,
+  INSTALLATIONS_PATH,
+  installationListSchema,
+} from '../../../../shared/installations.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
-import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
+import type { PersonName, RowTable } from '../../db/tenant-fixture/test-support.ts';
 import { sha256 } from '../../db/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
@@ -23,9 +28,14 @@ import { declaredAccess } from '../route-access-model.ts';
 //     request: (target) => ({ method: 'POST', url: `/api/installations/${target.installationId}/documents`, payload: {...} }),
 //   },
 
-/** What a tenant route is about, which decides who may call it and how (the role matrix of the security notes). */
+/**
+ * What a tenant route is about, which decides who may call it and how (the role matrix of the security notes).
+ * `installation_role_read` is a read about the installation itself that every role in it may make (E14-S01: the list of its
+ * repositories): the admin of a repository passes too, and nobody who holds a role is told `403`.
+ */
 export type EndpointClass =
   | 'installation_read'
+  | 'installation_role_read'
   | 'installation_write'
   | 'repository_read'
   | 'repository_write'
@@ -75,9 +85,9 @@ export interface CrossTenantCase {
   readonly urlFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<string>;
 }
 
-/** A row a response names, by table and `id` (`signature_id` for `signer_pii`). */
+/** A row a response names, by table and `id` (`signature_id` for `signer_pii`); `installations` is the root of the tenant tables, which the list of installations names (E14-S01). */
 export interface RowRef {
-  readonly table: RowTable;
+  readonly table: RowTable | 'installations';
   readonly id: number;
 }
 
@@ -94,6 +104,11 @@ interface IsolationViewer {
 }
 
 export interface IsolationCase {
+  /**
+   * Who asks, one person of each tenant, when the route shows nothing to the default pair (`member1` and `admin2`): the list of
+   * installations (E14-S01) shows a person the tenants they hold a role in, and `member1` holds none.
+   */
+  readonly people?: readonly [PersonName, PersonName];
   /** The request of the viewer for their own resource; `injected` names resources of the other tenant, to try in a path, a query or a body. */
   readonly request: (own: MatrixTarget, injected: MatrixTarget | null) => RequestSpec;
   /** The tenant rows the body of the answer names. */
@@ -304,6 +319,14 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       ),
     }),
   },
+  // E14-S01. Any role in the installation lists its repositories, each person the ones their role reaches. It comes before the erasure cases, which end the session of `member1`.
+  [`GET ${INSTALLATION_REPOSITORIES_PATH}`]: {
+    endpointClass: 'installation_role_read',
+    request: (target) => ({
+      method: 'GET',
+      url: INSTALLATION_REPOSITORIES_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
   [`GET ${ERASURE_PREVIEW_PATH}`]: {
     endpointClass: 'installation_read',
     request: (target) => ({
@@ -328,6 +351,15 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
  * data-export-routes.test.ts), so there is nothing of another tenant to inject and the request is the same with or without it.
  */
 export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
+  // E14-S01. The list names the installations the person holds a role in, and takes no parameter at all (a query parameter is a
+  // `400`, shown in installation-list-routes.test.ts), so there is nothing of another tenant to inject and the request is the same
+  // with or without it. The admin of each tenant asks: `member1` holds no role and is shown nothing.
+  [`GET ${INSTALLATIONS_PATH}`]: {
+    people: ['admin1', 'admin2'],
+    request: () => ({ method: 'GET', url: INSTALLATIONS_PATH }),
+    rows: (body) => installationListSchema.parse(body).map((row) => ({ table: 'installations' as const, id: row.id })),
+    mayShow: (owner, viewer) => owner.installationId === viewer.own.installationId,
+  },
   [`GET ${DATA_EXPORT_PATH}`]: {
     request: () => ({ method: 'GET', url: DATA_EXPORT_PATH }),
     rows: (body) =>

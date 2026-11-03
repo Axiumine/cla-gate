@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyRequest } from 'fastify';
-import type { Requirement } from '../../domain/authz.ts';
+import type { Role } from '../../domain/authz.ts';
 import type { RoleLookupMode } from '../../services/role-lookups.ts';
 import type { InstallationRowId } from '../db/installation-row-id.ts';
 
@@ -12,11 +12,16 @@ import type { InstallationRowId } from '../db/installation-row-id.ts';
 /**
  * What a resolver found a request to be about. `installationId` is `installations.id` (the surrogate key behind the
  * composite foreign keys), never GitHub's installation id, which appears in no URL. `repositoryId` is `repositories.id`.
- * A call that needs the `repo_admin` role names a repository, so the type has no `repo_admin` without one.
+ * A call that needs the `repo_admin` role names a repository, so the type has no `repo_admin` without one; `any_role`
+ * (E14-S01) is the requirement of a call about the installation that any role in it may make.
  */
 export type TenantTarget =
-  | { readonly installationId: InstallationRowId; readonly repositoryId: null; readonly requirement: 'org_admin' }
-  | { readonly installationId: InstallationRowId; readonly repositoryId: number; readonly requirement: Requirement };
+  | {
+      readonly installationId: InstallationRowId;
+      readonly repositoryId: null;
+      readonly requirement: 'org_admin' | 'any_role';
+    }
+  | { readonly installationId: InstallationRowId; readonly repositoryId: number; readonly requirement: Role };
 
 /**
  * Names the tenant a request is about, or `null` when there is none the caller may know of: an unknown id, a removed
@@ -51,7 +56,7 @@ export function tenantAccess(options: {
  * The role the viewer holds in the tenant, named like the requirement it satisfies: `org_admin` for an admin of the
  * account the installation belongs to, `repo_admin` for an admin of the repository who is not one.
  */
-export type TenantRole = Requirement;
+export type TenantRole = Role;
 
 /** What a handler of a tenant route reads, and the only place it reads the installation from. */
 export interface TenantContext {

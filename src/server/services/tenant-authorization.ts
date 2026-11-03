@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { type Decision, decide, type Requirement, type RoleFacts } from '../domain/authz.ts';
+import { type Decision, decide, type Requirement, type Role, type RoleFacts } from '../domain/authz.ts';
 import type { AdminLedger } from './admin-ledger.ts';
 import type { InstallationRow } from './installation-state.ts';
 import type { RoleViewer } from './org-admin.ts';
@@ -24,10 +24,7 @@ export interface TenantAuthorizationDeps {
   readonly ledger: Pick<AdminLedger, 'isAdmin'>;
 }
 
-/**
- * One call to decide: who asks, what for, and the stored rows of the tenant.
- * @internal Exported for the tests, which build questions (Knip ignores `@internal` exports in production mode).
- */
+/** One call to decide: who asks, what for, and the stored rows of the tenant. */
 export interface TenantQuestion {
   readonly mode: RoleLookupMode;
   readonly requirement: Requirement;
@@ -41,7 +38,7 @@ export interface TenantQuestion {
 
 /** The answer: the viewer may proceed with the role they hold, or the call is forbidden, or it is as if the tenant did not exist. */
 export type TenantAnswer =
-  | { readonly decision: 'allow'; readonly role: Requirement }
+  | { readonly decision: 'allow'; readonly role: Role }
   | { readonly decision: 'forbidden' }
   | { readonly decision: 'not_found' };
 
@@ -83,6 +80,24 @@ async function inactiveFacts(deps: TenantAuthorizationDeps, question: TenantQues
   return { orgAdmin, repoAdmin: false, hasRoleInInstallation: orgAdmin };
 }
 
+/**
+ * The role facts of a question that names no repository, as the guard would have them: from the cached lookups for a live
+ * tenant, from the stored row and the ledger for a suspended or deleted one. The list of the installations a person
+ * administers (E14-S01) asks this for each installation, so it and the guard cannot disagree about who is an org admin.
+ */
+export function tenantFacts(deps: TenantAuthorizationDeps, question: TenantQuestion): Promise<RoleFacts> {
+  return question.active ? liveFacts(deps, question) : inactiveFacts(deps, question);
+}
+
+/**
+ * How many probes the discovery of a call may spend. A call that any role in the installation may make (E14-S01) is answered
+ * by the discovery, so it gets the budget of the repository list; every other call only needs it to choose between 403 and
+ * 404, and gets the small budget of the denial path.
+ */
+function discoveryBudget(requirement: Requirement): ProbeBudget {
+  return new ProbeBudget(requirement === 'any_role' ? PROBE_BUDGETS.repositoryList : PROBE_BUDGETS.denial);
+}
+
 /** The decision with the role-in-installation rule applied to a `not_found`: a viewer who is admin somewhere here is forbidden, not unknown. */
 async function decideWithDiscovery(
   deps: TenantAuthorizationDeps,
@@ -93,8 +108,8 @@ async function decideWithDiscovery(
   if (decision !== 'not_found' || !question.active) {
     return decision;
   }
-  // The small budget of the denial path: a stranger who hits endpoints costs a few GitHub calls per installation, however often.
-  const found = await deps.discover(question.viewer, question.installation.id, new ProbeBudget(PROBE_BUDGETS.denial));
+  // A small budget: a stranger who hits endpoints costs a few GitHub calls per installation, however often.
+  const found = await deps.discover(question.viewer, question.installation.id, discoveryBudget(question.requirement));
   return found.role === 'repo_admin'
     ? decide(question.requirement, { ...facts, hasRoleInInstallation: true })
     : decision;
@@ -110,7 +125,7 @@ async function decideWithDiscovery(
  */
 export function createTenantAuthorization(deps: TenantAuthorizationDeps): AuthorizeTenant {
   return async (question) => {
-    const facts = question.active ? await liveFacts(deps, question) : await inactiveFacts(deps, question);
+    const facts = await tenantFacts(deps, question);
     const decision = await decideWithDiscovery(deps, question, facts);
     return decision === 'allow' ? { decision, role: facts.orgAdmin ? 'org_admin' : 'repo_admin' } : { decision };
   };

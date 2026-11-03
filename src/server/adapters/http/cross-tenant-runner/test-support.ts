@@ -9,6 +9,7 @@ import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
   type PersonName,
+  type RowTable,
   type TenantWorld,
   tenantChecksums,
   twoTenants,
@@ -127,11 +128,13 @@ export const scopedTarget = (tenant: TenantWorld): MatrixTarget => ({
 /** What the role matrix says for a class of endpoint, for tenant 1: the resource the allowed people reach and the one that is too high for a repo admin. */
 function planOf(endpointClass: EndpointClass, tenant: TenantWorld) {
   const nested = !endpointClass.startsWith('installation_');
+  const openToAnyRole = endpointClass === 'installation_role_read';
   return {
     ok: nested ? scopedTarget(tenant) : plainTarget(tenant),
-    tooLow: plainTarget(tenant),
-    /** Whether the admin of the repository that carries the resource passes: not for a route about the installation itself. */
-    repoAdminPasses: nested,
+    /** The resource that is too high for a repo admin, or null for a route that every role in the installation may call. */
+    tooLow: openToAnyRole ? null : plainTarget(tenant),
+    /** Whether the admin of the repository that carries the resource passes: not for a route about the installation itself, unless any role may call it. */
+    repoAdminPasses: nested || openToAnyRole,
     nested,
   };
 }
@@ -172,7 +175,9 @@ async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCa
     );
   }
   await deny(null, c.request(plan.ok), 401);
-  await deny('repoAdmin1', c.request(plan.tooLow), 403);
+  if (plan.tooLow !== null) {
+    await deny('repoAdmin1', c.request(plan.tooLow), 403);
+  }
   for (const target of plan.nested ? crossed(world) : []) {
     for (const who of ADMINS) {
       expect(
@@ -372,7 +377,7 @@ export async function assertOperatorCase(
 }
 
 /** The query for the owner of a row of a tenant table: its installation, and the person it is about. `signer_pii` and `cla_versions` have no installation column of their own. */
-function ownerQuery(ref: RowRef) {
+function ownerQuery(ref: { readonly table: RowTable; readonly id: number }) {
   const id = ref.id;
   switch (ref.table) {
     case 'repositories':
@@ -400,7 +405,12 @@ const ownerRow = z.object({ installation_id: z.number().nullable(), user_id: z.n
 
 /** Who owns the row `ref` names, read from the database and not from the answer. @throws ZodError when there is no such row. */
 export async function ownerOf(db: Kysely<Database>, ref: RowRef): Promise<RowOwner> {
-  const { rows } = await ownerQuery(ref).execute(db);
+  // An installation is its own tenant: its row names no other.
+  const query =
+    ref.table === 'installations'
+      ? sql`select id as installation_id, null::bigint as user_id from installations where id = ${ref.id}`
+      : ownerQuery({ table: ref.table, id: ref.id });
+  const { rows } = await query.execute(db);
   const row = ownerRow.parse(rows[0]);
   return { installationId: row.installation_id, userId: row.user_id };
 }
@@ -413,14 +423,20 @@ interface Viewer {
   readonly other: MatrixTarget;
 }
 
-const viewersOf = (world: MatrixWorld): Viewer[] => [
+/** The viewers of a case: the person of tenant 1 and the person of tenant 2 it names (`member1` and `admin2` by default). */
+const viewersOf = (world: MatrixWorld, people: IsolationCase['people'] = ['member1', 'admin2']): Viewer[] => [
   {
-    person: 'member1',
-    userId: world.people.member1.userId,
+    person: people[0],
+    userId: world.people[people[0]].userId,
     own: scopedTarget(world.t1),
     other: scopedTarget(world.t2),
   },
-  { person: 'admin2', userId: world.people.admin2.userId, own: scopedTarget(world.t2), other: scopedTarget(world.t1) },
+  {
+    person: people[1],
+    userId: world.people[people[1]].userId,
+    own: scopedTarget(world.t2),
+    other: scopedTarget(world.t1),
+  },
 ];
 
 /** The rows of the answer that the viewer may not be shown, as `table id`. */
@@ -439,7 +455,7 @@ async function rowsNotShown(world: MatrixWorld, c: IsolationCase, viewer: Viewer
  * tenant injected (in a path, a query or a body) is the answer without them.
  */
 export async function assertIsolationCase(world: MatrixWorld, route: string, c: IsolationCase): Promise<void> {
-  for (const viewer of viewersOf(world)) {
+  for (const viewer of viewersOf(world, c.people)) {
     expect((await world.ask(null, c.request(viewer.own, null))).statusCode, `${route} with no session`).toBe(401);
     const clean = await world.ask(viewer.person, c.request(viewer.own, null));
     expect(clean.statusCode, `${route} as ${viewer.person}`).toBe(200);

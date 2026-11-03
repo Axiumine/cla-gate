@@ -60,6 +60,8 @@ const SCOPED_QUERY_NAMES = [
   'services/document-placement.ts findSignaturePlacement',
   'services/repo-admin-candidates.ts listRepoAdminCandidates',
   'services/repository-enabled.ts setRepositoryEnabled',
+  'services/repository-count-queries.ts countRepositories',
+  'services/repository-list-queries.ts listRepositoryEntries',
   'services/repository-queries.ts markRepositoriesRemoved',
   'services/repository-queries.ts renameActiveRepository',
   'services/repository-queries.ts findActiveRepositoryByGithubId',
