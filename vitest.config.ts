@@ -5,9 +5,10 @@ import { defineConfig } from 'vitest/config';
 import { scriptsProject, serverProject, webProject } from './vitest.projects.ts';
 
 // Thresholds are 100% and the exclusion list is fixed (docs/quality-gates.md, Thresholds): never add to it. The entries
-// beyond tests, declarations, e2e and the leak scenarios are test setup files and MSW handler files: the Vitest globalSetup
-// file, which runs in the main process where V8 coverage cannot see it, the setup file of the `web` project and the
-// handlers its tests register (E17-S01).
+// beyond tests, declarations, e2e and the leak scenarios are test setup files: the Vitest globalSetup file, which runs in
+// the main process where V8 coverage cannot see it, and the setup file of the `web` project (E17-S01). The MSW handlers of the
+// web tests are written in helpers that are covered (src/web/test-support/render.tsx, src/web/api/test-support.ts), so no
+// entry exempts a directory of them: an entry that matches no file would exempt whatever is put there later.
 // The projects are `scripts`, `server` and `web` (vitest.projects.ts).
 // With DATABASE_URL set, the server project runs against that Postgres instead of PGlite (see global-setup.ts). One
 // shared database per run means one test file at a time.
@@ -25,7 +26,6 @@ export default defineConfig({
         '**/*.d.ts',
         '**/global-setup.ts',
         '**/vitest.setup.ts',
-        'src/web/test-support/handlers/**',
         'e2e/**',
         'tests/leaks/**',
       ],
