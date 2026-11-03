@@ -10,6 +10,7 @@ import type { Boss, WorkerJob, WorkerOptions, WorkerResult } from './boss.ts';
 import { PgBossEnqueuer } from './enqueuer.ts';
 import { PgBossPendingJobs } from './pending.ts';
 import { DEAD_LETTER_QUEUE } from './queues.ts';
+import { failOnUnhandledRejection, installRejectionGuard } from './rejection-guard.ts';
 
 // The workers of the job queue (E07-S03): one pg-boss worker pool per job type that has a handler, each job run through
 // `runJob` (validation, logs, delivery marking) and settled with its verdict, and (E07-S05) one for the dead-letter queue.
@@ -44,6 +45,7 @@ export class Workers {
   #running = 0;
   #abortedAtStop = 0;
   #stopping = false;
+  #releaseGuard: (() => void) | undefined;
 
   constructor(options: WorkersOptions) {
     this.#options = options;
@@ -52,6 +54,7 @@ export class Workers {
   /** Starts working the queue of every type that has a handler, and the dead-letter queue when it has ports. */
   async start(boss: Boss): Promise<void> {
     const { concurrency, pollingIntervalSeconds, deadLetter } = this.#options;
+    this.#releaseGuard ??= installRejectionGuard();
     const options: WorkerOptions = {
       localConcurrency: concurrency,
       batchSize: 1,
@@ -69,12 +72,20 @@ export class Workers {
         enqueuer: new PgBossEnqueuer(boss),
       };
       await boss.work(DEAD_LETTER_QUEUE, options, (jobs) =>
-        this.#settle(jobs, async (job) => ({
-          status: 'completed',
-          output: { outcome: (await runDeadLetter(job, run)).outcome },
-        })),
+        this.#settle(jobs, (job) =>
+          failOnUnhandledRejection(this.#options.logger, async () => ({
+            status: 'completed',
+            output: { outcome: (await runDeadLetter(job, run)).outcome },
+          })),
+        ),
       );
     }
+  }
+
+  /** Stops guarding the process against the unhandled rejections of jobs (the workers are gone, or never started). */
+  release(): void {
+    this.#releaseGuard?.();
+    this.#releaseGuard = undefined;
   }
 
   /** The shutdown begins: a job that is aborted from now on was aborted by it. */
@@ -96,11 +107,13 @@ export class Workers {
    * so a run that sends the copy and dies before it settles the job sends nothing twice.
    */
   async #run(boss: Boss, type: JobType, job: WorkerJob): Promise<JobVerdict> {
-    const verdict = await runJob(type, job, {
-      ...this.#options,
-      pending: new PgBossPendingJobs(boss),
-      enqueuer: new PgBossEnqueuer(boss),
-    });
+    const verdict = await failOnUnhandledRejection(this.#options.logger, () =>
+      runJob(type, job, {
+        ...this.#options,
+        pending: new PgBossPendingJobs(boss),
+        enqueuer: new PgBossEnqueuer(boss),
+      }),
+    );
     if (verdict.status === 'completed') {
       return verdict;
     }

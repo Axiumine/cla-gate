@@ -69,12 +69,14 @@ export async function startJobQueue(options: StartJobQueueOptions): Promise<JobQ
       logger.info({ sweep: await applySweepSchedule(boss, sweepMinutes) }, 'jobs.sweep_schedule');
     }
   } catch (error) {
+    workers?.release();
     await boss.stop().catch(() => undefined);
     throw error;
   }
   const stop = async (): Promise<StopOutcome> => {
     workers?.beginStop();
     await boss.stop({ graceful: true, timeout: options.graceMs ?? STOP_GRACE_MS });
+    workers?.release();
     return workers?.outcome() ?? 'drained';
   };
   return {

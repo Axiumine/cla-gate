@@ -284,14 +284,6 @@ realPostgresRolesOnly(
 
 realPostgresRolesOnly('a handler that rejects fails its job and the process goes on with the next one', async () => {
   const w = await world();
-  const unhandled: unknown[] = [];
-  const noteUnhandled = (reason: unknown): void => {
-    unhandled.push(reason);
-  };
-  process.on('unhandledRejection', noteUnhandled);
-  onTestFinished(() => {
-    process.off('unhandledRejection', noteUnhandled);
-  });
   const attempts: number[] = [];
   await w.enqueue(sync(32_001), 'bad');
   await w.enqueue(sync(32_002), 'good');
@@ -317,8 +309,63 @@ realPostgresRolesOnly('a handler that rejects fails its job and the process goes
   await eventually(() => {
     expect(attempts).toEqual([0, 1]);
   });
-  expect(unhandled).toEqual([]);
 });
+
+/**
+ * Makes the listeners of `unhandledRejection` the test runner installed wait while `work` runs, so that a rejection with nobody
+ * waiting for it reaches only the listeners of the code under test: with none, Node would treat it as an uncaught exception.
+ */
+async function withOnlyTheApplicationsListeners(work: () => Promise<void>): Promise<void> {
+  const runners = process.listeners('unhandledRejection');
+  process.removeAllListeners('unhandledRejection');
+  try {
+    await work();
+  } finally {
+    for (const listener of runners) {
+      process.on('unhandledRejection', listener);
+    }
+  }
+}
+
+realPostgresRolesOnly(
+  'a promise that nobody waits for and that rejects while the handler runs fails that job, and the process and the other job go on',
+  async () => {
+    const w = await world();
+    const attempts: number[] = [];
+    const finished: number[] = [];
+    await w.enqueue(sync(32_011), 'floating');
+    await w.enqueue(sync(32_012), 'good');
+    await withOnlyTheApplicationsListeners(async () => {
+      await startWorkers(
+        w,
+        syncRegistry(async (job, { attempt }) => {
+          if (job.githubInstallationId === 32_011) {
+            attempts.push(attempt);
+            // Nobody waits for this promise, and it rejects while the handler is still waiting for the timer.
+            setTimeout(() => {
+              void Promise.reject(new Error('the promise nobody waited for'));
+            }, 20);
+            await sleep(500);
+          }
+          finished.push(job.githubInstallationId);
+          return DONE;
+        }),
+      );
+      await eventually(async () => {
+        expect(new Set(await statesOf(w, 'sync-installation'))).toEqual(new Set(['retry', 'completed']));
+      });
+      const [floating, good] = await w.jobs('sync-installation');
+      expect(floating).toMatchObject({
+        state: 'retry',
+        retry_count: 0,
+        output: { message: 'the promise nobody waited for' },
+      });
+      expect(good).toMatchObject({ state: 'completed' });
+      expect(attempts).toEqual([0]);
+      expect(finished).toContain(32_012);
+    });
+  },
+);
 
 realPostgresRolesOnly('the concurrency is a cap: six waiting jobs run three at a time', async () => {
   const w = await world();

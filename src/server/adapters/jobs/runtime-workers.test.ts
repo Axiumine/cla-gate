@@ -5,6 +5,7 @@ import type { JobHandler } from '../../services/job-registry.ts';
 import { completing, JOBS, runWorld } from '../../services/job-run-fixture/test-support.ts';
 import { captureLogs, testConfig } from '../../test-support.ts';
 import { createLogger } from '../http/logger.ts';
+import { rejectionGuardUsers } from './rejection-guard.ts';
 import { STOP_GRACE_MS, type StartJobQueueOptions, startJobQueue } from './runtime.ts';
 import { fakeBoss } from './test-support.ts';
 import type { WorkerWiring } from './workers.ts';
@@ -152,4 +153,39 @@ test('the jobs of the workers are the jobs of the wrapper: a job handed to the w
   expect(await boss.work.mock.calls[0]?.[2]([job()])).toEqual([
     { id: 'job-1', status: 'completed', output: { outcome: 'done' } },
   ]);
+});
+
+test('the guard against the unhandled rejections of jobs is in use while the workers run and not after the stop', async () => {
+  const before = rejectionGuardUsers();
+  const { queue } = start();
+  const running = await queue;
+  expect(rejectionGuardUsers()).toBe(before + 1);
+  await running.stop();
+  expect(rejectionGuardUsers()).toBe(before);
+});
+
+test('a queue without workers does not use the guard', async () => {
+  const before = rejectionGuardUsers();
+  const { queue } = start({ withWorkers: false });
+  const running = await queue;
+  expect(rejectionGuardUsers()).toBe(before);
+  await running.stop();
+});
+
+test('a start that fails after the workers started stops guarding the process', async () => {
+  const before = rejectionGuardUsers();
+  const boss = fakeBoss();
+  boss.work.mockResolvedValueOnce('worker-1').mockRejectedValueOnce(new Error('second queue does not exist'));
+  const { deps } = runWorld((registry) => {
+    registry.register('sync-installation', completing());
+    registry.register('sweep', completing());
+  });
+  const failed = startJobQueue({
+    connectionString: 'postgres://cla_app:made-up@127.0.0.1:1/cla',
+    logger: createLogger(testConfig(), captureLogs().destination),
+    createBoss: () => boss,
+    workers: { ...deps, concurrency: 1 },
+  });
+  await expect(failed).rejects.toThrow('second queue does not exist');
+  expect(rejectionGuardUsers()).toBe(before);
 });
