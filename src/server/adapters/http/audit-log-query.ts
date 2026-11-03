@@ -4,16 +4,10 @@ import { z } from 'zod';
 import { AUDIT_ACTIONS } from '../../../shared/audit.ts';
 import { AUDIT_LOG_DEFAULT_LIMIT, AUDIT_LOG_MAX_LIMIT } from '../../../shared/audit-log.ts';
 import { auditCursorSchema } from '../../domain/audit-cursor.ts';
+import { idText, instantText } from './query-values.ts';
 
 // What a request for the audit log may carry (E16-S02). The query string is untrusted input: every value is checked here,
 // and a value that fails is a `400`. The ids are the numeric ones (a GitHub id, or the id of the subject row), never a login.
-
-/** A positive integer written in plain digits: no sign, no leading zero, no exponent, within what a number holds exactly. */
-const idText = z
-  .string()
-  .regex(/^[1-9]\d*$/)
-  .transform(Number)
-  .pipe(z.int().positive());
 
 /** The `limit` of a page: 1 to {@link AUDIT_LOG_MAX_LIMIT} in plain digits, {@link AUDIT_LOG_DEFAULT_LIMIT} when absent. */
 const limitText = z
@@ -22,15 +16,6 @@ const limitText = z
   .transform(Number)
   .pipe(z.int().min(1).max(AUDIT_LOG_MAX_LIMIT))
   .default(AUDIT_LOG_DEFAULT_LIMIT);
-
-/**
- * An instant in ISO 8601 with an explicit offset or `Z`, at most to the millisecond: that is what the comparison with the
- * stored time is made at, and a bound with more digits would be rounded without telling the caller.
- */
-const instantText = z.iso
-  .datetime({ offset: true })
-  .refine((text) => !/\.\d{4,}/.test(text), { message: 'at most three decimals' })
-  .transform((text) => new Date(text));
 
 /** The kind of the row an audit entry is about: the shape the writer accepts for `subject.type`. */
 const subjectType = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);

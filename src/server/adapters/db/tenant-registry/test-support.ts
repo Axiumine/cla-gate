@@ -5,6 +5,7 @@ import { parseGithubId } from '../../../../shared/github-id.ts';
 import { forgetAdminSeen, recordAdminSeen, wasAdminSeenSince } from '../../../services/admin-ledger-queries.ts';
 import { auditLogRows, listAuditLog } from '../../../services/audit-log-queries.ts';
 import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
+import { countSignatures, signatureBatch } from '../../../services/export/signature-queries.ts';
 import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
 import { RepositoryNotFoundError, setRepositoryEnabled } from '../../../services/repository-enabled.ts';
@@ -47,6 +48,7 @@ export const TENANT_MODULES = [
   'services/evaluate-pr/evaluation-rows.ts',
   'services/evaluate-pr/policy-facts.ts',
   'services/evaluate-pr/signature-facts.ts',
+  'services/export/signature-queries.ts',
   'services/installation-operator.ts',
   'services/repo-admin-candidates.ts',
   'services/repository-enabled.ts',
@@ -284,6 +286,36 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       run: async (db, scope, ids) => {
         const placement = await findSignaturePlacement(db, scope, ids.signatureId);
         return placement === null ? [] : ownersOfSignatures(db, [ids.signatureId]);
+      },
+    }),
+  },
+  'services/export/signature-queries.ts': {
+    // The seed gives each tenant one signature on its installation-wide document, so the export of that document finds the
+    // tenant's own row with its own ids and nothing with another tenant's.
+    countSignatures: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const count = await countSignatures(db, scope, { documentId: ids.documentId, state: 'all' });
+        return count === 0 ? [] : ownersOfSignatures(db, [ids.signatureId]);
+      },
+    }),
+    signatureBatch: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const rows = await signatureBatch(
+          db,
+          scope,
+          { documentId: ids.documentId, state: 'all' },
+          { afterId: 0, limit: 10 },
+        );
+        return rows.length === 0
+          ? []
+          : ownersOfSignatures(
+              db,
+              rows.map((row) => row.signature_id),
+            );
       },
     }),
   },

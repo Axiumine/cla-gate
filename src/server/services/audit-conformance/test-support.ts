@@ -52,6 +52,24 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
     { action: 'repository.removed', subject: REPOSITORY, metadata: { reason_code: 'access_lost' } },
     { action: 'repository.removed', subject: REPOSITORY, metadata: { reason_code: 'transferred' } },
   ],
+  'services/export/signature-export-record.ts#signatures.exported': [
+    { action: 'signatures.exported', subject: { type: 'document', id: 12 }, metadata: { state: 'all', row_count: 0 } },
+    {
+      action: 'signatures.exported',
+      subject: { type: 'document', id: 12 },
+      metadata: { state: 'active', row_count: 2500 },
+    },
+    {
+      action: 'signatures.exported',
+      subject: { type: 'document', id: 12 },
+      metadata: { state: 'outdated', row_count: 1 },
+    },
+    {
+      action: 'signatures.exported',
+      subject: { type: 'document', id: 12 },
+      metadata: { state: 'revoked', row_count: 1001 },
+    },
+  ],
   'services/installation-sync-checks.ts#installation.suspended|installation.unsuspended': [
     { action: 'installation.suspended', subject: { type: 'installation', id: 77 }, metadata: ORGANISATION },
     { action: 'installation.unsuspended', subject: { type: 'installation', id: 77 }, metadata: ORGANISATION },

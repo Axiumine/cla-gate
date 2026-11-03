@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import type { TrustProxy } from '../../config/trust-proxy.ts';
 import type { Clock } from '../../services/ports/clock.ts';
+import { requireAuth } from './auth-request.ts';
 import { AppError } from './errors.ts';
 import { warnWhenProxyIsSuspected } from './trust-proxy-warning.ts';
 
@@ -17,9 +18,17 @@ const WINDOW_MS = 60_000;
 
 /**
  * The budget of each client address per minute: the global one, and the overrides of the login routes (E10-S08). A route
- * takes its override through {@link routeRateLimit}.
+ * takes its override through {@link routeRateLimit}. `signatureExport` is the budget of each signed-in person for the
+ * signature CSV (E16-S03), taken through {@link userRateLimit}.
  */
-export const RATE_LIMITS = { global: 600, login: 20, callback: 20, logout: 20, session: 120 } as const;
+export const RATE_LIMITS = {
+  global: 600,
+  login: 20,
+  callback: 20,
+  logout: 20,
+  session: 120,
+  signatureExport: 6,
+} as const;
 
 /**
  * At most this many keys per store. The plugin's default (5000) applies to every route with an override unless the route
@@ -33,6 +42,20 @@ const RATE_LIMIT_MAX_KEYS = 10_000;
  */
 export function routeRateLimit(max: number): RateLimitOptions {
   return { max, timeWindow: WINDOW_MS, cache: RATE_LIMIT_MAX_KEYS };
+}
+
+/**
+ * The `config.rateLimit` of a route with a budget of `max` requests per minute for each signed-in person, keyed on the
+ * numeric GitHub id of the session and not on the client address (E16-S03): a person behind another address, or two people
+ * behind one, keep a budget each. The check runs in the `preHandler`, after the guard of the route access, so a request the
+ * guard refuses (no session, no role, another tenant's document) costs nobody a request of their budget.
+ */
+export function userRateLimit(max: number): RateLimitOptions {
+  return {
+    ...routeRateLimit(max),
+    hook: 'preHandler',
+    keyGenerator: (request) => `user:${requireAuth(request).user.githubId}`,
+  };
 }
 
 /**

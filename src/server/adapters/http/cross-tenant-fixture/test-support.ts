@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
+import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
@@ -87,6 +88,16 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
     request: (target) => ({
       method: 'GET',
       url: AUDIT_LOG_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  [`GET ${SIGNATURES_CSV_PATH}`]: {
+    endpointClass: 'document_read',
+    request: (target) => ({
+      method: 'GET',
+      url: SIGNATURES_CSV_PATH.replace(':installationId', String(target.installationId)).replace(
+        ':documentId',
+        String(target.documentId),
+      ),
     }),
   },
 };

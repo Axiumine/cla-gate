@@ -2,46 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { sessionResponseSchema } from '../../../shared/auth.ts';
+import { HOSTILE_NAMES } from '../../../shared/hostile-names.ts';
 import { COOKIE_NAME } from './auth-fixture/test-support.ts';
 import { ALICE, callbackWorld, type FakeAccount, setCookies } from './callback-fixture/test-support.ts';
 
 // GET /api/auth/callback (E10-S05), what is kept of the account: a name is whatever its owner typed, bounded and stored as it
 // is; an avatar only from GitHub's own host; only the addresses GitHub says are verified, and only in the session row.
-
-/**
- * The printable names a person can type into GitHub that are hostile to whatever shows them later: spreadsheet formulas,
- * Markdown and HTML, mentions and issue links, SQL, comment markers, bidirectional text and invisible characters. A local
- * copy of the shared corpus of E09-S01, which is not built yet; it moves to `src/shared` when that story lands.
- */
-const HOSTILE_NAMES = [
-  '=HYPERLINK("http://evil.example","x")',
-  '+1+1',
-  '-2+3',
-  '@SUM(A1)',
-  "=cmd|' /C calc'!A0",
-  '[x](http://evil.example)',
-  '<img src=x onerror=alert(1)>',
-  '@everyone',
-  '@here',
-  '@org/team',
-  '#1',
-  'org/repo#1',
-  'GH-1',
-  "'; drop table users;--",
-  '![i](http://t.example/p.png)',
-  '<script>alert(1)</script>',
-  '<!-- cla-platform:license/cla:v1 -->',
-  '` `` ``` ````',
-  'a | b',
-  '&#64;octocat',
-  'trailing backslash\\',
-  '/recheck',
-  'javascript:alert(1)',
-  'مرحبا بالعالم',
-  '\u{1f469}‍\u{1f469}‍\u{1f467}‍\u{1f466}',
-  'zero​width‍joiner',
-  'n'.repeat(200),
-];
 
 /** The same address over the scheme that is not encrypted. */
 const plain = (address: string): string => address.replace(/^https:/, 'http:');

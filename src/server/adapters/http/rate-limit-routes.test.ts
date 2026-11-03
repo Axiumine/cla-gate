@@ -25,7 +25,7 @@ async function bare(): Promise<FastifyInstance> {
 }
 
 test('the budgets are the ones of the story, spelled out here on purpose', () => {
-  expect(RATE_LIMITS).toEqual({ global: 600, login: 20, callback: 20, logout: 20, session: 120 });
+  expect(RATE_LIMITS).toEqual({ global: 600, login: 20, callback: 20, logout: 20, session: 120, signatureExport: 6 });
 });
 
 test('the exempt set is exactly the webhook route, spelled out here on purpose', () => {

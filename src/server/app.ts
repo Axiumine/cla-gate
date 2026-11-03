@@ -23,6 +23,7 @@ import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
 import { requireRouteAccess } from './adapters/http/route-access.ts';
 import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
+import { signatureCsvRoutes } from './adapters/http/signature-csv-routes.ts';
 import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
@@ -145,6 +146,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await app.register(operatorRoutes, { db });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await app.register(auditLogRoutes, { db });
+  await app.register(signatureCsvRoutes, { db, clock });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

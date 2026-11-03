@@ -47,7 +47,6 @@ const RESERVED_ACTIONS: Readonly<Partial<Record<AuditAction, string>>> = {
   'signature.created': 'written by the signing transaction (E13-S04)',
   'signature.revoked': 'written by the revoke endpoint (E15-S03)',
   'signatures.invalidated': 'written by the invalidation of a document major (E15-S04)',
-  'signatures.exported': 'written by the signature CSV export (E16-S03)',
   'commit_override.created': 'written by the commit override endpoint (E15-S05)',
   'commit_override.deleted': 'written by the override removal endpoint (E15-S06)',
   'allowlist_entry.created': 'written by the allowlist endpoints (E14-S06)',
