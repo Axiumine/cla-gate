@@ -57,6 +57,7 @@ test('every route of the CLA documents that reads a body, those of later stories
       'POST /api/installations/:installationId/documents',
       'PUT /api/installations/:installationId/documents/:documentId/draft',
       'DELETE /api/installations/:installationId/documents/:documentId/draft',
+      'POST /api/installations/:installationId/documents/:documentId/versions',
     ]),
   );
   expect(routes.filter(([, limit]) => limit !== CLA_BODY_LIMIT)).toEqual([]);

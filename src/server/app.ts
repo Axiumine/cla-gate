@@ -137,20 +137,21 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
  */
 async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: Clock): Promise<void> {
   const { config, db } = options;
+  const enqueuer = options.enqueuer ?? options.jobQueue?.enqueuer ?? notWiredEnqueuer;
   await app.register(healthRoutes, {
     db,
     readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
     queue: options.jobQueue,
   });
   await app.register(operatorRoutes, { db });
-  await app.register(documentRoutes, { db });
+  await app.register(documentRoutes, { db, enqueuer });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,
     appId: config.github.appId,
     db,
-    enqueuer: options.enqueuer ?? options.jobQueue?.enqueuer ?? notWiredEnqueuer,
+    enqueuer,
     deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
   await registerWeb(app, config);

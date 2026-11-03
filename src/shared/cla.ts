@@ -15,6 +15,9 @@ export const DOCUMENT_PATH = `${DOCUMENTS_PATH}/:documentId`;
 /** The draft of one document: read, save and discard (E12-S03). */
 export const DRAFT_PATH = `${DOCUMENT_PATH}/draft`;
 
+/** The versions of one document: publish (E12-S04); the history and the exact text come with E12-S05. */
+export const VERSIONS_PATH = `${DOCUMENT_PATH}/versions`;
+
 /** The documents a repository admin sees for one repository (E12-S01). */
 export const REPOSITORY_DOCUMENTS_PATH = '/api/installations/:installationId/repositories/:repositoryId/documents';
 
@@ -50,7 +53,9 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * The rules a request can break, each with the status it is answered with. The server throws them by name and the HTTP
  * layer turns each into the error body of E06-S01 (`code` is the key); later stories of E12 add their own. The three
  * `content_` rules are those of the text of a CLA (E12-S02, `validateClaText`); `draft_conflict` is the save of a draft
- * that another admin saved over meanwhile (E12-S03).
+ * that another admin saved over meanwhile (E12-S03). The rest are the rules of publishing a version (E12-S04): the rationale,
+ * the numbering, the guard against publishing over a version the admin has not seen, and the confirmation that signers will have
+ * to sign again.
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -61,6 +66,12 @@ export const CLA_RULE_STATUS = {
   content_empty: 422,
   content_invalid_characters: 422,
   draft_conflict: 409,
+  invalid_rationale: 422,
+  first_version_must_be_major: 422,
+  content_unchanged: 422,
+  stale_active_version: 409,
+  resign_confirmation_required: 409,
+  version_conflict: 409,
   not_found: 404,
 } as const;
 
@@ -145,7 +156,7 @@ export const repositoryDocumentsResponseSchema = z.object({
 });
 
 /** The largest revision a draft can have: the column is a 32-bit integer, and a revision the database cannot hold is a 400, not an error of the database. */
-const MAX_REVISION = 2_147_483_647;
+export const MAX_REVISION = 2_147_483_647;
 
 /**
  * The body of `PUT .../documents/:documentId/draft` (E12-S03). Strict, and both keys are required: the editor says which

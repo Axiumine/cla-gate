@@ -95,7 +95,7 @@ test('a draft is not in the audit log, in the log lines of the requests, or in t
 /** The files of the server that contain `needle`, relative to `src/server`. */
 const filesWith = (needle: RegExp): string[] => sources.filter((file) => needle.test(read(file)));
 
-test('only the statements of the drafts name the table, and only the draft service and the draft routes read the text of a draft', () => {
+test('only the statements of the drafts name the table, and only the draft service, the draft routes and the publish, which turns a draft into a version, read the text of a draft', () => {
   expect(filesWith(/\bcla_drafts\b/)).toEqual([
     'adapters/db/schema.ts',
     'services/cla-draft-queries.ts',
@@ -105,10 +105,12 @@ test('only the statements of the drafts name the table, and only the draft servi
     'adapters/http/document-presenters.ts',
     'services/cla-documents.ts',
     'services/cla-drafts.ts',
+    'services/cla-publish-checks.ts',
   ]);
   expect(filesWith(/from '[^']*\/cla-draft-writes\.ts'/)).toEqual([
     'adapters/http/document-presenters.ts',
     'services/cla-drafts.ts',
+    'services/cla-publish.ts',
   ]);
   expect(filesWith(/from '[^']*\/cla-drafts\.ts'/)).toEqual(['adapters/http/document-draft-routes.ts']);
 });

@@ -20,9 +20,11 @@ const containingOwner = (owner: number): unknown => expect.arrayContaining([owne
 
 const byIds = scoped.filter(([, query]) => query.takesIds);
 
-async function world() {
+/** The two tenants on a fresh database, in the state the query needs: some entries arrange more rows than `twoTenants` stores. */
+async function world(query: Pick<ScopedQuery, 'arrange'> = {}) {
   const { db } = await migratedTestDatabase();
   const tenants = await twoTenants(db);
+  await query.arrange?.(db, [tenants.t1, tenants.t2]);
   return { db, ...tenants };
 }
 
@@ -39,10 +41,17 @@ test('the registry holds the scoped queries the story lists, so the matrix below
     'services/cla-document-writes.ts insertDocument',
     'services/cla-document-writes.ts updateDocumentName',
     'services/cla-draft-queries.ts findDraft',
+    'services/cla-draft-queries.ts lockDraft',
     'services/cla-draft-queries.ts findDraftRevision',
     'services/cla-draft-writes.ts insertDraft',
     'services/cla-draft-writes.ts updateDraft',
     'services/cla-draft-writes.ts deleteDraft',
+    'services/cla-enforcing-queries.ts listEnforcingRepositories',
+    'services/cla-version-queries.ts lockDocument',
+    'services/cla-version-queries.ts findActiveVersion',
+    'services/cla-version-queries.ts countSignaturesAtMajor',
+    'services/cla-version-writes.ts insertVersion',
+    'services/cla-version-writes.ts setActiveVersion',
     'services/document-placement.ts findDocumentPlacement',
     'services/document-placement.ts findSignaturePlacement',
     'services/repo-admin-candidates.ts listRepoAdminCandidates',
@@ -77,7 +86,7 @@ test('the registry holds the scoped queries the story lists, so the matrix below
 test.each(scoped)(
   "%s: called for a tenant with that tenant's ids it answers with the rows of that tenant only",
   async (_name, query) => {
-    const { db, t1, t2 } = await world();
+    const { db, t1, t2 } = await world(query);
     const first = await attempt(query, db, { installationId: t1.installationId }, t1);
     expect(first).toEqual({ kind: 'rows', owners: containingOwner(t1.installationId) });
     expect(first.kind === 'rows' ? first.owners.filter((owner) => owner !== t1.installationId) : []).toEqual([]);
@@ -90,7 +99,7 @@ test.each(scoped)(
 test.each(byIds)(
   '%s: called for tenant 1 with the ids of tenant 2 it answers nothing, or refuses, and changes nothing',
   async (_name, query) => {
-    const { db, t1, t2 } = await world();
+    const { db, t1, t2 } = await world(query);
     const before = await tenantChecksums(db);
     const outcome = await attempt(query, db, { installationId: t1.installationId }, t2);
     expect(outcome).toEqual(query.refusal === undefined ? { kind: 'rows', owners: [] } : { kind: 'refused' });
@@ -101,7 +110,7 @@ test.each(byIds)(
 test.each(scoped.filter(([, query]) => query.activeOnly))(
   '%s: with every repository of the tenant removed it finds nothing, or refuses, and changes nothing',
   async (_name, query) => {
-    const { db, t1 } = await world();
+    const { db, t1 } = await world(query);
     await db
       .updateTable('repositories')
       .set({ removed_at: new Date('2026-06-01T00:00:00Z') })

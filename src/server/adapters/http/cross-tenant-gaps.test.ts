@@ -109,6 +109,7 @@ test('the tables of the application hold the cases of the routes built so far, a
     'GET /api/installations/:installationId/documents/:documentId/draft',
     'PUT /api/installations/:installationId/documents/:documentId/draft',
     'DELETE /api/installations/:installationId/documents/:documentId/draft',
+    'POST /api/installations/:installationId/documents/:documentId/versions',
   ]);
   expect(ISOLATION_CASES).toEqual({});
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);

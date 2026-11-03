@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { jobSchema } from './jobs.ts';
-import { DELIVERY_ID, IDS, JOBS, SHA, sorted } from './test-support.ts';
+import { DELIVERY_ID, IDS, JOBS, SHA, sorted, without } from './test-support.ts';
 
 // The catalogue of jobs (E06-S04): what E07 validates before a handler runs. A job holds ids and nothing else.
 
@@ -84,14 +84,22 @@ test('evaluate-head-sha takes a 40-digit lower-case sha', () => {
   expect(jobSchema.parse({ ...JOBS.evaluateHeadSha, headSha: SHA }).type).toBe('evaluate-head-sha');
 });
 
-test.each(['', 'evaluate', 'EVALUATE-PR', 'sweep-repository', 'constructor', '__proto__', 7, null, undefined])(
-  'a job of type %s is not in the catalogue',
-  (type) => {
-    expect(jobSchema.safeParse({ type, githubInstallationId: IDS.installation, deliveryId: DELIVERY_ID }).success).toBe(
-      false,
-    );
-  },
-);
+test.each([
+  '',
+  'evaluate',
+  'EVALUATE-PR',
+  'sweep',
+  'sweep-installation',
+  'constructor',
+  '__proto__',
+  7,
+  null,
+  undefined,
+])('a job of type %s is not in the catalogue', (type) => {
+  expect(jobSchema.safeParse({ type, githubInstallationId: IDS.installation, deliveryId: DELIVERY_ID }).success).toBe(
+    false,
+  );
+});
 
 test('a job that is not an object is refused', () => {
   for (const bad of [null, undefined, 'evaluate-pr', 7, [], [JOBS.evaluatePr]]) {
@@ -108,4 +116,50 @@ test('the catalogue has the six jobs a webhook can start, and the type names the
     'revoke-user-sessions',
     'sync-installation',
   ]);
+});
+
+const SWEEP = {
+  type: 'sweep-repository',
+  githubInstallationId: IDS.installation,
+  githubRepoId: IDS.repository,
+  reason: 'cla_version_published',
+} as const;
+
+// The job a change of policy sends (E07-S09; E12-S04 sends it for a new major version): ids and a reason from the closed set of
+// seven of E07-S09, no delivery.
+test.each([
+  'repository_enabled',
+  'cla_version_published',
+  'cla_document_changed',
+  'allowlist_changed',
+  'signature_revoked',
+  'signatures_invalidated',
+  'override_changed',
+])('a sweep-repository job for the reason %s is valid', (reason) => {
+  expect(jobSchema.parse({ ...SWEEP, reason })).toEqual({ ...SWEEP, reason });
+});
+
+test.each(['', 'CLA_VERSION_PUBLISHED', 'version_published', 7, null, undefined])(
+  'a sweep-repository job refuses the reason %s',
+  (reason) => {
+    expect(jobSchema.safeParse({ ...SWEEP, reason }).success).toBe(false);
+  },
+);
+
+test.each(['githubInstallationId', 'githubRepoId', 'reason'])('a sweep-repository job needs its %s', (field) => {
+  expect(jobSchema.safeParse(without(SWEEP, field)).success).toBe(false);
+});
+
+test.each(['githubInstallationId', 'githubRepoId'])(
+  'a sweep-repository job refuses a %s that is not a GitHub id',
+  (field) => {
+    for (const bad of BAD_IDS) {
+      expect(jobSchema.safeParse({ ...SWEEP, [field]: bad }).success).toBe(false);
+    }
+  },
+);
+
+test('a sweep-repository job refuses a key it does not declare', () => {
+  expect(jobSchema.safeParse({ ...SWEEP, prNumber: 7 }).success).toBe(false);
+  expect(jobSchema.safeParse({ ...SWEEP, title: 'a copied title' }).success).toBe(false);
 });

@@ -70,6 +70,12 @@ test('the fourteenth and fifteenth actions are the two draft actions of E12-S03,
   }
 });
 
+test('the sixteenth action is the publication of a version, E12-S04, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS[15]).toBe('cla_version.published');
+  expect(SYSTEM_ACTIONS.has('cla_version.published')).toBe(false);
+  expect(INSTANCE_ACTIONS.has('cla_version.published')).toBe(false);
+});
+
 test('no action and no metadata key is listed twice', () => {
   expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
   expect(new Set(AUDIT_METADATA_KEYS).size).toBe(AUDIT_METADATA_KEYS.length);

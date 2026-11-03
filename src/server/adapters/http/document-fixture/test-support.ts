@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
 import { errorResponseSchema } from '../../../../shared/errors.ts';
-import type { PersonName } from '../../db/tenant-fixture/test-support.ts';
+import type { TestAppOptions } from '../../../test-support.ts';
+import { type PersonName, tenantChecksums } from '../../db/tenant-fixture/test-support.ts';
 import { matrixWorld } from '../cross-tenant-runner/test-support.ts';
 
 // The world of the CLA documents route tests (E12-S01): the two tenants and five people of the cross-tenant matrix, on the
@@ -11,8 +12,8 @@ import { matrixWorld } from '../cross-tenant-runner/test-support.ts';
 
 export type DocumentWorld = Awaited<ReturnType<typeof matrixWorld>>;
 
-/** The world of the tests: the matrix world, with the documents routes already part of the app. */
-export const documentWorld = (): Promise<DocumentWorld> => matrixWorld();
+/** The world of the tests: the matrix world, with the documents routes already part of the app. `app` sets the queue of the app (E12-S04). */
+export const documentWorld = (app?: Pick<TestAppOptions, 'enqueuer'>): Promise<DocumentWorld> => matrixWorld({}, app);
 
 /** The path of the documents of the installation `installationId` (`installations.id`). */
 export const documentsPath = (installationId: number): string => `/api/installations/${installationId}/documents`;
@@ -48,6 +49,15 @@ export async function documentCount(world: DocumentWorld): Promise<number> {
     .select((eb) => eb.fn.countAll<number>().as('n'))
     .executeTakeFirstOrThrow();
   return rowCount.parse(row).n;
+}
+
+/**
+ * The checksums of every tenant table but the ledger of org admins, which the guard refreshes on every call it lets in: two equal
+ * results mean a call that got past the guard changed no row of any other table.
+ */
+export async function tablesOf(world: DocumentWorld) {
+  const all = await tenantChecksums(world.db);
+  return Object.fromEntries(Object.entries(all).filter(([table]) => table !== 'installation_admin_seen'));
 }
 
 /** The audit rows of one action, oldest first. */
@@ -107,6 +117,20 @@ export async function fillDocuments(
     active_version_id: null,
   }));
   await world.db.insertInto('cla_documents').values(rows).execute();
+}
+
+/** The path of the versions of the document `documentId` of the installation `installationId`. */
+export const versionsPath = (installationId: number, documentId: number): string =>
+  `${documentsPath(installationId)}/${documentId}/versions`;
+
+/** Publishes the draft of a document as `who`; `body` is sent as it is. */
+export function publishAs(
+  world: DocumentWorld,
+  who: PersonName | null,
+  target: { readonly installationId: number; readonly documentId: number },
+  body: object,
+) {
+  return world.ask(who, { method: 'POST', url: versionsPath(target.installationId, target.documentId), payload: body });
 }
 
 /** Reads the draft of a document as `who`. */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
-import { findDraft, findDraftRevision } from '../../../services/cla-draft-queries.ts';
+import { findDraft, findDraftRevision, lockDraft } from '../../../services/cla-draft-queries.ts';
 import { deleteDraft, insertDraft, updateDraft } from '../../../services/cla-draft-writes.ts';
 import type { Database } from '../schema.ts';
 import type { ScopedQuery } from '../tenant-registry/test-support.ts';
@@ -39,6 +39,15 @@ export const DRAFT_READS: Readonly<Record<string, ScopedQuery>> = {
     activeOnly: false,
     run: async (db, scope, ids) => {
       const draft = await findDraft(db, scope, ids.scoped.documentId);
+      return draft === null ? [] : ownersOfDrafts(db, [ids.scoped.documentId]);
+    },
+  },
+  lockDraft: {
+    kind: 'scoped',
+    takesIds: true,
+    activeOnly: false,
+    run: async (db, scope, ids) => {
+      const draft = await lockDraft(db, scope, ids.scoped.documentId);
       return draft === null ? [] : ownersOfDrafts(db, [ids.scoped.documentId]);
     },
   },

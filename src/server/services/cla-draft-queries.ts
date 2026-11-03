@@ -31,6 +31,27 @@ export async function findDraft(
   return row === undefined ? null : { contentMd: row.content_md, revision: row.revision, updatedAt: row.updated_at };
 }
 
+/**
+ * The draft of the document `documentId` of the tenant, locked until the end of the caller's transaction (`select ... for
+ * update`), or null when none is saved. Publishing a version (E12-S04) reads the draft this way: a save that arrives meanwhile
+ * waits, and when the publish has committed it finds no draft at its revision, so a text that was published is never
+ * overwritten by one nobody published.
+ */
+export async function lockDraft(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  documentId: number,
+): Promise<StoredDraft | null> {
+  const row = await db
+    .selectFrom('cla_drafts')
+    .select(['content_md', 'revision', 'updated_at'])
+    .where('installation_id', '=', scope.installationId)
+    .where('document_id', '=', documentId)
+    .forUpdate()
+    .executeTakeFirst();
+  return row === undefined ? null : { contentMd: row.content_md, revision: row.revision, updatedAt: row.updated_at };
+}
+
 /** The revision of the draft of the document, or null when none is saved. The text is not read: the check needs the number only. */
 export async function findDraftRevision(
   db: Kysely<Database>,

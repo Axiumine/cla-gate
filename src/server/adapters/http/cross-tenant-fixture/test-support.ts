@@ -57,6 +57,11 @@ export interface CrossTenantCase {
    * for a request that succeeds once and not twice (a save that names the revision it read).
    */
   readonly prepare?: (db: Kysely<Database>, target: MatrixTarget) => Promise<void>;
+  /**
+   * The body of a call that must succeed, when it depends on the database at that moment (a publish names the version it
+   * replaces, which each success changes). The runner reads it after `prepare` and sends it in place of the body of `request`.
+   */
+  readonly bodyFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<object>;
 }
 
 /** A row a response names, by table and `id` (`signature_id` for `signer_pii`). */
@@ -113,6 +118,24 @@ async function draftAtFirstRevision(db: Kysely<Database>, target: MatrixTarget):
     .execute();
 }
 
+const versionsUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/versions`;
+
+/** The body of a publish that succeeds now: the saved draft as a major version over the version the document points at (none: the first). */
+async function publishBody(db: Kysely<Database>, target: MatrixTarget): Promise<object> {
+  const document = await db
+    .selectFrom('cla_documents')
+    .select('active_version_id')
+    .where('id', '=', target.documentId)
+    .executeTakeFirstOrThrow();
+  return {
+    source: { type: 'draft', revision: 1 },
+    bump: 'major',
+    rationale: 'Published by the matrix',
+    expectedActiveVersionId: document.active_version_id,
+    acknowledgeResigning: true,
+  };
+}
+
 /** The `tenant` routes of the application, keyed `METHOD path`. A story that adds one adds its case here (E13 to E16). */
 export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
   // E12-S01. The case creates a document that covers the installation (org admin only); the repository-scoped body is shown in document-routes-create.test.ts.
@@ -166,6 +189,25 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
     endpointClass: 'document_write',
     success: 204,
     request: (target) => ({ method: 'DELETE', url: draftUrl(target) }),
+  },
+  // E12-S04. A publish consumes the draft and moves the pointer, so each call that must succeed gets a draft at revision 1 and the
+  // version the document points at then. The tenants' repositories enforce nothing, so no job is sent.
+  'POST /api/installations/:installationId/documents/:documentId/versions': {
+    endpointClass: 'document_write',
+    success: 201,
+    prepare: draftAtFirstRevision,
+    bodyFor: publishBody,
+    request: (target) => ({
+      method: 'POST',
+      url: versionsUrl(target),
+      payload: {
+        source: { type: 'draft', revision: 1 },
+        bump: 'major',
+        rationale: 'Published by the matrix',
+        expectedActiveVersionId: null,
+        acknowledgeResigning: true,
+      },
+    }),
   },
 };
 

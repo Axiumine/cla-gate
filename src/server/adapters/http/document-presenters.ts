@@ -9,10 +9,12 @@ import type {
   installationScopedEntrySchema,
   savedDraftResponseSchema,
 } from '../../../shared/cla.ts';
+import type { publishVersionResponseSchema } from '../../../shared/cla-version.ts';
 import type { DocumentPosition, StoredActiveVersion, StoredDocument } from '../../services/cla-document-types.ts';
 import type { DocumentDetail } from '../../services/cla-documents.ts';
 import type { StoredDraft } from '../../services/cla-draft-queries.ts';
 import type { SavedDraft } from '../../services/cla-draft-writes.ts';
+import type { PublishedVersion } from '../../services/cla-publish-types.ts';
 import { decodeCursor, encodeCursor } from './cursor.ts';
 
 // The documents of the API as the routes of document-routes.ts send them (E12-S01): the stored rows with their times as
@@ -57,6 +59,15 @@ export function presentDraft(draft: StoredDraft): z.infer<typeof claDraftSchema>
 /** What a save answers: the revision and the time, never the text. */
 export function presentSavedDraft(draft: SavedDraft): z.infer<typeof savedDraftResponseSchema>['draft'] {
   return { revision: draft.revision, updatedAt: draft.updatedAt.toISOString() };
+}
+
+/** A published version as `publishVersionResponseSchema` has it: the version, whether signers sign again, and how many that affects. */
+export function presentPublished(published: PublishedVersion): z.infer<typeof publishVersionResponseSchema> {
+  return {
+    version: presentVersion(published.version),
+    requiresResigning: published.requiresResigning,
+    affectedSignatures: published.affectedSignatures,
+  };
 }
 
 /** What a repository admin sees of an installation-wide document: the id, the name and the number of the active version. */

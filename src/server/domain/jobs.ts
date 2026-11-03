@@ -38,6 +38,20 @@ const EVALUATE_TRIGGERS = [
   'policy_change',
 ] as const;
 
+/**
+ * Why a `sweep-repository` job exists (E07-S09): a change of policy that can turn a pull request's check from green to red or
+ * back. The set is closed so that a caller cannot invent a reason; the callers are E12-S04 (`cla_version_published`), E14 and E15.
+ */
+const SWEEP_REPOSITORY_REASONS = [
+  'repository_enabled',
+  'cla_version_published',
+  'cla_document_changed',
+  'allowlist_changed',
+  'signature_revoked',
+  'signatures_invalidated',
+  'override_changed',
+] as const;
+
 /** A 40-digit lower-case commit id, the form GitHub writes. */
 const headShaField = { headSha: z.string().regex(/^[0-9a-f]{40}$/) };
 
@@ -66,6 +80,13 @@ export const jobSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({ type: z.literal('sync-installation'), ...installationField }),
   z.strictObject({ type: z.literal('revoke-user-sessions'), githubUserId: githubIdSchema, ...deliveryIdField }),
+  // Not started by a webhook: a change of policy sends it (E12-S04 for a new major version). The last member, so that the
+  // rebase onto E07-S09, which owns the job, removes one hunk.
+  z.strictObject({
+    type: z.literal('sweep-repository'),
+    ...repositoryFields,
+    reason: z.enum(SWEEP_REPOSITORY_REASONS),
+  }),
 ]);
 
 /** One job of the catalogue: its `type` and the ids it carries. */

@@ -37,6 +37,9 @@ export const AUDIT_ACTIONS = [
   // id and the revision that was discarded). The text is never in the row.
   'cla_draft.saved',
   'cla_draft.discarded',
+  // Added by E12-S04: a version of a CLA was published (metadata the ids, the number, the bump and the count of signatures it
+  // affects). The text and the rationale are never in the row.
+  'cla_version.published',
   // Instance-wide actions: SYSTEM_ACTIONS and INSTANCE_ACTIONS must be subsets of this list.
   'data_export.created',
   'network_metadata.purged',

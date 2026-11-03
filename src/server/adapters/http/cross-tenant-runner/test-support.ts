@@ -5,6 +5,7 @@ import { expect } from 'vitest';
 import { z } from 'zod';
 import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import { StubRoleLookup } from '../../../services/role-table-fixture/test-support.ts';
+import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
   type PersonName,
@@ -68,11 +69,15 @@ function headersOf(
  * The world of the matrix: the real app (routes are added before the first request), two tenants with five people who are
  * logged in, and a `StubRoleLookup` that answers what GitHub says about them. `ask(who, spec)` sends a request as `who`
  * (nobody: no cookie); a state-changing one carries the origin and the token the app demands. `env` adds to the login
- * settings of the app (the operator ids of E11-S08, for instance).
+ * settings of the app (the operator ids of E11-S08, for instance); `app` adds the one option of the app a test sets (the queue the
+ * publish of a major version sends its jobs to, E12-S04).
  */
-export async function matrixWorld(env: Readonly<Record<string, string>> = {}) {
+export async function matrixWorld(
+  env: Readonly<Record<string, string>> = {},
+  app: Pick<TestAppOptions, 'enqueuer'> = {},
+) {
   const roles = new StubRoleLookup();
-  const world = await authWorld(env, { github: roles });
+  const world = await authWorld(env, { github: roles, ...app });
   const seeded = await twoTenants(world.db, roles);
   const sessions = {
     admin1: await world.login(seeded.people.admin1.githubId),
@@ -181,7 +186,9 @@ async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCa
 /** Sends the request of the case as `who` to a call that must succeed, after the case has put the resource in the state it expects. */
 async function askAllowed(world: MatrixWorld, c: CrossTenantCase, who: PersonName, target: MatrixTarget) {
   await c.prepare?.(world.db, target);
-  return world.ask(who, c.request(target));
+  const spec = c.request(target);
+  const payload = await c.bodyFor?.(world.db, target);
+  return world.ask(who, payload === undefined ? spec : { ...spec, payload });
 }
 
 /** The calls that are allowed: the admin of the organisation, and the admin of the repository where the role matrix lets them. */
