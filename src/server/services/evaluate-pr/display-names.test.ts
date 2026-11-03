@@ -34,9 +34,12 @@ test('an unlinked author or committer has no login to take', () => {
 
 test('the names of the unresolved trailers are kept by lower-case commit SHA, and a commit without one is not in the map', () => {
   const pr = pullRequest(5);
-  const upper = commit(2, { sha: commitSha(2).toUpperCase(), message: TRAILER });
+  // A SHA with hex letters: in `commitSha(2)` every digit is a number, so upper-casing it would change nothing.
+  const lettered = commitSha(0xabc);
+  const upper = commit(2, { sha: lettered.toUpperCase(), message: TRAILER });
+  expect(upper.sha).not.toBe(lettered);
   const { coAuthors } = displayNamesOf(pr, [commit(1), upper]);
-  expect([...coAuthors]).toEqual([[commitSha(2), ['Jane Roe']]]);
+  expect([...coAuthors]).toEqual([[lettered, ['Jane Roe']]]);
 });
 
 test('a trailer that resolves to an account, and a bot trailer, give no name', () => {

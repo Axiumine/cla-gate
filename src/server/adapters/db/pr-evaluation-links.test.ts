@@ -186,6 +186,21 @@ test('findRowsForSha: one entry per pull request evaluated at the head SHA, with
   ]);
 });
 
+test('findRowsForSha: the rows come by number whatever order the plan reads them in, not by the order they were stored', async () => {
+  const { db, t1 } = await linksWorld();
+  for (const prNumber of [30, 4, 12]) {
+    await insertEvaluation(db, t1, { prNumber, headSha: sha('3') });
+  }
+  // The unique index happens to deliver the rows by number, which would hide a missing ORDER BY: read the table in storage order.
+  const rows = await db.transaction().execute(async (trx) => {
+    await sql`set local enable_indexscan = off`.execute(trx);
+    await sql`set local enable_bitmapscan = off`.execute(trx);
+    await sql`set local enable_indexonlyscan = off`.execute(trx);
+    return findRowsForSha(trx, scopeOf(t1), t1.repositoryId, sha('3'));
+  });
+  expect(rows.map((row) => row.prNumber)).toEqual([4, 12, 30]);
+});
+
 test('findRowsForSha: a head SHA nobody evaluated has no rows', async () => {
   const { db, t1 } = await linksWorld();
   expect(await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha('9'))).toEqual([]);

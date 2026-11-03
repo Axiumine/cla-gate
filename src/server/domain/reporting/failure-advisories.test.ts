@@ -45,6 +45,20 @@ test('only the commits that have the advisory are read: names of any other commi
   expect(summary).not.toContain('Not listed');
 });
 
+test('the advisory of a commit is matched to its trailer names whatever the case of its SHA', () => {
+  // sha(10) holds a hex letter, so its upper-case form is another text; the job keys the names by lower-case SHA.
+  const upper = sha(10).toUpperCase();
+  expect(upper).not.toBe(sha(10));
+  const request = requestOf({
+    evaluation: evaluationOf({
+      actors: [actor(1, ['opener'])],
+      advisories: [{ code: 'co_author_unresolved' as const, sha: upper }],
+    }),
+    names: { logins: new Map([[1, 'octocat']]), coAuthors: trailers([10, ['Jane Roe']]) },
+  });
+  expect(summaryOf(request)).toContain('- `Jane Roe`');
+});
+
 test('an advisory of another kind lists nobody: too many trailers is a count, not a name', () => {
   const request = requestOf({
     evaluation: evaluationOf({
