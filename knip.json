@@ -49,6 +49,7 @@
     "!scripts/e2e/**!",
     "!scripts/leaks/**!",
     "!scripts/mutation-gate/**!",
+    "!scripts/provision/test-support.ts!",
     "!scripts/qodana-gate/**!",
     "!scripts/semgrep-rules/**!",
     "!scripts/trivy-gate/**!",
