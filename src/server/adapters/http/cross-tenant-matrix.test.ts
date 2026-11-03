@@ -56,12 +56,12 @@ test('the canary routes are the tenant and authenticated routes the canary table
   addCanaryRoutes(world);
   await world.app.ready();
   const tables = {
-    cross: { ...CANARY_CASES, ...LEAKY_CROSS_TENANT },
+    cross: { ...CROSS_TENANT_CASES, ...CANARY_CASES, ...LEAKY_CROSS_TENANT },
     isolation: { ...CANARY_ISOLATION, ...LEAKY_ISOLATION },
     noTenantData: NO_TENANT_DATA,
   };
   expect(matrixGaps(world.app.routeAccess, tables)).toEqual([]);
-  expect(matrixGaps(world.app.routeAccess, { ...tables, cross: CANARY_CASES })).toEqual([
+  expect(matrixGaps(world.app.routeAccess, { ...tables, cross: { ...CROSS_TENANT_CASES, ...CANARY_CASES } })).toEqual([
     'tenant route GET /canary/leaky/installations/:installationId/repositories/:repositoryId has no entry in CROSS_TENANT_CASES',
   ]);
   expect(Object.keys(CANARY_CASES)).toEqual([

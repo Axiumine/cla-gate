@@ -32,6 +32,8 @@ test('the registry holds the scoped queries the story lists, so the matrix below
     'services/admin-ledger-queries.ts recordAdminSeen',
     'services/admin-ledger-queries.ts forgetAdminSeen',
     'services/admin-ledger-queries.ts wasAdminSeenSince',
+    'services/audit-log-queries.ts auditLogRows',
+    'services/audit-log-queries.ts listAuditLog',
     'services/document-placement.ts findDocumentPlacement',
     'services/document-placement.ts findSignaturePlacement',
     'services/repo-admin-candidates.ts listRepoAdminCandidates',

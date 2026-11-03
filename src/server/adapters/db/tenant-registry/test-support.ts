@@ -3,6 +3,7 @@
 import type { Kysely } from 'kysely';
 import { parseGithubId } from '../../../../shared/github-id.ts';
 import { forgetAdminSeen, recordAdminSeen, wasAdminSeenSince } from '../../../services/admin-ledger-queries.ts';
+import { auditLogRows, listAuditLog } from '../../../services/audit-log-queries.ts';
 import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
 import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
@@ -39,6 +40,7 @@ import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from 
 export const TENANT_MODULES = [
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
+  'services/audit-log-queries.ts',
   'services/close-pr/close-heads.ts',
   'services/close-pr/close-rows.ts',
   'services/document-placement.ts',
@@ -143,6 +145,21 @@ async function ownersOfDocuments(db: Kysely<Database>, documentIds: readonly num
   return rows.map((row) => row.installation_id);
 }
 
+/** The installation that owns each audit row with these row ids (an instance-level row has none and is left out). */
+async function ownersOfAuditRows(db: Kysely<Database>, auditIds: readonly number[]): Promise<number[]> {
+  if (auditIds.length === 0) {
+    return [];
+  }
+  const rows = await db
+    .selectFrom('audit_log')
+    .select('installation_id')
+    .where('id', 'in', auditIds)
+    .where('installation_id', 'is not', null)
+    .$narrowType<{ installation_id: number }>()
+    .execute();
+  return rows.map((row) => row.installation_id);
+}
+
 /** The installation that owns each signature with these row ids. */
 async function ownersOfSignatures(db: Kysely<Database>, signatureIds: readonly number[]): Promise<number[]> {
   const rows = await db.selectFrom('signatures').select('installation_id').where('id', 'in', signatureIds).execute();
@@ -216,6 +233,40 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
         (await wasAdminSeenSince(db, scope, ids.admin.githubId, new Date('2026-01-01T00:00:00Z')))
           ? ledgerOwnersOf(db, ids.admin.githubId)
           : [],
+    }),
+  },
+  'services/audit-log-queries.ts': {
+    // The audit rows the seed gives each tenant name the tenant's own plain repository as their subject, so the filter on it
+    // finds the tenant's row with its own ids and nothing with another tenant's.
+    auditLogRows: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const rows = await auditLogRows(db, scope, {
+          subjectType: 'repository',
+          subjectId: ids.plain.repositoryId,
+          limit: 10,
+        }).execute();
+        return ownersOfAuditRows(
+          db,
+          rows.map((row) => row.id),
+        );
+      },
+    }),
+    listAuditLog: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const page = await listAuditLog(db, scope, {
+          subjectType: 'repository',
+          subjectId: ids.plain.repositoryId,
+          limit: 10,
+        });
+        return ownersOfAuditRows(
+          db,
+          page.items.map((item) => item.id),
+        );
+      },
     }),
   },
   'services/document-placement.ts': {

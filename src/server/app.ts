@@ -5,6 +5,7 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import type { Database } from './adapters/db/schema.ts';
+import { auditLogRoutes } from './adapters/http/audit-log-routes.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
 import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
@@ -143,6 +144,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   });
   await app.register(operatorRoutes, { db });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
+  await app.register(auditLogRoutes, { db });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

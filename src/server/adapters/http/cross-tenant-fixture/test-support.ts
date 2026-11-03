@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
@@ -79,8 +80,16 @@ export interface IsolationCase {
   readonly mayShow: (owner: RowOwner, viewer: IsolationViewer) => boolean;
 }
 
-/** The `tenant` routes of the application, keyed `METHOD path`. Empty until a story adds a route (E12 to E16). */
-export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {};
+/** The `tenant` routes of the application, keyed `METHOD path`. A story that adds a route (E12 to E16) adds its case here. */
+export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
+  [`GET ${AUDIT_LOG_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: AUDIT_LOG_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+};
 
 /** The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `GET /api/me/signatures`). */
 export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {};
