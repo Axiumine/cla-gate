@@ -107,6 +107,14 @@ test('the verdict is stored as toStoredDetails of the evaluation and the reporte
         evaluationId: row?.id,
       },
       evaluation: verdict,
+      names: {
+        logins: new Map([
+          [7, 'user-7'],
+          [1, 'user-1'],
+          [2, 'user-2'],
+        ]),
+        coAuthors: new Map<string, readonly string[]>(),
+      },
     },
   ]);
   expect(world.reporter.startedTargets).toEqual([world.reporter.published[0]?.target]);

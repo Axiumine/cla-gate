@@ -7,6 +7,7 @@ import {
   isOneCodeSpan,
   isOneLine,
   longestBackticks,
+  outsideCodeSpans,
   showZeroWidth,
   unguardedMarks,
   ZWSP,
@@ -77,4 +78,18 @@ test('codePointCount counts code points, not UTF-16 units', () => {
 
 test('showZeroWidth names each zero-width space', () => {
   expect(showZeroWidth(`a${ZWSP}b${ZWSP}`)).toBe('a⟦ZWSP⟧b⟦ZWSP⟧');
+});
+
+test.each([
+  ['no span', 'a < b', 'a < b'],
+  ['one span', 'a `<b>` c', 'a  c'],
+  ['two spans', '`<a>` and `<b>`', ' and '],
+  ['a double fence that holds a single backtick', 'x ``a`<b>`` y', 'x  y'],
+  ['a padded fence', 'x ```` ``` <a> ```` y', 'x  y'],
+  ['a run with no closing run of the same length is plain text', 'a ``b` c', 'a ``b` c'],
+  ['a span cut by a run of another length keeps looking', 'a ``b ` c`` d', 'a  d'],
+  ['runs pair from the left, so a third single run stays', '` a `<b>`', '<b>`'],
+  ['an empty text', '', ''],
+])('outsideCodeSpans: %s', (_what, text, expected) => {
+  expect(outsideCodeSpans(text)).toBe(expected);
 });

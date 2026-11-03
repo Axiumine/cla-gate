@@ -18,7 +18,7 @@
 14. `'; drop table users;--`
 15. `![i](http://t.example/p.png)`
 16. `<script>alert(1)</script>`
-17. `<!-- cla-platform:license/cla:v1 -->`
+17. `<⟦ZWSP⟧!-- cla-platform:license/cla:v1 -->`
 18. ````` ` `` ``` ```` `````
 19. `a | b`
 20. `&#⟦ZWSP⟧64;octocat`

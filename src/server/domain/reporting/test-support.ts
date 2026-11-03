@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { HOSTILE_CONTROL_NAMES, HOSTILE_NAMES } from '../../../shared/hostile-names.ts';
+import { renderCheckOutput } from './check-output.ts';
+import type { DisplayNames } from './display-names.ts';
+import type {
+  FailureRequest,
+  ReportedEvaluation,
+  ReportedFinding,
+  ReportedRole,
+  ReportedUnlinkedRole,
+} from './failure-input.ts';
+import { failureReport } from './failure-report.ts';
 
 // Helpers for the tests of src/server/domain/reporting: the shared hostile corpus in the shape `test.each` wants, and the
 // checks every rendered name must pass. They read the output as text and know nothing of the encoder, so a test that uses
@@ -63,4 +73,77 @@ export function isOneCodeSpan(rendered: string): boolean {
 /** `text` with each U+200B written as `⟦ZWSP⟧`, so a snapshot file shows where the encoder broke a mention. */
 export function showZeroWidth(text: string): string {
   return text.replaceAll(ZWSP, '⟦ZWSP⟧');
+}
+
+/** `text` with every Markdown code span cut out: a run of n backticks opens a span that the next run of exactly n closes. */
+export function outsideCodeSpans(text: string): string {
+  const runs = Array.from(text.matchAll(/`+/gu));
+  let kept = '';
+  let at = 0;
+  for (const [index, open] of runs.entries()) {
+    if (open.index < at) {
+      continue;
+    }
+    const close = runs.slice(index + 1).find((run) => run[0].length === open[0].length);
+    if (close === undefined) {
+      continue;
+    }
+    kept += text.slice(at, open.index);
+    at = close.index + close[0].length;
+  }
+  return kept + text.slice(at);
+}
+
+// Builders for the tests of the failure report (E09-S03). They are plain data with defaults, so a test names only what it is
+// about.
+
+/** A full commit SHA that starts with a number: `sha(5)` is `0000005` and 33 zeros, so its short form tells commits apart. */
+export function sha(n: number): string {
+  return n.toString(16).padStart(7, '0').padEnd(40, '0');
+}
+
+/** The head SHA of the reports under test. */
+export const HEAD = '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b';
+
+type ReportedActor = ReportedEvaluation['actors'][number];
+
+/** An actor of an evaluation: not covered, and the author of a commit, unless the test says otherwise. */
+export function actor(id: number, roles: readonly ReportedRole[] = ['author'], covered = false): ReportedActor {
+  return { account: { id }, roles, covered };
+}
+
+/** An unlinked identity of commit `sha(n)`, not waived by an override unless `overrideId` says so. */
+export function finding(
+  n: number,
+  name: string,
+  role: ReportedUnlinkedRole = 'author',
+  overrideId: number | null = null,
+): ReportedFinding {
+  return { sha: sha(n), role, raw: { name }, overrideId };
+}
+
+/** A failed evaluation with nothing in it: the unsigned-contributor code, no actor, no finding, no advisory, no fix. */
+export function evaluationOf(parts: Partial<ReportedEvaluation> = {}): ReportedEvaluation {
+  return { failureCodes: ['unsigned_contributor'], actors: [], findings: [], advisories: [], fixes: [], ...parts };
+}
+
+/** No login and no trailer name known. */
+export const NO_NAMES: DisplayNames = { logins: new Map(), coAuthors: new Map() };
+
+/** A request for repository 4242, pull request 7 and the origin `https://cla.example.test`. */
+export function requestOf(parts: Partial<FailureRequest> = {}): FailureRequest {
+  return {
+    headSha: HEAD,
+    evaluation: evaluationOf(),
+    names: NO_NAMES,
+    githubRepoId: 4242,
+    prNumber: 7,
+    publicBaseUrl: 'https://cla.example.test',
+    ...parts,
+  };
+}
+
+/** The summary of the Check Run for a request: the report, rendered the way the writer sends it. */
+export function summaryOf(request: FailureRequest): string {
+  return renderCheckOutput(failureReport(request).view).summary;
 }

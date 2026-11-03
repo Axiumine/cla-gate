@@ -118,3 +118,18 @@ test('a cut name that ends in backticks is not padded, because the ellipsis is i
   expect(isOneCodeSpan(rendered)).toBe(true);
   expect(codePointCount(rendered)).toBe(64 + 1 + 63 + 1 + 64);
 });
+
+test.each([
+  [
+    'the comment marker of E09-S07',
+    '<!-- cla-platform:license/cla:v1 -->',
+    `\`<${ZWSP}!-- cla-platform:license/cla:v1 -->\``,
+  ],
+  ['an opener and nothing else', '<!--', `\`<${ZWSP}!--\``],
+  ['each of two openers', 'a<!--b<!--c', `\`a<${ZWSP}!--b<${ZWSP}!--c\``],
+  ['an opener after a bracket', '<<!--', `\`<<${ZWSP}!--\``],
+  ['a bracket and a bang that are not an opener', '<!- -> <! --', '`<!- -> <! --`'],
+])('renderName splits an HTML comment opener so a name never spells the marker: %s', (_what, raw, expected) => {
+  expect(renderName(raw)).toBe(expected);
+  expect(renderName(raw)).not.toContain('<!--');
+});

@@ -18,6 +18,11 @@ export * from './listing-state.ts';
 export * from './repo-walk.ts';
 export * from './stored-details.ts';
 export { IGNORED_TRAILER_IDENTITIES } from './trailer-identities.ts';
-export { MAX_TRAILERS_PER_COMMIT, type ParsedCoAuthors, parseCoAuthors } from './trailers.ts';
+export {
+  MAX_TRAILERS_PER_COMMIT,
+  type ParsedCoAuthors,
+  parseCoAuthors,
+  unresolvedCoAuthorNames,
+} from './trailers.ts';
 export * from './types.ts';
 export * from './unlinked.ts';

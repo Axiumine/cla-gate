@@ -3,6 +3,7 @@
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { Evaluation } from '../../domain/evaluation/index.ts';
 import type { JobEnvelope } from '../../domain/job-envelope.ts';
+import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 
 // What the evaluation job (E07-S04) needs of the code that writes the Check Run and the pull request comment. The reporter
 // is E09: this file is the port the job calls, `FakeReporter` (`services/evaluate-pr/test-support.ts`) the double the job is
@@ -43,9 +44,10 @@ export interface EvaluationReporter {
 
   /**
    * The verdict on `target`, which the job has stored already. Called once per evaluation that was not superseded; a retry
-   * of the job calls it again, so it must be idempotent.
+   * of the job calls it again, so it must be idempotent. `names` are the logins and trailer names of the data the job fetched
+   * (E09-S03): the evaluation holds numeric ids only. They are used for this report and never stored.
    */
-  publish(target: ReportTarget, evaluation: Evaluation): Promise<void>;
+  publish(target: ReportTarget, evaluation: Evaluation, names: DisplayNames): Promise<void>;
 
   /**
    * The evaluation of `target` could not be completed and will not be retried by the queue (E07-S05): the Check Run of its

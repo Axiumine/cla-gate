@@ -48,6 +48,15 @@ export function breakMentions(text: string): string {
   return text.replace(/[@#]/gu, (mark) => `${mark}${ZWSP}`);
 }
 
+/**
+ * `text` with U+200B between the `<` and the `!--` of each `<!--`, so no renderer reads it as the start of an HTML comment and
+ * the pull request comment marker (E09-S07) cannot be spelled by a name: it appears in the output only where the reporter
+ * writes it.
+ */
+export function breakHtmlComments(text: string): string {
+  return text.replaceAll('<!--', `<${ZWSP}!--`);
+}
+
 /** The length of the longest run of backticks in `text`; 0 when there is none. */
 function longestBacktickRun(text: string): number {
   let longest = 0;

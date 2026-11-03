@@ -14,6 +14,7 @@ import {
 import { createLogger } from '../../adapters/http/logger.ts';
 import { type Evaluation, type EvaluationInput, evaluatePullRequest } from '../../domain/evaluation/index.ts';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
+import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import { captureLogs, type LogCapture } from '../../test-support.ts';
 import { account, commit, pullRequest } from '../github-pull-contract/test-support.ts';
 import type { JobOutcome } from '../job-registry.ts';
@@ -89,7 +90,7 @@ function timedDatabase(db: Kysely<Database>, timeline: string[]): Kysely<Databas
 /** What a FakeReporter was asked, and what it does when asked: nothing, unless a test says so. */
 export interface ReporterHooks {
   started?: ((target: ReportTarget) => Promise<void>) | undefined;
-  publish?: ((target: ReportTarget, evaluation: Evaluation) => Promise<void>) | undefined;
+  publish?: ((target: ReportTarget, evaluation: Evaluation, names: DisplayNames) => Promise<void>) | undefined;
   failed?: ((target: ReportTarget, code: ReportFailureCode) => Promise<void>) | undefined;
   cancelled?: ((target: CancelTarget) => Promise<void>) | undefined;
 }
@@ -97,7 +98,11 @@ export interface ReporterHooks {
 /** The reporter in memory: every report it was given, in order, and an optional behaviour for each method (E07-S04). */
 export class FakeReporter implements EvaluationReporter {
   readonly startedTargets: ReportTarget[] = [];
-  readonly published: { readonly target: ReportTarget; readonly evaluation: Evaluation }[] = [];
+  readonly published: {
+    readonly target: ReportTarget;
+    readonly evaluation: Evaluation;
+    readonly names: DisplayNames;
+  }[] = [];
   /** The failures reported (E07-S05), in order. */
   readonly failures: { readonly target: ReportTarget; readonly code: ReportFailureCode }[] = [];
   /** The pull requests reported as closed (E07-S06), in order. */
@@ -116,10 +121,10 @@ export class FakeReporter implements EvaluationReporter {
     await this.hooks.started?.(target);
   }
 
-  async publish(target: ReportTarget, evaluation: Evaluation): Promise<void> {
+  async publish(target: ReportTarget, evaluation: Evaluation, names: DisplayNames): Promise<void> {
     this.timeline.push('reporter.publish');
-    this.published.push({ target, evaluation });
-    await this.hooks.publish?.(target, evaluation);
+    this.published.push({ target, evaluation, names });
+    await this.hooks.publish?.(target, evaluation, names);
   }
 
   async failed(target: ReportTarget, code: ReportFailureCode): Promise<void> {

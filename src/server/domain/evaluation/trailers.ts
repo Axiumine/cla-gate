@@ -6,7 +6,9 @@ import type { AdvisoryCode } from './types.ts';
 // E08-S06: reads the `Co-authored-by` trailers of one commit message. The text is spoofable, so the result is never
 // trusted to grant anything: the only thing taken from a trailer is a numeric GitHub id in a noreply address, and that id
 // becomes an actor who must be covered like anyone else. Everything else the trailer says (the name above all) is dropped
-// here and never reaches a rule, a stored value or a rendered text.
+// here and never reaches a rule or a stored value. The one exception is `unresolvedCoAuthorNames` (E09-S03), which hands
+// the name of a trailer that could not be resolved to the reporter, for the advisory list of the Check Run; the reporter
+// prints it only through `renderName`, and an email address is never part of it.
 
 /** At most this many trailers of a commit are read; a commit with more gets one `too_many_trailers` advisory. */
 export const MAX_TRAILERS_PER_COMMIT = 20;
@@ -73,6 +75,37 @@ function readTrailer(value: string): TrailerReading {
   return githubId === null ? UNRESOLVED : { kind: 'resolved', githubId };
 }
 
+/** One trailer as read: what it resolves to, and the name written before its address (display-only, never an address). */
+type ReadTrailer = TrailerReading & { readonly name: string };
+
+/** The trailers of a message, at most `MAX_TRAILERS_PER_COMMIT` of them, and whether there were more. */
+interface ReadTrailers {
+  readonly trailers: readonly ReadTrailer[];
+  readonly overflow: boolean;
+}
+
+/** The text before the last `<` of a trailer value, trimmed: the name. A value with no `<` gives no name, so a bare address is never one. */
+function nameOf(value: string): string {
+  const open = value.lastIndexOf('<');
+  return open < 0 ? '' : value.slice(0, open).trim();
+}
+
+/** The `Co-authored-by` trailers of the final paragraph, in order, up to the limit; the first one beyond it sets `overflow`. */
+function readTrailers(message: string): ReadTrailers {
+  const trailers: ReadTrailer[] = [];
+  for (const line of finalParagraph(message)) {
+    const value = trailerValue(line);
+    if (value === null) {
+      continue;
+    }
+    if (trailers.length === MAX_TRAILERS_PER_COMMIT) {
+      return { trailers, overflow: true };
+    }
+    trailers.push({ ...readTrailer(value), name: nameOf(value) });
+  }
+  return { trailers, overflow: false };
+}
+
 /**
  * Reads the `Co-authored-by` trailers of a commit message. Only the final paragraph is read (text after the last blank
  * line, CRLF normalised), and a line is a trailer when it starts with `co-authored-by:` in any case. At most
@@ -82,25 +115,21 @@ function readTrailer(value: string): TrailerReading {
  * safe range) gives `co_author_unresolved`: advisory only, it never blocks and carries no name or email.
  */
 export function parseCoAuthors(message: string): ParsedCoAuthors {
-  const githubIds: number[] = [];
-  const advisories: AdvisoryCode[] = [];
-  let read = 0;
-  for (const line of finalParagraph(message)) {
-    const value = trailerValue(line);
-    if (value === null) {
-      continue;
-    }
-    if (read === MAX_TRAILERS_PER_COMMIT) {
-      advisories.push('too_many_trailers');
-      break;
-    }
-    read += 1;
-    const reading = readTrailer(value);
-    if (reading.kind === 'resolved') {
-      githubIds.push(reading.githubId);
-    } else if (reading.kind === 'unresolved') {
-      advisories.push('co_author_unresolved');
-    }
-  }
-  return { githubIds, advisories };
+  const { trailers, overflow } = readTrailers(message);
+  const githubIds = trailers.flatMap((trailer) => (trailer.kind === 'resolved' ? [trailer.githubId] : []));
+  const advisories: AdvisoryCode[] = trailers.flatMap((trailer) =>
+    trailer.kind === 'unresolved' ? ['co_author_unresolved' as const] : [],
+  );
+  return { githubIds, advisories: overflow ? [...advisories, 'too_many_trailers'] : advisories };
+}
+
+/**
+ * The names of the trailers `parseCoAuthors` reports as `co_author_unresolved`, in the order written, for the reporter's
+ * advisory list (E09-S03). Each one is the text before the last `<` of its trailer, trimmed, which may be empty: the address
+ * is never part of it, and a trailer with no `<` gives an empty name. The names are display-only text that anyone can write;
+ * they reach the output only through `renderName`. A trailer of a bot or an AI tool, a resolved one and one past the limit
+ * give none, exactly as they give no advisory.
+ */
+export function unresolvedCoAuthorNames(message: string): readonly string[] {
+  return readTrailers(message).trailers.flatMap((trailer) => (trailer.kind === 'unresolved' ? [trailer.name] : []));
 }

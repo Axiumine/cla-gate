@@ -8,7 +8,7 @@
 // address on purpose: one that arrives as a name is only text, and its `@` is made inert like every other. The Markdown
 // building blocks (the code span, the escaping, the cut by code points) are in markup.ts.
 
-import { breakMentions, codeSpan, escapeMarkdown, takeCodePoints } from './markup.ts';
+import { breakHtmlComments, breakMentions, codeSpan, escapeMarkdown, takeCodePoints } from './markup.ts';
 
 /** A name longer than this many code points is cut. */
 const NAME_LIMIT = 64;
@@ -62,8 +62,9 @@ export class InvalidIdError extends Error {
  * The cleaning, in this order: lone surrogates become U+FFFD; C0 and C1 controls, U+2028, U+2029 and the bidirectional
  * controls are removed; each run of whitespace becomes one space; the ends are trimmed; the name is cut to 64 code points and
  * `…` is appended when it was; U+200B follows every `@` and `#` (inside the span too, so a renderer that ignores the span
- * still cannot mention or link). The fence is one backtick longer than the longest run of backticks in the text, and text that
- * starts or ends with a backtick gets a space each side. A name that is empty after cleaning is `(unnamed)`.
+ * still cannot mention or link) and splits every `<!--`, so a name never spells the comment marker of E09-S07. The fence is
+ * one backtick longer than the longest run of backticks in the text, and text that starts or ends with a backtick gets a
+ * space each side. A name that is empty after cleaning is `(unnamed)`.
  */
 export function renderName(raw: string): string {
   const cleaned = raw.toWellFormed().replace(UNSAFE, '').replace(/\s+/gu, ' ').trim();
@@ -71,7 +72,7 @@ export function renderName(raw: string): string {
     return codeSpan(UNNAMED);
   }
   const { head, cut } = takeCodePoints(cleaned, NAME_LIMIT);
-  return codeSpan(breakMentions(cut ? `${head}${ELLIPSIS}` : head));
+  return codeSpan(breakHtmlComments(breakMentions(cut ? `${head}${ELLIPSIS}` : head)));
 }
 
 /**
