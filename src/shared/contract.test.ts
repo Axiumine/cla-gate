@@ -87,7 +87,9 @@ test.each([
 test.each([
   ['no response at all', {}],
   ['only an error response', { 404: thing }],
+  ['a redirect as the only response, since 3xx is not a success', { 300: thing }],
   ['a status below 200', { 100: thing, 404: thing }],
+  ['a status just below 200', { 199: thing, 200: thing }],
   ['a status above 599', { 200: thing, 600: thing }],
   ['a status that is not an integer', { 200: thing, '201.5': thing }],
   ['a status that is not a number', { 200: thing, ok: thing }],
@@ -99,6 +101,14 @@ test.each([['GET'], ['HEAD']] as const)('a %s route with a body is refused: fetc
   expect(() => defineRoute({ method, path: '/api/things', body: z.object({}), responses: { 200: thing } })).toThrow(
     /carries no body/,
   );
+});
+
+test.each([
+  ['the first status, 200, as the only success', { 200: thing }],
+  ['the last success, 299', { 299: thing }],
+  ['the last status, 599, beside a success', { 200: thing, 599: thing }],
+])('responses with %s are accepted: the range is 200 to 599 and a success is below 300', (_what, responses) => {
+  expect(defineRoute({ method: 'GET', path: '/api/things', responses }).name).toBe('GET /api/things');
 });
 
 test('several success statuses and error statuses can be declared together', () => {
