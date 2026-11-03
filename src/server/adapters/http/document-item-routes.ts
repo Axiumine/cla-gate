@@ -9,6 +9,7 @@ import { readDocument } from '../../services/cla-documents.ts';
 import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
 import { presentDetail } from './document-presenters.ts';
+import { CLA_BODY_LIMIT } from './limits.ts';
 import { setNoStore } from './no-store.ts';
 import { parseInput } from './request-body.ts';
 import { requireTenant, tenantAccess } from './tenant-access.ts';
@@ -41,6 +42,7 @@ export function renameRoute(app: Routes, db: Kysely<Database>): void {
   app.patch(
     DOCUMENT_PATH,
     {
+      bodyLimit: CLA_BODY_LIMIT,
       schema: { response: { 200: documentDetailResponseSchema } },
       config: {
         access: tenantAccess({ mode: 'write', resolve: byDocumentParam(db) }),

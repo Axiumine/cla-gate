@@ -17,6 +17,8 @@
     "src/web/styles/app.css",
     "src/server/domain/evaluation/index.ts!",
     "src/shared/pr-evaluation-details.ts!",
+    "src/shared/cla-text.ts!",
+    "src/server/services/cla-content.ts!",
     "tests/leaks/scenarios/*.ts",
     "tests/leaks/control/*.ts",
     "src/server/domain/eligibility.ts!",

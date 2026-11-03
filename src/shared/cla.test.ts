@@ -59,6 +59,9 @@ test('the limits and the status of each rule are the ones the story names', () =
     kind_not_supported: 422,
     document_limit_reached: 422,
     document_name_taken: 409,
+    content_too_large: 422,
+    content_empty: 422,
+    content_invalid_characters: 422,
     not_found: 404,
   });
 });

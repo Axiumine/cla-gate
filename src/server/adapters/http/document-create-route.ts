@@ -8,6 +8,7 @@ import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
 import { presentDocument } from './document-presenters.ts';
 import { byInstallationParamAndBodyRepository } from './document-resolvers.ts';
+import { CLA_BODY_LIMIT } from './limits.ts';
 import { setNoStore } from './no-store.ts';
 import { parseInput } from './request-body.ts';
 import { requireTenant, tenantAccess } from './tenant-access.ts';
@@ -23,6 +24,7 @@ export function createRoute(app: Routes, db: Kysely<Database>): void {
   app.post(
     DOCUMENTS_PATH,
     {
+      bodyLimit: CLA_BODY_LIMIT,
       schema: { response: { 201: documentResponseSchema } },
       config: {
         access: tenantAccess({ mode: 'write', resolve: byInstallationParamAndBodyRepository(db) }),

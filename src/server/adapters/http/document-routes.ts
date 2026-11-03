@@ -1,28 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { FastifyError } from 'fastify';
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
-import { CLA_RULE_STATUS } from '../../../shared/cla.ts';
-import { ClaRuleError } from '../../services/cla-rule-error.ts';
 import type { Database } from '../db/schema.ts';
+import { answerRuleErrors } from './cla-rule-errors.ts';
 import { listRoute, repositoryListRoute } from './document-collection-routes.ts';
 import { createRoute } from './document-create-route.ts';
 import { readRoute, renameRoute } from './document-item-routes.ts';
-import { AppError, rejectRequest } from './errors.ts';
 
 // The routes of the CLA documents of a tenant (E12-S01): create, list, read and rename. Who may call each is decided by the
 // guard of its `tenant` access (E11-S05); the requirement follows the scope of the document (the role matrix of the security
 // notes). Every answer is told not to be cached. The collection routes are in document-collection-routes.ts, those of one
-// document in document-item-routes.ts; the rules a request can break are answered here.
+// document in document-item-routes.ts; the rules a request can break are answered by cla-rule-errors.ts.
 
 export interface DocumentRoutesOptions {
   readonly db: Kysely<Database>;
-}
-
-/** The error of a rule the request broke as the API answers it; any other error is returned as it is. */
-function answerFor(error: unknown): unknown {
-  return error instanceof ClaRuleError ? new AppError(CLA_RULE_STATUS[error.rule], error.rule) : error;
 }
 
 /**
@@ -32,7 +24,7 @@ function answerFor(error: unknown): unknown {
  */
 export const documentRoutes: FastifyPluginCallbackZod<DocumentRoutesOptions> = (app, options, done) => {
   const { db } = options;
-  app.setErrorHandler((error: FastifyError, request, reply) => rejectRequest(answerFor(error), request, reply));
+  answerRuleErrors(app);
   createRoute(app, db);
   listRoute(app, db);
   repositoryListRoute(app, db);

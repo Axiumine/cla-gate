@@ -26,3 +26,11 @@ export const HTTP_LIMITS = {
  * delivery that large is refused with `413` and never buffered. Every other route keeps {@link HTTP_LIMITS.bodyLimit}.
  */
 export const WEBHOOK_BODY_LIMIT = 10_485_760;
+
+/**
+ * Bytes. The body limit of the routes of the CLA documents that change data (E12-S02): 512 KiB. A text of the most bytes a
+ * CLA may have (204 800, `CLA_TEXT_MAX_BYTES`) whose every character JSON escapes with two bytes (a quote, a backslash, a
+ * line feed) is 409 600 bytes, so it fits with its envelope; a larger body is refused with `413` before it is parsed. The
+ * limit is below {@link HTTP_LIMITS.bodyLimit}, which every other route keeps.
+ */
+export const CLA_BODY_LIMIT = 524_288;

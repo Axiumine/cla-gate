@@ -45,13 +45,17 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
 
 /**
  * The rules a request can break, each with the status it is answered with. The server throws them by name and the HTTP
- * layer turns each into the error body of E06-S01 (`code` is the key); later stories of E12 add their own.
+ * layer turns each into the error body of E06-S01 (`code` is the key); later stories of E12 add their own. The three
+ * `content_` rules are those of the text of a CLA (E12-S02, `validateClaText`).
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
   kind_not_supported: 422,
   document_limit_reached: 422,
   document_name_taken: 409,
+  content_too_large: 422,
+  content_empty: 422,
+  content_invalid_characters: 422,
   not_found: 404,
 } as const;
 
