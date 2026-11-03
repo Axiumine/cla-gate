@@ -91,8 +91,9 @@ export interface EvaluationReporter {
   /**
    * The pull request of `target` was closed (merged or not) while its evaluation was in progress (E07-S06): the Check Run of
    * its head SHA ends with the conclusion `cancelled`, so no check hangs on a closed pull request. A run that is completed
-   * already is left as it is. Writes no comment and no `pr_evaluations` column; the job sets the row. Called again when the
-   * job is retried, so it must be idempotent.
+   * already is left as it is. When another open pull request stands at the same head SHA the run is theirs too, and is not
+   * cancelled (E09-S06). Writes no comment and no `pr_evaluations` column; the job sets the row. Called again when the job is
+   * retried, so it must be idempotent.
    */
   cancelled(target: RunTarget): Promise<ReportOutcome>;
 

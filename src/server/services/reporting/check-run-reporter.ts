@@ -65,7 +65,9 @@ export class CheckRunReporter implements EvaluationReporter {
   }
 
   /**
-   * The pull request of `target` was closed: a run that is still running ends `cancelled`; a completed run is left as it is.
+   * The pull request of `target` was closed: a run that is still running ends `cancelled`; a completed run is left as it is. A run
+   * that another open pull request at the SHA shares is not cancelled: it is left to the one still being evaluated, or completed
+   * with what the remaining rows say.
    * @throws as {@link CheckRunReporter.publish} does.
    */
   cancelled(target: RunTarget): Promise<ReportOutcome> {

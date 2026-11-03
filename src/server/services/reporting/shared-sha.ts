@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { parseStoredDetails } from '../../../shared/pr-evaluation-details.ts';
 import type { RowAtSha } from '../../adapters/db/pr-evaluation-links.ts';
+import type { CheckView, CoverageCounts } from '../../domain/reporting/check-view.ts';
+import { coverageCounts } from '../../domain/reporting/coverage-counts.ts';
+import { sharedView } from '../../domain/reporting/run-report.ts';
 import type { RunTarget } from '../ports/reporter.ts';
 import type { CheckRunReporterOptions } from './report-options.ts';
 import type { Situation } from './report-situation.ts';
@@ -9,6 +13,9 @@ import type { Situation } from './report-situation.ts';
 // of the other pull requests at it decide what the run says, but only the rows of pull requests that still stand at the SHA: a
 // finished row of a pull request that was closed is never rewritten, and a pull request whose head moved on leaves its old row
 // behind, so either would otherwise fail or hold the run of a pull request that is open and fine for good.
+
+/** What the counts of a passing run say when no row can tell them: nobody is named, so the sentence is `0 contributors covered.` */
+const NO_COVERAGE: CoverageCounts = { signature: 0, allowlist: 0, override: 0 };
 
 /**
  * The other pull requests whose rows decide the Check Run of the head SHA of `target`: the rows at the SHA of pull requests other
@@ -38,4 +45,21 @@ export async function liveSiblings(
     pulls.filter((pull) => pull.state !== 'open' || pull.headSha !== target.headSha).map((pull) => pull.number),
   );
   return candidates.filter((row) => !gone.has(row.prNumber));
+}
+
+/**
+ * What the shared Check Run says when `siblings` (see {@link liveSiblings}) are all that is left of the pull requests at the SHA:
+ * the worst of their rows, and for a pass the coverage counts of the stored details of the first passing row. Counts that cannot be
+ * read (a row from before the details had their present shape) are zero, which is the sentence's truth: it names nobody.
+ */
+export function settledView(headSha: string, siblings: readonly RowAtSha[]): CheckView {
+  const passing = parseStoredDetails(siblings.find((row) => row.result === 'success')?.details);
+  const covered = passing.ok
+    ? coverageCounts({ actors: passing.details.actors, findings: passing.details.unlinked })
+    : NO_COVERAGE;
+  return sharedView(
+    headSha,
+    siblings.map((row) => row.result),
+    covered,
+  );
 }
