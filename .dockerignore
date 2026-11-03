@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# E19-S01. What never enters the build context: version control, installed and built output, reports, tool state, browser
+# test output, and every secret-bearing file (environment files except the example, `secrets/`, keys).
+# scripts/docker/dockerignore.test.ts asserts each entry.
+.git
+node_modules
+dist
+coverage
+reports
+.vitest
+.stryker-tmp
+e2e
+playwright-report
+test-results
+.env*
+!.env.example
+secrets/
+*.pem
+*.tsbuildinfo
