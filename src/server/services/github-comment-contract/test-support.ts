@@ -4,6 +4,7 @@ import { expect } from 'vitest';
 import {
   type ContractCase,
   expectInstallationRefusals,
+  type GitHubWorld,
   id,
   installation,
   repository,
@@ -33,6 +34,20 @@ export function comment(commentId: number, overrides: Partial<GitHubIssueComment
 
 /** The App both implementations post as (`GET /app`). */
 const APP = id(4242);
+
+/**
+ * Installation 11 reaches `acme/api`, installation 12 reaches `globex/api`, and two comments sit where installation 11
+ * must not read or rewrite them: 5002 in installation 12's repository, 5003 in a repository 11 does not reach.
+ */
+function seedForeignComments({
+  addInstallation,
+  addIssueComment,
+}: Pick<GitHubWorld, 'addInstallation' | 'addIssueComment'>): void {
+  addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
+  addInstallation(installation(12, 'globex'), [repository(201, 'globex/api')]);
+  addIssueComment(id(12), 'globex/api', comment(5002));
+  addIssueComment(id(11), 'acme/other', comment(5003));
+}
 
 /** An open pull request whose head is `headSha`. */
 export function pullRef(number: number, overrides: Partial<GitHubPullRequestRef> = {}): GitHubPullRequestRef {
@@ -79,10 +94,7 @@ export const COMMENT_CASES: readonly ContractCase[] = [
   [
     'getIssueComment resolves null for a comment nobody wrote or somebody deleted, one of another installation or repository, and a name GitHub cannot hold',
     async ({ client, addInstallation, addIssueComment }) => {
-      addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
-      addInstallation(installation(12, 'globex'), [repository(201, 'globex/api')]);
-      addIssueComment(id(12), 'globex/api', comment(5002));
-      addIssueComment(id(11), 'acme/other', comment(5003));
+      seedForeignComments({ addInstallation, addIssueComment });
       expect(await client.getIssueComment(id(11), ACME, id(5001))).toBeNull();
       expect(await client.getIssueComment(id(11), ACME, id(5002))).toBeNull();
       expect(await client.getIssueComment(id(11), 'globex/api', id(5002))).toBeNull();
@@ -170,10 +182,7 @@ export const COMMENT_CASES: readonly ContractCase[] = [
   [
     'updateIssueComment throws not found for a comment nobody wrote or somebody deleted, one of another installation or repository, a repository the installation does not reach and a name GitHub cannot hold',
     async ({ client, addInstallation, addIssueComment }) => {
-      addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
-      addInstallation(installation(12, 'globex'), [repository(201, 'globex/api')]);
-      addIssueComment(id(12), 'globex/api', comment(5002));
-      addIssueComment(id(11), 'acme/other', comment(5003));
+      seedForeignComments({ addInstallation, addIssueComment });
       const refused = [
         [ACME, 5001],
         [ACME, 5002],
