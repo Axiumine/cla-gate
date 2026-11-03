@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { evaluatePullRequest } from './evaluation/index.ts';
 import { commitFacts, evaluationInput, signatureFact } from './evaluation/test-support.ts';
 import { renderCheckOutput } from './reporting/check-output.ts';
-import { type RowResult, runReport } from './reporting/run-report.ts';
+import { type RowResult, runReport, sharedView } from './reporting/run-report.ts';
 import { HEAD, NO_NAMES, requestOf } from './reporting/test-support.ts';
 
 // E09-S05: the Check Run of a head SHA that several pull requests can share, over the verdicts of the real engine. The run says
@@ -73,3 +73,17 @@ test.each([[[]], [['success']], [['failure', 'in_progress']]] as const)(
     expect(comment.kind === 'failure' ? comment.summary.length : 0).toBeGreaterThan(1);
   },
 );
+
+const COVERED = { signature: 2, allowlist: 1, override: 3 };
+
+test.each([
+  [[], { kind: 'success', headSha: HEAD, covered: COVERED }],
+  [['cancelled'], { kind: 'success', headSha: HEAD, covered: COVERED }],
+  [['success', 'success'], { kind: 'success', headSha: HEAD, covered: COVERED }],
+  [['in_progress'], { kind: 'in_progress', headSha: HEAD }],
+  [['success', 'in_progress'], { kind: 'in_progress', headSha: HEAD }],
+  [['failure'], { kind: 'failure', headSha: HEAD, unsigned: 0, unlinked: 0, summary: [] }],
+  [['in_progress', 'failure'], { kind: 'failure', headSha: HEAD, unsigned: 0, unlinked: 0, summary: [] }],
+] as const)('the shared view over the rows %j is %j: failure over in progress over success', (others, expected) => {
+  expect(sharedView(HEAD, others, COVERED)).toEqual(expected);
+});

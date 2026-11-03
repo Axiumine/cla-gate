@@ -11,7 +11,7 @@ import { type Evaluation, evaluatePullRequest } from '../../domain/evaluation/in
 import { commitFacts, evaluationInput, signatureFact } from '../../domain/evaluation/test-support.ts';
 import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import { captureLogs, type LogCapture } from '../../test-support.ts';
-import { comment } from '../github-comment-contract/test-support.ts';
+import { comment, type pullRef } from '../github-comment-contract/test-support.ts';
 import { commitSha } from '../github-pull-contract/test-support.ts';
 import type { GitHubClient, GitHubIssueComment } from '../ports/github.ts';
 import type { ReportTarget, RunTarget } from '../ports/reporter.ts';
@@ -158,6 +158,14 @@ export async function reportingWorld(
     evaluation: (spec = {}) => storeEvaluation(raw, tenant, spec),
     rows: () => readAllEvaluations(raw),
   };
+}
+
+/** The head SHA a pull request moved on to: not `HEAD`. */
+export const MOVED = commitSha(5);
+
+/** What GitHub lists for the commit `HEAD` (`GET .../commits/{sha}/pulls`): the pull requests, as `pullRef` makes them. */
+export function listed(world: ReportingWorld, ...pulls: ReturnType<typeof pullRef>[]): void {
+  world.fake.setCommitPullRequests(INSTALLATION, FULL_NAME, HEAD, pulls);
 }
 
 /** The target of a report that has no trigger (a cancellation, a repository switched off): `target` without it. */

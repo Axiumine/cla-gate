@@ -66,10 +66,10 @@ test('each tenant sees its own ids for the pull request number and head SHA they
   expect(await findCommentIdForPr(db, scopeOf(t1), t1.repositoryId, 7)).toBe(112);
   expect(await findCommentIdForPr(db, scopeOf(t2), t2.repositoryId, 7)).toBe(222);
   expect(await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha('b'))).toEqual([
-    { prNumber: 7, result: 'success', checkRunId: 111 },
+    { prNumber: 7, result: 'success', checkRunId: 111, details: {}, superseded: false },
   ]);
   expect(await findRowsForSha(db, scopeOf(t2), t2.repositoryId, sha('b'))).toEqual([
-    { prNumber: 7, result: 'success', checkRunId: 221 },
+    { prNumber: 7, result: 'success', checkRunId: 221, details: {}, superseded: false },
   ]);
   expect(await findCommentIdForPr(db, scopeOf(t1), t2.repositoryId, 7)).toBeNull();
 });
@@ -108,8 +108,8 @@ test('cla_app can run every statement of the module, and cannot delete a row, wh
   expect(seen).toEqual({
     comment: 556,
     rows: [
-      { prNumber: 9, result: 'success', checkRunId: 555 },
-      { prNumber: 10, result: 'success', checkRunId: null },
+      { prNumber: 9, result: 'success', checkRunId: 555, details: {}, superseded: false },
+      { prNumber: 10, result: 'success', checkRunId: null, details: {}, superseded: false },
     ],
     newer: true,
   });

@@ -33,6 +33,8 @@ export interface EvaluationSpec {
   readonly checkRunId?: number;
   readonly commentId?: number;
   readonly updatedAt?: Date;
+  /** What the job stored with the result; a dead-letter's `{ code: 'evaluation_failed' }` when absent. */
+  readonly details?: Readonly<Record<string, unknown>>;
 }
 
 /** Stores an evaluation row of the repository of `tenant` and returns its id. */
@@ -49,7 +51,7 @@ export async function insertEvaluation(
       pr_number: spec.prNumber,
       head_sha: spec.headSha,
       result: spec.result ?? 'success',
-      details: JSON.stringify({ code: 'evaluation_failed' }),
+      details: JSON.stringify(spec.details ?? { code: 'evaluation_failed' }),
       check_run_id: spec.checkRunId ?? null,
       comment_id: spec.commentId ?? null,
       ...(spec.updatedAt === undefined ? {} : { updated_at: spec.updatedAt }),

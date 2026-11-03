@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { CheckView } from './check-view.ts';
+import type { CheckView, CoverageCounts } from './check-view.ts';
 import type { CommentContent } from './comment-body.ts';
 import { type CountedEvaluation, coverageCounts } from './coverage-counts.ts';
 import type { FailureRequest } from './failure-input.ts';
@@ -8,9 +8,10 @@ import { failureReport } from './failure-report.ts';
 
 // E09-S05: what the Check Run of a head SHA says when a pull request publishes its verdict. The run belongs to the SHA, and
 // several open pull requests can share one, so the run's conclusion is the worst `result` among their rows (`failure` over
-// `in_progress` over `success`); each pull request keeps its own row and its own comment (E09-S07), which says what its own
-// evaluation found whatever the other pull requests at the SHA are doing. The functions are pure: the rows of the other pull
-// requests are read by the reporter and handed in as plain results.
+// `in_progress` over `success`); the rows of pull requests that are closed, or whose head moved on, count for nothing. Each pull
+// request keeps its own row and its own comment (E09-S07), which says what its own evaluation found whatever the other pull
+// requests at the SHA are doing. The functions are pure: the rows of the other pull requests are read by the reporter (which
+// leaves out the closed ones) and handed in as plain results.
 
 /** The results a row of `pr_evaluations` holds, as far as this decides anything; `cancelled` (a closed pull request) counts for nothing. */
 export type RowResult = 'success' | 'failure' | 'in_progress' | 'cancelled';
@@ -30,10 +31,25 @@ export interface RunRequest extends FailureRequest {
 }
 
 /**
+ * What the Check Run of a head SHA says when no failure of the pull request that writes it is to be shown, given the results of
+ * the rows of the other pull requests that are open at the SHA: a failure of one of them makes the run fail, with no names and no
+ * link (this pull request has nothing to say about it), one still being evaluated keeps it `in_progress`, and only with neither
+ * does it pass, with `covered` as its counts. `cancelled` rows count for nothing.
+ */
+export function sharedView(headSha: string, others: readonly RowResult[], covered: CoverageCounts): CheckView {
+  if (others.includes('failure')) {
+    return { kind: 'failure', headSha, unsigned: 0, unlinked: 0, summary: [] };
+  }
+  if (others.includes('in_progress')) {
+    return { kind: 'in_progress', headSha };
+  }
+  return { kind: 'success', headSha, covered };
+}
+
+/**
  * The Check Run of `request.headSha` as the pull request that publishes it wants it, given the results of the rows of the
- * other pull requests at that SHA. A failure of this pull request is shown whole. Otherwise a failure of another one makes the run
- * fail with no names and no link (this pull request has nothing to say about it), a pull request still being evaluated keeps
- * the run `in_progress`, and only with neither does the run pass. Each of them keeps its own row either way.
+ * other pull requests open at that SHA. A failure of this pull request is shown whole. Otherwise the run is {@link sharedView}
+ * of the others, with the counts of this pull request's own evaluation. Each of them keeps its own row either way.
  * @throws InvalidSignLinkError, InvalidShaError, InvalidIdError as {@link failureReport} does.
  */
 export function runReport(request: RunRequest, others: readonly RowResult[]): RunReport {
@@ -42,12 +58,6 @@ export function runReport(request: RunRequest, others: readonly RowResult[]): Ru
     const { view, signUrl } = failureReport(request);
     return { view, signUrl, comment: { kind: 'failure', summary: view.summary } };
   }
-  const comment: CommentContent = { kind: 'success', headSha };
-  if (others.includes('failure')) {
-    return { view: { kind: 'failure', headSha, unsigned: 0, unlinked: 0, summary: [] }, signUrl: null, comment };
-  }
-  if (others.includes('in_progress')) {
-    return { view: { kind: 'in_progress', headSha }, signUrl: null, comment };
-  }
-  return { view: { kind: 'success', headSha, covered: coverageCounts(evaluation) }, signUrl: null, comment };
+  const view = sharedView(headSha, others, coverageCounts(evaluation));
+  return { view, signUrl: null, comment: { kind: 'success', headSha } };
 }

@@ -28,6 +28,9 @@ import {
 const JANUARY = new Date('2026-01-01T00:00:00Z');
 const FEBRUARY = new Date('2026-02-01T00:00:00Z');
 const MARCH = new Date('2026-03-01T00:00:00Z');
+
+/** What the fixture stores with a row that a test gives no details. */
+const STORED = { code: 'evaluation_failed' };
 /** An id above 2^31, as the Check Run ids of GitHub are. */
 const BIG = 9_876_543_210;
 
@@ -167,8 +170,8 @@ test('findCommentIdForPr: a comment on the same pull request number of another r
 test('findRowsForSha: one entry per pull request evaluated at the head SHA, with its result and Check Run id, by number', async () => {
   const { db, t1 } = await linksWorld();
   expect(await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha('e'))).toEqual([
-    { prNumber: 9, result: 'success', checkRunId: 10_001 },
-    { prNumber: 10, result: 'success', checkRunId: null },
+    { prNumber: 9, result: 'success', checkRunId: 10_001, details: {}, superseded: true },
+    { prNumber: 10, result: 'success', checkRunId: null, details: {}, superseded: false },
   ]);
   await insertEvaluation(db, t1, { prNumber: 30, headSha: sha('3'), result: 'in_progress', checkRunId: 5 });
   await insertEvaluation(db, t1, { prNumber: 4, headSha: sha('3'), result: 'failure' });
@@ -180,9 +183,9 @@ test('findRowsForSha: one entry per pull request evaluated at the head SHA, with
     { prNumber: 7, headSha: sha('3') },
   );
   expect(await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha('3'))).toEqual([
-    { prNumber: 4, result: 'failure', checkRunId: null },
-    { prNumber: 5, result: 'cancelled', checkRunId: 6 },
-    { prNumber: 30, result: 'in_progress', checkRunId: 5 },
+    { prNumber: 4, result: 'failure', checkRunId: null, details: STORED, superseded: false },
+    { prNumber: 5, result: 'cancelled', checkRunId: 6, details: STORED, superseded: false },
+    { prNumber: 30, result: 'in_progress', checkRunId: 5, details: STORED, superseded: false },
   ]);
 });
 
@@ -199,6 +202,50 @@ test('findRowsForSha: the rows come by number whatever order the plan reads them
     return findRowsForSha(trx, scopeOf(t1), t1.repositoryId, sha('3'));
   });
   expect(rows.map((row) => row.prNumber)).toEqual([4, 12, 30]);
+});
+
+test('findRowsForSha: the details the job stored come with each row', async () => {
+  const { db, t1 } = await linksWorld();
+  const details = { version: 1, outcome: 'success', actors: [] };
+  await insertEvaluation(db, t1, { prNumber: 30, headSha: sha('3'), details });
+  const [row] = await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha('3'));
+  expect(row?.details).toEqual(details);
+});
+
+test.each([
+  ['the older row of a pull request that has a row touched later at another head SHA', 23, '1', true],
+  ['not the newest row of the pull request, whatever its id', 23, '2', false],
+  ['not a pull request with a single head SHA', 25, '1', false],
+  ['not a row touched at the same time as the other row of its pull request', 24, '1', false],
+])('findRowsForSha marks %s as superseded: %s', async (_name, prNumber, digit, expected) => {
+  const { db, t1 } = await linksWorld();
+  await insertEvaluation(db, t1, { prNumber: 23, headSha: sha('1'), updatedAt: JANUARY });
+  await insertEvaluation(db, t1, { prNumber: 23, headSha: sha('2'), updatedAt: FEBRUARY });
+  await insertEvaluation(db, t1, { prNumber: 24, headSha: sha('1'), updatedAt: MARCH });
+  await insertEvaluation(db, t1, { prNumber: 24, headSha: sha('2'), updatedAt: MARCH });
+  await insertEvaluation(db, t1, { prNumber: 25, headSha: sha('1'), updatedAt: JANUARY });
+  const rows = await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha(digit));
+  expect(rows.find((row) => row.prNumber === prNumber)?.superseded).toBe(expected);
+});
+
+test('findRowsForSha: a row of the same pull request number in another repository of the tenant does not supersede', async () => {
+  const { db, t1 } = await linksWorld();
+  await insertEvaluation(db, t1, { prNumber: 31, headSha: sha('1'), updatedAt: JANUARY });
+  await insertEvaluation(
+    db,
+    { installationId: t1.installationId, repositoryId: t1.scoped.repositoryId },
+    { prNumber: 31, headSha: sha('2'), updatedAt: MARCH },
+  );
+  const [row] = await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha('1'));
+  expect(row?.superseded).toBe(false);
+});
+
+test('findRowsForSha: a row of the same pull request number in another tenant does not supersede', async () => {
+  const { db, t1, t2 } = await linksWorld();
+  await insertEvaluation(db, t1, { prNumber: 32, headSha: sha('1'), updatedAt: JANUARY });
+  await insertEvaluation(db, t2, { prNumber: 32, headSha: sha('2'), updatedAt: MARCH });
+  const [row] = await findRowsForSha(db, scopeOf(t1), t1.repositoryId, sha('1'));
+  expect(row?.superseded).toBe(false);
 });
 
 test('findRowsForSha: a head SHA nobody evaluated has no rows', async () => {

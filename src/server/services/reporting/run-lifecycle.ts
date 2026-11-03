@@ -10,6 +10,7 @@ import type { CheckRunReporterOptions } from './report-options.ts';
 import { linkKeyOf, logReport, rememberRun } from './report-record.ts';
 import { locationOf, locatorOf, readSituation } from './report-situation.ts';
 import { writeRun } from './report-write.ts';
+import { liveSiblings } from './shared-sha.ts';
 
 // The two reports of the life of an evaluation (E09-S05): it began (`started`), and it has a verdict (`publish`). Both record the id
 // of the run on the row of the pull request (E09-S04); `publish` also keeps the comment of the pull request (E09-S07), after the
@@ -46,8 +47,9 @@ export async function reportStarted(options: CheckRunReporterOptions, target: Re
 
 /**
  * Writes the verdict of `target` to its Check Run, then to the comment of the pull request. The view of the run is this pull
- * request's own, unless another pull request at the same SHA is failing or still being evaluated, which is then what the run says
- * (`failure` over `in_progress` over `success`); the comment always says this pull request's own verdict (E09-S07).
+ * request's own, unless another pull request that is open at the same SHA is failing or still being evaluated, which is then what
+ * the run says (`failure` over `in_progress` over `success`); the rows of closed pull requests, and of ones whose head moved on,
+ * count for nothing (see {@link liveSiblings}). The comment always says this pull request's own verdict (E09-S07).
  * @throws TenantMismatchError, EvaluationRowMissingError, InvalidSignLinkError for a base URL that cannot make a sign link, and
  * what the GitHub port and the writer throw.
  */
@@ -61,7 +63,7 @@ export async function reportPublished(
   const situation = await readSituation(db, target);
   // Asked before the id of the run is recorded: a write of either id touches `updated_at` of the row, and with it the answer.
   const stale = await hasNewerHeadRow(db, situation.scope, linkKeyOf(target, situation));
-  const others = situation.rows.filter((row) => row.prNumber !== target.prNumber).map((row) => row.result);
+  const siblings = await liveSiblings(options, target, situation);
   const report = runReport(
     {
       headSha: target.headSha,
@@ -71,7 +73,7 @@ export async function reportPublished(
       prNumber: target.prNumber,
       publicBaseUrl,
     },
-    others,
+    siblings.map((row) => row.result),
   );
   const checkRunId = await writeRun(options, target, {
     ...locatorOf(target, situation.own),

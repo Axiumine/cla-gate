@@ -34,6 +34,13 @@ export interface RowAtSha {
   readonly prNumber: number;
   readonly result: Database['pr_evaluations']['result'];
   readonly checkRunId: number | null;
+  /** What the job stored with the result: `{}` while the row is in progress. A passing row's coverage counts are read from it. */
+  readonly details: Readonly<Record<string, unknown>>;
+  /**
+   * True when the pull request has a row touched later, at another head SHA: its head moved on, so this row is a past
+   * evaluation and no longer decides anything for the SHA. The same question as {@link hasNewerHeadRow}, asked of every row.
+   */
+  readonly superseded: boolean;
 }
 
 /**
@@ -103,8 +110,10 @@ export async function findCommentIdForPr(
 }
 
 /**
- * Every row of the repository at `headSha`, one per pull request evaluated at it, with its result and Check Run id, by pull
- * request number. Several open pull requests can share a head SHA and the Check Run belongs to the SHA (E09-S05).
+ * Every row of the repository at `headSha`, one per pull request evaluated at it, with its result, details and Check Run id, by
+ * pull request number, and whether the pull request has moved on to another head SHA since. Several open pull requests can share a
+ * head SHA and the Check Run belongs to the SHA (E09-S05); the rows of the ones that are closed or have moved on are in the answer
+ * too, because the database cannot tell a closed pull request from an open one (the reporter asks GitHub).
  */
 export async function findRowsForSha(
   db: Kysely<Database>,
@@ -113,14 +122,38 @@ export async function findRowsForSha(
   headSha: string,
 ): Promise<RowAtSha[]> {
   const rows = await db
-    .selectFrom('pr_evaluations')
-    .select(['pr_number', 'result', 'check_run_id'])
-    .where('installation_id', '=', scope.installationId)
-    .where('repository_id', '=', repositoryId)
-    .where('head_sha', '=', headSha)
-    .orderBy('pr_number')
+    .selectFrom('pr_evaluations as row')
+    .select((eb) => [
+      'row.pr_number',
+      'row.result',
+      'row.check_run_id',
+      'row.details',
+      eb
+        .exists(
+          eb
+            .selectFrom('pr_evaluations as newer')
+            .select('newer.id')
+            .where('newer.installation_id', '=', scope.installationId)
+            .whereRef('newer.repository_id', '=', 'row.repository_id')
+            .whereRef('newer.pr_number', '=', 'row.pr_number')
+            .whereRef('newer.updated_at', '>', 'row.updated_at'),
+        )
+        // Postgres answers a boolean; Kysely's SqlBool also admits the 0 and 1 of other dialects.
+        .$castTo<boolean>()
+        .as('superseded'),
+    ])
+    .where('row.installation_id', '=', scope.installationId)
+    .where('row.repository_id', '=', repositoryId)
+    .where('row.head_sha', '=', headSha)
+    .orderBy('row.pr_number')
     .execute();
-  return rows.map((row) => ({ prNumber: row.pr_number, result: row.result, checkRunId: row.check_run_id }));
+  return rows.map((row) => ({
+    prNumber: row.pr_number,
+    result: row.result,
+    checkRunId: row.check_run_id,
+    details: row.details,
+    superseded: row.superseded,
+  }));
 }
 
 /**
