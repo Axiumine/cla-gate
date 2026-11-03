@@ -40,6 +40,13 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { account_id: 4244, account_type: 'other', reason_code: 'policy_changed' },
     },
   ],
+  'services/dead-letter/dead-letter-sync.ts#installation.sync_failed': [
+    {
+      action: 'installation.sync_failed',
+      subject: { type: 'installation', id: 77 },
+      metadata: { reason_code: 'retries_exhausted' },
+    },
+  ],
   'services/repository-enabled.ts#repository.disabled|repository.enabled': [
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: 3 } },
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },
