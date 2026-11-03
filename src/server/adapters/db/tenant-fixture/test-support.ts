@@ -15,7 +15,8 @@ import { seedSignature, seedTenant, type Tenant } from '../test-support.ts';
 //   tenant 1  organisation `org-1`, GitHub installation 5000, repositories `org-1/repo` and `org-1/scoped`
 //   tenant 2  organisation `org-2`, GitHub installation 10000, repositories `org-2/repo` and `org-2/scoped`
 // Each tenant's admin has an entry in the ledger of org admins (E11-S07), seen on 2026-05-01, and the repo-scoped document
-// of each tenant has a draft at revision 1 (E12-S03, `DRAFT_TEXT`), saved by the tenant's publisher.
+// of each tenant has a draft at revision 1 (E12-S03, `DRAFT_TEXT`), saved by the tenant's publisher. Each repository `repo` holds
+// evaluations of pull requests 7 and 8 (E07), and 9 and 10 (the reporter, E09-S04; see `seedReportRows`).
 // People (GitHub knows them by the numeric id; the login is `login-<id>`):
 //   admin1 admin of the organisation 1;  admin2 admin of 2;  repoAdmin1 admin of `org-1/scoped` only;
 //   member1 plain member of 1;  outsider knows nothing.
@@ -195,6 +196,40 @@ async function seedJobRows(db: Kysely<Database>, tenant: Tenant, n: number): Pro
     .execute();
 }
 
+/**
+ * The rows the reporter's statements (E09-S04) need a neighbour for. Pull request 9 was evaluated at two head SHAs: the older
+ * row has a Check Run and a comment, the newer one (touched a day later) a Check Run only. Pull request 10 shares the older
+ * head SHA and has neither. The ids differ per tenant, so a row that strays names its owner.
+ */
+async function seedReportRows(db: Kysely<Database>, tenant: Tenant, n: number): Promise<void> {
+  const row = {
+    installation_id: tenant.installationId,
+    repository_id: tenant.repositoryId,
+    result: 'success',
+  } as const;
+  await db
+    .insertInto('pr_evaluations')
+    .values([
+      {
+        ...row,
+        pr_number: 9,
+        head_sha: 'e'.repeat(40),
+        check_run_id: n * 10_000 + 1,
+        comment_id: n * 10_000 + 2,
+        updated_at: new Date('2026-05-01T10:00:00Z'),
+      },
+      {
+        ...row,
+        pr_number: 9,
+        head_sha: 'f'.repeat(40),
+        check_run_id: n * 10_000 + 3,
+        updated_at: new Date('2026-05-02T10:00:00Z'),
+      },
+      { ...row, pr_number: 10, head_sha: 'e'.repeat(40) },
+    ])
+    .execute();
+}
+
 /** Admits the installation of `tenant`, stores the repository with its own document and the policy rows around it. */
 async function extendTenant(db: Kysely<Database>, tenant: Tenant, n: number, signerGithubId: number) {
   await db
@@ -228,6 +263,7 @@ async function extendTenant(db: Kysely<Database>, tenant: Tenant, n: number, sig
     .executeTakeFirstOrThrow();
   await seedPolicyRows(db, tenant, n);
   await seedJobRows(db, tenant, n);
+  await seedReportRows(db, tenant, n);
   await db
     .insertInto('cla_drafts')
     .values({

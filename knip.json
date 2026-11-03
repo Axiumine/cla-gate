@@ -31,6 +31,7 @@
     "tests/leaks/control/*.ts",
     "src/server/domain/eligibility.ts!",
     "src/server/adapters/http/tenant-access.ts!",
+    "src/server/adapters/db/pr-evaluation-links.ts!",
     "src/server/adapters/db/tenant-scope.ts!",
     "src/server/adapters/http/tenant-resolvers.ts!",
     "src/server/services/installation-store.ts!",
