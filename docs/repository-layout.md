@@ -12,6 +12,10 @@ Items marked (planned) do not exist yet.
 │   ├── boot-config.ts  boot-installations.ts  boot-reconcile.ts  boot-services.ts
 │   │                            the parts of start-up: logging the configuration, binding the gate once the policies
 │   │                            exist, reconciling installations, wiring the services
+│   ├── boot-app.ts  boot-queue.ts  boot-jobs.ts
+│   │                            start-up of the job queue (E07): building the app on the queue, starting pg-boss and
+│   │                            refusing a missing queue, and `jobWorkers` (the handler registry, the `register` option a later
+│   │                            epic uses, the `evaluation` option E09 binds)
 │   ├── config/                  environment parsing (zod), Secret, TRUST_PROXY parsing; github-app.ts and github-key.ts
 │   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS), operator-ids.ts
 │   │                            (OPERATOR_GITHUB_IDS), env-github.ts
@@ -28,14 +32,26 @@ Items marked (planned) do not exist yet.
 │   │                            tenant queries and the source scan of the cross-tenant tests); the session store (sessions.ts with sessions-create,
 │   │                            -delete, -model, -read, -row and -touch.ts; sessions-fixture/ is test only) and the
 │   │                            user upsert (users.ts)
-│   ├── adapters/github/         the Octokit adapter of the GitHub port (octokit-*.ts: client, requests, errors, auth),
+│   ├── adapters/jobs/           the pg-boss adapter of the job queue (E07): runtime.ts (start, stop, readiness), boss.ts (the slice
+│   │                            of pg-boss the code uses), queues.ts and queue-options.ts (the twelve queues and their bounds),
+│   │                            queue-policy.ts and queue-check.ts (a queue of the wrong policy is refused), serialisation.ts (the
+│   │                            key of a serialised queue), enqueuer.ts and job-id.ts (`PgBossEnqueuer`, the idempotent job id),
+│   │                            pending.ts (`PendingJobs`), workers.ts and rejection-guard.ts (the workers, and what a promise that
+│   │                            nobody waits for does to its job), migrate-queues.ts, runtime-grants.ts, index-builds.ts and
+│   │                            sweep-schedule.ts (the owner's step of `yarn db:migrate`, the grants, the sweep's cron); test-support.ts
+│   │                            and the *-real.test.ts suites need the real database
+│   ├── adapters/github/         the Octokit adapter of the GitHub port (octokit-*.ts: client, requests, errors, auth; the pull
+│   │                            request, comment and open-pull-request calls in octokit-pull-*.ts and octokit-comment-calls.ts, the
+│   │                            names the Octokit calls log under in octokit-names.ts),
 │   │                            the App JWT (app-jwt.ts, app-auth.ts), the installation token provider
 │   │                            (installation-tokens.ts, token-cache.ts, single-flight.ts), the self-check
 │   │                            (app-identity.ts, start.ts), the rate limiter (rate-limiter.ts with lane, semaphore,
 │   │                            point-bucket, wait-policy, rate-limit-reading.ts and rate-limit-log.ts), response
 │   │                            schemas (schemas.ts), pagination; the login's calls to GitHub with the user's token
 │   │                            (user-login*.ts: exchange, identity, addresses, revoke); membership-fixture/ and
-│   │                            permission-fixture/ (test only: the contract fixtures of the two role calls)
+│   │                            permission-fixture/ (test only: the contract fixtures of the two role calls), exemption-fixture/ and
+│   │                            public-members-guard/ (test only: the typed membership fixtures, and the guard that fails a test
+│   │                            that asks a public-members endpoint)
 │   ├── adapters/github/webhook-schemas.ts  zod schemas of the subscribed events (webhook-fixture/ holds the test payloads)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (errors.ts: AppError; also for
 │   │                            failures that never reach a route), HTTP limits, health routes, trust-proxy conversion,
@@ -61,19 +77,29 @@ Items marked (planned) do not exist yet.
 │   │                            ignore), webhook-tenant.ts (the tenant and admission verdict), session.ts (session
 │   │                            lifetimes), return-to.ts (`safeReturnTo`), github-profile.ts (what is kept of a profile),
 │   │                            authz.ts (`decide`, the role decision table), tenant-state.ts (`tenantState`), operator.ts
-│   │                            (`isOperator`, `createOperatorPolicy`);
+│   │                            (`isOperator`, `createOperatorPolicy`); the job envelopes (job-envelope.ts), the retry bounds (job-retry.ts),
+│   │                            recheck.ts (the `/recheck` rules and the rate limit key), sweep.ts and repository-jobs.ts (the
+│   │                            coalesce keys and reasons of the sweep and the repository-level jobs);
 │   │                            test-support.ts is test only
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
 │   │                            its public surface
 │   └── services/                audit.ts (appendAudit, the one public entry), audit-entry.ts (AuditEntry, validation);
 │                                ports/ (github.ts, installation-gate.ts, clock.ts, github-errors.ts); the stored
-│                                ports/jobs.ts (the JobEnqueuer port; jobs-not-wired.ts is the default that fails closed until
-│                                E07-S01; jobs-fixture/ and jobs-contract/ are test only), webhook-deliveries.ts and
+│                                ports/jobs.ts (the JobEnqueuer port; jobs-not-wired.ts is the default that fails closed when no queue is wired;
+│                                jobs-fixture/ and jobs-contract/ are test only), ports/reporter.ts (the EvaluationReporter port E09
+│                                implements) and ports/installation-unavailable.ts, webhook-deliveries.ts and
 │                                webhook-delivery-rows.ts (record and enqueue in one transaction), tenant-filter.ts,
 │                                failure-throttle.ts and log-limiter.ts; login.ts (the login callback's transaction),
 │                                revoke-user-sessions.ts (the job handler), ports/github-login.ts;
 │                                the stored installation gate and admission policies (installation-gate.ts, admission-policies.ts);
+│                                the job queue's services (E07), pure of pg-boss: job-registry.ts (`HandlerRegistry`), job-handlers.ts
+│                                (`registerHandlers`), job-run.ts (`runJob`: envelope check, logs, delivery marked processed),
+│                                evaluate-pr/ (the evaluation protocol around the E08 engine), close-pr/, recheck/ (`/recheck` and
+│                                Re-run), sweep/ (the sweep, its reaper and the policy sweep), dead-letter/ (one handler per job type),
+│                                repository-job-enqueue.ts (what E12, E14 and E15 call), org-membership.ts and org-membership-cache.ts
+│                                (the exemption lookup and its per-process cache); fake-github/, github-comment-contract/,
+│                                github-open-pulls-contract/, github-pull-contract/ and job-run-fixture/ are test only
 │                                the installation and repository state (installation-*.ts, repository-*.ts): store,
 │                                queries, admission, sync and reconcile, transfer, operator view; roles and tenants (E11): org-admin.ts,
 │                                repo-admin.ts, repo-admin-discovery.ts, repo-admin-candidates.ts and probe-budget.ts (the role facts and
@@ -87,7 +113,7 @@ Items marked (planned) do not exist yet.
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
 │                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts, operator.ts (the operator list))
 ├── src/web/                     (planned) React SPA
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)

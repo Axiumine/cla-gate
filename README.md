@@ -63,7 +63,7 @@ Developers:
 ```sh
 yarn install --immutable   # also installs the git hooks
 yarn db:up                 # PostgreSQL 18 on a random free loopback port
-yarn db:migrate            # applies migrations/ as the owner role
+yarn db:migrate            # applies migrations/ as the owner role, then installs the job queue
 yarn dev                   # server with --watch; prints its address (try /readyz)
 ```
 
