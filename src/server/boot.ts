@@ -5,7 +5,7 @@ import type { DestinationStream, Logger } from 'pino';
 import type { Database } from './adapters/db/schema.ts';
 import type { GitHubApp } from './adapters/github/start.ts';
 import { createLogger } from './adapters/http/logger.ts';
-import { buildApp } from './app.ts';
+import { buildBootApp } from './boot-app.ts';
 import { loadConfigOrReport } from './boot-config.ts';
 import type { InstallationWiring } from './boot-installations.ts';
 import { reconcileInBackground } from './boot-reconcile.ts';
@@ -76,17 +76,10 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
     return undefined;
   }
   const { db, github, ...wiring } = started;
-  const { clock, fetch } = options;
-  const app = await buildApp({
-    config,
-    db,
-    logger,
-    clock,
-    fetch,
-    github: github?.client,
-    appIdentity: github?.identity,
-    operators: wiring.operators,
-  });
+  const app = await buildBootApp(
+    { config, logger, clock: options.clock, fetch: options.fetch },
+    { db, github, ...wiring },
+  );
   try {
     const address = await app.listen({ host: config.host, port: config.port });
     const timeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
