@@ -10,7 +10,7 @@ export const OPERATOR_INSTALLATIONS_PATH = '/api/operator/installations';
 const tenantStateSchema = z.enum(['rejected', 'deleted', 'suspended', 'active']);
 
 /** A time as the API tells it: ISO 8601 in UTC, or null while it has not happened. */
-const instantSchema = z.iso.datetime().nullable();
+const instantSchema = z.iso.datetime({ offset: false }).nullable();
 
 const count = z.int().nonnegative();
 
