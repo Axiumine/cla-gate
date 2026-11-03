@@ -99,7 +99,9 @@ test('an answer that never comes ends at the timeout, as an outage, and nothing 
       return HttpResponse.json({});
     },
   });
-  const { tokens } = tokensFixture([key.key], { clock, timeoutMs: 40 });
+  // The timeout is long enough for the connection to be made: one that fires in the middle of the TLS handshake leaves a
+  // handshake that ends after the test, and the runner reports its error against whichever test runs next.
+  const { tokens } = tokensFixture([key.key], { clock, timeoutMs: 1000 });
   await expect(tokens.get(id(7))).rejects.toThrow('GitHub could not be reached (TimeoutError)');
   expect(tokens.size).toBe(0);
 });

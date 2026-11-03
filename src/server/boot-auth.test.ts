@@ -5,7 +5,7 @@ import { expect, onTestFinished, test } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { boot } from './boot.ts';
 import { AUTH_ENV, TEST_CLIENT_SECRET, TEST_SESSION_SECRET } from './config/auth-fixture/test-support.ts';
-import { captureLogs, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // What start-up says about login (E10-S01): the server starts without the login settings outside production, and the
 // log tells the operator why there are no login routes.
@@ -27,6 +27,7 @@ async function start(env: Record<string, string>, github?: typeof fetch) {
     },
     signals: new FakeProcess(),
     createDb: () => db,
+    createJobQueue: startFakeJobQueue,
     logDestination: logs.destination,
     reconcileOnStart: false,
     ...(github === undefined ? {} : { fetch: github }),

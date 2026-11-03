@@ -8,6 +8,7 @@ import { createLogger } from './adapters/http/logger.ts';
 import { buildBootApp } from './boot-app.ts';
 import { loadConfigOrReport } from './boot-config.ts';
 import type { InstallationWiring } from './boot-installations.ts';
+import type { CreateJobQueue } from './boot-queue.ts';
 import { reconcileInBackground } from './boot-reconcile.ts';
 import { startGitHubAndDatabase } from './boot-services.ts';
 import { logAuth } from './config/auth.ts';
@@ -33,6 +34,8 @@ export interface BootOptions {
   readonly fetch?: typeof fetch;
   /** Whether the installations are reconciled with GitHub once, in the background, after start-up (E05-S08). Defaults to true. */
   readonly reconcileOnStart?: boolean;
+  /** Starts the job queue once the database is open (E07-S01). Defaults to pg-boss on `DATABASE_URL`; tests pass a fake. */
+  readonly createJobQueue?: CreateJobQueue;
 }
 
 export interface RunningServer extends InstallationWiring {
@@ -76,10 +79,11 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
     return undefined;
   }
   const { db, github, ...wiring } = started;
-  const app = await buildBootApp(
-    { config, logger, clock: options.clock, fetch: options.fetch },
-    { db, github, ...wiring },
-  );
+  const { signals, clock, fetch, createJobQueue } = options;
+  const app = await buildBootApp({ config, logger, db, github, wiring, signals, clock, fetch, createJobQueue });
+  if (app === undefined) {
+    return undefined;
+  }
   try {
     const address = await app.listen({ host: config.host, port: config.port });
     const timeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;

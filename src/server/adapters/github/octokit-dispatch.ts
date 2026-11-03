@@ -14,6 +14,8 @@ export interface DispatchOptions {
   readonly withJwt: WithJwt;
   readonly tokens: Tokens;
   readonly limiter: RateLimiter;
+  /** The abort signal of the unit of work these requests belong to (E07-S03): a job. Without one nothing can abort them. */
+  readonly signal?: AbortSignal | undefined;
 }
 
 /** A call of the adapter: it gets the channel to send through and the headers that carry the credential. */
@@ -26,16 +28,19 @@ export class Dispatch {
     this.#options = options;
   }
 
-  /** `call` signed with the App JWT, in the App's lane of the rate limiter. */
-  asApp<T>(call: Call<T>): Promise<T> {
+  /** `call` signed with the App JWT, in the App's lane of the rate limiter. Nothing is sent once the signal has aborted. */
+  async asApp<T>(call: Call<T>): Promise<T> {
+    this.#options.signal?.throwIfAborted();
     return asApp(this.#options.withJwt, (headers) => call(this.#channel('app'), headers));
   }
 
   /**
-   * `call` with the installation's token, in the installation's lane of the rate limiter.
+   * `call` with the installation's token, in the installation's lane of the rate limiter. Nothing is sent, and no token
+   * is asked for, once the signal has aborted.
    * @throws whatever the token provider throws (InstallationNotAdmittedError, ...) before any request.
    */
-  asInstallation<T>(githubInstallationId: GithubId, call: Call<T>): Promise<T> {
+  async asInstallation<T>(githubInstallationId: GithubId, call: Call<T>): Promise<T> {
+    this.#options.signal?.throwIfAborted();
     return asInstallation(this.#options.tokens, githubInstallationId, (headers) =>
       call(this.#channel(githubInstallationId), headers),
     );
@@ -43,13 +48,30 @@ export class Dispatch {
 
   /**
    * Where a request counts against the limits: the lane of `scope` in the limiter, which also reads a rate limit of
-   * GitHub's from the failed request against its own clock.
+   * GitHub's from the failed request against its own clock. With a signal (E07-S03) a request made after it aborted is not
+   * sent, one in flight is cancelled (the signal is the `request.signal` of Octokit, which `guardedFetch` combines with
+   * its timeout), and whatever failed after the abort rejects with the reason of the signal: an aborted job is not told it
+   * met an outage.
    */
   #channel(scope: LaneScope): Channel {
-    const { octokit, limiter } = this.#options;
+    const { octokit, limiter, signal } = this.#options;
+    if (signal === undefined) {
+      return {
+        octokit,
+        send: (route, request) => limiter.run(scope, route, () => sendOnce(route, request, limiter.clock)),
+      };
+    }
     return {
-      octokit,
-      send: (route, request) => limiter.run(scope, route, () => sendOnce(route, request, limiter.clock)),
+      octokit: { request: octokit.request.defaults({ request: { signal } }) },
+      send: async (route, request) => {
+        signal.throwIfAborted();
+        try {
+          return await limiter.run(scope, route, () => sendOnce(route, request, limiter.clock));
+        } catch (error) {
+          signal.throwIfAborted();
+          throw error;
+        }
+      },
     };
   }
 }

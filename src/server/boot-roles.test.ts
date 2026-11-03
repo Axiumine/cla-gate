@@ -8,7 +8,7 @@ import type { AppOptions } from './app.ts';
 import { boot } from './boot.ts';
 import { AUTH_ENV } from './config/auth-fixture/test-support.ts';
 import { testGitHubKey } from './config/test-support.ts';
-import { freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // What the start-up gives the guard of the tenant routes to read roles with (E11-S05): the GitHub client of the App when
 // there is one, and nothing when there is not, so that the application falls back to a GitHub that always fails.
@@ -44,6 +44,7 @@ async function start(env: Record<string, string>) {
     },
     signals: new FakeProcess(),
     createDb: () => db,
+    createJobQueue: startFakeJobQueue,
     reconcileOnStart: false,
   });
   onTestFinished(async () => {

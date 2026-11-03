@@ -31,7 +31,7 @@ import type { AppConfig } from './config/env.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
-import type { JobEnqueuer } from './services/ports/jobs.ts';
+import type { JobEnqueuer, JobQueue } from './services/ports/jobs.ts';
 import { RoleCache } from './services/role-cache.ts';
 import { createTenantAuthorizer, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
 
@@ -50,8 +50,10 @@ export interface AppOptions {
   readonly fetch?: typeof fetch | undefined;
   /** The ceiling of each call to GitHub during the login (E10-S05). Defaults to 10 seconds. */
   readonly githubTimeoutMs?: number | undefined;
-  /** Where the webhook route sends the job of a delivery (E06-S06). Defaults to one that fails every send until the queue is wired (E07-S01). */
+  /** Where the webhook route sends the job of a delivery (E06-S06). Defaults to the queue's own, and without a queue to one that fails every send. */
   readonly enqueuer?: JobEnqueuer;
+  /** The running job queue (E07-S01): `/readyz` follows it and closing the app stops it, before the database is destroyed. */
+  readonly jobQueue?: JobQueue;
   /** Milliseconds after which the webhook route answers `503` `webhook_timeout` (E06-S07). Defaults to 8 seconds, inside GitHub's 10. */
   readonly webhookDeadlineMs?: number;
   /** The cache of the roles GitHub reported (E11-S04), also read from `app.roleCache`. Defaults to an empty one on `clock`. */
@@ -116,6 +118,17 @@ async function registerLoginChecks(
   }
 }
 
+/** On close the job queue stops before the database is destroyed (E07-S01), so no job runs against a closed database. */
+function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queue: JobQueue | undefined): void {
+  app.addHook('onClose', async () => {
+    try {
+      await queue?.stop();
+    } finally {
+      await db.destroy();
+    }
+  });
+}
+
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
  * probes, the operator's list (E11-S08), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer
@@ -126,6 +139,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await app.register(healthRoutes, {
     db,
     readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
+    queue: options.jobQueue,
   });
   await app.register(operatorRoutes, { db });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
@@ -134,7 +148,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
     clock,
     appId: config.github.appId,
     db,
-    enqueuer: options.enqueuer ?? notWiredEnqueuer,
+    enqueuer: options.enqueuer ?? options.jobQueue?.enqueuer ?? notWiredEnqueuer,
     deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
   await registerWeb(app, config);
@@ -175,8 +189,6 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   await registerLoginChecks(app, options, clock, roleCache);
   await registerRoutes(app, options, clock);
 
-  app.addHook('onClose', async () => {
-    await db.destroy();
-  });
+  closeQueueThenDatabase(app, db, options.jobQueue);
   return app;
 }

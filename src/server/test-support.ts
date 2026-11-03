@@ -12,10 +12,12 @@ import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { type AppOptions, buildApp } from './app.ts';
+import type { CreateJobQueue } from './boot-queue.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
+import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import type { OperatorPolicies } from './services/operator-policies.ts';
 import type { Clock } from './services/ports/clock.ts';
-import type { JobEnqueuer } from './services/ports/jobs.ts';
+import type { JobEnqueuer, JobQueue, StopOutcome } from './services/ports/jobs.ts';
 import type { RoleCache } from './services/role-cache.ts';
 import type { RoleGitHub } from './services/tenant-authorizer.ts';
 
@@ -88,6 +90,8 @@ export interface TestAppOptions {
   readonly github?: RoleGitHub;
   /** Who operates the instance (E11-S08); defaults to the app's own, from `OPERATOR_GITHUB_IDS` in `env`. */
   readonly operators?: OperatorPolicies;
+  /** The job queue the app reports on and stops (E07-S01). Defaults to none. */
+  readonly jobQueue?: JobQueue;
   /** The verified identity of the GitHub App, for the install address of `GET /api/meta` (E17-S09). Defaults to none. */
   readonly appIdentity?: AppOptions['appIdentity'];
 }
@@ -112,6 +116,28 @@ export async function testApp(options: TestAppOptions = {}): Promise<TestApp> {
  * needs other config declares `config: { access: 'public', ... }` itself.
  */
 export const PUBLIC_ROUTE = { config: { access: 'public' } } satisfies RouteShorthandOptions;
+
+/** A job queue that is only a script (E07-S01): a test flips `ready`, sets how a stop ends (E07-S03) and counts the stops. */
+export type FakeJobQueue = JobQueue & { ready: boolean; stops: number; stopOutcome: StopOutcome };
+
+/** A queue that is ready, stops `drained` and counts how often it was stopped; its enqueuer is the one given, by default the one that fails every send. */
+export function fakeJobQueue(enqueuer: JobEnqueuer = notWiredEnqueuer): FakeJobQueue {
+  const queue: FakeJobQueue = {
+    enqueuer,
+    ready: true,
+    stops: 0,
+    stopOutcome: 'drained',
+    isReady: () => Promise.resolve(queue.ready),
+    stop: () => {
+      queue.stops += 1;
+      return Promise.resolve(queue.stopOutcome);
+    },
+  };
+  return queue;
+}
+
+/** What the tests of boot() pass as `createJobQueue`: pg-boss needs a real PostgreSQL, so a ready fake starts instead. */
+export const startFakeJobQueue: CreateJobQueue = () => Promise.resolve(fakeJobQueue());
 
 /** A TCP server that accepts connections and never answers: what a database behind a black-holing firewall looks like. */
 export async function silentPostgres(): Promise<{ url: string; close: () => Promise<void> }> {

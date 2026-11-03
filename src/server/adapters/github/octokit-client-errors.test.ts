@@ -90,11 +90,11 @@ test('a connection that fails is an outage after the two repeats, with no cause 
 });
 
 test('an answer that takes longer than the timeout is an outage too, after the two repeats', async () => {
-  const slow = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    return json([]);
-  };
-  const { client, calls } = clientFixture({ 'GET /app/installations': slow }, { timeoutMs: 30 });
+  // An answer that never comes, and a timeout long enough for the connection to be made first: a timeout of 30 ms that fires
+  // in the middle of the TLS handshake leaves a handshake that ends after the test, and the runner reports its error
+  // (an unhandled ERR_TLS_CERT_ALTNAME_INVALID) against whichever test runs next.
+  const slow = () => new Promise<Response>(() => undefined);
+  const { client, calls } = clientFixture({ 'GET /app/installations': slow }, { timeoutMs: 1000 });
   const failure = await client.listInstallations().catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(GitHubUnavailableError);
   expect(String(failure)).toContain('TimeoutError');

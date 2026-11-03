@@ -76,6 +76,89 @@ export interface GitHubRepositoryPermission {
   readonly userId: GithubId;
 }
 
+/** The account types GitHub gives an account that opens a pull request or commits: no `Unknown`, which is for trailers only. */
+type GitHubCommitAccountType = 'User' | 'Bot' | 'Organization' | 'Mannequin';
+
+/**
+ * An account of a pull request or a commit (E07-S10). The numeric id is the identity; the login is a lookup handle (the
+ * organisation membership call takes one) and a display snapshot, and never reaches the evaluation engine.
+ */
+export interface GitHubAccountRef {
+  readonly id: GithubId;
+  readonly login: string;
+  readonly type: GitHubCommitAccountType;
+}
+
+/**
+ * The kinds of account that can write a comment: the types of {@link GitHubCommitAccountType}, and `Other` for any type
+ * GitHub names that the platform has no word for (an enterprise). Only `Bot` is ever treated differently.
+ */
+type GitHubCommentAuthorType = GitHubCommitAccountType | 'Other';
+
+/**
+ * A comment on an issue or a pull request (`GET /repos/{owner}/{repo}/issues/comments/{comment_id}`, E07-S07). A
+ * pull request's conversation is its issue's, so the same comment shape serves both. The text is what somebody typed: it is
+ * only ever compared with the command, never stored or logged.
+ */
+export interface GitHubIssueComment {
+  readonly id: GithubId;
+  /** The number of the issue or pull request the comment is on, read from the comment's `issue_url`. */
+  readonly issueNumber: number;
+  readonly body: string;
+  /** The account that wrote it, or null when GitHub shows none. The numeric id is the identity; there is no login. */
+  readonly author: { readonly id: GithubId; readonly type: GitHubCommentAuthorType } | null;
+}
+
+/** A pull request as a listing names it (E07-S07): enough to tell whether a commit is the head of an open one. */
+export interface GitHubPullRequestRef {
+  readonly number: number;
+  readonly state: 'open' | 'closed';
+  /** Lower-case commit SHA of the head. */
+  readonly headSha: string;
+}
+
+/** A pull request as the evaluation reads it (`GET /repos/{owner}/{repo}/pulls/{pull_number}`). */
+export interface GitHubPullRequest {
+  readonly number: number;
+  readonly state: 'open' | 'closed';
+  readonly draft: boolean;
+  /** Lower-case commit SHA of the head. */
+  readonly headSha: string;
+  /** Lower-case commit SHA of the base branch tip. */
+  readonly baseSha: string;
+  /** The account that opened the pull request. */
+  readonly opener: GitHubAccountRef;
+  /** How many commits GitHub says the pull request has. */
+  readonly commitCount: number;
+}
+
+/**
+ * One commit of a listing. `author` and `committer` are the GitHub accounts git's identities are linked to, or `null`
+ * when GitHub could not link them (the answer holds `null`, `{}`, or no numeric id): an unlinked identity. The raw
+ * identities are what git recorded; they are display-only. SHAs are lower case.
+ */
+export interface GitHubCommit {
+  readonly sha: string;
+  readonly parents: readonly string[];
+  readonly author: GitHubAccountRef | null;
+  readonly committer: GitHubAccountRef | null;
+  readonly message: string;
+  readonly rawAuthor: { readonly name: string; readonly email: string };
+  readonly rawCommitter: { readonly name: string; readonly email: string };
+}
+
+/** One page of a listing of open pull requests (E07-S08), 100 at most, newest first. `last` is true when GitHub names no next page. */
+export interface GitHubPullRequestPage {
+  readonly pulls: readonly GitHubPullRequestRef[];
+  readonly last: boolean;
+}
+
+/** One page of a commit listing, 100 commits at most. `last` is true when GitHub names no next page. */
+export interface GitHubCommitPage {
+  readonly commits: readonly GitHubCommit[];
+  readonly last: boolean;
+}
+
 export interface GitHubClient {
   /** `GET /app`, signed as the App. */
   getApp(): Promise<GitHubAppInfo>;
@@ -122,4 +205,85 @@ export interface GitHubClient {
     repo: string,
     login: string,
   ): Promise<GitHubRepositoryPermission | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/pulls/{pull_number}` with the installation's token (E07-S10). `fullName` is `owner/name`
+   * as GitHub shows it now. Resolves null for a pull request GitHub does not have, and for a name GitHub cannot hold.
+   */
+  getPullRequest(githubInstallationId: GithubId, fullName: string, prNumber: number): Promise<GitHubPullRequest | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/issues/comments/{comment_id}` with the installation's token (E07-S07). Resolves null for a
+   * comment GitHub does not have (deleted), and for a name GitHub cannot hold.
+   */
+  getIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commentId: GithubId,
+  ): Promise<GitHubIssueComment | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls?per_page=100` with the installation's token (E07-S07): the pull
+   * requests GitHub associates with a commit, open or closed, whatever repository their head is in (a fork's included),
+   * the first 100 of them. Resolves an empty list for a commit or repository GitHub does not have and for a name or SHA
+   * GitHub cannot hold.
+   */
+  listPullRequestsForCommit(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+  ): Promise<GitHubPullRequestRef[]>;
+
+  /**
+   * One page (1-based, 100 pull requests) of `GET /repos/{owner}/{repo}/pulls?state=open` with the installation's token
+   * (E07-S08): the open pull requests of a repository, newest first, each with its number, state and head SHA. The sweep
+   * reads at most ten pages of a repository per run.
+   * @throws GitHubNotFoundError for a repository GitHub does not have, one the installation does not reach and a name GitHub
+   * cannot hold; GitHubForbiddenError when GitHub refuses the read (a blocked repository).
+   */
+  listOpenPullRequests(githubInstallationId: GithubId, fullName: string, page: number): Promise<GitHubPullRequestPage>;
+
+  /**
+   * One page (1-based, 100 commits) of `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits`: the commits of the pull
+   * request in GitHub's order, at most 250 of them in all.
+   * @throws GitHubNotFoundError for a pull request GitHub does not have.
+   */
+  listPullRequestCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+    page: number,
+  ): Promise<GitHubCommitPage>;
+
+  /**
+   * One page (1-based, 100 commits) of `GET /repos/{owner}/{repo}/commits?sha={headSha}`: the history behind `headSha`
+   * in commit-date order, which is how a pull request above 250 commits is read (E08-S07).
+   * @throws GitHubNotFoundError for a repository or commit GitHub does not have.
+   */
+  listRepositoryCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    page: number,
+  ): Promise<GitHubCommitPage>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/compare/{base}...{head}`: the merge base of the two commits (a criss-cross history
+   * has several; GitHub names one).
+   * @throws GitHubNotFoundError for a repository or commit GitHub does not have.
+   */
+  compareCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    baseSha: string,
+    headSha: string,
+  ): Promise<{ readonly mergeBaseSha: string }>;
+
+  /**
+   * The same client for one unit of work, such as a job (E07-S03): a request is abandoned, and rejects with the reason of
+   * `signal`, when `signal` aborts, and one made after it aborted is not sent. The rate limits, the installation tokens
+   * and the gate are those of this client, so a view is as cheap as an object. The signal reaches the requests of the
+   * methods above; the token an installation needs is minted under its own timeout.
+   */
+  withSignal(signal: AbortSignal): GitHubClient;
 }

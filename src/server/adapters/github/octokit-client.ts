@@ -19,6 +19,7 @@ import {
   fetchRepository,
   fetchRepositoryPermission,
 } from './octokit-installation-calls.ts';
+import { OctokitPullReads } from './octokit-pull-reads.ts';
 import type { RateLimiter } from './rate-limiter.ts';
 
 // The Octokit adapter of the GitHub client port (E05-S04). The App-level methods are signed with the App JWT (and so
@@ -43,40 +44,47 @@ export interface OctokitClientOptions {
   readonly withJwt: WithJwt;
   readonly tokens: Tokens;
   readonly limiter: RateLimiter;
+  /** The abort signal of the job these requests belong to (E07-S03); {@link OctokitGitHubClient.withSignal} sets it. */
+  readonly signal?: AbortSignal | undefined;
 }
 
-export class OctokitGitHubClient implements GitHubClient {
-  readonly #dispatch: Dispatch;
+export class OctokitGitHubClient extends OctokitPullReads implements GitHubClient {
+  readonly #options: OctokitClientOptions;
 
   constructor(options: OctokitClientOptions) {
-    this.#dispatch = new Dispatch(options);
+    super(new Dispatch(options));
+    this.#options = options;
+  }
+
+  withSignal(signal: AbortSignal): GitHubClient {
+    return new OctokitGitHubClient({ ...this.#options, signal });
   }
 
   getApp(): Promise<GitHubAppInfo> {
-    return this.#dispatch.asApp(fetchApp);
+    return this.dispatch.asApp(fetchApp);
   }
 
   getInstallation(githubInstallationId: GithubId): Promise<GitHubInstallation | null> {
-    return this.#dispatch.asApp((channel, headers) => fetchInstallation(channel, headers, githubInstallationId));
+    return this.dispatch.asApp((channel, headers) => fetchInstallation(channel, headers, githubInstallationId));
   }
 
   listInstallations(): Promise<GitHubInstallation[]> {
-    return this.#dispatch.asApp(fetchInstallations);
+    return this.dispatch.asApp(fetchInstallations);
   }
 
   listInstallationRepositories(githubInstallationId: GithubId): Promise<GitHubRepository[]> {
-    return this.#dispatch.asInstallation(githubInstallationId, fetchRepositories);
+    return this.dispatch.asInstallation(githubInstallationId, fetchRepositories);
   }
 
   getRepositoryById(githubInstallationId: GithubId, githubRepoId: GithubId): Promise<GitHubRepository | null> {
-    return this.#dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       fetchRepository(channel, headers, githubRepoId),
     );
   }
 
   getOrgMembership(githubInstallationId: GithubId, org: string, login: string): Promise<GitHubOrgMembership | null> {
     // The installation is checked first, so a refused installation is refused whatever the names are.
-    return this.#dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       NAME.test(org) && NAME.test(login) ? fetchMembership(channel, headers, org, login) : Promise.resolve(null),
     );
   }
@@ -88,7 +96,7 @@ export class OctokitGitHubClient implements GitHubClient {
     login: string,
   ): Promise<GitHubRepositoryPermission | null> {
     // The installation is checked first, as for the membership: a refused installation is refused whatever the names are.
-    return this.#dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       NAME.test(owner) && REPOSITORY_NAME.test(repo) && NAME.test(login)
         ? fetchRepositoryPermission(channel, headers, { owner, repo }, login)
         : Promise.resolve(null),

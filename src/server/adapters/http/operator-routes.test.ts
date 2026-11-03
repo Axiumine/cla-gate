@@ -33,7 +33,7 @@ test('the operator gets every installation with its state, the times in UTC and 
         suspendedAt: null,
         deletedAt: null,
         tenantState: 'active',
-        repositories: { active: 2, enabled: 0, removed: 0 },
+        repositories: { active: 2, enabled: 1, removed: 0 },
       },
       {
         githubInstallationId: 10_000,
@@ -46,7 +46,7 @@ test('the operator gets every installation with its state, the times in UTC and 
         suspendedAt: null,
         deletedAt: null,
         tenantState: 'active',
-        repositories: { active: 2, enabled: 0, removed: 0 },
+        repositories: { active: 2, enabled: 1, removed: 0 },
       },
     ],
   });

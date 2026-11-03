@@ -14,7 +14,7 @@ import { testGitHubKey } from './config/test-support.ts';
 import { id, installation, repositories } from './services/github-contract/test-support.ts';
 import type { InstallationSync } from './services/installation-sync.ts';
 import { FakeGate } from './services/test-support.ts';
-import { captureLogs, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // The reconciliation of the installations that runs once in the background after start-up (E05-S08).
 
@@ -44,6 +44,7 @@ async function start(env: Record<string, string> = {}, extra: Partial<BootOption
     },
     signals: new FakeProcess(),
     createDb: () => db,
+    createJobQueue: startFakeJobQueue,
     logDestination: logs.destination,
     ...extra,
   });
@@ -95,9 +96,33 @@ test('with reconcileOnStart false nothing is reconciled and GitHub is not asked 
   expect(world.requests.filter((request) => request.includes('/app/installations'))).toEqual([]);
 });
 
+test('syncFor gives the sync of one job: it syncs like the sync of the server, with its GitHub requests bound to the signal (E07-S03)', async () => {
+  const world = await gatedHttpWorld(signer, new FakeGate());
+  world.addInstallation(installation(11, 'acme', { account: ownerAccount }), repositories(100, 2));
+  const { server, db } = await start({}, { reconcileOnStart: false });
+  const outcome = await server?.syncFor?.(new AbortController().signal).syncInstallation(id(11));
+  expect(outcome).toMatchObject({ status: 'synced', changed: true, repositories: { added: 2 } });
+  expect(await db.selectFrom('repositories').select('github_repo_id').orderBy('github_repo_id').execute()).toEqual([
+    { github_repo_id: 100 },
+    { github_repo_id: 101 },
+  ]);
+});
+
+test('a job that was aborted syncs nothing: its sync sends no request to GitHub and writes nothing', async () => {
+  const world = await gatedHttpWorld(signer, new FakeGate());
+  world.addInstallation(installation(11, 'acme', { account: ownerAccount }), repositories(100, 2));
+  const { server, db } = await start({}, { reconcileOnStart: false });
+  const requestsAtStart = [...world.requests];
+  const reason = new Error('the shutdown deadline passed');
+  await expect(server?.syncFor?.(AbortSignal.abort(reason)).syncInstallation(id(11))).rejects.toBe(reason);
+  expect(world.requests).toEqual(requestsAtStart);
+  expect(await db.selectFrom('installations').select('id').execute()).toEqual([]);
+});
+
 test('without a GitHub App there is no sync and no reconciliation', async () => {
   const { server } = await start({ GITHUB_APP_ID: '', GITHUB_APP_PRIVATE_KEY: '' });
   expect(server?.sync).toBeUndefined();
+  expect(server?.syncFor).toBeUndefined();
   expect(server?.reconciliation).toBeUndefined();
 });
 

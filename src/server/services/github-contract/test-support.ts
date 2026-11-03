@@ -4,8 +4,12 @@ import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import type {
   GitHubClient,
+  GitHubCommit,
   GitHubInstallation,
+  GitHubIssueComment,
   GitHubOrgMembership,
+  GitHubPullRequest,
+  GitHubPullRequestRef,
   GitHubRepository,
   GitHubRepositoryPermission,
 } from '../ports/github.ts';
@@ -40,10 +44,43 @@ export interface GitHubWorld {
     login: string,
     permission: GitHubRepositoryPermission,
   ) => void;
+  /** A pull request of a repository (`owner/name`) of an installation. */
+  readonly addPullRequest: (githubInstallationId: GithubId, fullName: string, pullRequest: GitHubPullRequest) => void;
+  /** What `listPullRequestCommits` lists for a pull request, in order. */
+  readonly setPullRequestCommits: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+    commits: readonly GitHubCommit[],
+  ) => void;
+  /** What `listRepositoryCommits` lists for a repository, in order. */
+  readonly setRepositoryCommits: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    commits: readonly GitHubCommit[],
+  ) => void;
+  /** The merge base `compareCommits` answers for two commits. */
+  readonly setMergeBase: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    commits: { readonly baseSha: string; readonly headSha: string },
+    mergeBaseSha: string,
+  ) => void;
+  /** A comment of a repository (`owner/name`) of an installation. */
+  readonly addIssueComment: (githubInstallationId: GithubId, fullName: string, comment: GitHubIssueComment) => void;
+  /** What `listPullRequestsForCommit` lists for a commit. */
+  readonly setCommitPullRequests: (
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    pulls: readonly GitHubPullRequestRef[],
+  ) => void;
   /** The instance does not serve this installation: its gate refuses it. */
   readonly refuse: (githubInstallationId: GithubId, reason: NotAdmittedReason) => void;
   /** How many requests reached GitHub (the fake: how many calls it served). */
   readonly reached: () => number;
+  /** The next `getInstallation` waits for GitHub's answer until `release` is called; `arrived` settles when it is waiting. */
+  readonly stallGetInstallation: () => { readonly arrived: Promise<void>; readonly release: () => void };
 }
 
 export const id = parseGithubId;
@@ -94,14 +131,73 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
     addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
       fake.addRepositoryPermission(githubInstallationId, fullName, login, permission);
     },
+    addPullRequest: (githubInstallationId, fullName, pullRequest) => {
+      fake.addPullRequest(githubInstallationId, fullName, pullRequest);
+    },
+    setPullRequestCommits: (githubInstallationId, fullName, prNumber, commits) => {
+      fake.setPullRequestCommits(githubInstallationId, fullName, prNumber, commits);
+    },
+    setRepositoryCommits: (githubInstallationId, fullName, commits) => {
+      fake.setRepositoryCommits(githubInstallationId, fullName, commits);
+    },
+    setMergeBase: (githubInstallationId, fullName, commits, mergeBaseSha) => {
+      fake.setMergeBase(githubInstallationId, fullName, commits, mergeBaseSha);
+    },
+    addIssueComment: (githubInstallationId, fullName, comment) => {
+      fake.addIssueComment(githubInstallationId, fullName, comment);
+    },
+    setCommitPullRequests: (githubInstallationId, fullName, headSha, pulls) => {
+      fake.setCommitPullRequests(githubInstallationId, fullName, headSha, pulls);
+    },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);
     },
     reached: () => fake.calls.length,
+    stallGetInstallation: () => stallNext(fake),
+  };
+}
+
+/** The next `getInstallation` of `fake` waits until the test lets it go; `arrived` settles when it is waiting. */
+function stallNext(fake: FakeGitHub): { readonly arrived: Promise<void>; readonly release: () => void } {
+  const arrived = Promise.withResolvers<undefined>();
+  const released = Promise.withResolvers<undefined>();
+  fake.beforeNext('getInstallation', () => {
+    arrived.resolve(undefined);
+    return released.promise;
+  });
+  return {
+    arrived: arrived.promise,
+    release: () => {
+      released.resolve(undefined);
+    },
   };
 }
 
 export type ContractCase = readonly [name: string, run: (world: GitHubWorld) => Promise<void>];
+
+/**
+ * What every read of the port answers for the three installations a test sets up with `addInstallation` as 11, 12 and
+ * never (13): the gate refuses the first (`InstallationNotAdmittedError`, and no request reaches GitHub), the second is
+ * suspended (`InstallationSuspendedError`), GitHub no longer has the third (`InstallationGoneError`). `reads` lists the
+ * calls to try for an installation id.
+ */
+export async function expectInstallationRefusals(
+  world: Pick<GitHubWorld, 'refuse' | 'suspend' | 'reached'>,
+  reads: (installationId: number) => readonly (() => Promise<unknown>)[],
+): Promise<void> {
+  world.refuse(id(11), 'rejected');
+  world.suspend(id(12), new Date('2026-11-01T09:30:00Z'));
+  for (const call of reads(11)) {
+    await expect(call()).rejects.toEqual(new InstallationNotAdmittedError('rejected'));
+  }
+  expect(world.reached()).toBe(0);
+  for (const call of reads(12)) {
+    await expect(call()).rejects.toEqual(new InstallationSuspendedError(id(12)));
+  }
+  for (const call of reads(13)) {
+    await expect(call()).rejects.toEqual(new InstallationGoneError(id(13)));
+  }
+}
 
 /** The cases, as `test.each` rows. */
 export const CONTRACT_CASES: readonly ContractCase[] = [
@@ -300,6 +396,51 @@ export const CONTRACT_CASES: readonly ContractCase[] = [
         expect(await client.getRepositoryPermission(id(11), 'acme', repo, 'alice')).toBeNull();
       }
       expect(await client.getRepositoryPermission(id(11), '../orgs/other', 'api', 'alice')).toBeNull();
+    },
+  ],
+  [
+    'withSignal answers as the client does while the signal has not aborted, from the same world',
+    async ({ client, addInstallation, addMembership }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, 'acme/api')]);
+      addMembership(id(11), 'acme', 'alice', MEMBER);
+      const view = client.withSignal(new AbortController().signal);
+      expect(await view.getInstallation(id(11))).toEqual(installation(11, 'acme'));
+      expect(await view.getRepositoryById(id(11), id(101))).toEqual(repository(101, 'acme/api'));
+      expect(await view.getOrgMembership(id(11), 'acme', 'alice')).toEqual(MEMBER);
+    },
+  ],
+  [
+    'withSignal sends nothing, not even a token request, once the signal has aborted, and rejects with its reason',
+    async ({ client, addInstallation, reached }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, 'acme/api')]);
+      const reason = new Error('the job was aborted');
+      const view = client.withSignal(AbortSignal.abort(reason));
+      for (const call of [
+        () => view.getApp(),
+        () => view.getInstallation(id(11)),
+        () => view.listInstallations(),
+        () => view.listInstallationRepositories(id(11)),
+        () => view.getRepositoryById(id(11), id(101)),
+        () => view.getOrgMembership(id(11), 'acme', 'alice'),
+      ]) {
+        await expect(call()).rejects.toBe(reason);
+      }
+      expect(reached()).toBe(0);
+    },
+  ],
+  [
+    'withSignal rejects a call that is waiting for GitHub with the reason of the signal when it aborts, and leaves the client alone',
+    async ({ client, addInstallation, stallGetInstallation }) => {
+      addInstallation(installation(11, 'acme'));
+      const stalled = stallGetInstallation();
+      const reason = new Error('the job was aborted at its deadline');
+      const abort = new AbortController();
+      const waiting = expect(client.withSignal(abort.signal).getInstallation(id(11))).rejects.toBe(reason);
+      await stalled.arrived;
+      abort.abort(reason);
+      await waiting;
+      stalled.release();
+      expect(await client.getInstallation(id(11))).toEqual(installation(11, 'acme'));
     },
   ],
   [

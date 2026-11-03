@@ -160,11 +160,11 @@ test.each([
 });
 
 test('an answer slower than the request timeout is an outage', async () => {
-  const slow = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    return json({ state: 'active', role: 'admin', user: { id: VIEWER_ID } });
-  };
-  const fixture = world({ [MEMBERSHIP]: slow }, { timeoutMs: 30 });
+  // An answer that never comes, and a timeout long enough for the connection to be made first: a timeout of 30 ms that fires
+  // in the middle of the TLS handshake leaves a handshake that ends after the test, and the runner reports its error
+  // (an unhandled ERR_TLS_CERT_ALTNAME_INVALID) against whichever test runs next.
+  const slow = () => new Promise<Response>(() => undefined);
+  const fixture = world({ [MEMBERSHIP]: slow }, { timeoutMs: 1000 });
   expect(await failureOf(fixture.lookup(orgInstallation(11, 'acme'), VIEWER))).toBeInstanceOf(GitHubUnavailableError);
 });
 

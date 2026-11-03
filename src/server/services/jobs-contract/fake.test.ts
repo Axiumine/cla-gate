@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { test } from 'vitest';
 import { migratedTestDatabase } from '../../adapters/db/test-support.ts';
-import { createJobsTable, fakeEnqueuer, jobCount } from '../jobs-fixture/test-support.ts';
+import { createJobsTable, fakeEnqueuer, liveJobCount, setJobStates } from '../jobs-fixture/test-support.ts';
 import { CONTRACT_CASES, type JobsWorld } from './test-support.ts';
 
 // The fake enqueuer against the contract of the port (E06-S06). E07-S01 adds the same table for the pg-boss adapter.
@@ -13,7 +13,9 @@ async function fakeWorld(): Promise<JobsWorld> {
   return {
     enqueuer: fakeEnqueuer(),
     db,
-    liveJobs: () => jobCount(db),
+    liveJobs: () => liveJobCount(db),
+    startJobs: () => setJobStates(db, 'active'),
+    finishJobs: () => setJobStates(db, 'completed'),
   };
 }
 

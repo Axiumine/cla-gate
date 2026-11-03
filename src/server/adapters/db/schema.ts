@@ -147,7 +147,7 @@ interface PrEvaluationsTable {
   repository_id: number;
   pr_number: number;
   head_sha: string;
-  result: 'in_progress' | 'success' | 'failure';
+  result: 'in_progress' | 'success' | 'failure' | 'cancelled';
   details: JsonObject<true>;
   check_run_id: number | null;
   comment_id: number | null;

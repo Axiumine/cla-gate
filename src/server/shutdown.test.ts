@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { createLogger } from './adapters/http/logger.ts';
-import { closeOnSignals } from './shutdown.ts';
-import { captureLogs, FakeProcess, testApp } from './test-support.ts';
+import { closeOnSignals, failExitOnAbortedStop } from './shutdown.ts';
+import { captureLogs, FakeProcess, fakeJobQueue, freePort, PUBLIC_ROUTE, testApp } from './test-support.ts';
 
 // closeOnSignals() on a real app, with the log captured: what the operator reads when a shutdown goes well, badly or twice.
 
@@ -51,18 +51,48 @@ test('a signal logs that the shutdown starts, closes the app once and leaves the
   expect(signals.exitCode).toBeUndefined();
 });
 
-test('a shutdown that outlasts its deadline logs why it drops the connections, drops them and fails the exit code', async () => {
-  const { app, logs, signals, dropped } = await setup();
-  neverClosing(app);
+/** A listening app with a route that never answers, and a client that is waiting for it. */
+async function withStuckRequest() {
+  const { install, ...rest } = await prepare();
+  const arrived = Promise.withResolvers<undefined>();
+  rest.app.get('/stuck', PUBLIC_ROUTE, () => {
+    arrived.resolve(undefined);
+    return new Promise<never>(() => undefined);
+  });
+  const address = await rest.app.listen({ host: '127.0.0.1', port: await freePort() });
+  const waiting = fetch(`${address}/stuck`).catch(() => 'dropped');
+  await arrived.promise;
+  return { ...rest, install, waiting };
+}
+
+test('a request that is still open at the deadline: the shutdown logs why it drops the connections, drops them and fails the exit code', async () => {
+  const { logs, signals, dropped, install, waiting } = await withStuckRequest();
+  install(SHORT);
   signals.emit('SIGINT');
   await vi.waitFor(() => {
     expect(dropped).toHaveBeenCalledOnce();
   });
+  expect(await waiting).toBe('dropped');
   expect(signals.exitCode).toBe(1);
   expect(messages(logs)).toEqual([
     [30, 'shutting down'],
     [50, 'shutdown deadline exceeded, dropping open connections'],
   ]);
+});
+
+test('the deadline is about the requests: a close that goes on after the HTTP server has closed is not cut short (E07-S03)', async () => {
+  const { app, logs, signals, dropped, install } = await prepare();
+  // The job drain of a shutdown (the queue's own 30 s) runs in a close hook, after the HTTP server has closed.
+  app.addHook('onClose', async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, SHORT * 6));
+  });
+  await app.listen({ host: '127.0.0.1', port: await freePort() });
+  const close = install(SHORT);
+  signals.emit('SIGTERM');
+  await close();
+  expect(dropped).not.toHaveBeenCalled();
+  expect(signals.exitCode).toBeUndefined();
+  expect(messages(logs)).toEqual([[30, 'shutting down']]);
 });
 
 test('a second signal logs that it drops the connections at once', async () => {
@@ -100,4 +130,42 @@ test('a shutdown that finishes in time cancels the deadline: nothing is dropped 
   expect(dropped).not.toHaveBeenCalled();
   expect(signals.exitCode).toBeUndefined();
   expect(logs.lines()).toEqual([]);
+});
+
+test('a stop that drained leaves the exit code alone and logs nothing (E07-S03)', async () => {
+  const logs = captureLogs();
+  const signals = new FakeProcess();
+  const queue = fakeJobQueue();
+  const wrapped = failExitOnAbortedStop(queue, createLogger({ logLevel: 'info' }, logs.destination), signals);
+  expect(await wrapped.stop()).toBe('drained');
+  expect(signals.exitCode).toBeUndefined();
+  expect(logs.lines()).toEqual([]);
+  expect(queue.stops).toBe(1);
+});
+
+test('a stop that aborted running jobs logs it at error and ends the process with exit code 1 (E07-S03)', async () => {
+  const logs = captureLogs();
+  const signals = new FakeProcess();
+  const queue = fakeJobQueue();
+  queue.stopOutcome = 'aborted';
+  const wrapped = failExitOnAbortedStop(queue, createLogger({ logLevel: 'info' }, logs.destination), signals);
+  expect(await wrapped.stop()).toBe('aborted');
+  expect(signals.exitCode).toBe(1);
+  expect(messages(logs)).toEqual([
+    [50, 'jobs still running at the end of the grace period were aborted, and run again after a restart'],
+  ]);
+});
+
+test('the wrapped queue is the queue: its enqueuer and its readiness are the ones of the queue', async () => {
+  const queue = fakeJobQueue();
+  const wrapped = failExitOnAbortedStop(
+    queue,
+    createLogger({ logLevel: 'info' }, captureLogs().destination),
+    new FakeProcess(),
+  );
+  expect(wrapped.enqueuer).toBe(queue.enqueuer);
+  queue.ready = false;
+  expect(await wrapped.isReady()).toBe(false);
+  queue.ready = true;
+  expect(await wrapped.isReady()).toBe(true);
 });

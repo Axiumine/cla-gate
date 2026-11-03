@@ -3,16 +3,43 @@
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
+import {
+  abortable,
+  COMMIT_SHA,
+  commentKey,
+  commitKey,
+  type FakeInstallation,
+  FakeWorld,
+  type GitHubMethod,
+  membershipKey,
+  mergeKey,
+  openPullsPage,
+  pageOf,
+  permissionKey,
+  pullKey,
+  type RecordedCall,
+  repositoryKey,
+  takeFirst,
+} from './fake-github/test-support.ts';
+
+export type { GitHubMethod, RecordedCall };
+
 import type { Clock } from './ports/clock.ts';
 import type {
   GitHubAppInfo,
   GitHubClient,
+  GitHubCommitPage,
   GitHubInstallation,
+  GitHubIssueComment,
   GitHubOrgMembership,
+  GitHubPullRequest,
+  GitHubPullRequestPage,
+  GitHubPullRequestRef,
   GitHubRepository,
   GitHubRepositoryPermission,
 } from './ports/github.ts';
 import {
+  GitHubNotFoundError,
   InstallationGoneError,
   InstallationNotAdmittedError,
   InstallationSuspendedError,
@@ -74,36 +101,6 @@ export class FakeGate implements InstallationGate {
   }
 }
 
-/** The methods of the GitHub client port, as the recorder of {@link FakeGitHub} names them. */
-export type GitHubMethod =
-  | 'getApp'
-  | 'getInstallation'
-  | 'listInstallations'
-  | 'listInstallationRepositories'
-  | 'getRepositoryById'
-  | 'getOrgMembership'
-  | 'getRepositoryPermission';
-
-/** One call the fake served: the method and the installation id it was made for (undefined: not about one). */
-export interface RecordedCall {
-  readonly method: GitHubMethod;
-  readonly installationId: GithubId | undefined;
-}
-
-/** What the fake knows of one installation. */
-interface FakeInstallation {
-  installation: GitHubInstallation;
-  repositories: GitHubRepository[];
-}
-
-/** The App a fresh {@link FakeGitHub} is. */
-const FAKE_APP: GitHubAppInfo = {
-  id: parseGithubId(4242),
-  slug: 'cla-gate-test',
-  owner: { id: parseGithubId(9001), type: 'Organization' },
-  permissions: { checks: 'write', metadata: 'read', pull_requests: 'read' },
-};
-
 /**
  * The GitHub client port in memory (E05-S04). A test scripts installations, repositories and memberships, runs the code
  * under test, and reads {@link FakeGitHub.calls}: every call served, with its method and installation id. Behaves like
@@ -113,88 +110,47 @@ const FAKE_APP: GitHubAppInfo = {
  * installation throws InstallationNotAdmittedError before the call is recorded (the adapter's token request would never
  * be sent). The same contract suite runs against this and against the adapter.
  */
-export class FakeGitHub implements GitHubClient {
-  /** Every call served, in order. A call the gate refused is not here. */
-  readonly calls: RecordedCall[] = [];
+export class FakeGitHub extends FakeWorld implements GitHubClient {
   readonly #gate: InstallationGate | undefined;
-  readonly #installations = new Map<GithubId, FakeInstallation>();
-  readonly #memberships = new Map<string, GitHubOrgMembership>();
-  readonly #permissions = new Map<string, GitHubRepositoryPermission>();
-  readonly #failures: { method: GitHubMethod; error: Error }[] = [];
-  readonly #hooks: { method: GitHubMethod; run: () => Promise<void> }[] = [];
-  #app: GitHubAppInfo = FAKE_APP;
+  #signal: AbortSignal | undefined;
 
   constructor(options: { gate?: InstallationGate } = {}) {
+    super();
     this.#gate = options.gate;
   }
 
-  setApp(app: GitHubAppInfo): void {
-    this.#app = app;
-  }
-
-  /** Adds, or replaces, an installation with the repositories it can reach. */
-  addInstallation(installation: GitHubInstallation, repositories: readonly GitHubRepository[] = []): void {
-    this.#installations.set(installation.id, { installation, repositories: [...repositories] });
-  }
-
-  /** Replaces the repositories an installation can reach. @throws Error for an installation never added. */
-  setRepositories(githubInstallationId: GithubId, repositories: readonly GitHubRepository[]): void {
-    this.#known(githubInstallationId).repositories = [...repositories];
-  }
-
-  /** Suspends the installation at `at`, or lifts the suspension with null. @throws Error for an unknown installation. */
-  suspend(githubInstallationId: GithubId, at: Date | null): void {
-    const entry = this.#known(githubInstallationId);
-    entry.installation = { ...entry.installation, suspendedAt: at };
-  }
-
-  /** The installation is gone from GitHub (uninstalled). */
-  removeInstallation(githubInstallationId: GithubId): void {
-    this.#installations.delete(githubInstallationId);
-  }
-
-  addMembership(githubInstallationId: GithubId, org: string, login: string, membership: GitHubOrgMembership): void {
-    this.#memberships.set(membershipKey(githubInstallationId, org, login), membership);
-  }
-
-  /** Scripts what `GET /repos/{owner}/{repo}/collaborators/{username}/permission` answers to `login` for `fullName` (`owner/name`). */
-  addRepositoryPermission(
-    githubInstallationId: GithubId,
-    fullName: string,
-    login: string,
-    permission: GitHubRepositoryPermission,
-  ): void {
-    this.#permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
-  }
-
-  /** The next call of `method` throws `error` (once, after it is recorded). Several calls queue in order. */
-  failNext(method: GitHubMethod, error: Error): void {
-    this.#failures.push({ method, error });
+  /** Every call served, in order. A call the gate refused is not here. */
+  get calls(): RecordedCall[] {
+    return this.state.calls;
   }
 
   /**
-   * `run` is awaited once, just before the next call of `method` is answered (and after it is recorded): the world can
-   * change while the caller waits for GitHub, as it does on the real network. Several hooks queue in order.
+   * A view of this fake for one unit of work (E07-S03): it serves from the same world and records into the same
+   * {@link FakeGitHub.calls}, and with `signal` aborted a call rejects with the reason of the signal, whether it was made
+   * after the abort (nothing is recorded) or is waiting for a {@link FakeGitHub.beforeNext} hook.
    */
-  beforeNext(method: GitHubMethod, run: () => Promise<void>): void {
-    this.#hooks.push({ method, run });
+  withSignal(signal: AbortSignal): GitHubClient {
+    const view = new FakeGitHub(this.#gate === undefined ? {} : { gate: this.#gate });
+    view.state = this.state;
+    view.#signal = signal;
+    return view;
   }
 
   getApp(): Promise<GitHubAppInfo> {
-    return this.#serve('getApp', undefined, () => this.#app);
+    return this.#serve('getApp', undefined, () => this.state.app);
   }
 
   getInstallation(githubInstallationId: GithubId): Promise<GitHubInstallation | null> {
     return this.#serve(
       'getInstallation',
       githubInstallationId,
-      () => this.#installations.get(githubInstallationId)?.installation ?? null,
+      () => this.state.installations.get(githubInstallationId)?.installation ?? null,
     );
   }
 
   listInstallations(): Promise<GitHubInstallation[]> {
     return this.#serve('listInstallations', undefined, () =>
-      [...this.#installations.values()].map((entry) => entry.installation),
+      [...this.state.installations.values()].map((entry) => entry.installation),
     );
   }
 
@@ -216,7 +172,7 @@ export class FakeGitHub implements GitHubClient {
     return this.#serveInstallation(
       'getOrgMembership',
       githubInstallationId,
-      () => this.#memberships.get(membershipKey(githubInstallationId, org, login)) ?? null,
+      () => this.state.memberships.get(membershipKey(githubInstallationId, org, login)) ?? null,
     );
   }
 
@@ -229,29 +185,120 @@ export class FakeGitHub implements GitHubClient {
     return this.#serveInstallation(
       'getRepositoryPermission',
       githubInstallationId,
-      () => this.#permissions.get(permissionKey(githubInstallationId, `${owner}/${repo}`, login)) ?? null,
+      () => this.state.permissions.get(permissionKey(githubInstallationId, `${owner}/${repo}`, login)) ?? null,
     );
   }
 
-  #known(githubInstallationId: GithubId): FakeInstallation {
-    const entry = this.#installations.get(githubInstallationId);
-    if (entry === undefined) {
-      throw new Error(`FakeGitHub has no installation ${githubInstallationId}: add it first`);
-    }
-    return entry;
+  getPullRequest(
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+  ): Promise<GitHubPullRequest | null> {
+    return this.#serveInstallation(
+      'getPullRequest',
+      githubInstallationId,
+      () => this.state.pullRequests.get(pullKey(githubInstallationId, fullName, prNumber)) ?? null,
+    );
   }
 
-  /** Records the call, runs a scripted hook, then rejects with a scripted failure or answers with `read()` (which may throw: that rejects too). */
-  #serve<T>(method: GitHubMethod, installationId: GithubId | undefined, read: () => T): Promise<T> {
-    this.calls.push({ method, installationId });
-    const hook = takeFirst(this.#hooks, method);
-    const scripted = takeFirst(this.#failures, method);
-    return (hook?.run() ?? Promise.resolve()).then(() => {
-      if (scripted !== undefined) {
-        throw scripted.error;
+  listOpenPullRequests(id: GithubId, name: string, page: number): Promise<GitHubPullRequestPage> {
+    return this.#serveInstallation('listOpenPullRequests', id, (e) => openPullsPage(this.state, e, name, page));
+  }
+
+  listPullRequestCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    prNumber: number,
+    page: number,
+  ): Promise<GitHubCommitPage> {
+    return this.#serveInstallation('listPullRequestCommits', githubInstallationId, () =>
+      pageOf(
+        this.state.pullCommits.get(pullKey(githubInstallationId, fullName, prNumber)),
+        page,
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/commits',
+      ),
+    );
+  }
+
+  listRepositoryCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    page: number,
+  ): Promise<GitHubCommitPage> {
+    return this.#serveInstallation('listRepositoryCommits', githubInstallationId, () =>
+      pageOf(
+        COMMIT_SHA.test(headSha)
+          ? this.state.repositoryCommits.get(repositoryKey(githubInstallationId, fullName))
+          : undefined,
+        page,
+        'GET /repos/{owner}/{repo}/commits',
+      ),
+    );
+  }
+
+  compareCommits(
+    githubInstallationId: GithubId,
+    fullName: string,
+    baseSha: string,
+    headSha: string,
+  ): Promise<{ readonly mergeBaseSha: string }> {
+    return this.#serveInstallation('compareCommits', githubInstallationId, () => {
+      const key = mergeKey(githubInstallationId, fullName, { baseSha, headSha });
+      const mergeBaseSha =
+        COMMIT_SHA.test(baseSha) && COMMIT_SHA.test(headSha) ? this.state.mergeBases.get(key) : undefined;
+      if (mergeBaseSha === undefined) {
+        throw new GitHubNotFoundError('GET /repos/{owner}/{repo}/compare/{basehead}');
       }
-      return read();
+      return { mergeBaseSha };
     });
+  }
+
+  getIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commentId: GithubId,
+  ): Promise<GitHubIssueComment | null> {
+    return this.#serveInstallation(
+      'getIssueComment',
+      githubInstallationId,
+      () => this.state.comments.get(commentKey(githubInstallationId, fullName, commentId)) ?? null,
+    );
+  }
+
+  listPullRequestsForCommit(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+  ): Promise<GitHubPullRequestRef[]> {
+    return this.#serveInstallation('listPullRequestsForCommit', githubInstallationId, () => [
+      ...(COMMIT_SHA.test(headSha)
+        ? (this.state.commitPulls.get(commitKey(githubInstallationId, fullName, headSha)) ?? [])
+        : []),
+    ]);
+  }
+
+  /**
+   * Records the call, runs a scripted hook, then rejects with a scripted failure or answers with `read()` (which may
+   * throw: that rejects too). A view with an aborted signal rejects with its reason before the call is recorded, and
+   * while the hook is awaited.
+   */
+  async #serve<T>(method: GitHubMethod, installationId: GithubId | undefined, read: () => T): Promise<T> {
+    const signal = this.#signal;
+    signal?.throwIfAborted();
+    const { calls, hooks, failures, observers } = this.state;
+    const call: RecordedCall = { method, installationId };
+    calls.push(call);
+    for (const observer of observers) {
+      observer(call);
+    }
+    const hook = takeFirst(hooks, method);
+    const scripted = takeFirst(failures, method);
+    await abortable(signal, () => hook?.run() ?? Promise.resolve());
+    if (scripted !== undefined) {
+      throw scripted.error;
+    }
+    return read();
   }
 
   /** {@link FakeGitHub.#serve} for a method that acts with the installation's token: the gate and the token's answers first. */
@@ -260,9 +307,10 @@ export class FakeGitHub implements GitHubClient {
     githubInstallationId: GithubId,
     read: (entry: FakeInstallation) => T,
   ): Promise<T> {
+    this.#signal?.throwIfAborted();
     await (this.#gate ?? OPEN_GATE).assertAdmitted(githubInstallationId);
     return this.#serve(method, githubInstallationId, () => {
-      const entry = this.#installations.get(githubInstallationId);
+      const entry = this.state.installations.get(githubInstallationId);
       if (entry === undefined) {
         throw new InstallationGoneError(githubInstallationId);
       }
@@ -273,18 +321,5 @@ export class FakeGitHub implements GitHubClient {
     });
   }
 }
-
-/** Removes and returns the first scripted entry for `method`, or undefined. */
-function takeFirst<T extends { readonly method: GitHubMethod }>(queue: T[], method: GitHubMethod): T | undefined {
-  const index = queue.findIndex((entry) => entry.method === method);
-  return index === -1 ? undefined : queue.splice(index, 1)[0];
-}
-
-/** GitHub compares organisation and login names without regard to case. */
-const membershipKey = (githubInstallationId: GithubId, org: string, login: string): string =>
-  `${githubInstallationId}/${org.toLowerCase()}/${login.toLowerCase()}`;
-
-const permissionKey = (githubInstallationId: GithubId, fullName: string, login: string): string =>
-  `${githubInstallationId}/${fullName.toLowerCase()}/${login.toLowerCase()}`;
 
 const OPEN_GATE: InstallationGate = { assertAdmitted: () => Promise.resolve() };

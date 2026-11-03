@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { SWEEP_INTERVALS } from '../domain/sweep.ts';
 import { Secret } from './secret.ts';
 import { parseTrustProxy, type TrustProxy } from './trust-proxy.ts';
 
@@ -39,6 +40,23 @@ export const portField = z
   .regex(/^\d{1,5}$/)
   .transform(Number)
   .pipe(z.number().max(65_535));
+
+/** How many jobs of one queue run at once (E07-S03): a whole number from 1 to 32, no sign, no leading zero, no spaces. */
+export const workerConcurrencyField = z
+  .string()
+  .regex(/^[1-9]\d?$/)
+  .transform(Number)
+  .pipe(z.number().max(32));
+
+/**
+ * The minutes between two sweeps (E07-S08): exactly one of `SWEEP_INTERVALS` (0, 5, 10, 15, 20, 30, 60), written as plain
+ * digits without a sign, a leading zero or spaces. Anything else is a `ConfigError`.
+ */
+export const sweepIntervalField = z
+  .string()
+  .regex(/^(?:0|[1-9]\d?)$/)
+  .transform(Number)
+  .pipe(z.literal(SWEEP_INTERVALS));
 
 /** @returns the parsed setting; for text that is not a setting it records an issue and returns `z.NEVER`. */
 function toTrustProxy(value: string, ctx: z.core.$RefinementCtx<string>): TrustProxy {

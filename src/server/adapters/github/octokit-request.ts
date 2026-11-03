@@ -27,7 +27,8 @@ export type RawRequest = () => Promise<{ data: unknown; headers: { link?: string
  * less is waited out and the request repeated (`rate-limiter.ts`).
  */
 export interface Channel {
-  readonly octokit: Octokit;
+  /** The requests of the adapter are made with `request`, which may carry the abort signal of a job (E07-S03). */
+  readonly octokit: Pick<Octokit, 'request'>;
   send(route: string, request: RawRequest): Promise<Page>;
 }
 

@@ -14,7 +14,7 @@ import { migratedTestDatabase, seedTenant } from './test-support.ts';
 
 test('the engine vocabulary matches the columns that store it', () => {
   expectTypeOf<Database['allowlist_entries']['kind']>().toEqualTypeOf<AllowlistKind>();
-  expectTypeOf<Exclude<Database['pr_evaluations']['result'], 'in_progress'>>().toEqualTypeOf<
+  expectTypeOf<Exclude<Database['pr_evaluations']['result'], 'in_progress' | 'cancelled'>>().toEqualTypeOf<
     (typeof OUTCOMES)[number]
   >();
 });

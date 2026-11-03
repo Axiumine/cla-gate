@@ -5,7 +5,7 @@ import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { mockApp } from './adapters/github/test-support.ts';
 import { boot } from './boot.ts';
 import { testRsaKey } from './config/test-support.ts';
-import { FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { FakeProcess, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // E17-S09: the install address of GET /api/meta comes from the App slug that the start-up self-check verified (E05-S02).
 
@@ -21,6 +21,7 @@ async function start(env: Record<string, string>) {
     },
     signals: new FakeProcess(),
     createDb: () => db,
+    createJobQueue: startFakeJobQueue,
     reconcileOnStart: false,
   });
   onTestFinished(async () => {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { z } from 'zod';
+import type { SweepInterval } from '../domain/sweep.ts';
 import { envSchema, type ValidEnv } from './env-schema.ts';
 import { type GithubConfig, toGithubConfig } from './github-config.ts';
 import type { Secret } from './secret.ts';
@@ -19,6 +20,10 @@ export interface AppConfig {
   readonly sessionSecret: Secret | undefined;
   /** How long a session lives (E10-S01), in seconds; idle is never above absolute and neither is below 300. */
   readonly session: { readonly idleSeconds: number; readonly absoluteSeconds: number };
+  /** How many jobs of one queue run at once in this process (E07-S03), 1 to 32. */
+  readonly workerConcurrency: number;
+  /** Minutes between two reconciliation sweeps (E07-S08): 5, 10, 15, 20, 30 or 60, or 0 for none. */
+  readonly sweepIntervalMinutes: SweepInterval;
   readonly github: GithubConfig;
   /** The directory the single-page app is served from (E17-S03): absolute, `dist/web` unless `WEB_ROOT` says otherwise. */
   readonly webRoot: string;
@@ -48,6 +53,8 @@ function toAppConfig(env: ValidEnv): AppConfig {
     trustProxy: env.TRUST_PROXY,
     sessionSecret: env.SESSION_SECRET,
     session: { idleSeconds: env.SESSION_IDLE_SECONDS, absoluteSeconds: env.SESSION_ABSOLUTE_SECONDS },
+    workerConcurrency: env.WORKER_CONCURRENCY,
+    sweepIntervalMinutes: env.SWEEP_INTERVAL_MINUTES,
     github: toGithubConfig(env),
     webRoot: env.WEB_ROOT,
     source: { url: env.SOURCE_URL, commit: env.SOURCE_COMMIT },

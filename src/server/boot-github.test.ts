@@ -9,7 +9,7 @@ import { type BootOptions, boot } from './boot.ts';
 import { AUTH_ENV } from './config/auth-fixture/test-support.ts';
 import { TEST_WEBHOOK_SECRET, testGitHubKey } from './config/test-support.ts';
 import { FakeClock } from './services/test-support.ts';
-import { captureLogs, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // What start-up does with the GitHub App (E05-S02): the self-check runs before the database is opened and before the
 // port is bound, and only a failure that retrying cannot repair stops the start.
@@ -42,6 +42,7 @@ async function start(env: Record<string, string>, extra: Partial<BootOptions> = 
     },
     signals,
     createDb,
+    createJobQueue: startFakeJobQueue,
     logDestination: logs.destination,
     // These tests are about the self-check; the reconciliation has its own (boot-reconcile.test.ts).
     reconcileOnStart: false,

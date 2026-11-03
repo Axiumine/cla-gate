@@ -19,6 +19,7 @@ import {
 } from './jobs-fixture/test-support.ts';
 import type { JobEnqueuer } from './ports/jobs.ts';
 import { countingDatabase } from './tenant-fixture/test-support.ts';
+import { FakeClock } from './test-support.ts';
 import { createWebhookDeliveries } from './webhook-deliveries.ts';
 import { type DeliverySubject, markDeliveryProcessed } from './webhook-delivery-rows.ts';
 
@@ -154,6 +155,41 @@ test('a processed delivery is a duplicate even when its job is gone: it finished
   expect(await deliveries.record(subject(ID_A), syncOf(31_001, ID_A))).toBe('duplicate');
   expect(enqueuer.calls).toHaveLength(1);
   expect(await jobCount(db)).toBe(0);
+});
+
+const recheckOf = (commentId: number, deliveryId: DeliveryId): Job => ({
+  type: 'recheck-comment',
+  githubInstallationId: parseGithubId(31_001),
+  githubRepoId: parseGithubId(9000),
+  prNumber: 7,
+  commentId: parseGithubId(commentId),
+  deliveryId,
+});
+
+test('a /recheck comment is sent under the rate limit of its pull request: a second one in the minute never becomes a job, and its delivery is marked processed', async () => {
+  const db = await freshDatabase();
+  const clock = new FakeClock('2026-11-02T10:00:00Z');
+  const deliveries = createWebhookDeliveries({ db, enqueuer: fakeEnqueuer(clock) });
+  const comment = subject(ID_A, 'issue_comment', 'created');
+  expect(await deliveries.record(comment, recheckOf(5001, ID_A))).toBe('accepted');
+  clock.advance(30_000);
+  expect(await deliveries.record(subject(ID_B, 'issue_comment', 'created'), recheckOf(5002, ID_B))).toBe('accepted');
+  expect(await jobCount(db)).toBe(1);
+  expect(await processedAt(db, ID_A)).toBeNull();
+  expect(await processedAt(db, ID_B)).toBeInstanceOf(Date);
+  clock.advance(31_000);
+  const third = deliveryIdSchema.parse('1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d');
+  expect(await deliveries.record(subject(third, 'issue_comment', 'created'), recheckOf(5003, third))).toBe('accepted');
+  expect(await jobCount(db)).toBe(2);
+});
+
+test('the rate limit of a /recheck is per pull request: another pull request has its own', async () => {
+  const db = await freshDatabase();
+  const deliveries = createWebhookDeliveries({ db, enqueuer: fakeEnqueuer(new FakeClock('2026-11-02T10:00:00Z')) });
+  await deliveries.record(subject(ID_A, 'issue_comment', 'created'), recheckOf(5001, ID_A));
+  const other = { ...recheckOf(5002, ID_B), prNumber: 8 };
+  expect(await deliveries.record(subject(ID_B, 'issue_comment', 'created'), other)).toBe('accepted');
+  expect(await jobCount(db)).toBe(2);
 });
 
 test('a send that is deduplicated for a new delivery marks it processed in the same transaction: no job will ever do it', async () => {

@@ -4,7 +4,7 @@ import { expect, onTestFinished, test } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { INDEX_HTML, webFixture } from './adapters/http/spa-fixture/test-support.ts';
 import { boot } from './boot.ts';
-import { FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { FakeProcess, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // E17-S03: the whole server on PGlite and a real socket, serving a fixture build of the app next to its API.
 
@@ -19,6 +19,7 @@ async function start(env: Record<string, string>) {
     },
     signals: new FakeProcess(),
     createDb: () => openPgliteDatabase(),
+    createJobQueue: startFakeJobQueue,
   });
   onTestFinished(async () => {
     await server?.close();

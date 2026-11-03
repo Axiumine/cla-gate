@@ -27,6 +27,9 @@ export const AUDIT_ACTIONS = [
   // Added by E05-S08: the account snapshot of a stored installation changed (its login, account or the time of a
   // suspension that stays), so every change of stored state has an audit row. Ids and the type code only, no login.
   'installation.updated',
+  // Added by E07-S05: the sync of an installation failed in every attempt of the queue (the dead-letter handler writes it).
+  // The subject is the installation; there is no personal data.
+  'installation.sync_failed',
   // Instance-wide actions: SYSTEM_ACTIONS and INSTANCE_ACTIONS must be subsets of this list.
   'data_export.created',
   'network_metadata.purged',
@@ -42,6 +45,7 @@ export const SYSTEM_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>([
   'installation.rejected',
   'installation.admitted',
   'installation.updated',
+  'installation.sync_failed',
   'installation.deleted',
   'installation.suspended',
   'installation.unsuspended',

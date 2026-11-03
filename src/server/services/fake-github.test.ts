@@ -126,3 +126,58 @@ test('the lists it returns are copies: changing one does not change the fake', a
   expect(await fake.listInstallationRepositories(id(11))).toHaveLength(2);
   expect(await fake.listInstallations()).toHaveLength(1);
 });
+
+test('a view for a job (withSignal) serves from the world of the fake and records into its calls, with or without a gate (E07-S03)', async () => {
+  const plain = new FakeGitHub();
+  plain.addInstallation(installation(11, 'acme'), [repository(101, 'acme/api')]);
+  expect(await plain.withSignal(new AbortController().signal).listInstallationRepositories(id(11))).toEqual([
+    repository(101, 'acme/api'),
+  ]);
+  expect(plain.calls).toEqual([{ method: 'listInstallationRepositories', installationId: 11 }]);
+  const gate = new FakeGate();
+  const gated = new FakeGitHub({ gate });
+  gated.addInstallation(installation(11, 'acme'));
+  gate.refuse(id(11), 'rejected');
+  await expect(gated.withSignal(new AbortController().signal).listInstallationRepositories(id(11))).rejects.toEqual(
+    new InstallationNotAdmittedError('rejected'),
+  );
+  expect(gated.calls).toEqual([]);
+});
+
+test('a view shares what the test scripts on the fake: failures and hooks of the next call, and the world as it changes', async () => {
+  const fake = new FakeGitHub();
+  const view = fake.withSignal(new AbortController().signal);
+  fake.addInstallation(installation(11, 'acme'));
+  const outage = new GitHubUnavailableError('down');
+  fake.failNext('getInstallation', outage);
+  await expect(view.getInstallation(id(11))).rejects.toBe(outage);
+  const order: string[] = [];
+  fake.beforeNext('getInstallation', () => {
+    order.push('hook');
+    return Promise.resolve();
+  });
+  expect((await view.getInstallation(id(11)))?.id).toBe(11);
+  expect(order).toEqual(['hook']);
+});
+
+test('a view whose signal has aborted records nothing, asks no gate and runs no hook', async () => {
+  const gate = new FakeGate();
+  const fake = new FakeGitHub({ gate });
+  fake.addInstallation(installation(11, 'acme'));
+  let hooked = false;
+  fake.beforeNext('listInstallationRepositories', () => {
+    hooked = true;
+    return Promise.resolve();
+  });
+  const reason = new Error('aborted');
+  await expect(fake.withSignal(AbortSignal.abort(reason)).listInstallationRepositories(id(11))).rejects.toBe(reason);
+  expect([fake.calls, gate.asked, hooked]).toEqual([[], [], false]);
+});
+
+test('a hook that fails reaches the caller of a view as it does the caller of the fake', async () => {
+  const fake = new FakeGitHub();
+  fake.addInstallation(installation(11, 'acme'));
+  const failure = new Error('the world broke');
+  fake.beforeNext('getInstallation', () => Promise.reject(failure));
+  await expect(fake.withSignal(new AbortController().signal).getInstallation(id(11))).rejects.toBe(failure);
+});
