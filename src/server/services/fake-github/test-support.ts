@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
+import { CheckRunStore, type CheckRunWriteRecord } from '../fake-check-runs/test-support.ts';
+import { CommentIds, commentsOfIssue, pageOfComments, postedComment } from '../fake-comments/test-support.ts';
 import type {
   GitHubAppInfo,
+  GitHubCheckRun,
   GitHubCommit,
   GitHubCommitPage,
   GitHubInstallation,
   GitHubIssueComment,
+  GitHubIssueCommentPage,
   GitHubOrgMembership,
   GitHubPullRequest,
   GitHubPullRequestPage,
@@ -104,6 +108,23 @@ export function openPullsPage(
   );
 }
 
+/**
+ * A write to a repository the installation reaches, with SHAs GitHub can hold (E09-S05): the adapter sends nothing else to
+ * a path, and a repository the installation does not reach is a 404, as it is for GitHub. Names compare without regard to case.
+ * @throws GitHubNotFoundError naming `route`.
+ */
+export function reachable(
+  entry: FakeInstallation,
+  fullName: string,
+  route: string,
+  shas: readonly string[] = [],
+): void {
+  const known = entry.repositories.some((repository) => repository.fullName.toLowerCase() === fullName.toLowerCase());
+  if (!(known && shas.every((sha) => COMMIT_SHA.test(sha)))) {
+    throw new GitHubNotFoundError(route);
+  }
+}
+
 /** GitHub compares repository names without regard to case too. */
 export const repositoryKey = (githubInstallationId: GithubId, fullName: string): string =>
   `${githubInstallationId}/${fullName.toLowerCase()}`;
@@ -111,14 +132,18 @@ export const repositoryKey = (githubInstallationId: GithubId, fullName: string):
 export const pullKey = (githubInstallationId: GithubId, fullName: string, prNumber: number): string =>
   `${repositoryKey(githubInstallationId, fullName)}#${prNumber}`;
 
-export const mergeKey = (
+const mergeKey = (
   githubInstallationId: GithubId,
   fullName: string,
   { baseSha, headSha }: { readonly baseSha: string; readonly headSha: string },
 ): string => `${repositoryKey(githubInstallationId, fullName)}@${baseSha}...${headSha}`;
 
+/** The part of a comment key that names its repository: what `commentKey` adds the id to. */
+const commentPrefix = (githubInstallationId: GithubId, fullName: string): string =>
+  `${repositoryKey(githubInstallationId, fullName)}/comments/`;
+
 export const commentKey = (githubInstallationId: GithubId, fullName: string, commentId: GithubId): string =>
-  `${repositoryKey(githubInstallationId, fullName)}/comments/${commentId}`;
+  `${commentPrefix(githubInstallationId, fullName)}${commentId}`;
 
 export const commitKey = (githubInstallationId: GithubId, fullName: string, headSha: string): string =>
   `${repositoryKey(githubInstallationId, fullName)}/commits/${headSha}`;
@@ -145,8 +170,15 @@ export type GitHubMethod =
   | 'listRepositoryCommits'
   | 'compareCommits'
   | 'getIssueComment'
+  | 'updateIssueComment'
+  | 'listIssueComments'
+  | 'createIssueComment'
   | 'listPullRequestsForCommit'
-  | 'listOpenPullRequests';
+  | 'listOpenPullRequests'
+  | 'createCheckRun'
+  | 'updateCheckRun'
+  | 'getCheckRun'
+  | 'listCheckRunsForRef';
 
 /** One call the fake served: the method and the installation id it was made for (undefined: not about one). */
 export interface RecordedCall {
@@ -171,7 +203,10 @@ export interface FakeState {
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
   readonly mergeBases: Map<string, string>;
   readonly comments: Map<string, GitHubIssueComment>;
+  /** The ids the comments the world posts get (E09-S07). */
+  readonly commentIds: CommentIds;
   readonly commitPulls: Map<string, readonly GitHubPullRequestRef[]>;
+  readonly checkRuns: CheckRunStore;
   readonly observers: ((call: RecordedCall) => void)[];
   readonly failures: { method: GitHubMethod; error: Error }[];
   readonly hooks: { method: GitHubMethod; run: () => Promise<void> }[];
@@ -190,7 +225,9 @@ function freshState(): FakeState {
     repositoryCommits: new Map(),
     mergeBases: new Map(),
     comments: new Map(),
+    commentIds: new CommentIds(),
     commitPulls: new Map(),
+    checkRuns: new CheckRunStore(),
     observers: [],
     failures: [],
     hooks: [],
@@ -289,6 +326,16 @@ export class FakeWorld {
     this.state.commitPulls.set(commitKey(githubInstallationId, fullName, headSha), pulls);
   }
 
+  /** Adds a Check Run that somebody else posted, or one of ours with an id a test chooses, to a repository (`owner/name`) of an installation. */
+  addCheckRun(githubInstallationId: GithubId, fullName: string, run: GitHubCheckRun): void {
+    this.state.checkRuns.seed({ installationId: githubInstallationId, fullName }, run);
+  }
+
+  /** Every write a Check Run was sent, oldest first, `POST` and `PATCH` alike, with the id of the run it reached (E09-S08). */
+  get checkRunWrites(): readonly CheckRunWriteRecord[] {
+    return this.state.checkRuns.writes;
+  }
+
   /** `listener` is told of every call the fake serves, in order, as it is recorded: what a test uses to order GitHub's calls among other events. */
   observe(listener: (call: RecordedCall) => void): void {
     this.state.observers.push(listener);
@@ -314,4 +361,66 @@ export class FakeWorld {
     }
     return entry;
   }
+}
+
+/** The merge base scripted for two commits of a repository. @throws GitHubNotFoundError for a pair nobody scripted, or a SHA GitHub cannot hold. */
+export function mergeBaseOf(
+  state: Pick<FakeState, 'mergeBases'>,
+  githubInstallationId: GithubId,
+  commits: { readonly fullName: string; readonly baseSha: string; readonly headSha: string },
+): { readonly mergeBaseSha: string } {
+  const { fullName, baseSha, headSha } = commits;
+  const mergeBaseSha =
+    COMMIT_SHA.test(baseSha) && COMMIT_SHA.test(headSha)
+      ? state.mergeBases.get(mergeKey(githubInstallationId, fullName, { baseSha, headSha }))
+      : undefined;
+  if (mergeBaseSha === undefined) {
+    throw new GitHubNotFoundError('GET /repos/{owner}/{repo}/compare/{basehead}');
+  }
+  return { mergeBaseSha };
+}
+
+/** What the comment calls of the fake read: the comments of the world, the ids it hands out and the App it posts as. */
+type CommentWorld = Pick<FakeState, 'comments' | 'commentIds' | 'app'>;
+
+/** Page `page` of the comments of the issue `issueNumber` of `fullName`, for the installation `entry` stands for (E09-S07). @throws GitHubNotFoundError for a repository it does not reach. */
+export function commentsPage(
+  world: CommentWorld,
+  at: { readonly entry: FakeInstallation; readonly fullName: string; readonly issueNumber: number },
+  page: number,
+): GitHubIssueCommentPage {
+  reachable(at.entry, at.fullName, 'GET /repos/{owner}/{repo}/issues/{issue_number}/comments');
+  const prefix = commentPrefix(at.entry.installation.id, at.fullName);
+  return pageOfComments(commentsOfIssue(world.comments, prefix, at.issueNumber), page);
+}
+
+/** A comment posted by the App on the issue `issueNumber` of `fullName`, for the installation `entry` stands for (E09-S07). @throws GitHubNotFoundError for a repository it does not reach. */
+export function postComment(
+  world: CommentWorld,
+  at: { readonly entry: FakeInstallation; readonly fullName: string; readonly issueNumber: number },
+  body: string,
+): GitHubIssueComment {
+  reachable(at.entry, at.fullName, 'POST /repos/{owner}/{repo}/issues/{issue_number}/comments');
+  const id = world.commentIds.take();
+  const posted = postedComment({ id, issueNumber: at.issueNumber, appId: world.app.id }, body);
+  world.comments.set(commentKey(at.entry.installation.id, at.fullName, id), posted);
+  return posted;
+}
+
+/** The comment `commentId` of `fullName` rewritten to `body`, for the installation `entry` stands for (E09-S06). @throws GitHubNotFoundError for a comment or repository it does not have. */
+export function rewriteComment(
+  world: CommentWorld,
+  at: { readonly entry: FakeInstallation; readonly fullName: string; readonly commentId: GithubId },
+  body: string,
+): GitHubIssueComment {
+  const route = 'PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}';
+  reachable(at.entry, at.fullName, route);
+  const key = commentKey(at.entry.installation.id, at.fullName, at.commentId);
+  const comment = world.comments.get(key);
+  if (comment === undefined) {
+    throw new GitHubNotFoundError(route);
+  }
+  const rewritten = { ...comment, body };
+  world.comments.set(key, rewritten);
+  return rewritten;
 }

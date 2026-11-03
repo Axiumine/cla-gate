@@ -6,6 +6,7 @@ import {
   GitHubForbiddenError,
   GitHubNotFoundError,
   GitHubUnavailableError,
+  GitHubUnprocessableError,
 } from '../../services/ports/github-errors.ts';
 import { unreachable } from './github-http.ts';
 import { type LimitSignals, rateLimitFrom } from './rate-limit-reading.ts';
@@ -32,7 +33,8 @@ function signalsOf(error: RequestError): LimitSignals {
  * The error to throw for a failed Octokit request to `route` (a template such as `GET /repositories/{repository_id}`)
  * made at `nowMs`: no answer is an outage, 401 {@link GitHubAuthError}, 404 {@link GitHubNotFoundError}, a 429 or a
  * 403 that is a rate limit {@link GitHubRateLimitedError} (the limiter waits it out when it can; see `rate-limiter.ts`),
- * another 403 {@link GitHubForbiddenError}, and every other status (a 5xx) {@link GitHubUnavailableError}. A rate limit
+ * another 403 {@link GitHubForbiddenError}, 422 {@link GitHubUnprocessableError} (E09-S05), and every other status (a 5xx)
+ * {@link GitHubUnavailableError}. A rate limit
  * is not "forbidden" because a caller that reads 403 as "no access" (a repository that left the installation) would
  * take a limit for a removal.
  */
@@ -51,7 +53,10 @@ export function failureOf(error: unknown, route: string, nowMs: number): Error {
   if (limit !== undefined) {
     return limit;
   }
-  return status === 403
-    ? new GitHubForbiddenError(route)
+  if (status === 403) {
+    return new GitHubForbiddenError(route);
+  }
+  return status === 422
+    ? new GitHubUnprocessableError(route)
     : new GitHubUnavailableError(`GitHub answered ${status} to ${route}`);
 }

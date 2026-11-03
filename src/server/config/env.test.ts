@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
+import { signUrl } from '../../shared/sign-link.ts';
 import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError, loadConfig } from './env.ts';
 import { loadMigrateConfig } from './migrate-config.ts';
@@ -92,6 +93,17 @@ test.each([
   expect(loadConfig({ DATABASE_URL: DB, PUBLIC_BASE_URL: given }).publicBaseUrl).toBe(origin);
 });
 
+test.each([
+  ['http://localhost:8080'],
+  ['https://cla.example.org/'],
+  ['https://CLA-2.Example.org:8443'],
+  ['http://[::1]:3000'],
+  ['https://127.0.0.1'],
+])('the sign link can be built on the PUBLIC_BASE_URL %s, which the configuration accepts', (given) => {
+  const { publicBaseUrl } = loadConfig({ DATABASE_URL: DB, PUBLIC_BASE_URL: given });
+  expect(signUrl(publicBaseUrl, 4242, 7)).toBe(`${publicBaseUrl}/sign/4242?pr=7`);
+});
+
 test('PORT 0 (an ephemeral port) is valid', () => {
   expect(loadConfig({ DATABASE_URL: DB, PORT: '0' }).port).toBe(0);
 });
@@ -134,6 +146,17 @@ test.each([
   ['a PUBLIC_BASE_URL with a fragment', { PUBLIC_BASE_URL: 'https://cla.example.org/#x' }, ['PUBLIC_BASE_URL']],
   ['a PUBLIC_BASE_URL that is not http(s)', { PUBLIC_BASE_URL: 'ftp://cla.example.org' }, ['PUBLIC_BASE_URL']],
   ['a PUBLIC_BASE_URL that is not a URL', { PUBLIC_BASE_URL: 'cla.example.org' }, ['PUBLIC_BASE_URL']],
+  // The sign link of every failing pull request is built on it (E09-S03): an origin it cannot use must fail here, at boot.
+  [
+    'a PUBLIC_BASE_URL with an underscore in the host',
+    { PUBLIC_BASE_URL: 'https://cla_gate.example.org' },
+    ['PUBLIC_BASE_URL'],
+  ],
+  [
+    'a PUBLIC_BASE_URL with a closing bracket in the host',
+    { PUBLIC_BASE_URL: 'https://cla.example.org)' },
+    ['PUBLIC_BASE_URL'],
+  ],
   ['a short SESSION_SECRET', { SESSION_SECRET: 'short' }, ['SESSION_SECRET']],
   ['a non numeric GITHUB_APP_ID', { GITHUB_APP_ID: 'abc' }, ['GITHUB_APP_ID']],
   ['a GITHUB_APP_ID that ends in letters', { GITHUB_APP_ID: '123abc' }, ['GITHUB_APP_ID']],

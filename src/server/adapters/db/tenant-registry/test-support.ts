@@ -30,6 +30,7 @@ import type { Database } from '../schema.ts';
 import { EXPORT_TENANT_QUERIES } from '../tenant-export-fixture/test-support.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { JOB_TENANT_QUERIES } from '../tenant-jobs-fixture/test-support.ts';
+import { LINK_TENANT_QUERIES } from '../tenant-links-fixture/test-support.ts';
 import {
   ledgerOwnersOf,
   ownersOfAuditRows,
@@ -57,6 +58,7 @@ import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from 
 
 /** The files that run a statement over a tenant table, relative to `src/server`. */
 export const TENANT_MODULES = [
+  'adapters/db/pr-evaluation-links.ts',
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
   'services/audit-log-queries.ts',
@@ -459,6 +461,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   ...JOB_TENANT_QUERIES,
   // The statements of the exports (E16-S03, E16-S06): the signatures of a document, and a person's own data.
   ...EXPORT_TENANT_QUERIES,
+  // The statements of the reporter over the evaluation rows (E09-S04).
+  ...LINK_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

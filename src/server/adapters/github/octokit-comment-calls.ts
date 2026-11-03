@@ -6,8 +6,9 @@ import { COMMIT_SHA, PER_PAGE, repositoryOf } from './octokit-names.ts';
 import { type Channel, type RequestHeaders, readOrNull } from './octokit-request.ts';
 import { issueCommentSchema, pullRequestRefPageSchema } from './schemas.ts';
 
-// The requests of the manual re-evaluation (E07-S07): a comment, and the pull requests GitHub associates with a commit. They
-// are made with an installation's token, so `headers` carry it, and nothing that cannot be a name or a SHA reaches a path.
+// The requests of the manual re-evaluation (E07-S07): a comment, and the pull requests GitHub associates with a commit. They are made
+// with an installation's token, so `headers` carry it, and nothing that cannot be a name or a SHA reaches a path. The calls on the
+// comment the platform keeps are in octokit-conversation-calls.ts.
 
 /** `GET /repos/{owner}/{repo}/issues/comments/{comment_id}` (E07-S07), or null for a comment that does not exist. */
 export function fetchIssueComment(

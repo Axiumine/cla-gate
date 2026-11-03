@@ -4,7 +4,8 @@ import { sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { seedSignature } from '../../adapters/db/test-support.ts';
 import { toStoredDetails } from '../../domain/evaluation/index.ts';
-import { evaluateWorld, reported } from './test-support.ts';
+import { commit, commitSha } from '../github-pull-contract/test-support.ts';
+import { evaluateWorld, FULL_NAME, INSTALLATION, PR_NUMBER, reported } from './test-support.ts';
 
 // The job composed with the real engine of E08 (E07-S04): the facts it reads are the ones the verdict is made of, and what is
 // stored is what the engine said, in the shape of the stored details.
@@ -66,4 +67,20 @@ test('a signature made on the last read is counted: a person who signs while the
   };
   await world.run();
   expect(world.reporter.published.at(0)?.evaluation.outcome).toBe('success');
+});
+
+test('the reporter is given the logins the job saw and the names of the unresolved co-author trailers of the commits (E09-S03)', async () => {
+  const world = await evaluateWorld({ engine: true });
+  world.fake.setPullRequestCommits(INSTALLATION, FULL_NAME, PR_NUMBER, [
+    commit(1),
+    commit(2, { message: 'Subject\n\nBody.\n\nCo-authored-by: Jane Roe <jane@example.org>' }),
+  ]);
+  await world.run();
+  const names = world.reporter.published.at(0)?.names;
+  expect([...(names?.logins ?? [])]).toEqual([
+    [7, 'user-7'],
+    [1, 'user-1'],
+    [2, 'user-2'],
+  ]);
+  expect([...(names?.coAuthors ?? [])]).toEqual([[commitSha(2), ['Jane Roe']]]);
 });

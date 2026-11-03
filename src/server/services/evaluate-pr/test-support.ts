@@ -4,8 +4,12 @@ import { type Kysely, type KyselyPlugin, type PluginTransformQueryArgs, sql } fr
 import { type Mock, vi } from 'vitest';
 import { z } from 'zod';
 import { parseGithubId } from '../../../shared/github-id.ts';
+import { loadMigrationFiles } from '../../adapters/db/migration-files.ts';
+import { migrate } from '../../adapters/db/migrator.ts';
+import { openPgliteDatabase } from '../../adapters/db/pglite.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import {
+  MIGRATIONS_DIRECTORY,
   migratedRuntimeDatabase,
   migratedTestDatabase,
   seedTenant,
@@ -14,12 +18,13 @@ import {
 import { createLogger } from '../../adapters/http/logger.ts';
 import { type Evaluation, type EvaluationInput, evaluatePullRequest } from '../../domain/evaluation/index.ts';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
+import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import { captureLogs, type LogCapture } from '../../test-support.ts';
 import { account, commit, pullRequest } from '../github-pull-contract/test-support.ts';
 import type { JobOutcome } from '../job-registry.ts';
 import { createOrgMembership } from '../org-membership.ts';
 import { createOrgMembershipCache } from '../org-membership-cache.ts';
-import type { EvaluationReporter, ReportTarget } from '../ports/reporter.ts';
+import type { EvaluationReporter, ReportOutcome, ReportTarget } from '../ports/reporter.ts';
 import { FakeClock, FakeGate, FakeGitHub } from '../test-support.ts';
 import { evaluatePr } from './evaluate-pr.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
@@ -29,6 +34,9 @@ type ReportFailureCode = Parameters<EvaluationReporter['failed']>[1];
 
 /** What a cancellation is about (E07-S06): the target of `EvaluationReporter.cancelled`. */
 type CancelTarget = Parameters<EvaluationReporter['cancelled']>[0];
+
+/** What every method of a FakeReporter answers unless a test says otherwise: the report was made (E09-S06). */
+const REPORTED: ReportOutcome = { status: 'reported' };
 
 // The world of the tests of the `evaluate-pr` job (E07-S04): a migrated database with one tenant, a FakeGitHub that serves
 // its installation, repository, pull request and commits, a FakeReporter, an evaluator that is a stub unless a test brings the
@@ -89,19 +97,26 @@ function timedDatabase(db: Kysely<Database>, timeline: string[]): Kysely<Databas
 /** What a FakeReporter was asked, and what it does when asked: nothing, unless a test says so. */
 export interface ReporterHooks {
   started?: ((target: ReportTarget) => Promise<void>) | undefined;
-  publish?: ((target: ReportTarget, evaluation: Evaluation) => Promise<void>) | undefined;
+  publish?: ((target: ReportTarget, evaluation: Evaluation, names: DisplayNames) => Promise<void>) | undefined;
   failed?: ((target: ReportTarget, code: ReportFailureCode) => Promise<void>) | undefined;
   cancelled?: ((target: CancelTarget) => Promise<void>) | undefined;
+  enforcementDisabled?: ((target: CancelTarget) => Promise<void>) | undefined;
 }
 
 /** The reporter in memory: every report it was given, in order, and an optional behaviour for each method (E07-S04). */
 export class FakeReporter implements EvaluationReporter {
   readonly startedTargets: ReportTarget[] = [];
-  readonly published: { readonly target: ReportTarget; readonly evaluation: Evaluation }[] = [];
+  readonly published: {
+    readonly target: ReportTarget;
+    readonly evaluation: Evaluation;
+    readonly names: DisplayNames;
+  }[] = [];
   /** The failures reported (E07-S05), in order. */
   readonly failures: { readonly target: ReportTarget; readonly code: ReportFailureCode }[] = [];
   /** The pull requests reported as closed (E07-S06), in order. */
   readonly cancellations: CancelTarget[] = [];
+  /** The pull requests whose repository was reported as switched off (E09-S06), in order. */
+  readonly disabled: CancelTarget[] = [];
   readonly hooks: ReporterHooks = {};
   /** The events of every fake that was given this list, in order (E07-S05). */
   readonly timeline: string[];
@@ -110,28 +125,39 @@ export class FakeReporter implements EvaluationReporter {
     this.timeline = timeline;
   }
 
-  async started(target: ReportTarget): Promise<void> {
+  async started(target: ReportTarget): Promise<ReportOutcome> {
     this.timeline.push('reporter.started');
     this.startedTargets.push(target);
     await this.hooks.started?.(target);
+    return REPORTED;
   }
 
-  async publish(target: ReportTarget, evaluation: Evaluation): Promise<void> {
+  async publish(target: ReportTarget, evaluation: Evaluation, names: DisplayNames): Promise<ReportOutcome> {
     this.timeline.push('reporter.publish');
-    this.published.push({ target, evaluation });
-    await this.hooks.publish?.(target, evaluation);
+    this.published.push({ target, evaluation, names });
+    await this.hooks.publish?.(target, evaluation, names);
+    return REPORTED;
   }
 
-  async failed(target: ReportTarget, code: ReportFailureCode): Promise<void> {
+  async failed(target: ReportTarget, code: ReportFailureCode): Promise<ReportOutcome> {
     this.timeline.push('reporter.failed');
     this.failures.push({ target, code });
     await this.hooks.failed?.(target, code);
+    return REPORTED;
   }
 
-  async cancelled(target: CancelTarget): Promise<void> {
+  async cancelled(target: CancelTarget): Promise<ReportOutcome> {
     this.timeline.push('reporter.cancelled');
     this.cancellations.push(target);
     await this.hooks.cancelled?.(target);
+    return REPORTED;
+  }
+
+  async enforcementDisabled(target: CancelTarget): Promise<ReportOutcome> {
+    this.timeline.push('reporter.enforcement_disabled');
+    this.disabled.push(target);
+    await this.hooks.enforcementDisabled?.(target);
+    return REPORTED;
   }
 }
 
@@ -197,9 +223,30 @@ export function githubWorld(gate?: FakeGate): FakeGitHub {
   return fake;
 }
 
+/** What a world is built with: the CLA document, the real engine, the runtime role, or a database of its own. */
+interface WorldOptions {
+  cla?: boolean;
+  engine?: boolean;
+  runtime?: boolean;
+  /** A migrated PGlite of its own instead of the shared one of the test file, for a world whose app destroys the database when it closes (E09-S08). */
+  own?: boolean;
+}
+
+/** A migrated PGlite that belongs to the world that asks for it. */
+async function ownDatabase(): Promise<{ db: Kysely<Database> }> {
+  const db = await openPgliteDatabase();
+  await migrate(db, await loadMigrationFiles(MIGRATIONS_DIRECTORY));
+  return { db };
+}
+
+/** The shared database of the test file, migrated; with the runtime role in place for `runtime`. */
+function sharedDatabase(runtime: boolean | undefined): Promise<{ db: Kysely<Database> }> {
+  return runtime === true ? migratedRuntimeDatabase() : migratedTestDatabase();
+}
+
 /** The tenant `org-1` (installation 5000, repository 9000 `org-1/repo`), admitted, with enforcement on and its CLA document attached. */
-async function seededTenant(options: { cla?: boolean; runtime?: boolean }) {
-  const { db: raw } = await (options.runtime === true ? migratedRuntimeDatabase() : migratedTestDatabase());
+async function seededTenant(options: WorldOptions) {
+  const { db: raw } = await (options.own === true ? ownDatabase() : sharedDatabase(options.runtime));
   const tenant = await seedTenant(raw, 1);
   await sql`update installations set admission_status = 'admitted', admission_reason = null`.execute(raw);
   await raw
@@ -215,9 +262,7 @@ async function seededTenant(options: { cla?: boolean; runtime?: boolean }) {
  * passes unless `engine` brings the real one; `runtime` migrates with the runtime role in place, for the tests that run the
  * job as `cla_app`.
  */
-export async function evaluateWorld(
-  options: { cla?: boolean; engine?: boolean; runtime?: boolean } = {},
-): Promise<EvaluateWorld> {
+export async function evaluateWorld(options: WorldOptions = {}): Promise<EvaluateWorld> {
   const { raw, tenant } = await seededTenant(options);
   const timeline: string[] = [];
   const gate = new FakeGate();

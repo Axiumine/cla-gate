@@ -6,9 +6,10 @@ import { onTestFinished } from 'vitest';
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import type { TestGitHubKey } from '../../../config/test-support.ts';
+import { CheckRunStore } from '../../../services/fake-check-runs/test-support.ts';
+import { CommentIds, commentsOfIssue, postedComment } from '../../../services/fake-comments/test-support.ts';
 import type { GitHubWorld } from '../../../services/github-contract/test-support.ts';
 import type {
-  GitHubAccountRef,
   GitHubClient,
   GitHubCommit,
   GitHubInstallation,
@@ -23,7 +24,16 @@ import type { InstallationGate } from '../../../services/ports/installation-gate
 import { FakeClock, FakeGate } from '../../../services/test-support.ts';
 import { captureLogs, testConfig } from '../../../test-support.ts';
 import { createLogger } from '../../http/logger.ts';
+import { checkRoutes } from '../check-world/test-support.ts';
 import { GITHUB_API_ORIGIN } from '../github-http.ts';
+import {
+  commentBody,
+  commitBody,
+  installationBody,
+  pullRefBody,
+  pullRequestBody,
+  repositoryBody,
+} from '../http-bodies/test-support.ts';
 import { guardPublicMembers } from '../public-members-guard/test-support.ts';
 import { startGitHubApp } from '../start.ts';
 import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-support.ts';
@@ -34,6 +44,9 @@ import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-suppo
 // the installation that owns it and to no other, as on GitHub.
 
 const PER_PAGE = 100;
+
+/** The App that posts a comment in this world: the one `GET /app` answers with. */
+const APP = parseGithubId(Number(APP_ID));
 
 /** The installation a made-up token was minted for. */
 const TOKEN_INSTALLATION = /^Bearer ghs_made-up-(\d+)-\d+$/;
@@ -56,7 +69,9 @@ interface State {
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
   readonly mergeBases: Map<string, string>;
   readonly comments: Map<string, GitHubIssueComment>;
+  readonly commentIds: CommentIds;
   readonly commitPulls: Map<string, readonly GitHubPullRequestRef[]>;
+  readonly checkRuns: CheckRunStore;
   readonly requests: string[];
   /** The next `GET /app/installations/{id}` is answered when this settles; `arrived` is called as it comes in. */
   stall?: { readonly arrived: () => void; readonly released: Promise<void> } | undefined;
@@ -66,95 +81,6 @@ interface State {
 export interface HttpWorld extends GitHubWorld {
   /** `METHOD /path?query` of every request that reached GitHub since the App started, in order. */
   readonly requests: string[];
-}
-
-/** An installation as GitHub spells it, with fields the platform does not use. */
-function installationBody(installation: GitHubInstallation): Record<string, unknown> {
-  return {
-    id: installation.id,
-    account: { ...installation.account, node_id: 'MDEyOk9yZ2FuaXphdGlvbg==', site_admin: false },
-    app_id: 4242,
-    repository_selection: 'all',
-    suspended_at: installation.suspendedAt === null ? null : installation.suspendedAt.toISOString(),
-    suspended_by: null,
-    permissions: installation.permissions,
-    events: ['pull_request'],
-  };
-}
-
-function repositoryBody(repository: GitHubRepository): Record<string, unknown> {
-  const [owner = 'unknown', name = 'unknown'] = repository.fullName.split('/');
-  return {
-    id: repository.id,
-    name,
-    full_name: repository.fullName,
-    private: true,
-    owner: { login: owner, id: 1, type: 'Organization' },
-    default_branch: 'main',
-  };
-}
-
-/** An account as GitHub spells it, with fields the platform does not use; `null` stays `null`, as for an unlinked identity. */
-function accountBody(account: GitHubAccountRef | null): Record<string, unknown> | null {
-  return account === null ? null : { ...account, node_id: 'MDQ6VXNlcjE=', site_admin: false };
-}
-
-function pullRequestBody(pullRequest: GitHubPullRequest): Record<string, unknown> {
-  return {
-    number: pullRequest.number,
-    state: pullRequest.state,
-    draft: pullRequest.draft,
-    head: { sha: pullRequest.headSha, ref: 'feature' },
-    base: { sha: pullRequest.baseSha, ref: 'main' },
-    user: accountBody(pullRequest.opener),
-    commits: pullRequest.commitCount,
-    title: 'A title the platform never reads',
-  };
-}
-
-function commitBody(commit: GitHubCommit): Record<string, unknown> {
-  return {
-    sha: commit.sha,
-    parents: commit.parents.map((sha) => ({ sha })),
-    author: accountBody(commit.author),
-    committer: accountBody(commit.committer),
-    commit: {
-      message: commit.message,
-      author: { ...commit.rawAuthor, date: '2026-11-01T09:00:00Z' },
-      committer: { ...commit.rawCommitter, date: '2026-11-01T09:00:00Z' },
-    },
-  };
-}
-
-/** A comment as GitHub spells it: the issue it is on is named by a URL, and an account of a type the platform has no word for is an enterprise. */
-function commentBody(comment: GitHubIssueComment, repository: string): Record<string, unknown> {
-  const { author } = comment;
-  return {
-    id: comment.id,
-    body: comment.body,
-    user:
-      author === null
-        ? null
-        : {
-            id: author.id,
-            login: 'someone',
-            type: author.type === 'Other' ? 'Enterprise' : author.type,
-            site_admin: false,
-          },
-    issue_url: `${GITHUB_API_ORIGIN}/repos/${repository}/issues/${comment.issueNumber}`,
-    html_url: 'https://github.com/x',
-  };
-}
-
-/** A pull request of a listing (a commit's, or a repository's open ones), whose head lives in a fork: a listing does not care where the head is. */
-function pullRefBody(pull: GitHubPullRequestRef): Record<string, unknown> {
-  return {
-    number: pull.number,
-    state: pull.state,
-    head: { sha: pull.headSha, ref: 'feature', repo: { full_name: 'forker/api', fork: true } },
-    base: { sha: 'b'.repeat(40), ref: 'main' },
-    title: 'A title the platform never reads',
-  };
 }
 
 /** One page of `items` and the `Link` header that leads to the next, like GitHub's. */
@@ -289,17 +215,22 @@ function repositoryOf(state: State, request: Request, params: Record<string, unk
   return repositoryKey(installationOf(state, request)?.installation.id, owner, repo);
 }
 
+/** Whether the installation of the token of a request reaches the repository the path names (names compare without regard to case). */
+function reaches(state: State, request: Request, params: Record<string, unknown>): boolean {
+  const name = `${String(params['owner'])}/${String(params['repo'])}`.toLowerCase();
+  return (
+    installationOf(state, request)?.repositories.some((repository) => repository.fullName.toLowerCase() === name) ===
+    true
+  );
+}
+
 /**
  * `GET /repos/{owner}/{repo}/pulls?state=open` (E07-S08): the open pull requests scripted for the repository, newest first,
  * and a 404 for a repository the installation of the token does not reach.
  */
 function openPullsRoute(state: State) {
   return http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/pulls`, ({ request, params }) => {
-    const name = `${String(params['owner'])}/${String(params['repo'])}`.toLowerCase();
-    const reached = installationOf(state, request)?.repositories.some(
-      (repository) => repository.fullName.toLowerCase() === name,
-    );
-    if (reached !== true) {
+    if (!reaches(state, request, params)) {
       return notFound();
     }
     const prefix = `${repositoryOf(state, request, params)}#`;
@@ -344,9 +275,20 @@ function pullRoutes(state: State) {
   ];
 }
 
-/** The routes of the manual re-evaluation (E07-S07): a comment, and the pull requests of a commit. */
+/** The routes of the manual re-evaluation (E07-S07): a comment, and the pull requests of a commit; and (E09-S06) the rewrite of a comment. */
 function commentRoutes(state: State) {
   return [
+    http.patch(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/comments/:id`, async ({ request, params }) => {
+      const { body } = z.object({ body: z.string() }).parse(await request.json());
+      const key = `${repositoryOf(state, request, params)}/comments/${String(params['id'])}`;
+      const found = state.comments.get(key);
+      if (found === undefined || !reaches(state, request, params)) {
+        return notFound();
+      }
+      const rewritten = { ...found, body };
+      state.comments.set(key, rewritten);
+      return HttpResponse.json(commentBody(rewritten, `${String(params['owner'])}/${String(params['repo'])}`));
+    }),
     http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/comments/:id`, ({ request, params }) => {
       const found = state.comments.get(`${repositoryOf(state, request, params)}/comments/${String(params['id'])}`);
       const name = `${String(params['owner'])}/${String(params['repo'])}`;
@@ -355,6 +297,38 @@ function commentRoutes(state: State) {
     http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/commits/:sha/pulls`, ({ request, params }) => {
       const found = state.commitPulls.get(`${repositoryOf(state, request, params)}/commits/${String(params['sha'])}`);
       return found ? HttpResponse.json(found.map(pullRefBody)) : notFound();
+    }),
+  ];
+}
+
+/** The routes of the comment the platform keeps on a pull request (E09-S07): the comments of an issue, and a new one posted by the App. */
+function conversationRoutes(state: State) {
+  const issueOf = (params: Record<string, unknown>): number => Number(params['number']);
+  const prefixOf = (request: Request, params: Record<string, unknown>): string =>
+    `${repositoryOf(state, request, params)}/comments/`;
+  return [
+    http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/:number/comments`, ({ request, params }) => {
+      if (!reaches(state, request, params)) {
+        return notFound();
+      }
+      const found = commentsOfIssue(state.comments, prefixOf(request, params), issueOf(params));
+      const { items, link } = pageOf(new URL(request.url), found);
+      const name = `${String(params['owner'])}/${String(params['repo'])}`;
+      return HttpResponse.json(
+        items.map((comment) => commentBody(comment, name)),
+        { headers: link },
+      );
+    }),
+    http.post(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/:number/comments`, async ({ request, params }) => {
+      const { body } = z.object({ body: z.string() }).parse(await request.json());
+      if (!reaches(state, request, params)) {
+        return notFound();
+      }
+      const posted = postedComment({ id: state.commentIds.take(), issueNumber: issueOf(params), appId: APP }, body);
+      state.comments.set(`${prefixOf(request, params)}${posted.id}`, posted);
+      return HttpResponse.json(commentBody(posted, `${String(params['owner'])}/${String(params['repo'])}`), {
+        status: 201,
+      });
     }),
   ];
 }
@@ -372,6 +346,8 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
     ...installationRoutes(state),
     ...pullRoutes(state),
     ...commentRoutes(state),
+    ...conversationRoutes(state),
+    ...checkRoutes({ store: state.checkRuns, reached: (request) => installationOf(state, request) }),
     guardPublicMembers().handler,
   );
   server.listen({ onUnhandledFrame: 'error' });
@@ -420,6 +396,9 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
     setCommitPullRequests: (githubInstallationId, fullName, headSha, pulls) => {
       state.commitPulls.set(`${keyOf(githubInstallationId, fullName)}/commits/${headSha}`, pulls);
     },
+    addCheckRun: (githubInstallationId, fullName, run) => {
+      state.checkRuns.seed({ installationId: githubInstallationId, fullName }, run);
+    },
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);
     },
@@ -460,7 +439,9 @@ async function startWorld(
     repositoryCommits: new Map(),
     mergeBases: new Map(),
     comments: new Map(),
+    commentIds: new CommentIds(),
     commitPulls: new Map(),
+    checkRuns: new CheckRunStore(),
     requests: [],
   };
   const clock = new FakeClock(START);

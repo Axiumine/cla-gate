@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { isHttpOrigin } from '../../shared/sign-link.ts';
 import { SWEEP_INTERVALS } from '../domain/sweep.ts';
 import { Secret } from './secret.ts';
 import { parseTrustProxy, type TrustProxy } from './trust-proxy.ts';
@@ -29,11 +30,16 @@ export const databaseUrlField = z
   .string()
   .refine(isPostgresUrl)
   .transform((value) => new Secret(value));
-/** `scheme://host[:port]` with nothing after it, normalised. */
+/**
+ * `scheme://host[:port]` with nothing after it, normalised, with a host the sign link of a pull request can be built on
+ * (E09-S03): letters, digits, hyphens and dots, or an IPv6 literal. The origin is the base of every sign link, so one that
+ * would fail there is refused at start-up and never reaches a failing pull request.
+ */
 export const originField = z
   .string()
   .refine(isOrigin)
-  .transform((value) => new URL(value).origin);
+  .transform((value) => new URL(value).origin)
+  .refine(isHttpOrigin);
 /** A TCP port, 0 to 65535. */
 export const portField = z
   .string()

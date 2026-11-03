@@ -188,7 +188,8 @@ const commentAuthorTypeSchema = z.union([
 /**
  * `GET /repos/{owner}/{repo}/issues/comments/{comment_id}` (E07-S07): the text, the author and the number of the issue the comment is
  * on, which is the last segment of `issue_url`. A missing body reads as empty, which is no command. An answer without a
- * usable `issue_url` is not read: the number is what ties a comment to a pull request.
+ * usable `issue_url` is not read: the number is what ties a comment to a pull request. `performed_via_github_app` (E09-S07)
+ * is the App the comment was posted through; a comment a person wrote has none, and the id is the only field of it that is read.
  */
 export const issueCommentSchema = z
   .object({
@@ -196,13 +197,18 @@ export const issueCommentSchema = z
     body: z.string().default(''),
     user: z.object({ id: githubIdSchema, type: commentAuthorTypeSchema }).nullable(),
     issue_url: z.string().regex(/\/issues\/[1-9]\d{0,9}$/),
+    performed_via_github_app: z.object({ id: githubIdSchema }).nullish(),
   })
-  .transform(({ id, body, user, issue_url }) => ({
+  .transform(({ id, body, user, issue_url, performed_via_github_app }) => ({
     id,
     body,
     author: user,
     issueNumber: Number(issue_url.slice(issue_url.lastIndexOf('/') + 1)),
+    appId: performed_via_github_app?.id ?? null,
   }));
+
+/** `GET /repos/{owner}/{repo}/issues/{issue_number}/comments` (E09-S07): one page, a bare array of comments. */
+export const issueCommentPageSchema = z.array(issueCommentSchema);
 
 /**
  * `GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls` (E07-S07) and `GET /repos/{owner}/{repo}/pulls` (E07-S08): one page,
@@ -217,3 +223,39 @@ export const pullRequestRefPageSchema = z.array(
     })
     .transform(({ number, state, head }) => ({ number, state, headSha: head.sha })),
 );
+
+/**
+ * The state of a Check Run (E09-S05). GitHub names more than the three the platform tells apart for the runs of other Apps
+ * (`waiting`, `requested`, `pending`); a state nobody here has a word for reads as `queued`, which is not completed, instead
+ * of failing the listing of a head SHA that another App also reports on.
+ */
+const checkStatusSchema = z.union([
+  z.enum(['queued', 'in_progress', 'completed']),
+  z.unknown().transform(() => 'queued' as const),
+]);
+
+/**
+ * One Check Run, from `POST` and `PATCH .../check-runs`, `GET .../check-runs/{id}` and each entry of the listing of a commit
+ * (E09-S05): the id, the commit, the state, the App that posted it (`app` is null for a run whose App was deleted) and the
+ * `external_id` of the creator. The output, the conclusion and the times are dropped: nothing reads them back.
+ */
+export const checkRunSchema = z
+  .object({
+    id: githubIdSchema,
+    head_sha: commitShaSchema,
+    status: checkStatusSchema,
+    external_id: z.string().nullish(),
+    app: z.object({ id: githubIdSchema }).nullish(),
+  })
+  .transform(({ id, head_sha, status, external_id, app }) => ({
+    id,
+    headSha: head_sha,
+    status,
+    appId: app?.id ?? null,
+    externalId: external_id ?? null,
+  }));
+
+/** `GET /repos/{owner}/{repo}/commits/{ref}/check-runs`: one page, as its runs. `total_count` is not used. */
+export const checkRunPageSchema = z
+  .object({ check_runs: z.array(checkRunSchema) })
+  .transform((page) => page.check_runs);

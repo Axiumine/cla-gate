@@ -9,6 +9,7 @@ import {
   GitHubRateLimitedError,
   GitHubResponseError,
   GitHubUnavailableError,
+  GitHubUnprocessableError,
 } from '../../services/ports/github-errors.ts';
 import {
   clientFixture,
@@ -64,7 +65,7 @@ const FAILURES: [name: string, failure: Failure][] = [
   ['500', outage(500)],
   ['501', outage(501)],
   ['410', outage(410)],
-  ['422', outage(422)],
+  ['422', { status: 422, headers: {}, message: LEAK, expected: GitHubUnprocessableError, names: true }],
 ];
 
 test.each(FAILURES)('%s leaves as the right error, sent once, with none of the body', async (_name, spec) => {

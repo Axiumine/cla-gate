@@ -168,18 +168,21 @@ test('each save appends cla_draft.saved with the document and the new revision, 
   expect(JSON.stringify(audit)).not.toContain('wording');
 });
 
+// The marker is made of a letter that no hexadecimal request id in the answer can hold, so the check cannot trip on one.
+const MARKER = 'zzzz';
+
 test.each([
   ['an empty text', '', 'content_empty'],
   ['a text of white space', ' \n \t\n', 'content_empty'],
-  ['a NUL', 'a\u0000b\n', 'content_invalid_characters'],
-  ['a lone surrogate', 'a\uDC00b\n', 'content_invalid_characters'],
-  ['a text of 204 801 bytes', `${'a'.repeat(204_800)}\n`, 'content_too_large'],
-  ['block quotes nested 51 levels', `${'> '.repeat(51)}aaaa\n`, 'content_too_deeply_nested'],
+  ['a NUL', `${MARKER}\u0000${MARKER}\n`, 'content_invalid_characters'],
+  ['a lone surrogate', `${MARKER}\uDC00${MARKER}\n`, 'content_invalid_characters'],
+  ['a text of 204 801 bytes', `${'z'.repeat(204_800)}\n`, 'content_too_large'],
+  ['block quotes nested 51 levels', `${'> '.repeat(51)}${MARKER}\n`, 'content_too_deeply_nested'],
 ] as const)('%s is 422 with its own code, and the answer repeats none of the text', async (_label, text, code) => {
   const world = await documentWorld();
   const response = await saveDraftAs(world, 'admin1', wide(world), { contentMd: text, expectedRevision: null });
   expect([response.statusCode, errorCodeOf(response)]).toEqual([422, code]);
-  expect(response.body).not.toContain('aaaa');
+  expect(response.body).not.toContain(MARKER);
   expect(await world.db.selectFrom('cla_drafts').select('document_id').execute()).toHaveLength(2);
 });
 

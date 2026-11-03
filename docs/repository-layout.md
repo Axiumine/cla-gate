@@ -16,6 +16,9 @@ Items marked (planned) do not exist yet.
 │   │                            start-up of the job queue (E07): building the app on the queue, starting pg-boss and
 │   │                            refusing a missing queue, and `jobWorkers` (the handler registry, the `register` option a later
 │   │                            epic uses, the `evaluation` option E09 binds)
+│   ├── boot-evaluation.ts       binds the Check Run reporter to the evaluation jobs when a GitHub App is configured (E09)
+│   ├── check-name-literal.test.ts  legacy-status-doc.test.ts
+│   │                            the tests that keep the check name in one constant and the legacy status page linked from the Settings table
 │   ├── config/                  environment parsing (zod), Secret, TRUST_PROXY parsing; github-app.ts and github-key.ts
 │   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS), operator-ids.ts
 │   │                            (OPERATOR_GITHUB_IDS), web-root.ts (WEB_ROOT), source-fields.ts (SOURCE_URL, SOURCE_COMMIT), env-github.ts
@@ -30,7 +33,7 @@ Items marked (planned) do not exist yet.
 │   │                            re-exported by test-support.ts); document-lock.ts (the row lock of a document) and violations.ts (the constraint a failed
 │   │                            statement broke); tenant-scope.ts (`TenantScope`, `assertRepositoryInTenant`;
 │   │                            tenant-fixture/, tenant-registry/, tenant-registry-documents/, -drafts/ and -versions/ and tenant-scan/ are test only: the two tenants, the registry of
-│   │                            tenant queries and the source scan of the cross-tenant tests); the session store (sessions.ts with sessions-create,
+│   │                            tenant queries and the source scan of the cross-tenant tests); pr-evaluation-links.ts (E09: the `check_run_id` and `comment_id` of `pr_evaluations`; pr-evaluation-links-fixture/ and tenant-links-fixture/ are test only); the session store (sessions.ts with sessions-create,
 │   │                            -delete, -model, -read, -row and -touch.ts; sessions-fixture/ is test only) and the
 │   │                            user upsert (users.ts)
 │   ├── adapters/jobs/           the pg-boss adapter of the job queue (E07): runtime.ts (start, stop, readiness), boss.ts (the slice
@@ -43,7 +46,7 @@ Items marked (planned) do not exist yet.
 │   │                            and the *-real.test.ts suites need the real database
 │   ├── adapters/github/         the Octokit adapter of the GitHub port (octokit-*.ts: client, requests, errors, auth; the pull
 │   │                            request, comment and open-pull-request calls in octokit-pull-*.ts and octokit-comment-calls.ts, the
-│   │                            names the Octokit calls log under in octokit-names.ts),
+│   │                            names the Octokit calls log under in octokit-names.ts; the Check Run calls in octokit-check-runs.ts, octokit-check-reads.ts and octokit-check-writes.ts; check-world/ and http-bodies/ are test only),
 │   │                            the App JWT (app-jwt.ts, app-auth.ts), the installation token provider
 │   │                            (installation-tokens.ts, token-cache.ts, single-flight.ts), the self-check
 │   │                            (app-identity.ts, start.ts), the rate limiter (rate-limiter.ts with lane, semaphore,
@@ -96,6 +99,12 @@ Items marked (planned) do not exist yet.
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
 │   │                            its public surface
+│   ├── domain/reporting/        the pure output of E09: encode.ts (`renderName`, `neutraliseText`, `shortSha`, `renderId`: the only way user text,
+│   │                            SHAs and ids reach GitHub output) and markup.ts; the Check Run: check-view.ts, check-output.ts, check-output-minimal.ts,
+│   │                            output-parts.ts (the 50-entry and 60 000-unit caps), coverage-counts.ts; the failure text: failure-report.ts,
+│   │                            failure-sections.ts, failure-people.ts, failure-commits.ts, failure-text.ts, failure-input.ts, display-names.ts
+│   │                            (`DisplayNames`); the comment: comment-body.ts; run-report.ts (`runReport`, `sharedView`: the worst-of state of the pull
+│   │                            requests that stand at one head SHA); test-support.ts and snapshots/ (the golden files) are test only
 │   └── services/                audit.ts (appendAudit, the one public entry), audit-entry.ts (AuditEntry, validation);
 │                                ports/ (github.ts, installation-gate.ts, clock.ts, github-errors.ts); the stored
 │                                ports/jobs.ts (the JobEnqueuer port; jobs-not-wired.ts is the default that fails closed when no queue is wired;
@@ -107,11 +116,11 @@ Items marked (planned) do not exist yet.
 │                                the stored installation gate and admission policies (installation-gate.ts, admission-policies.ts);
 │                                the job queue's services (E07), pure of pg-boss: job-registry.ts (`HandlerRegistry`), job-handlers.ts
 │                                (`registerHandlers`), job-run.ts (`runJob`: envelope check, logs, delivery marked processed),
-│                                evaluate-pr/ (the evaluation protocol around the E08 engine), close-pr/, recheck/ (`/recheck` and
+│                                evaluate-pr/ (the evaluation protocol around the E08 engine; display-names.ts builds the `DisplayNames` of one report), reporting/ (E09, the `EvaluationReporter` over the Check Runs API: check-run-reporter.ts and create-check-run-reporter.ts, check-run-writer.ts (find, create, patch, recreate), run-lifecycle.ts (started, publish), run-endings.ts (failed, cancelled, disabled), report-write.ts, report-guard.ts, report-options.ts, report-record.ts, report-situation.ts, shared-sha.ts (the pull requests that share a head SHA), comment-upsert.ts, comment-guard.ts, disabled-comment.ts; adapter-world/, rerun-fixture/ and scripted-github/ are test only), close-pr/, recheck/ (`/recheck` and
 │                                Re-run), sweep/ (the sweep, its reaper and the policy sweep), dead-letter/ (one handler per job type),
 │                                repository-job-enqueue.ts (what E12, E14 and E15 call), org-membership.ts and org-membership-cache.ts
 │                                (the exemption lookup and its per-process cache); fake-github/, github-comment-contract/,
-│                                github-open-pulls-contract/, github-pull-contract/ and job-run-fixture/ are test only
+│                                github-open-pulls-contract/, github-pull-contract/, fake-check-runs/ and github-check-contract/ (the fake Check Runs API and the contract it shares with the Octokit adapter) and job-run-fixture/ are test only
 │                                the installation and repository state (installation-*.ts, repository-*.ts): store,
 │                                queries, admission, sync and reconcile, transfer, operator view; roles and tenants (E11): org-admin.ts,
 │                                repo-admin.ts, repo-admin-discovery.ts, repo-admin-candidates.ts and probe-budget.ts (the role facts and
@@ -133,7 +142,7 @@ Items marked (planned) do not exist yet.
 ├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
-│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts, operator.ts (the operator list); the CLA documents (E12): cla.ts (kinds,
+│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check.ts (`CHECK_RUN_NAME`, the one place the check name is spelled), sign-link.ts (`signUrl`, `isHttpOrigin`), operator.ts (the operator list); the CLA documents (E12): cla.ts (kinds,
 │                                rule codes and statuses, the document schemas), cla-name.ts (the name rules), cla-text.ts (the canonical text),
 │                                cla-version.ts and cla-history.ts (publish and history), cla-markdown.ts (the sanitising pipeline), cla-markdown-parse.ts,
 │                                cla-markdown-nesting.ts and the line scan cla-markdown-containers.ts, -items.ts, -leaf.ts and -lines.ts,

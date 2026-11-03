@@ -7,6 +7,7 @@ import type { JobOutcome } from '../job-registry.ts';
 import type { GitHubPullRequest } from '../ports/github.ts';
 import type { ReportTarget } from '../ports/reporter.ts';
 import { collectCommits } from './commit-listing.ts';
+import { displayNamesOf } from './display-names.ts';
 import type { EvaluatePrPorts } from './evaluate-pr-ports.ts';
 import { readEvaluationInput, type Tenant } from './evaluation-facts.ts';
 import { type EvaluationKey, finishEvaluation, startEvaluation } from './evaluation-rows.ts';
@@ -73,7 +74,7 @@ export async function evaluateOpen(run: Run, pr: GitHubPullRequest): Promise<Job
     return superseded(logger);
   }
   await finishEvaluation(ports.db, installation.id, target.evaluationId, toStoredDetails(evaluation));
-  await ports.reporter.publish(target, evaluation);
+  await ports.reporter.publish(target, evaluation, displayNamesOf(pr, collected.commits));
   logger.info({ result: evaluation.outcome, failureCodes: evaluation.failureCodes }, 'evaluate_pr.evaluated');
   return { outcome: 'evaluated' };
 }

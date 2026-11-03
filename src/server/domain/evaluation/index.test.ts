@@ -37,6 +37,7 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'ROLES',
     'storedUnlinked',
     'toStoredDetails',
+    'unresolvedCoAuthorNames',
     'verifyListing',
   ]);
 });

@@ -3,22 +3,27 @@
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
+import { lacksConclusion, type StoredCheckRun } from './fake-check-runs/test-support.ts';
 import {
   abortable,
   COMMIT_SHA,
   commentKey,
+  commentsPage,
   commitKey,
   type FakeInstallation,
   FakeWorld,
   type GitHubMethod,
   membershipKey,
-  mergeKey,
+  mergeBaseOf,
   openPullsPage,
   pageOf,
   permissionKey,
+  postComment,
   pullKey,
   type RecordedCall,
+  reachable,
   repositoryKey,
+  rewriteComment,
   takeFirst,
 } from './fake-github/test-support.ts';
 
@@ -26,11 +31,14 @@ export type { GitHubMethod, RecordedCall };
 
 import type { Clock } from './ports/clock.ts';
 import type {
+  CheckRunWrite,
   GitHubAppInfo,
+  GitHubCheckRun,
   GitHubClient,
   GitHubCommitPage,
   GitHubInstallation,
   GitHubIssueComment,
+  GitHubIssueCommentPage,
   GitHubOrgMembership,
   GitHubPullRequest,
   GitHubPullRequestPage,
@@ -40,6 +48,7 @@ import type {
 } from './ports/github.ts';
 import {
   GitHubNotFoundError,
+  GitHubUnprocessableError,
   InstallationGoneError,
   InstallationNotAdmittedError,
   InstallationSuspendedError,
@@ -122,6 +131,11 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
   /** Every call served, in order. A call the gate refused is not here. */
   get calls(): RecordedCall[] {
     return this.state.calls;
+  }
+
+  /** Every Check Run in the world with the last write it was given, in the order they were posted (E09-S05). */
+  get checkRuns(): readonly StoredCheckRun[] {
+    return this.state.checkRuns.runs;
   }
 
   /**
@@ -243,15 +257,9 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     baseSha: string,
     headSha: string,
   ): Promise<{ readonly mergeBaseSha: string }> {
-    return this.#serveInstallation('compareCommits', githubInstallationId, () => {
-      const key = mergeKey(githubInstallationId, fullName, { baseSha, headSha });
-      const mergeBaseSha =
-        COMMIT_SHA.test(baseSha) && COMMIT_SHA.test(headSha) ? this.state.mergeBases.get(key) : undefined;
-      if (mergeBaseSha === undefined) {
-        throw new GitHubNotFoundError('GET /repos/{owner}/{repo}/compare/{basehead}');
-      }
-      return { mergeBaseSha };
-    });
+    return this.#serveInstallation('compareCommits', githubInstallationId, () =>
+      mergeBaseOf(this.state, githubInstallationId, { fullName, baseSha, headSha }),
+    );
   }
 
   getIssueComment(
@@ -266,6 +274,39 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     );
   }
 
+  updateIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commentId: GithubId,
+    body: string,
+  ): Promise<GitHubIssueComment> {
+    return this.#serveInstallation('updateIssueComment', githubInstallationId, (entry) =>
+      rewriteComment(this.state, { entry, fullName, commentId }, body),
+    );
+  }
+
+  listIssueComments(
+    githubInstallationId: GithubId,
+    fullName: string,
+    issueNumber: number,
+    page: number,
+  ): Promise<GitHubIssueCommentPage> {
+    return this.#serveInstallation('listIssueComments', githubInstallationId, (entry) =>
+      commentsPage(this.state, { entry, fullName, issueNumber }, page),
+    );
+  }
+
+  createIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    issueNumber: number,
+    body: string,
+  ): Promise<GitHubIssueComment> {
+    return this.#serveInstallation('createIssueComment', githubInstallationId, (entry) =>
+      postComment(this.state, { entry, fullName, issueNumber }, body),
+    );
+  }
+
   listPullRequestsForCommit(
     githubInstallationId: GithubId,
     fullName: string,
@@ -276,6 +317,60 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
         ? (this.state.commitPulls.get(commitKey(githubInstallationId, fullName, headSha)) ?? [])
         : []),
     ]);
+  }
+
+  createCheckRun(
+    githubInstallationId: GithubId,
+    fullName: string,
+    headSha: string,
+    write: CheckRunWrite,
+  ): Promise<GitHubCheckRun> {
+    const route = 'POST /repos/{owner}/{repo}/check-runs';
+    return this.#serveInstallation('createCheckRun', githubInstallationId, (entry) => {
+      reachable(entry, fullName, route, [headSha]);
+      refuseWithoutConclusion(route, write);
+      return this.state.checkRuns.create(
+        { installationId: githubInstallationId, fullName },
+        this.state.app.id,
+        headSha,
+        write,
+      );
+    });
+  }
+
+  updateCheckRun(
+    githubInstallationId: GithubId,
+    fullName: string,
+    checkRunId: GithubId,
+    write: CheckRunWrite,
+  ): Promise<GitHubCheckRun> {
+    const route = 'PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}';
+    return this.#serveInstallation('updateCheckRun', githubInstallationId, (entry) => {
+      reachable(entry, fullName, route);
+      refuseWithoutConclusion(route, write);
+      const run = this.state.checkRuns.update({ installationId: githubInstallationId, fullName }, checkRunId, write);
+      if (run === undefined) {
+        throw new GitHubNotFoundError(route);
+      }
+      return run;
+    });
+  }
+
+  getCheckRun(githubInstallationId: GithubId, fullName: string, checkRunId: GithubId): Promise<GitHubCheckRun | null> {
+    return this.#serveInstallation(
+      'getCheckRun',
+      githubInstallationId,
+      () => this.state.checkRuns.find({ installationId: githubInstallationId, fullName }, checkRunId) ?? null,
+    );
+  }
+
+  listCheckRunsForRef(githubInstallationId: GithubId, fullName: string, headSha: string): Promise<GitHubCheckRun[]> {
+    return this.#serveInstallation('listCheckRunsForRef', githubInstallationId, (entry) => {
+      reachable(entry, fullName, 'GET /repos/{owner}/{repo}/commits/{ref}/check-runs');
+      return COMMIT_SHA.test(headSha)
+        ? this.state.checkRuns.latest({ installationId: githubInstallationId, fullName }, headSha)
+        : [];
+    });
   }
 
   /**
@@ -319,6 +414,13 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
       }
       return read(entry);
     });
+  }
+}
+
+/** @throws GitHubUnprocessableError naming `route` for a completed run with no conclusion, as GitHub refuses it. */
+function refuseWithoutConclusion(route: string, write: CheckRunWrite): void {
+  if (lacksConclusion(write)) {
+    throw new GitHubUnprocessableError(route);
   }
 }
 
