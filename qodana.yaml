@@ -14,3 +14,9 @@ linter: jetbrains/qodana-js:2026.2
 profile:
   name: qodana.recommended
 failThreshold: 0
+exclude:
+  # Every relative import in this repository names its file with the extension and a barrel as `/index.ts`, because Node's
+  # type stripping needs that on the server and `src/shared` is imported by both projects. ES6PreferShortImport wants the
+  # extension and the `/index` dropped (94 findings in src/web); doing that in one project would break the one style the
+  # repository has, and ESLint and TypeScript already check that every import resolves.
+  - name: ES6PreferShortImport

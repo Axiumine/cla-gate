@@ -47,6 +47,9 @@ updates:
         patterns: ["@stryker-mutator/*"]
       memlab:
         patterns: ["memlab", "@memlab/api"]
+      # @tailwindcss/vite depends on the exact version of tailwindcss (E17-S05), so a bump of one has to carry the other.
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*"]
       dev-tooling:
         patterns: ["*"]
         update-types: ["minor", "patch"]

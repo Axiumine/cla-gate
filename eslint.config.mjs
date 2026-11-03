@@ -22,6 +22,7 @@ import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
 import { escapeHatchConfig } from './scripts/escape-hatches/eslint-config.ts';
 import { layerConfigs } from './scripts/eslint-layers.ts';
+import { webConfigs } from './scripts/web/eslint-config.ts';
 
 /** Same counting as scripts/code-caps/measure.ts: a function or file is its whole line span, blanks and comments included. */
 const counting = { skipBlankLines: false, skipComments: false };
@@ -91,4 +92,6 @@ export default defineConfig([
   escapeHatchConfig,
   // Layering (docs/architecture.md, Layering): scripts/eslint-layers.ts, with the tests that prove each direction.
   ...layerConfigs,
+  // The rules of src/web only (E17-S01): React Hooks. scripts/web/eslint-config.ts, with the tests that prove each one fires.
+  ...webConfigs,
 ]);

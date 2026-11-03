@@ -10,7 +10,7 @@ test('every response carries the strict security headers, errors and 404s includ
   for (const url of ['/healthz', '/readyz', '/missing']) {
     const { headers } = await app.inject(url);
     expect(headers['content-security-policy']).toBe(
-      "default-src 'self';script-src 'self';style-src 'self';base-uri 'self';form-action 'self';frame-ancestors 'none';object-src 'none'",
+      "default-src 'self';script-src 'self';style-src 'self';img-src 'self' https://avatars.githubusercontent.com;base-uri 'self';form-action 'self';frame-ancestors 'none';object-src 'none'",
     );
     expect(headers['x-frame-options']).toBe('DENY');
     expect(headers['x-content-type-options']).toBe('nosniff');

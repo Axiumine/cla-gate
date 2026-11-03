@@ -12,6 +12,7 @@ test('http: a strict policy without HSTS or upgrade-insecure-requests', () => {
       'default-src': ["'self'"],
       'script-src': ["'self'"],
       'style-src': ["'self'"],
+      'img-src': ["'self'", 'https://avatars.githubusercontent.com'],
       'base-uri': ["'self'"],
       'form-action': ["'self'"],
       'frame-ancestors': ["'none'"],

@@ -6,6 +6,7 @@ import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
 import { testApp } from '../../test-support.ts';
 import { declaredAccess, PUBLIC_ROUTES, WEBHOOK_ROUTES } from './route-access-model.ts';
 import { accessProblem } from './route-access-problems.ts';
+import { webFixture } from './spa-fixture/test-support.ts';
 import { tenantAccess } from './tenant-access.ts';
 
 // The route table of the real application (E11-S01): every route registered while the app is built, collected twice. Once by
@@ -46,9 +47,10 @@ const sorted = (names: readonly string[]): string[] => names.toSorted((a, b) => 
 
 const nameOf = (entry: { readonly method: string; readonly url: string }): string => `${entry.method} ${entry.url}`;
 
+/** The table of the application as it runs in production: with a built single-page app to serve (E17-S03), so its file routes are in it. */
 async function tableOfTheApp() {
   seen.length = 0;
-  const { app } = await testApp({ env: AUTH_ENV });
+  const { app } = await testApp({ env: { ...AUTH_ENV, NODE_ENV: 'test', WEB_ROOT: webFixture().root } });
   await app.ready();
   return { app, table: app.routeAccess, registered: [...seen] };
 }
@@ -77,13 +79,17 @@ test('the table is collected: the application registers its routes with the logi
 
 test('the table of the application holds every route Fastify registered, once each, and the implicit HEAD routes are not entries', async () => {
   const { table, registered } = await tableOfTheApp();
+  // The implicit HEAD route of a GET route is registered on its own, as the method 'HEAD'; the file routes answer both methods with one route (['HEAD', 'GET']), so their HEAD is an entry.
   const all = registered.flatMap((route) =>
-    [route.method].flat().map((method) => `${method.toUpperCase()} ${route.url}`),
+    [route.method]
+      .flat()
+      .map((method) => ({ name: `${method.toUpperCase()} ${route.url}`, implicit: route.method === 'HEAD' })),
   );
   // `GET /` is the throw-away instance that framework-errors.ts creates to read the security headers: not a route of the app.
-  const ofTheApp = all.filter((name) => name !== 'GET /');
-  expect(table.map(nameOf)).toEqual(ofTheApp.filter((name) => !name.startsWith('HEAD ')));
-  expect(ofTheApp.filter((name) => name.startsWith('HEAD '))).not.toEqual([]);
+  const ofTheApp = all.filter((route) => route.name !== 'GET /');
+  expect(table.map(nameOf)).toEqual(ofTheApp.filter((route) => !route.implicit).map((route) => route.name));
+  expect(ofTheApp.filter((route) => route.implicit)).not.toEqual([]);
+  expect(table.map(nameOf)).toContain('HEAD /*');
 });
 
 test('every route of the table declares a valid access', async () => {
@@ -96,7 +102,15 @@ test('the routes declared public are exactly PUBLIC_ROUTES, so a new public rout
   const { table } = await tableOfTheApp();
   const declared = table.filter((entry) => entry.access === 'public').map(nameOf);
   expect(sorted(declared)).toEqual(sorted(PUBLIC_ROUTES));
-  expect(sorted(declared)).toEqual(['GET /api/auth/callback', 'GET /api/auth/login', 'GET /healthz', 'GET /readyz']);
+  expect(sorted(declared)).toEqual([
+    'GET /*',
+    'GET /api/auth/callback',
+    'GET /api/auth/login',
+    'GET /api/meta',
+    'GET /healthz',
+    'GET /readyz',
+    'HEAD /*',
+  ]);
 });
 
 test('the route declared webhook is exactly POST /webhooks/github', async () => {

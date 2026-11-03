@@ -45,7 +45,16 @@ export function requireRouteAccess(app: FastifyInstance): void {
         method === 'HEAD' &&
         table.some((entry) => entry.method === 'GET' && entry.url === route.url && entry.access === access);
       if (!twin) {
-        table.push({ method, url: route.url, access });
+        // The declaration is read from the route when asked for, not now: the `onRoute` hooks of the plugin scopes run after
+        // this one (parents first) and may add to `route.config`, as the file routes of the single-page app do (E17-S03),
+        // and the guard acts on the config the route ends with, so that is the one to check.
+        table.push({
+          method,
+          url: route.url,
+          get access(): unknown {
+            return route.config?.access;
+          },
+        });
       }
     }
   });

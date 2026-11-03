@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { DEFAULT_SOURCE_URL } from '../../shared/meta.ts';
 import { authProblems, sessionFields } from './auth-fields.ts';
 import { databaseUrlField, originField, portField, sessionSecretField, trustProxyField } from './env-fields.ts';
 import { githubFields, githubProblems } from './env-github.ts';
+import { sourceCommitField, sourceUrlField } from './source-fields.ts';
+import { DEFAULT_WEB_ROOT, webRootField } from './web-root.ts';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 const DEFAULT_PORT = 3000;
@@ -19,6 +22,9 @@ export const envSchema = z
     PUBLIC_BASE_URL: originField.optional(),
     TRUST_PROXY: trustProxyField.default(false),
     SESSION_SECRET: sessionSecretField.optional(),
+    WEB_ROOT: webRootField.default(DEFAULT_WEB_ROOT),
+    SOURCE_URL: sourceUrlField.default(DEFAULT_SOURCE_URL),
+    SOURCE_COMMIT: sourceCommitField.default(null),
     ...githubFields,
     ...sessionFields,
   })

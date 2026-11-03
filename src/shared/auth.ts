@@ -34,7 +34,6 @@ export const logoutRequestSchema = z.strictObject({ everywhere: z.boolean().opti
 /**
  * Why a login ended at `/login/failed` (E10-S05). The server redirects with `?reason=<one of these>`; the screen (E17)
  * reads the same list, so a code added on one side cannot be missed on the other.
- * @internal Exported for the unit tests and for the login-failed screen (E17); Knip ignores `@internal` exports in production mode until that story imports it.
  */
 export const loginFailureReasonSchema = z.enum([
   'state_mismatch',
@@ -47,7 +46,10 @@ export const loginFailureReasonSchema = z.enum([
 
 export type LoginFailureReason = z.infer<typeof loginFailureReasonSchema>;
 
-/** The path of the login-failed screen (E17) that the login callback redirects to. */
+/** The path of the login-failed screen (E17-S08): the router registers it and the login callback redirects to it. */
+export const LOGIN_FAILED_PATH = '/login/failed';
+
+/** The path of the login-failed screen (E17) that the login callback redirects to, with the reason. */
 export function loginFailedPath(reason: LoginFailureReason): string {
-  return `/login/failed?reason=${reason}`;
+  return `${LOGIN_FAILED_PATH}?reason=${reason}`;
 }

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { logoutRequestSchema } from '../../../shared/auth.ts';
+import { logoutRoute } from '../../../shared/auth-contract.ts';
 import type { RoleCache } from '../../services/role-cache.ts';
 import type { SessionStore } from '../db/sessions.ts';
 import { requireAuth } from './auth-request.ts';
@@ -28,7 +29,7 @@ interface LogoutRoutesOptions {
  */
 export const logoutRoutes: FastifyPluginCallbackZod<LogoutRoutesOptions> = (app, options, done) => {
   app.post(
-    '/api/auth/logout',
+    logoutRoute.path,
     { config: { access: 'authenticated', auditExempt: 'session', rateLimit: routeRateLimit(RATE_LIMITS.logout) } },
     async (request, reply) => {
       const { sessionId, user } = requireAuth(request);

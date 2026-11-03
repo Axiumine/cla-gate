@@ -35,6 +35,29 @@ const dynamicInto = (directory: string, message: string) => ({
   message,
 });
 
+const noMarkup =
+  'src/web never sets markup (E17-S11): show a string a person controls with UserText, which renders it as a text node.';
+
+/**
+ * E17-S11: `dangerouslySetInnerHTML` as a JSX attribute or as a property of an object, which is how it reaches an element
+ * through a spread (`<p {...{ dangerouslySetInnerHTML: x }} />`) or `createElement`. Biome's `noDangerouslySetInnerHtml`
+ * reads the first form and `createElement` calls and does not follow a spread, so this is its backstop.
+ */
+const noInnerHtml = [
+  { selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']", message: noMarkup },
+  {
+    selector: "Property[key.name='dangerouslySetInnerHTML'], Property[key.value='dangerouslySetInnerHTML']",
+    message: noMarkup,
+  },
+];
+
+/**
+ * The `no-restricted-syntax` selectors of every src/web file: they keep it off src/server and keep markup out of it. A block
+ * for some src/web files that sets selectors of its own (scripts/web/eslint-config.ts) must repeat these, because a later
+ * block replaces the rule instead of adding to it.
+ */
+export const webLayerSelectors = [nonLiteralImport, dynamicInto('server', sharedAndWeb), ...noInnerHtml];
+
 /**
  * Everything the pure domain layer may import: its own files (no `..` anywhere), src/shared, and zod. Any other
  * specifier matches this "not allowed" expression: Node built-ins (`node:fs`, `node:dns/promises`, `node:sqlite`), I/O
@@ -93,7 +116,7 @@ export const layerConfigs: Linter.Config[] = [
     files: ['src/web/**'],
     rules: {
       ...restrictImports({ regex: into('server'), message: sharedAndWeb }),
-      ...restrictedSyntax(nonLiteralImport, dynamicInto('server', sharedAndWeb)),
+      ...restrictedSyntax(...webLayerSelectors),
     },
   },
   {

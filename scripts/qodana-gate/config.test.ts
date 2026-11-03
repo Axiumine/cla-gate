@@ -37,9 +37,9 @@ test('there is no baseline: no key, no setting and no SARIF file in the reposito
   expect(listDir(ROOT).filter((name) => name.includes('.sarif'))).toEqual([]);
 });
 
-test('every exclusion in the file has a comment line above it that says why (none is needed today)', () => {
+test('every exclusion in the file has a comment line above it that says why, and there is exactly one today', () => {
   expect(uncommentedExcludes(text)).toEqual([]);
-  expect(config.exclude ?? []).toEqual([]);
+  expect(config.exclude).toEqual([{ name: 'ES6PreferShortImport' }]);
 });
 
 test('the file starts with the licence header like every other source file', () => {

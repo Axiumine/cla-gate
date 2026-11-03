@@ -1,0 +1,158 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (C) 2026 Giovanni Manzoni */
+
+/*
+ * The stylesheet of the app (E17-S05), the one index.html links: Tailwind CSS 4 (its reset and its utilities, without its
+ * default theme, so the only colours, sizes and radii that exist are ours), the tokens, then the mapping of the tokens to
+ * Tailwind's theme and the base rules that every screen gets.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@import "./tokens.css";
+
+/* Utilities come from the class names in the components of src/web: not from the tests, whose strings are not styles. */
+@source "../**/*.{ts,tsx}";
+@source not "../**/*.test.{ts,tsx}";
+@source not "../**/test-support{,.ts}";
+
+/* `dark:` follows the theme that data-theme names, whatever the system prefers: the user's choice wins. */
+@custom-variant dark (&:where(:root[data-theme="dark"], :root[data-theme="dark"] *));
+
+/*
+ * The mapping: a Tailwind name on the left, the token it stands for on the right. `inline` makes a utility read the token
+ * itself (`bg-surface` is `background-color: var(--surface)`), so the dark theme needs no second set of utilities.
+ */
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-link: var(--link);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-on-danger: var(--on-danger);
+  --color-success-bg: var(--success-bg);
+  --color-success-fg: var(--success-fg);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-info-bg: var(--info-bg);
+  --color-info-fg: var(--info-fg);
+  --color-focus: var(--focus);
+
+  --spacing: var(--space-1);
+
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-surface);
+  --radius-full: var(--radius-pill);
+
+  --font-ui: var(--font-sans);
+  --font-code: var(--font-mono);
+  --text-xs: var(--size-xs);
+  --text-xs--line-height: var(--leading-normal);
+  --text-sm: var(--size-sm);
+  --text-sm--line-height: var(--leading-normal);
+  --text-base: var(--size-base);
+  --text-base--line-height: var(--leading-normal);
+  --text-lg: var(--size-lg);
+  --text-lg--line-height: var(--leading-tight);
+  --text-xl: var(--size-xl);
+  --text-xl--line-height: var(--leading-tight);
+  --text-2xl: var(--size-2xl);
+  --text-2xl--line-height: var(--leading-tight);
+  --font-weight-normal: var(--weight-normal);
+  --font-weight-medium: var(--weight-medium);
+  --font-weight-semibold: var(--weight-semibold);
+}
+
+/* Breakpoints are media-query lengths, which a custom property cannot hold: they are the one theme value written out here. */
+@theme {
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+}
+
+/*
+ * The widths of a page (E17-S09): the text column (`max-w-2xl`) and the rows of the header and the footer (`max-w-5xl`).
+ * Tailwind's `max-w-*` utilities read `--container-*`, which belong to the default theme this sheet leaves out, so without
+ * these a `max-w-2xl` class would produce no rule at all.
+ */
+@theme {
+  --container-2xl: 42rem;
+  --container-5xl: 64rem;
+}
+
+/* The spinner of LoadingState (E17-S07): Tailwind's own `animate-spin`, which comes with the default theme this sheet leaves out. */
+@theme {
+  --animate-spin: spin 1s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+/* The base rules, in the base layer: a utility (a later layer) overrides any of them. */
+@layer base {
+  body {
+    background-color: var(--page);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: var(--size-base);
+    line-height: var(--leading-normal);
+  }
+
+  a {
+    color: var(--link);
+  }
+
+  /* Every interactive element shows where the keyboard is: a 2px ring in the focus token, outside the element. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /*
+   * While an overlay is open (E17-S10) the page behind it does not scroll. overlay.tsx puts this class on <html> and sets
+   * the width of the scrollbar it takes away in --scroll-lock-gap, so the page does not jump sideways. Radix does the same
+   * with a <style> element, which style-src 'self' blocks.
+   */
+  html.scroll-locked {
+    overflow: hidden;
+    padding-right: var(--scroll-lock-gap, 0);
+  }
+
+  /*
+   * In forced-colors mode the browser replaces every colour with a system one, so a boundary that is only a fill or a shadow
+   * disappears. The controls get a border in a system colour there; a component that sets its own border overrides it.
+   */
+  @media (forced-colors: active) {
+    :where(button, input, select, textarea, summary, [role="button"], [role="tab"]) {
+      border: 1px solid ButtonText;
+    }
+  }
+}
+
+/*
+ * A person who asked for less motion gets none: no transition, no animation, no smooth scrolling, whatever a component
+ * sets. The rule is outside every layer on purpose: a rule outside the layers beats the rules inside them (the utilities
+ * included) without !important, and a component styled by Tailwind utilities has no rule outside them to beat it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none;
+    scroll-behavior: auto;
+    transition: none;
+  }
+}

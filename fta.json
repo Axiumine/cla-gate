@@ -11,6 +11,7 @@
     "/.vitest",
     "/.yarn",
     "/.stryker-tmp",
-    "/.qodana"
+    "/.qodana",
+    "/src/web/test-support"
   ]
 }
