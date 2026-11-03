@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Giovanni Manzoni
 //
 // The entry point of the single-page app (E17-S01): it mounts <App /> into #root and does nothing else. Everything the
-// app does lives in App.tsx and below, where it is tested.
+// app does lives in App.tsx and below, where it is tested. The first import is the setting of Zod (zod-config.ts), which
+// must run before any module builds a schema.
+import './zod-config.ts';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
