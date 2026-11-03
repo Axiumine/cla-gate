@@ -5,7 +5,7 @@ import { expect, test, vi } from 'vitest';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import type * as AppModule from './app.ts';
 import { boot } from './boot.ts';
-import { captureLogs, FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, FakeProcess, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // Start-up with a route that has no access declaration (E11-S01): `buildApp` is wrapped so that the app it returns gets two
 // routes from a plugin, one with no declaration under `/api`, as a module that slipped one in would.
@@ -37,7 +37,13 @@ test('boot refuses to start while a route lacks its access declaration: it logs 
     PORT: String(await freePort()),
     LOG_LEVEL: 'info',
   };
-  const server = await boot({ env, signals, createDb: () => db, logDestination: logs.destination });
+  const server = await boot({
+    env,
+    signals,
+    createDb: () => db,
+    createJobQueue: startFakeJobQueue,
+    logDestination: logs.destination,
+  });
   expect(server).toBeUndefined();
   expect(signals.exitCode).toBe(1);
   const failure = logs.lines().find((line) => line['msg'] === 'failed to start');

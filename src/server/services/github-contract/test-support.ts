@@ -4,7 +4,6 @@ import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import type {
   GitHubClient,
-  GitHubClient,
   GitHubCommit,
   GitHubInstallation,
   GitHubIssueComment,

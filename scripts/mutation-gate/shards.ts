@@ -69,6 +69,21 @@ export const SERVER_SHARDS: readonly Shard[] = [
   // 18 files, 516 mutants: every other service (audit-*, repository-*, admission-policies, and the webhook intake's
   // tenant-filter, failure-throttle, log-limiter, webhook-deliveries). About 500 is the target; this one is a little over it.
   { name: 'services-other', mutate: ['src/server/services/[!i]*.ts'] },
+  // The job queue and its workers (E07): pg-boss runtime, producer, queue policy, serialisation, workers and the sweep schedule.
+  { name: 'jobs-adapter', mutate: ['src/server/adapters/jobs/**/*.ts'] },
+  // The evaluate-pr job (E07-S04): the pull request and commit reads, the policy facts and the evaluation protocol.
+  { name: 'evaluate-pr', mutate: ['src/server/services/evaluate-pr/**/*.ts'] },
+  // The job handlers of E07-S05 to S07: the dead-letter handler, the close-pr job, and /recheck and Re-run.
+  {
+    name: 'job-handlers',
+    mutate: [
+      'src/server/services/close-pr/**/*.ts',
+      'src/server/services/dead-letter/**/*.ts',
+      'src/server/services/recheck/**/*.ts',
+    ],
+  },
+  // The scheduled reconciliation sweep (E07-S08).
+  { name: 'sweep', mutate: ['src/server/services/sweep/**/*.ts'] },
 ];
 
 /** The scripts scope (E20-S05, the caps tool) is a shard of its own, selected by STRYKER_SCOPE=scripts and not by STRYKER_SHARD. */

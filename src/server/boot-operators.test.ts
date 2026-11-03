@@ -13,7 +13,7 @@ import { boot } from './boot.ts';
 import { AUTH_ENV } from './config/auth-fixture/test-support.ts';
 import { testGitHubKey } from './config/test-support.ts';
 import { FakeClock } from './services/test-support.ts';
-import { captureLogs, FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, FakeProcess, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // What start-up decides about the instance operators (E11-S08): the effective ids in the log, the owner of the App read from
 // the self-check of E05-S02, and the policy the running server guards the operator route with.
@@ -62,6 +62,7 @@ async function start(env: Record<string, string> = {}, people: readonly number[]
     },
     signals,
     createDb,
+    createJobQueue: startFakeJobQueue,
     clock,
     logDestination: logs.destination,
     reconcileOnStart: false,

@@ -162,6 +162,34 @@ async function seedPolicyRows(db: Kysely<Database>, tenant: Tenant, n: number): 
     .execute();
 }
 
+/**
+ * The rows the statements of the job queue (E07) need a neighbour for: an allowlist entry of the repository alone, next to the
+ * installation-wide one (a read for the repository of another tenant must not meet it), and an evaluation that is still
+ * running, which the cancellation and the reaper act on.
+ */
+async function seedJobRows(db: Kysely<Database>, tenant: Tenant, n: number): Promise<void> {
+  await db
+    .insertInto('allowlist_entries')
+    .values({
+      installation_id: tenant.installationId,
+      repository_id: tenant.repositoryId,
+      kind: 'user',
+      github_id: n * 100 + 1,
+      created_by: tenant.publisherId,
+    })
+    .execute();
+  await db
+    .insertInto('pr_evaluations')
+    .values({
+      installation_id: tenant.installationId,
+      repository_id: tenant.repositoryId,
+      pr_number: 8,
+      head_sha: 'c'.repeat(40),
+      result: 'in_progress',
+    })
+    .execute();
+}
+
 /** Admits the installation of `tenant`, stores the repository with its own document and the policy rows around it. */
 async function extendTenant(db: Kysely<Database>, tenant: Tenant, n: number, signerGithubId: number) {
   await db
@@ -178,6 +206,7 @@ async function extendTenant(db: Kysely<Database>, tenant: Tenant, n: number, sig
       github_repo_id: githubRepoId,
       full_name: fullName,
       cla_document_id: null,
+      enabled: true,
     })
     .returning('id')
     .executeTakeFirstOrThrow();
@@ -193,6 +222,7 @@ async function extendTenant(db: Kysely<Database>, tenant: Tenant, n: number, sig
     .returning('id')
     .executeTakeFirstOrThrow();
   await seedPolicyRows(db, tenant, n);
+  await seedJobRows(db, tenant, n);
   const signature = await seedSignature(db, tenant, signerGithubId);
   return { scoped: { repositoryId: repository.id, githubRepoId, fullName, documentId: document.id }, signature };
 }

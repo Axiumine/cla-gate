@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { parseGithubId } from '../../../shared/github-id.ts';
-import { needsSweepEvaluation, STALE_AFTER_SECONDS } from '../../domain/sweep.ts';
+import { evaluationKey, needsSweepEvaluation, STALE_AFTER_SECONDS } from '../../domain/sweep.ts';
 import type { Tenant } from '../evaluate-pr/evaluation-facts.ts';
 import type { GitHubPullRequestRef } from '../ports/github.ts';
 import { listOpenPulls } from './open-pulls.ts';
 import { cancelSuperseded, resolveUnlisted } from './reaper.ts';
 import { enqueueEvaluations, type SendCounts, SWEEP_REQUEST } from './sweep-enqueue.ts';
 import type { SweepContext, SweepPorts } from './sweep-ports.ts';
-import { evaluationKey, evaluationStates, staleEvaluations } from './sweep-rows.ts';
+import { evaluationStates, staleEvaluations } from './sweep-rows.ts';
 
 // The sweep of one repository (E07-S08): the open pull requests are read, the ones with no final result for their head SHA are
 // sent to be evaluated, and the evaluations that stayed `in_progress` are settled by the reaper.

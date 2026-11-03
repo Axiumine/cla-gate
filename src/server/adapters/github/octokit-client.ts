@@ -96,7 +96,7 @@ export class OctokitGitHubClient extends OctokitPullReads implements GitHubClien
     login: string,
   ): Promise<GitHubRepositoryPermission | null> {
     // The installation is checked first, as for the membership: a refused installation is refused whatever the names are.
-    return this.#dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       NAME.test(owner) && REPOSITORY_NAME.test(repo) && NAME.test(login)
         ? fetchRepositoryPermission(channel, headers, { owner, repo }, login)
         : Promise.resolve(null),

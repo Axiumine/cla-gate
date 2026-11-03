@@ -9,8 +9,10 @@ import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates
 import { RepositoryNotFoundError, setRepositoryEnabled } from '../../../services/repository-enabled.ts';
 import {
   findActiveRepositoryByGithubId,
+  findRepositoryByGithubId,
   isActiveRepositoryOfAnotherInstallation,
   listActiveRepositoryIds,
+  listEnabledRepositories,
   markRepositoriesRemoved,
   renameActiveRepository,
 } from '../../../services/repository-queries.ts';
@@ -24,6 +26,7 @@ import {
 } from '../../../services/tenant-queries.ts';
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
+import { JOB_TENANT_QUERIES } from '../tenant-jobs-fixture/test-support.ts';
 import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from '../tenant-scope.ts';
 
 // The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
@@ -36,13 +39,19 @@ import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from 
 export const TENANT_MODULES = [
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
+  'services/close-pr/close-heads.ts',
+  'services/close-pr/close-rows.ts',
   'services/document-placement.ts',
+  'services/evaluate-pr/evaluation-rows.ts',
+  'services/evaluate-pr/policy-facts.ts',
+  'services/evaluate-pr/signature-facts.ts',
   'services/installation-operator.ts',
   'services/repo-admin-candidates.ts',
   'services/repository-enabled.ts',
   'services/repository-queries.ts',
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
+  'services/sweep/sweep-rows.ts',
   'services/tenant-queries.ts',
 ] as const;
 
@@ -53,7 +62,7 @@ export const TENANT_MODULES = [
 export const AUDIT_WRITER = 'services/audit.ts';
 
 /** The error is the one a refused call throws. */
-type Refusal = (error: unknown) => boolean;
+export type Refusal = (error: unknown) => boolean;
 
 /**
  * A function that takes the tenant and answers with its rows. `run` calls it with `scope` (the tenant it acts for) and the ids
@@ -292,10 +301,25 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
         return row === null ? [] : [row.installation_id];
       },
     }),
+    findRepositoryByGithubId: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const row = await findRepositoryByGithubId(db, scope.installationId, ids.plain.githubRepoId);
+        return row === null ? [] : [row.installation_id];
+      },
+    }),
     listActiveRepositoryIds: scoped({
       takesIds: false,
       activeOnly: true,
       run: async (db, scope) => ownersOfGithubIds(db, await listActiveRepositoryIds(db, scope.installationId)),
+    }),
+    listEnabledRepositories: scoped({
+      takesIds: false,
+      activeOnly: true,
+      // The fixture enables the repository with its own document of each tenant, so the list has a foreign row to leave out.
+      run: async (db, scope) =>
+        (await listEnabledRepositories(db, scope.installationId)).map((row) => row.installation_id),
     }),
     isActiveRepositoryOfAnotherInstallation: {
       kind: 'by_design',
@@ -371,6 +395,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       answers: (own, other) => ({ own: own.installationId, foreign: other.installationId }),
     },
   },
+  // The statements of the job queue (E07): the evaluation rows, the policy facts and the sweep's reads.
+  ...JOB_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

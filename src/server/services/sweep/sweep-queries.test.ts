@@ -3,9 +3,10 @@
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../../shared/github-id.ts';
 import { rowId } from '../../adapters/db/test-support.ts';
+import { evaluationKey } from '../../domain/sweep.ts';
 import { listServedInstallationIds } from '../installation-queries.ts';
 import { listEnabledRepositories } from '../repository-queries.ts';
-import { evaluationKey, evaluationStates, staleEvaluations } from './sweep-rows.ts';
+import { evaluationStates, staleEvaluations } from './sweep-rows.ts';
 import { addNeighbour, HEAD, MINUTE, NEWER_HEAD, seedAged, sweepWorld } from './test-support.ts';
 
 // The statements the sweep (E07-S08) reads with, each against two tenants: none of them may return a row of the other.

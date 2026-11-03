@@ -11,7 +11,7 @@ import { expectedToken } from './adapters/http/auth-fixture/test-support.ts';
 import { boot } from './boot.ts';
 import { AUTH_ENV, TEST_SESSION_SECRET } from './config/auth-fixture/test-support.ts';
 import { FakeClock } from './services/test-support.ts';
-import { captureLogs, FakeProcess, freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
+import { captureLogs, FakeProcess, freePort, startFakeJobQueue, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // The session cookie on the real, listening server (E10-S02): boot wires the login routes and hands them its clock.
 
@@ -42,6 +42,7 @@ async function startWithPerson() {
     },
     signals: new FakeProcess(),
     createDb: () => db,
+    createJobQueue: startFakeJobQueue,
     logDestination: captureLogs().destination,
     reconcileOnStart: false,
     clock,

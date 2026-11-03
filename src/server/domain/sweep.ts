@@ -30,6 +30,9 @@ export const SWEEP_EVALUATION_WINDOW_SECONDS = 5 * 60;
 /** Seconds in which an installation takes one `sweep-installation` job: a retry of the `sweep` that fans them out sends none twice. */
 export const SWEEP_INSTALLATION_WINDOW_SECONDS = 60;
 
+/** The key of the evaluation of one pull request at one head SHA: what the stored states of a repository are looked up by. */
+export const evaluationKey = (prNumber: number, headSha: string): string => `${String(prNumber)}@${headSha}`;
+
 /** What the sweep knows of the evaluation stored for a pull request at its current head SHA. */
 export interface StoredEvaluationState {
   readonly result: 'in_progress' | 'success' | 'failure' | 'cancelled';

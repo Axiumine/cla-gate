@@ -2,15 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
 import type { Database } from '../../adapters/db/schema.ts';
-import type { StoredEvaluationState } from '../../domain/sweep.ts';
+import { evaluationKey, type StoredEvaluationState } from '../../domain/sweep.ts';
 import type { RepositoryScope } from '../close-pr/close-rows.ts';
 import { batches } from '../repository-rows.ts';
 
 // The rows of `pr_evaluations` the sweep reads (E07-S08). It writes none: a row changes through the jobs it starts and through
 // the cancellation of E07-S06. Every statement filters by the installation, so one tenant never reaches the rows of another.
-
-/** The key of the evaluation of one pull request at one head SHA. */
-export const evaluationKey = (prNumber: number, headSha: string): string => `${String(prNumber)}@${headSha}`;
 
 /**
  * What is stored for each of the pull requests `prNumbers` of the repository, by {@link evaluationKey}: the row of every

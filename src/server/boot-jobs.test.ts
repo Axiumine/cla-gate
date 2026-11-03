@@ -24,6 +24,7 @@ import {
 import { pullRequest } from './services/github-pull-contract/test-support.ts';
 import type { InstallationSync } from './services/installation-sync.ts';
 import { HandlerUnavailableError } from './services/job-handlers.ts';
+import { HandlerRegisteredError, type JobHandler } from './services/job-registry.ts';
 import { FakePendingJobs } from './services/job-run-fixture/test-support.ts';
 import { createJobsTable, deliveryRows, droppingEnqueuer, fakeEnqueuer } from './services/jobs-fixture/test-support.ts';
 import { MEMBER_TTL_MS } from './services/org-membership-cache.ts';
@@ -66,6 +67,39 @@ test('the registry binds the eight handlers of the application, the three types 
   expect(workers.registry.types()).toEqual(JOB_TYPES.filter((type) => !later.includes(type)));
   expect(workers.registry.types()).toHaveLength(8);
   expect(workers.concurrency).toBe(7);
+});
+
+test('the register option binds the handler of a job type whose epic comes later, after the ones of the application, and a type that has one is refused', async () => {
+  const { db } = await migratedTestDatabase();
+  const handler = vi.fn<JobHandler<'revoke-user-sessions'>>(() => Promise.resolve({ outcome: 'revoked' }));
+  const workers = jobWorkers({
+    db,
+    config: testConfig(),
+    logger: CONTEXT.logger,
+    syncFor: undefined,
+    register: (registry) => {
+      registry.register('revoke-user-sessions', handler);
+    },
+  });
+  expect(workers.registry.types()).toContain('revoke-user-sessions');
+  const job = { type: 'revoke-user-sessions', githubUserId: INSTALLATION } as const;
+  const outcome = await workers.registry.run('revoke-user-sessions', job, {
+    ...CONTEXT,
+    signal: new AbortController().signal,
+  });
+  expect(outcome).toEqual({ outcome: 'revoked' });
+  expect(handler).toHaveBeenCalledWith(job, expect.objectContaining({ jobId: 'job-1' }));
+  expect(() =>
+    jobWorkers({
+      db,
+      config: testConfig(),
+      logger: CONTEXT.logger,
+      syncFor: undefined,
+      register: (registry) => {
+        registry.register('sweep', () => Promise.resolve({ outcome: 'again' }));
+      },
+    }),
+  ).toThrow(HandlerRegisteredError);
 });
 
 test('the default concurrency is 4', async () => {

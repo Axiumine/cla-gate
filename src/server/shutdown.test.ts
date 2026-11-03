@@ -3,7 +3,7 @@
 import { expect, onTestFinished, test, vi } from 'vitest';
 import { createLogger } from './adapters/http/logger.ts';
 import { closeOnSignals, failExitOnAbortedStop } from './shutdown.ts';
-import { captureLogs, FakeProcess, fakeJobQueue, freePort, testApp } from './test-support.ts';
+import { captureLogs, FakeProcess, fakeJobQueue, freePort, PUBLIC_ROUTE, testApp } from './test-support.ts';
 
 // closeOnSignals() on a real app, with the log captured: what the operator reads when a shutdown goes well, badly or twice.
 
@@ -55,7 +55,7 @@ test('a signal logs that the shutdown starts, closes the app once and leaves the
 async function withStuckRequest() {
   const { install, ...rest } = await prepare();
   const arrived = Promise.withResolvers<undefined>();
-  rest.app.get('/stuck', () => {
+  rest.app.get('/stuck', PUBLIC_ROUTE, () => {
     arrived.resolve(undefined);
     return new Promise<never>(() => undefined);
   });

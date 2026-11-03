@@ -110,6 +110,17 @@ async function registerLoginChecks(
   }
 }
 
+/** On close the job queue stops before the database is destroyed (E07-S01), so no job runs against a closed database. */
+function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queue: JobQueue | undefined): void {
+  app.addHook('onClose', async () => {
+    try {
+      await queue?.stop();
+    } finally {
+      await db.destroy();
+    }
+  });
+}
+
 /**
  * The Fastify application, fully wired but not listening: tests call `app.inject()`, `boot()` calls `listen()`.
  * Routes are declared with zod schemas (fastify-type-provider-zod), so input is validated and output serialised
@@ -160,12 +171,6 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
 
-  app.addHook('onClose', async () => {
-    try {
-      await options.jobQueue?.stop();
-    } finally {
-      await db.destroy();
-    }
-  });
+  closeQueueThenDatabase(app, db, options.jobQueue);
   return app;
 }

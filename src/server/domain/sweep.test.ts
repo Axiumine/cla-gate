@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import {
+  evaluationKey,
   isStale,
   MAX_SWEPT_PULLS,
   needsSweepEvaluation,
@@ -61,4 +62,10 @@ test('an evaluation in progress needs one only when it is stale: a younger one i
   expect(needsSweepEvaluation({ result: 'in_progress', updatedAtMs: NOW - 5 * MINUTE }, NOW)).toBe(false);
   expect(needsSweepEvaluation({ result: 'in_progress', updatedAtMs: NOW - 30 * MINUTE }, NOW)).toBe(false);
   expect(needsSweepEvaluation({ result: 'in_progress', updatedAtMs: NOW - 31 * MINUTE }, NOW)).toBe(true);
+});
+
+test('the key of an evaluation names the pull request and the head SHA, so two head SHAs of one pull request are two keys', () => {
+  expect(evaluationKey(7, 'a'.repeat(40))).toBe(`7@${'a'.repeat(40)}`);
+  expect(evaluationKey(7, 'b'.repeat(40))).not.toBe(evaluationKey(7, 'a'.repeat(40)));
+  expect(evaluationKey(8, 'a'.repeat(40))).not.toBe(evaluationKey(7, 'a'.repeat(40)));
 });

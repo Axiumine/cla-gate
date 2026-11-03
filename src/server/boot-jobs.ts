@@ -18,7 +18,7 @@ import { markDeliveryProcessed } from './services/webhook-delivery-rows.ts';
 
 // What the job workers need, wired at boot (E07-S03): the handlers, the delivery a finished job marks processed, the time
 // and how many jobs run at once. This is the one place where handlers are bound. An epic that owns a job registers its
-// handler here, with `registry.register(type, handler)` after `registerHandlers` (E10-S07 does so for
+// handler through the `register` option of `jobWorkers`, which runs after `registerHandlers` (E10-S07 does so for
 // `revoke-user-sessions`); no file of the queue, the wrapper or the other handlers changes. The dead-letter handlers
 // (E07-S05) are bound for every type already, in `services/dead-letter/dead-letter-registry.ts`.
 
@@ -35,6 +35,12 @@ export interface JobWorkersOptions {
   readonly evaluation?: { readonly github: GitHubClient; readonly reporter: EvaluationReporter } | undefined;
   /** Defaults to the wall clock. */
   readonly clock?: Clock | undefined;
+  /**
+   * Binds handlers besides the ones of this file, once those are in: the epic that owns a job type registers its handler
+   * here, from its own composition code (E10-S07 binds `revoke-user-sessions`, E14-S04 the two finalise jobs), so that no
+   * file of the queue, the wrapper or the other handlers changes.
+   */
+  readonly register?: ((registry: HandlerRegistry) => void) | undefined;
 }
 
 /** The handlers of the application, in a registry, and what runs them. */
@@ -69,6 +75,7 @@ export function jobWorkers(options: JobWorkersOptions): WorkerWiring {
         ? undefined
         : { db, reconcileInstallations: (signal) => syncFor(signal).reconcileInstallations() },
   });
+  options.register?.(registry);
   return {
     registry,
     markDeliveryProcessed: (deliveryId) => markDeliveryProcessed(db, deliveryId),
