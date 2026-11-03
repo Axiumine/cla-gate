@@ -4,7 +4,7 @@ import { type Kysely, sql } from 'kysely';
 import type { Database } from '../db/schema.ts';
 import { PGBOSS_SCHEMA } from './queues.ts';
 
-/** The unprivileged role the application connects as (`docker/postgres-init.sql`). It owns nothing. */
+/** The unprivileged role the application connects as (`scripts/provision-database.sql`). It owns nothing. */
 const RUNTIME_ROLE = 'cla_app';
 
 /**

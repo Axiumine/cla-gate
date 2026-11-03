@@ -1,40 +1,172 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Giovanni Manzoni
 #
-# Local development database: `yarn db:up` (it picks a random free port above 32768, remembers it in the git-ignored
-# .local/ directory and runs compose with POSTGRES_PORT set), then `yarn db:migrate` and `yarn dev`; `yarn db:url` prints
-# the connection strings and `yarn db:down` stops it. There is deliberately no default port: running `docker compose`
-# by hand without POSTGRES_PORT fails with the message below instead of publishing 5432.
-# The passwords below are well-known development defaults for a database that listens on 127.0.0.1 only. They are not
-# secrets and must never be reused anywhere else. Production gets its credentials from the environment or a secret
-# manager (see docs/configuration.md).
+# The operator stack (E19-S04): the whole platform from one checkout, `docker compose up --build`. The image is built here
+# and never pulled or pushed (E19-S01). The development database is docker-compose.dev.yml.
 #
-# Two roles on purpose: `cla_owner` owns the schema and runs the migrations (`MIGRATION_DATABASE_URL`), `cla_app` is the
-# unprivileged runtime role (`DATABASE_URL`) that migration 001 grants minimal privileges to. The application never
-# owns its tables, which is what keeps the immutability triggers meaningful.
+#   1. sh scripts/init-secrets.sh      creates secrets/ and .env (only what is missing; it never prints a value)
+#   2. set PUBLIC_BASE_URL in .env     the https origin the public reaches the app on
+#   3. docker compose up --build       postgres, then migrate to completion, then app (setup mode until the GitHub App exists)
+#
+# Three services, three jobs. `postgres` provisions its own roles on the first start of an empty volume
+# (scripts/provision-database.sh, passwords from secret files). `migrate` is the only service that holds the owner
+# credential, runs once and stops; a failed migration, a refused checksum included, stops the stack before `app` starts.
+# `app` holds the runtime credential and the GitHub credentials, never the owner's. Every secret is a file under
+# /run/secrets, read once at start-up (`<NAME>_FILE`, E19-S02). Settings that are not secret come from .env, which compose
+# reads by itself; docs/configuration.md lists them. A test (scripts/docker/compose-wiring.test.ts) keeps this file and the
+# application's environment schema in step.
 name: cla-gate
+
+# What `migrate` and `app` share: one image (built once from the checkout), a read-only root filesystem with /tmp as the only
+# writable place, no Linux capability, no way to gain privileges, and an init process that reaps children.
+x-application: &application
+  image: cla-gate:local
+  build:
+    context: .
+    args:
+      SOURCE_COMMIT: ${SOURCE_COMMIT:-unknown}
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  init: true
 
 services:
   postgres:
-    # Same major version as the CI database container (scripts/ci/postgres.ts) and as PGlite (PostgreSQL 18).
     image: postgres:18
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cla_owner
-      POSTGRES_PASSWORD: cla_owner_dev_only
-      POSTGRES_DB: cla
-    ports:
-      # Loopback only, on a port scripts/dev/db.ts chose. 5432 is the container's own port, not a host port.
-      - "127.0.0.1:${POSTGRES_PORT:?run yarn db:up, which picks a free port above 32768}:5432"
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_admin_password
+      CLA_OWNER_PASSWORD_FILE: /run/secrets/db_owner_password
+      CLA_APP_PASSWORD_FILE: /run/secrets/db_app_password
+      # The image runs every .sql file of its init directory by itself, so the SQL file of the script is mounted elsewhere.
+      CLA_PROVISION_SQL: /opt/cla/provision-database.sql
+    secrets:
+      - db_admin_password
+      - db_owner_password
+      - db_app_password
     volumes:
       # PostgreSQL 18 images keep the cluster in a versioned subdirectory, so the volume mounts one level up.
       - cla-postgres-data:/var/lib/postgresql
-      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
+      # Runs once, on the first start of an empty volume: creates the database, the two roles and the pgboss schema.
+      - ./scripts/provision-database.sh:/docker-entrypoint-initdb.d/10-provision-database.sh:ro
+      - ./scripts/provision-database.sql:/opt/cla/provision-database.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cla_owner -d cla"]
+      # Over TCP: while the init scripts run, the temporary server listens on its socket only, so a socket check would
+      # report a database that is not provisioned yet.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cla_app -d cla"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 12
+    networks:
+      - backend
+
+  migrate:
+    <<: *application
+    command: ["node", "dist/server/migrate.js"]
+    restart: "no"
+    environment:
+      MIGRATION_DATABASE_URL_FILE: /run/secrets/migration_database_url
+    secrets:
+      - migration_database_url
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+  app:
+    <<: *application
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      # Every setting of the environment schema that the image does not fix itself, each an interpolation with a
+      # default, so that the file named .env decides. NODE_ENV, HOST and WEB_ROOT are the image's, and the container side of PORT is always 3000: PORT here
+      # is the host port below (scripts/docker/compose-wiring.test.ts lists the exceptions).
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      TRUST_PROXY: ${TRUST_PROXY:-172.30.30.0/24}
+      SOURCE_URL: ${SOURCE_URL:-https://github.com/Axiumine/cla-gate}
+      SOURCE_COMMIT: ${SOURCE_COMMIT:-unknown}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      SWEEP_INTERVAL_MINUTES: ${SWEEP_INTERVAL_MINUTES:-30}
+      SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-28800}
+      SESSION_ABSOLUTE_SECONDS: ${SESSION_ABSOLUTE_SECONDS:-604800}
+      NETWORK_METADATA_RETENTION_DAYS: ${NETWORK_METADATA_RETENTION_DAYS:-30}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_ALLOWED_ACCOUNT_IDS: ${GITHUB_ALLOWED_ACCOUNT_IDS:-}
+      OPERATOR_GITHUB_IDS: ${OPERATOR_GITHUB_IDS:-}
+      # The secrets: files, not values. The GitHub files are empty until the first-run setup has created the App and the
+      # operator has saved its credentials (an empty file counts as unset), and the two `_previous` ones stay empty
+      # outside a key or secret rotation.
+      DATABASE_URL_FILE: /run/secrets/database_url
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      SETUP_TOKEN_FILE: /run/secrets/setup_token
+      GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github_app_private_key
+      GITHUB_APP_PRIVATE_KEY_PREVIOUS_FILE: /run/secrets/github_app_private_key_previous
+      GITHUB_WEBHOOK_SECRET_FILE: /run/secrets/github_webhook_secret
+      GITHUB_WEBHOOK_SECRET_PREVIOUS_FILE: /run/secrets/github_webhook_secret_previous
+      GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_client_secret
+    secrets:
+      - database_url
+      - session_secret
+      - setup_token
+      - github_app_private_key
+      - github_app_private_key_previous
+      - github_webhook_secret
+      - github_webhook_secret_previous
+      - github_client_secret
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      # Loopback by default: put a reverse proxy in front (the `tls` profile, or your own). The 3000 on the right is the
+      # application's port inside its container; the host side is the deployment setting of the operator.
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3000}:3000"
+    networks:
+      - backend
+      - default
+
+networks:
+  default:
+    ipam:
+      config:
+        # An explicit subnet, so that TRUST_PROXY can name it: the proxy of the stack, and a proxy on the host (whose
+        # traffic arrives from the gateway of this network), are trusted, and nothing outside the subnet is.
+        - subnet: ${EDGE_SUBNET:-172.30.30.0/24}
+  # The database network: no route to the outside, and only `postgres`, `migrate` and `app` are on it.
+  backend:
+    internal: true
+
+secrets:
+  db_admin_password:
+    file: ./secrets/db_admin_password
+  db_owner_password:
+    file: ./secrets/db_owner_password
+  db_app_password:
+    file: ./secrets/db_app_password
+  migration_database_url:
+    file: ./secrets/migration_database_url
+  database_url:
+    file: ./secrets/database_url
+  session_secret:
+    file: ./secrets/session_secret
+  setup_token:
+    file: ./secrets/setup_token
+  github_app_private_key:
+    file: ./secrets/github_app_private_key
+  github_app_private_key_previous:
+    file: ./secrets/github_app_private_key_previous
+  github_webhook_secret:
+    file: ./secrets/github_webhook_secret
+  github_webhook_secret_previous:
+    file: ./secrets/github_webhook_secret_previous
+  github_client_secret:
+    file: ./secrets/github_client_secret
 
 volumes:
   cla-postgres-data:

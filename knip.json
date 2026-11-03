@@ -43,6 +43,7 @@
     "!scripts/code-caps/test-support.ts!",
     "!scripts/escape-hatches/eslint-config.ts!",
     "!scripts/ci/**!",
+    "!scripts/compose/test-support.ts!",
     "!scripts/ci-contract/**!",
     "!scripts/dev/**!",
     "!scripts/docker/test-support.ts!",

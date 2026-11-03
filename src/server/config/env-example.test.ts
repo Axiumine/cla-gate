@@ -12,6 +12,12 @@ import { SECRET_VARIABLES } from './secret-files.ts';
 const EXAMPLE = path.resolve(import.meta.dirname, '../../../.env.example');
 /** Read by `loadMigrateConfig`, outside the schema. */
 const MIGRATION_ONLY = ['MIGRATION_DATABASE_URL'];
+/**
+ * Read by the compose stack and not by the server (E19-S04): where the app's port is published, the subnet of the stack's
+ * network, and the address Let's Encrypt writes to (E19-S05). scripts/compose/compose-stack.test.ts keeps the first two in step
+ * with docker-compose.yml.
+ */
+const COMPOSE_ONLY = ['ACME_EMAIL', 'BIND_ADDRESS', 'EDGE_SUBNET'];
 
 const byName = (a: string, b: string): number => a.localeCompare(b);
 
@@ -24,9 +30,9 @@ const assignments = text
     return [line.slice(0, at), line.slice(at + 1)];
   });
 
-test('every variable of the environment schema is in .env.example, and nothing else is', () => {
+test('every variable of the environment schema is in .env.example, and nothing else is but what the stack reads', () => {
   const documented = assignments.map(([name]) => name).toSorted(byName);
-  expect(documented).toEqual([...Object.keys(envSchema.shape), ...MIGRATION_ONLY].toSorted(byName));
+  expect(documented).toEqual([...Object.keys(envSchema.shape), ...MIGRATION_ONLY, ...COMPOSE_ONLY].toSorted(byName));
 });
 
 test('no variable is listed twice', () => {

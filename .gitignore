@@ -27,10 +27,11 @@ test-results/
 # local state (the development database port chosen by `yarn db:up`)
 .local/
 
-# secrets and local configuration
+# secrets and local configuration (secrets/ is what scripts/init-secrets.sh creates for the compose stack, E19-S04)
 .env
 .env.*
 !.env.example
+secrets/
 *.pem
 *.key
 

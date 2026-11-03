@@ -15,6 +15,9 @@
 #                   (asked twice). The runtime role is always cla_app: migration 001 grants to that name.
 #   Development     CLA_TEST_ROLE with CLA_TEST_PASSWORD (or _FILE) also creates a role that may create the throw-away
 #                   test databases (E19-S10). Refused when NODE_ENV=production.
+#   SQL file        provision-database.sql next to this script, or the file CLA_PROVISION_SQL names. The compose stacks
+#                   (E19-S04) mount this script into the image's /docker-entrypoint-initdb.d/, which runs every .sql
+#                   file it finds there by itself, so the SQL file sits elsewhere and this variable says where.
 #   Exit codes      0 done, 2 invalid input, 3 refused because of a conflict (a database that has another owner), 4 no
 #                   connection, no usable psql or an SQL error.
 #
@@ -133,7 +136,7 @@ if [ -z "$client_major" ] || [ "$client_major" -lt 15 ]; then
 fi
 
 script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
-sql_file=$script_directory/provision-database.sql
+sql_file=${CLA_PROVISION_SQL:-$script_directory/provision-database.sql}
 if [ ! -r "$sql_file" ]; then
   say "cannot read $sql_file"
   exit "$EXIT_SQL"
