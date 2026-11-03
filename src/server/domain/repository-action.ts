@@ -25,6 +25,14 @@ export type AttachedDocumentScope =
   | { readonly scope: 'repository'; readonly repositoryId: number };
 
 /**
+ * The scope of a document by the repository it is stored for (`cla_documents.repository_id`, null when it covers the whole
+ * installation): the form the rule takes it in.
+ */
+export function scopeOfDocument(repositoryId: number | null): AttachedDocumentScope {
+  return repositoryId === null ? { scope: 'installation' } : { scope: 'repository', repositoryId };
+}
+
+/**
  * The role an action on `repository` needs, given the document it enforces (null when none is attached): `org_admin` when
  * the document covers the whole installation or there is none, since the policy that applies is then the organisation's;
  * `repo_admin` when it is scoped to this very repository. A document scoped to another repository is never attached (E14-S02

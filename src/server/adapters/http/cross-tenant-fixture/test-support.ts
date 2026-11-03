@@ -9,6 +9,7 @@ import {
   INSTALLATIONS_PATH,
   installationListSchema,
 } from '../../../../shared/installations.ts';
+import { REPOSITORY_CLA_DOCUMENT_PATH } from '../../../../shared/repository-document.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
 import type { PersonName, RowTable } from '../../db/tenant-fixture/test-support.ts';
@@ -77,6 +78,12 @@ export interface CrossTenantCase {
    * replaces, which each success changes). The runner reads it after `prepare` and sends it in place of the body of `request`.
    */
   readonly bodyFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<object>;
+  /**
+   * False for a route whose path names the repository and no installation (`/api/repositories/:repositoryId/…`, E14-S02): the
+   * guard finds the installation from the repository, so there is no installation id to cross with another tenant's repository.
+   * The runner then leaves out the denials with crossed ids, which the dedicated tests of the route replace. Defaults to true.
+   */
+  readonly crossable?: boolean;
   /**
    * The URL of a call that must succeed, when it names a row that `prepare` creates (the version of a document, E12-S05). The runner
    * reads it after `prepare` and sends it in place of the URL of `request`, which holds an id that names nothing and serves the
@@ -211,6 +218,15 @@ async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Prom
 }
 
 /**
+ * Makes the call of the attach case succeed whoever asks first: the repository of `target` does not enforce yet (an attach to an
+ * enforcing one sends a sweep, and the world has no queue), and the document is published (an unpublished one is a `409`).
+ */
+async function attachable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  await versionOne(db, target);
+  await db.updateTable('repositories').set({ enabled: false }).where('id', '=', target.repositoryId).execute();
+}
+
+/**
  * The person the erasure cases (E16-S04) ask about: `member1`, the signer of tenant 1 (E11-S06 fixture). Erasing them ends
  * their session, so the erasure case is the last entry of {@link CROSS_TENANT_CASES}, and its route the last one registered:
  * a case that comes after it would meet a `member1` who is logged out. A case added later goes before it.
@@ -325,6 +341,19 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
     request: (target) => ({
       method: 'GET',
       url: INSTALLATION_REPOSITORIES_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  // E14-S02. The call attaches the document of `target` to its repository, which the role matrix lets an admin of the repository do for
+  // the repository's own document and an org admin for any; the installation-wide document of a plain repository is org admin only.
+  // The path names the repository alone, so the denials with crossed ids are those of the dedicated tests (repository-document-tenants.test.ts).
+  [`PUT ${REPOSITORY_CLA_DOCUMENT_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    prepare: attachable,
+    request: (target) => ({
+      method: 'PUT',
+      url: REPOSITORY_CLA_DOCUMENT_PATH.replace(':repositoryId', String(target.repositoryId)),
+      payload: { documentId: target.documentId },
     }),
   },
   [`GET ${ERASURE_PREVIEW_PATH}`]: {

@@ -164,6 +164,28 @@ const crossed = (world: MatrixWorld): MatrixTarget[] => [
   { ...scopedTarget(world.t2), installationId: world.t1.installationId },
 ];
 
+/**
+ * The denials with crossed ids of a route about a repository: the admin of either tenant, asking with the installation of one
+ * tenant and the repository of the other, gets the answer for an unknown id. A route whose path has no installation id
+ * (`crossable: false`) has nothing to cross, and a route about the installation itself has no repository to cross it with.
+ */
+async function assertCrossedDenied(
+  world: MatrixWorld,
+  route: string,
+  c: CrossTenantCase,
+  denial: { readonly deny: Deny; readonly unknown: Shape },
+): Promise<void> {
+  const targets = planOf(c.endpointClass, world.t1).nested && c.crossable !== false ? crossed(world) : [];
+  for (const target of targets) {
+    for (const who of ADMINS) {
+      expect(
+        await denial.deny(who, c.request(target), 404, ' with crossed ids'),
+        `${route} with crossed ids as ${who}`,
+      ).toEqual(denial.unknown);
+    }
+  }
+}
+
 /** Every denial of the matrix, each an exact copy of the answer for a resource that does not exist. */
 async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
   const plan = planOf(c.endpointClass, world.t1);
@@ -178,14 +200,7 @@ async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCa
   if (plan.tooLow !== null) {
     await deny('repoAdmin1', c.request(plan.tooLow), 403);
   }
-  for (const target of plan.nested ? crossed(world) : []) {
-    for (const who of ADMINS) {
-      expect(
-        await deny(who, c.request(target), 404, ' with crossed ids'),
-        `${route} with crossed ids as ${who}`,
-      ).toEqual(unknown);
-    }
-  }
+  await assertCrossedDenied(world, route, c, { deny, unknown });
 }
 
 /** Sends the request of the case as `who` to a call that must succeed, after the case has put the resource in the state it expects. */
@@ -283,14 +298,7 @@ async function assertAwayDenials(world: MatrixWorld, route: string, c: CrossTena
     );
   }
   await deny(null, c.request(plan.ok), 401);
-  for (const target of plan.nested ? crossed(world) : []) {
-    for (const who of ADMINS) {
-      expect(
-        await deny(who, c.request(target), 404, ' with crossed ids'),
-        `${route} with crossed ids as ${who}`,
-      ).toEqual(unknown);
-    }
-  }
+  await assertCrossedDenied(world, route, c, { deny, unknown });
 }
 
 /**

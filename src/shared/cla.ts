@@ -59,6 +59,10 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * that another admin saved over meanwhile (E12-S03). The rest are the rules of publishing a version (E12-S04): the rationale,
  * the numbering, the guard against publishing over a version the admin has not seen, and the confirmation that signers will have
  * to sign again. `rollback_requires_major` is the copy of a version of an earlier major published as a minor one (E12-S06).
+ * The last four are the rules of attaching a document to a repository (E14-S02): `document_not_attachable` is the one answer for
+ * every document the repository may not enforce (unknown, another tenant's, another repository's, corporate), `document_unpublished`
+ * a document with no active version, `repository_enabled` a detach while enforcement is on, and `forbidden` a role that passed the
+ * guard of the repository but is too low for the document the change involves (the answer of the guard itself, from the service).
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -78,6 +82,10 @@ export const CLA_RULE_STATUS = {
   version_conflict: 409,
   rollback_requires_major: 422,
   not_found: 404,
+  document_not_attachable: 422,
+  document_unpublished: 409,
+  repository_enabled: 409,
+  forbidden: 403,
 } as const;
 
 export type ClaRule = keyof typeof CLA_RULE_STATUS;

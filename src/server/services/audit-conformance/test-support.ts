@@ -96,6 +96,23 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { reason_code: 'retries_exhausted' },
     },
   ],
+  'services/repository-document-record.ts#repository.cla_document_attached|repository.cla_document_detached': [
+    {
+      action: 'repository.cla_document_attached',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: 3, previous_document_id: null },
+    },
+    {
+      action: 'repository.cla_document_attached',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: 4, previous_document_id: 3 },
+    },
+    {
+      action: 'repository.cla_document_detached',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: null, previous_document_id: 4 },
+    },
+  ],
   'services/repository-enabled.ts#repository.disabled|repository.enabled': [
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: 3 } },
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },

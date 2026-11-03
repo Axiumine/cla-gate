@@ -49,11 +49,13 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
   registered(audited(`DELETE ${DOCUMENT}/draft`, 'E12-S03', 'cla_draft.discarded')),
   registered(audited(`POST ${DOCUMENT}/versions`, 'E12-S04', 'cla_version.published')),
   audited('POST /api/sign', 'E13-S04', 'signature.created'),
-  audited(
-    `PUT ${REPOSITORY}/cla-document`,
-    'E14-S02',
-    'repository.cla_document_attached',
-    'repository.cla_document_detached',
+  registered(
+    audited(
+      `PUT ${REPOSITORY}/cla-document`,
+      'E14-S02',
+      'repository.cla_document_attached',
+      'repository.cla_document_detached',
+    ),
   ),
   audited(`POST ${REPOSITORY}/enable`, 'E14-S03', 'repository.enabled'),
   audited(`POST ${REPOSITORY}/disable`, 'E14-S04', 'repository.disabled'),

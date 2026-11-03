@@ -2,7 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import type { Role } from './authz.ts';
-import { type AttachedDocumentScope, requiredRoleForRepository, satisfiesRole } from './repository-action.ts';
+import {
+  type AttachedDocumentScope,
+  requiredRoleForRepository,
+  satisfiesRole,
+  scopeOfDocument,
+} from './repository-action.ts';
 
 // The repository-action rule (E14-S01): the role an action on a repository needs, and whether a held role is enough.
 
@@ -42,4 +47,9 @@ const VIEWER_CAN: readonly (readonly [string, AttachedDocumentScope | null, Role
 
 test.each(VIEWER_CAN)('with %s, a %s may administer the repository: %s', (_label, document, held, may) => {
   expect(satisfiesRole(held, requiredRoleForRepository(REPOSITORY, document))).toBe(may);
+});
+
+test('a document is scoped to the installation when it names no repository, and to that repository when it does', () => {
+  expect(scopeOfDocument(null)).toEqual({ scope: 'installation' });
+  expect(scopeOfDocument(41)).toEqual({ scope: 'repository', repositoryId: 41 });
 });

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Role } from '../domain/authz.ts';
-import { type AttachedDocumentScope, requiredRoleForRepository, satisfiesRole } from '../domain/repository-action.ts';
+import {
+  type AttachedDocumentScope,
+  requiredRoleForRepository,
+  satisfiesRole,
+  scopeOfDocument,
+} from '../domain/repository-action.ts';
 import type { ListedDocument, RepositoryEntry } from './repository-entry.ts';
 
 // One repository of the list as the API tells it (`repositoryItemSchema`, E14-S01): the stored entry and the viewer's role
@@ -25,12 +30,7 @@ export interface ListedRepository {
 
 /** What the rule needs of the document a repository enforces: whom it covers. */
 function scopeOf(document: ListedDocument | null): AttachedDocumentScope | null {
-  if (document === null) {
-    return null;
-  }
-  return document.repositoryId === null
-    ? { scope: 'installation' }
-    : { scope: 'repository', repositoryId: document.repositoryId };
+  return document === null ? null : scopeOfDocument(document.repositoryId);
 }
 
 /** The entry as the API tells it, for a viewer who holds `role`. */
