@@ -81,7 +81,7 @@ test.each(['test', 'production'] as const)(
     const app = Fastify();
     registerErrorHandlers(app);
     onTestFinished(() => app.close());
-    await registerWeb(app, { nodeEnv, webRoot: fixture.root, mode: 'normal' });
+    await registerWeb(app, { nodeEnv, webRoot: fixture.root, mode: 'normal', publicBaseUrl: 'http://localhost:3000' });
     expect((await app.inject({ url: '/signatures', headers: HTML })).body).toBe(INDEX_HTML);
   },
 );

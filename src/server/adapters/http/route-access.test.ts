@@ -195,6 +195,7 @@ test('the constants are the routes of the story, spelled out here on purpose', (
     'GET /api/setup/status',
     'POST /api/setup/unlock',
     'POST /api/setup/manifest',
+    'GET /api/setup/session',
     'GET /*',
     'HEAD /*',
   ]);

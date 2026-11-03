@@ -7,7 +7,8 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync, FastifyReq
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import type { AppConfig } from '../../config/env.ts';
 import { AppError } from './errors.ts';
-import { decodedPathname, isSetupUrl } from './spa-url.ts';
+import { setupPagePolicy } from './security.ts';
+import { decodedPathname, isSetupPage, isSetupUrl } from './spa-url.ts';
 
 // Serving the single-page app from the API's own origin (E17-S03): the files of `dist/web`, the `index.html` that every
 // route of the app falls back to, and the cache rules of both. No CORS plugin is registered anywhere, so a page on another
@@ -91,10 +92,12 @@ const PUBLIC_NO_SESSION: { readonly access: 'public'; readonly session: 'none' }
  * limit (an `onRequest` hook of the route): `index.html` is sent for them whether or not a file of that name exists. The
  * `reply.sendFile` it uses is the one that `@fastify/static` gives this scope.
  */
-const fileRoutes: FastifyPluginAsync<{ readonly root: string; readonly hideSetup: boolean }> = async (
-  scope,
-  { root, hideSetup },
-) => {
+const fileRoutes: FastifyPluginAsync<{
+  readonly root: string;
+  readonly hideSetup: boolean;
+  /** The policy of the two setup pages, in setup mode only; the rest of the app keeps the one helmet sets. */
+  readonly setupPolicy: string | undefined;
+}> = async (scope, { root, hideSetup, setupPolicy }) => {
   scope.addHook('onRoute', (route) => {
     route.config = { ...route.config, ...PUBLIC_NO_SESSION };
     // The library answers a directory or a path it refuses with `reply.callNotFound()` and then resolves with nothing. The 404
@@ -113,7 +116,16 @@ const fileRoutes: FastifyPluginAsync<{ readonly root: string; readonly hideSetup
     if (hideSetup && isSetupUrl(request.url)) {
       throw new AppError(404, 'not_found');
     }
-    return isAppPage(request) ? reply.sendFile(INDEX) : undefined;
+    if (!isAppPage(request)) {
+      return undefined;
+    }
+    // The setup page posts the App manifest to GitHub with a real form (E19-S07), which the default `form-action 'self'`
+    // forbids: these two HTML responses, and only in setup mode, say `https://github.com` too.
+    if (setupPolicy !== undefined && isSetupPage(request.url)) {
+      // The reply is a thenable that settles when the response is sent: the result of `header` is dropped, never awaited.
+      void reply.header('content-security-policy', setupPolicy);
+    }
+    return reply.sendFile(INDEX);
   });
   await scope.register(fastifyStatic, staticOptions(root));
 };
@@ -139,15 +151,17 @@ function webRootToServe(config: Pick<AppConfig, 'nodeEnv' | 'webRoot'>, logger: 
 /**
  * Serves the single-page app from `config.webRoot` (see {@link webRootToServe} for when it does not): its files from every
  * path that no route of the API answers, and `index.html` for the pages of the app, except the setup page and what is below
- * it while the GitHub App is configured, which get the standard `404` (E19-S06). Call it after the routes of the API, so that
- * its wildcard never shadows one (an exact route always wins anyway).
+ * it while the GitHub App is configured, which get the standard `404` (E19-S06). In setup mode the two pages of the setup
+ * carry a policy that lets a form post to GitHub (E19-S07). Call it after the routes of the API, so that its wildcard never
+ * shadows one (an exact route always wins anyway).
  */
 export async function registerWeb(
   app: FastifyInstance,
-  config: Pick<AppConfig, 'nodeEnv' | 'webRoot' | 'mode'>,
+  config: Pick<AppConfig, 'nodeEnv' | 'webRoot' | 'mode' | 'publicBaseUrl'>,
 ): Promise<void> {
   const root = webRootToServe(config, app.log);
   if (root !== undefined) {
-    await app.register(fileRoutes, { root, hideSetup: config.mode === 'normal' });
+    const setupPolicy = config.mode === 'setup' ? setupPagePolicy(config) : undefined;
+    await app.register(fileRoutes, { root, hideSetup: config.mode === 'normal', setupPolicy });
   }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { SETUP_PATH } from '../../../shared/routes.ts';
+import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../../../shared/routes.ts';
 
 // How the file routes of the single-page app (E17-S03) read the path of a request target: decoded as they decode it, and
 // compared with the setup page (E19-S06, E19-S07), which exists only while the GitHub App is not configured.
@@ -28,4 +28,14 @@ export function isSetupUrl(url: string): boolean {
   }
   const lower = pathname.toLowerCase();
   return lower === SETUP_PATH || lower.startsWith(`${SETUP_PATH}/`);
+}
+
+/**
+ * Whether a request target is one of the two pages of the setup, `/setup` or `/setup/callback` (a trailing slash and the
+ * spelling of the case do not matter, as for {@link isSetupUrl}), and not what may be below them: the pages that post the App
+ * manifest to GitHub and are sent back by it. These two get the policy that lets a form post to GitHub (E19-S07).
+ */
+export function isSetupPage(url: string): boolean {
+  const lower = decodedPathname(url)?.toLowerCase().replace(/\/$/u, '');
+  return lower === SETUP_PATH || lower === SETUP_CALLBACK_PATH;
 }

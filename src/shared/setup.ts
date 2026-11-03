@@ -29,13 +29,19 @@ const MAX_TOKEN_LENGTH = 512;
 const RANDOM_VALUE = /^[A-Za-z0-9_-]{43}$/u;
 
 /**
- * The codes the setup routes answer with besides the standard ones (E19-S06), for the message catalog of the setup page
- * (E19-S07): a wrong token, a request that carries no live setup session, and an `Origin` that is not this instance's own.
+ * The codes the setup routes answer with besides the standard ones, for the message catalog of the setup page (E19-S07): a
+ * wrong token, a request that carries no live setup session, and an `Origin` that is not this instance's own (E19-S06); and
+ * the four of the conversion (E19-S11): GitHub's code that is no longer good, a second conversion, GitHub that could not be
+ * reached and GitHub's answer that cannot be read.
  */
 export const SETUP_ERROR_CODES = {
   invalidToken: 'invalid_setup_token',
   locked: 'setup_locked',
   originMismatch: 'origin_mismatch',
+  codeInvalid: 'setup_code_invalid',
+  alreadyIssued: 'setup_already_issued',
+  githubUnreachable: 'github_unreachable',
+  githubUnexpected: 'github_unexpected_response',
 } as const;
 
 /** `GET /api/setup/status` answers with this: `setup` while the first-run flow is on offer, `configured` once the App is. */
@@ -100,6 +106,46 @@ export const manifestResponseSchema = z.object({
   state: z.string().regex(RANDOM_VALUE),
 });
 
+/**
+ * The one-time code GitHub sends back to the setup page: letters and digits, at most 64 (E19-S11). The setup page checks the
+ * address it was opened at against it before it offers the conversion.
+ *
+ * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
+ */
+export const SETUP_CODE_PATTERN = /^[A-Za-z0-9]{1,64}$/u;
+
+/**
+ * The `state` GitHub echoes to the setup page: the 43 base64url characters the manifest answer carried (E19-S06).
+ * @internal Exported for the setup page and the unit tests (Knip ignores `@internal` exports in production mode).
+ */
+export const SETUP_STATE_PATTERN = RANDOM_VALUE;
+
+/**
+ * The body of `POST /api/setup/convert` (E19-S11): the `code` and the `state` that GitHub put in the address of the setup
+ * page. Unknown keys are a 400.
+ */
+export const convertRequestSchema = z.strictObject({
+  code: z.string().regex(SETUP_CODE_PATTERN),
+  state: z.string().regex(RANDOM_VALUE),
+});
+
+/**
+ * What the conversion answers with, once (E19-S11): the App's identity and its credentials. The values are checked for being
+ * there and nothing more: the credentials are single-use, so a value that is odd must still reach the operator. The page
+ * validates `slug` and `htmlUrl` itself before it builds a link from either (E19-S07), and builds the install link from the
+ * slug and not from `installUrl`.
+ */
+export const convertResponseSchema = z.object({
+  appId: z.number().int().positive(),
+  slug: z.string().min(1),
+  htmlUrl: z.string().min(1),
+  installUrl: z.string().min(1),
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
+  webhookSecret: z.string().min(1),
+  privateKeyPem: z.string().min(1),
+});
+
 /** `GET /api/setup/status` (E19-S06): public, always registered; `configured` leaves every other setup route unregistered. */
 export const setupStatusRoute = defineRoute({
   method: 'GET',
@@ -124,4 +170,24 @@ export const setupManifestRoute = defineRoute({
   path: '/api/setup/manifest',
   body: manifestRequestSchema,
   responses: { 200: manifestResponseSchema },
+});
+
+/**
+ * `GET /api/setup/session` (E19-S07): the CSRF token of the setup session the cookie names, for a page that was loaded after
+ * the unlock. GitHub sends the browser back to the setup page after a full-page round trip, which has lost the token the
+ * unlock answered with; the cookie has not been lost, and this is how the page gets the token again (like the session
+ * endpoint of E10 does for a login). `401 setup_locked` when the cookie names no live session.
+ */
+export const setupSessionRoute = defineRoute({
+  method: 'GET',
+  path: '/api/setup/session',
+  responses: { 200: unlockResponseSchema },
+});
+
+/** `POST /api/setup/convert` (E19-S11): needs the setup cookie, the CSRF token and the `Origin` of this instance. */
+export const setupConvertRoute = defineRoute({
+  method: 'POST',
+  path: '/api/setup/convert',
+  body: convertRequestSchema,
+  responses: { 200: convertResponseSchema },
 });

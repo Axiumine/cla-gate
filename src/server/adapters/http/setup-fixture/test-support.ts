@@ -78,3 +78,12 @@ export function postManifest(app: FastifyInstance, unlocked: Unlocked, call: Par
     payload: 'body' in call ? call.body : MANIFEST_BODY,
   });
 }
+
+/** `GET /api/setup/session` as the setup page sends it after GitHub's round trip, with `cookie` as the `Cookie` header (`undefined` leaves it out). */
+export function getSetupSession(app: FastifyInstance, cookie: string | undefined) {
+  return app.inject({
+    method: 'GET',
+    url: '/api/setup/session',
+    ...(cookie === undefined ? {} : { headers: { cookie } }),
+  });
+}

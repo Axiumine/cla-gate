@@ -3,11 +3,17 @@
 import { expect, test } from 'vitest';
 import {
   APP_NAME_PATTERN,
+  convertRequestSchema,
+  convertResponseSchema,
   GITHUB_LOGIN_PATTERN,
   manifestRequestSchema,
   manifestResponseSchema,
+  SETUP_CODE_PATTERN,
   SETUP_ERROR_CODES,
+  SETUP_STATE_PATTERN,
+  setupConvertRoute,
   setupManifestRoute,
+  setupSessionRoute,
   setupStatusRoute,
   setupStatusSchema,
   setupUnlockRoute,
@@ -32,19 +38,31 @@ const MANIFEST = {
   default_events: ['pull_request'],
 };
 
-test('the routes are the three of the story, by method and path', () => {
-  expect([setupStatusRoute.name, setupUnlockRoute.name, setupManifestRoute.name]).toEqual([
+test('the routes of the setup, by method and path', () => {
+  expect([
+    setupStatusRoute.name,
+    setupUnlockRoute.name,
+    setupManifestRoute.name,
+    setupSessionRoute.name,
+    setupConvertRoute.name,
+  ]).toEqual([
     'GET /api/setup/status',
     'POST /api/setup/unlock',
     'POST /api/setup/manifest',
+    'GET /api/setup/session',
+    'POST /api/setup/convert',
   ]);
 });
 
-test('the error codes the setup adds are three, each a snake_case word', () => {
+test('the error codes the setup adds are seven, each a snake_case word', () => {
   expect(SETUP_ERROR_CODES).toEqual({
     invalidToken: 'invalid_setup_token',
     locked: 'setup_locked',
     originMismatch: 'origin_mismatch',
+    codeInvalid: 'setup_code_invalid',
+    alreadyIssued: 'setup_already_issued',
+    githubUnreachable: 'github_unreachable',
+    githubUnexpected: 'github_unexpected_response',
   });
 });
 
@@ -116,4 +134,59 @@ test('the answer holds the address on GitHub only, for a user or an organisation
   ];
   expect(good.map((url) => manifestResponseSchema.safeParse(answer(url)).success)).toEqual([true, true]);
   expect(bad.map((url) => manifestResponseSchema.safeParse(answer(url)).success)).toEqual(bad.map(() => false));
+});
+
+test('the session endpoint answers with the CSRF token of the unlock answer and nothing else', () => {
+  expect(setupSessionRoute.responses[200]).toBe(unlockResponseSchema);
+  expect('body' in setupSessionRoute).toBe(false);
+});
+
+test.each(['a', 'A1', '0', 'a'.repeat(64), 'a180b1a3d263c81bc6441d7b990bae27d4c10679'])(
+  '%s is a code GitHub may send',
+  (code) => {
+    expect(SETUP_CODE_PATTERN.test(code)).toBe(true);
+  },
+);
+
+test.each(['', 'a'.repeat(65), 'a-b', 'a_b', 'a b', 'é', 'a\n', '\na', 'a/b', '../x', 'a?b', '<b>'])(
+  '%j is not a code GitHub may send',
+  (code) => {
+    expect(SETUP_CODE_PATTERN.test(code)).toBe(false);
+  },
+);
+
+test('the state the page reads back is the 43 base64url characters the manifest answer carried', () => {
+  expect(SETUP_STATE_PATTERN.test(STATE)).toBe(true);
+  expect(SETUP_STATE_PATTERN.test(`${STATE}A`)).toBe(false);
+  expect(SETUP_STATE_PATTERN.test(`${'A+'.repeat(21)}A`)).toBe(false);
+});
+
+test('the conversion takes the code and the state and no other key', () => {
+  expect(convertRequestSchema.safeParse({ code: 'abc123', state: STATE }).success).toBe(true);
+  expect(convertRequestSchema.safeParse({ code: 'abc123', state: STATE, more: 1 }).success).toBe(false);
+  expect(convertRequestSchema.safeParse({ code: 'ab/c', state: STATE }).success).toBe(false);
+  expect(convertRequestSchema.safeParse({ code: 'abc123', state: 'short' }).success).toBe(false);
+  expect(convertRequestSchema.safeParse({ code: '', state: STATE }).success).toBe(false);
+  expect(setupConvertRoute.body).toBe(convertRequestSchema);
+});
+
+const CONVERTED = {
+  appId: 42,
+  slug: 'cla-gate',
+  htmlUrl: 'https://github.com/apps/cla-gate',
+  installUrl: 'https://github.com/apps/cla-gate/installations/new',
+  clientId: 'Iv1.0123456789abcdef',
+  clientSecret: 'client-secret-value',
+  webhookSecret: 'webhook-secret-value',
+  privateKeyPem: '-----BEGIN RSA PRIVATE KEY-----\nabc\n-----END RSA PRIVATE KEY-----\n',
+};
+
+test('the conversion answer holds the App id, its address and its five credentials, each present', () => {
+  expect(convertResponseSchema.parse(CONVERTED)).toEqual(CONVERTED);
+  for (const key of Object.keys(CONVERTED)) {
+    expect(convertResponseSchema.safeParse({ ...CONVERTED, [key]: undefined }).success).toBe(false);
+  }
+  expect(convertResponseSchema.safeParse({ ...CONVERTED, appId: 0 }).success).toBe(false);
+  expect(convertResponseSchema.safeParse({ ...CONVERTED, appId: 1.5 }).success).toBe(false);
+  expect(convertResponseSchema.safeParse({ ...CONVERTED, clientSecret: '' }).success).toBe(false);
 });

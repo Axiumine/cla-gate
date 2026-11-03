@@ -11,6 +11,7 @@ import type { Clock } from '../../services/ports/clock.ts';
 import { setNoStore } from './no-store.ts';
 import { manifestRoute } from './setup-manifest-route.ts';
 import { PUBLIC_NO_SESSION } from './setup-route-config.ts';
+import { sessionRoute } from './setup-session-route.ts';
 import { createSetupSessions, type SetupSessions } from './setup-sessions.ts';
 import { createUnlockThrottle } from './setup-throttle.ts';
 import { unlockRoute } from './setup-unlock-route.ts';
@@ -43,14 +44,15 @@ interface FlowOptions {
 }
 
 /**
- * The routes of setup mode: the unlock and the manifest, with the cookie plugin they set and read the session cookie
- * through, and the throttle on the wrong tokens that only the unlock counts on.
+ * The routes of setup mode: the unlock, the manifest and the read of the session's CSRF token (E19-S07), with the cookie
+ * plugin they set and read the session cookie through, and the throttle on the wrong tokens that only the unlock counts on.
  */
 const flowRoutes: FastifyPluginAsyncZod<FlowOptions> = async (app, options) => {
   await app.register(fastifyCookie);
   const { token, publicBaseUrl, sessions } = options;
   unlockRoute(app, { token, sessions, throttle: createUnlockThrottle(options.clock) });
   manifestRoute(app, { publicBaseUrl, sessions, origin: new URL(publicBaseUrl).origin });
+  sessionRoute(app, { sessions });
 };
 
 /**

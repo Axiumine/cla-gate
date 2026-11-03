@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { SETUP_ERROR_CODES } from './setup.ts';
 
 // The machine codes of the error body (E17-S07): every code a screen of the web app can be handed, in one place, so the
 // message catalog can be checked against the list and a code added here without a message fails a test. The envelope itself
@@ -30,10 +31,11 @@ export const STATUS_ERROR_CODES = {
 } as const;
 
 /**
- * The codes that routes add on top of the status ones: the request guards of E10 (a foreign Origin, a wrong CSRF token).
+ * The codes that routes add on top of the status ones: the request guards of E10 (a foreign Origin, a wrong CSRF token) and
+ * the codes of the first-run setup (E19-S06, E19-S11), which the setup page (E19-S07) has a message and a remedy for.
  * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
  */
-export const DOMAIN_ERROR_CODES = ['origin_not_allowed', 'csrf_invalid'] as const;
+export const DOMAIN_ERROR_CODES = ['origin_not_allowed', 'csrf_invalid', ...Object.values(SETUP_ERROR_CODES)] as const;
 
 /**
  * The codes the web client makes up itself (E17-S04) for a failure that carries no code of the server's: every 401
