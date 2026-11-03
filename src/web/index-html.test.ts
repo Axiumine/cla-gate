@@ -51,6 +51,11 @@ const CHECKS: readonly Check[] = [
     (page) => page.querySelector('meta[name="color-scheme"][content="light dark"]') === null,
   ],
   ['no <title>', (page) => (page.querySelector('title')?.textContent ?? '').trim() === ''],
+  // Without it the browser asks for /favicon.ico, which the server answers with the 404 envelope: a console error on every page.
+  [
+    'no icon link to the favicon file of our own origin',
+    (page) => page.querySelector('head > link[rel="icon"][href="/favicon.svg"]') === null,
+  ],
 ];
 
 /** What the policy blocks, or the page needs and lacks, in the HTML text `html`. */
@@ -61,7 +66,8 @@ function problems(html: string): string[] {
 
 const GOOD =
   '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width">' +
-  '<meta name="color-scheme" content="light dark"><title>T</title><script src="/theme-init.js"></script>' +
+  '<meta name="color-scheme" content="light dark"><title>T</title><link rel="icon" href="/favicon.svg">' +
+  '<script src="/theme-init.js"></script>' +
   '<link rel="stylesheet" href="/styles/app.css"></head>' +
   '<body><div id="root"></div><script type="module" src="/main.tsx"></script></body></html>';
 
@@ -135,6 +141,16 @@ test.each([
     'no color-scheme meta tag for light and dark',
   ],
   ['an empty title', GOOD.replace('<title>T</title>', '<title> </title>'), 'no <title>'],
+  [
+    'no icon link',
+    GOOD.replace('<link rel="icon" href="/favicon.svg">', ''),
+    'no icon link to the favicon file of our own origin',
+  ],
+  [
+    'an icon that is a data: URI',
+    GOOD.replace('href="/favicon.svg"', 'href="data:image/svg+xml,<svg/>"'),
+    'no icon link to the favicon file of our own origin',
+  ],
 ])('the checks catch %s', (_what, html, problem) => {
   expect(problems(html)).toContain(problem);
 });

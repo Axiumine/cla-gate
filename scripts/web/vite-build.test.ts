@@ -171,18 +171,20 @@ test(
 );
 
 test(
-  'index.html loads the blocking theme script first, then the app by one module script and one stylesheet, both hashed files under /assets/',
+  'index.html loads the blocking theme script first, then the app by one module script and one stylesheet, both hashed files under /assets/, and names the icon file',
   async () => {
     const { html } = await theBuild();
     const loaders = elementsOf(parse(html)).filter((element) => ['script', 'link'].includes(element.tagName));
     expect(
       loaders.map((element) => [element.tagName, attributeOf(element, 'type') || attributeOf(element, 'rel')]),
     ).toEqual([
+      ['link', 'image/svg+xml'],
       ['script', ''],
       ['script', 'module'],
       ['link', 'stylesheet'],
     ]);
-    const [theme, ...hashed] = loadedUrls(loaders);
+    const [icon, theme, ...hashed] = loadedUrls(loaders);
+    expect(icon).toBe('/favicon.svg');
     expect(theme).toBe('/theme-init.js');
     for (const url of hashed) {
       expect(url).toMatch(/^\/assets\/[\w-]+-[\w-]{8}\.(js|css)$/);
@@ -194,16 +196,29 @@ test(
 );
 
 test(
-  'every file of the build but index.html and theme-init.js is under assets/, whose names carry a hash, and nothing is a font or a data: asset',
+  'every file of the build but index.html, theme-init.js and favicon.svg is under assets/, whose names carry a hash, and nothing is a font or a data: asset',
   async () => {
     const { files } = await theBuild();
     expect(files).toContain('index.html');
     expect(files).toContain('theme-init.js');
-    const others = files.filter((file) => file !== 'index.html' && file !== 'theme-init.js');
+    // The icon is copied as it is from src/web/public: a root file, like theme-init.js, so the server revalidates it.
+    expect(files).toContain('favicon.svg');
+    const others = files.filter((file) => !['index.html', 'theme-init.js', 'favicon.svg'].includes(file));
     expect(others.length).toBeGreaterThan(0);
     for (const file of others) {
       expect(file).toMatch(/^assets\/[\w-]+-[\w-]{8}\.(js|css)$/);
     }
+  },
+  BUILD_TIMEOUT_MS,
+);
+
+test(
+  'the icon is a plain SVG image: no script, no event handler and no reference to anything else',
+  async () => {
+    const { directory } = await theBuild();
+    const icon = await readText(directory, 'favicon.svg');
+    expect(icon).toMatch(/^<\?xml[^>]*\?>\s*<!--/);
+    expect(icon).not.toMatch(/<script|\son\w+=|href=|url\(|<style|<image|<foreignObject/i);
   },
   BUILD_TIMEOUT_MS,
 );
