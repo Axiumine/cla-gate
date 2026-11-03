@@ -3,6 +3,7 @@
 import type { Kysely, Transaction } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import type { Job } from '../domain/jobs.ts';
+import { deliveryRateLimit } from '../domain/recheck.ts';
 import type { JobEnqueuer } from './ports/jobs.ts';
 import { type DeliverySubject, insertDelivery, isProcessed, markDeliveryProcessed } from './webhook-delivery-rows.ts';
 
@@ -62,7 +63,9 @@ async function recordInTransaction(
   if (!isNew && (await step(signal, () => isProcessed(trx, subject.deliveryId)))) {
     return 'duplicate';
   }
-  const sent = await step(signal, () => enqueuer.enqueue(trx, job, { idempotencyKey: subject.deliveryId }));
+  const sent = await step(signal, () =>
+    enqueuer.enqueue(trx, job, { idempotencyKey: subject.deliveryId, ...deliveryRateLimit(job) }),
+  );
   if (sent === 'queued') {
     return 'accepted';
   }

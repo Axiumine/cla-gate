@@ -3,15 +3,15 @@
 import type { Logger } from 'pino';
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
+import { RECHECK_WINDOW_SECONDS, recheckRateLimitKey } from '../../domain/recheck.ts';
 import type { EnqueueOptions, JobEnqueuer } from '../ports/jobs.ts';
 import type { RecheckPorts } from './recheck-ports.ts';
 
 // How a manual re-evaluation is sent (E07-S07): one `evaluate-pr` job per pull request, rate limited per pull request. The
 // command costs GitHub API budget (an evaluation reads the pull request, its commits and the organisation), and anyone who
-// can comment can give it, so a pull request takes one in a window and the rest are dropped without a reply.
-
-/** Seconds in which a pull request takes one manual re-evaluation: a second request inside the window is dropped. */
-const RECHECK_WINDOW_SECONDS = 60;
+// can comment can give it, so a pull request takes one in a window and the rest are dropped without a reply. A `/recheck`
+// comment is limited a step earlier too, when the webhook intake sends its `recheck-comment` job (`deliveryRateLimit` in
+// `domain/recheck.ts`), because that job spends three GitHub calls before it gets here.
 
 /** The most pull requests one re-run of a Check Run starts an evaluation for. A commit is the head of a handful of them at most. */
 export const MAX_RERUN_PULL_REQUESTS = 20;
@@ -41,7 +41,7 @@ export function rerunOf(
 function optionsOf({ job, idempotencyKey }: Rerun): EnqueueOptions {
   return {
     idempotencyKey,
-    dedupeKey: `recheck:${job.githubRepoId}:${job.prNumber}`,
+    dedupeKey: recheckRateLimitKey(job.githubRepoId, job.prNumber),
     dedupeWindowSeconds: RECHECK_WINDOW_SECONDS,
   };
 }

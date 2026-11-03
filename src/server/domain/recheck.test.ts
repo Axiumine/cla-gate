@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { isRecheckCommand } from './recheck.ts';
+import { parseGithubId } from '../../shared/github-id.ts';
+import type { Job } from './jobs.ts';
+import { deliveryRateLimit, isRecheckCommand, RECHECK_WINDOW_SECONDS, recheckRateLimitKey } from './recheck.ts';
 
 // The exact-line rule of the `/recheck` command (E07-S07): a line that is `/recheck` and nothing else, outside code blocks
 // and quotes.
@@ -76,4 +78,40 @@ test('the command is found in a long body, and a body of nothing but fence chara
   expect(isRecheckCommand(`${filler}/recheck x`)).toBe(false);
   expect(isRecheckCommand(`${'`'.repeat(200_000)}\n/recheck`)).toBe(false);
   expect(isRecheckCommand(`${'~'.repeat(200_000)} x\n/recheck`)).toBe(false);
+});
+
+test('a pull request takes one manual re-evaluation a minute, under one key whatever the way of asking', () => {
+  expect(RECHECK_WINDOW_SECONDS).toBe(60);
+  expect(recheckRateLimitKey(parseGithubId(9000), 7)).toBe('recheck:9000:7');
+  const keys = [
+    recheckRateLimitKey(parseGithubId(9000), 7),
+    recheckRateLimitKey(parseGithubId(9000), 70),
+    recheckRateLimitKey(parseGithubId(900), 70),
+    recheckRateLimitKey(parseGithubId(90_007), 1),
+  ];
+  expect(new Set(keys).size).toBe(keys.length);
+});
+
+test('the job of a /recheck comment is sent under the rate limit of its pull request, and no other job from a delivery is', () => {
+  const installation = parseGithubId(70_001);
+  const comment: Job = {
+    type: 'recheck-comment',
+    githubInstallationId: installation,
+    githubRepoId: parseGithubId(9000),
+    prNumber: 7,
+    commentId: parseGithubId(5001),
+  };
+  expect(deliveryRateLimit(comment)).toEqual({ dedupeKey: 'recheck:9000:7', dedupeWindowSeconds: 60 });
+  const others: Job[] = [
+    { type: 'sync-installation', githubInstallationId: installation },
+    {
+      type: 'evaluate-pr',
+      githubInstallationId: installation,
+      githubRepoId: parseGithubId(9000),
+      prNumber: 7,
+      trigger: 'pull_request',
+    },
+    { type: 'close-pr', githubInstallationId: installation, githubRepoId: parseGithubId(9000), prNumber: 7 },
+  ];
+  expect(others.map((job) => deliveryRateLimit(job))).toEqual([undefined, undefined, undefined]);
 });

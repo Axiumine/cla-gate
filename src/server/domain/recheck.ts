@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { GithubId } from '../../shared/github-id.ts';
+import type { Job } from './jobs.ts';
 
 // The `/recheck` command (E07-S07): a pull request comment that asks for a new evaluation. The rule is exact on purpose. A
 // loose match (a comment that merely mentions `/recheck`, quotes someone who wrote it, or shows it in a code block) would
@@ -109,4 +111,26 @@ export function isRecheckCommand(body: string): boolean {
     ({ fence } = read);
   }
   return false;
+}
+
+/** Seconds in which a pull request takes one manual re-evaluation: a second request inside the window is dropped (epoch-aligned, see `EnqueueOptions`). */
+export const RECHECK_WINDOW_SECONDS = 60;
+
+/** The rate limit key of the manual re-evaluations of one pull request: every way of asking for one shares it (a `/recheck` comment, the Re-run of a check). */
+export function recheckRateLimitKey(githubRepoId: GithubId, prNumber: number): string {
+  return `recheck:${String(githubRepoId)}:${String(prNumber)}`;
+}
+
+/**
+ * The rate limit the delivery of `job` is sent under, or `undefined` for a job with none (E07-S07). A `recheck-comment` job
+ * spends GitHub calls before it knows whether the comment is the command (the repository, the comment, the pull request), and
+ * anyone who can comment can post `/recheck` again and again, so the limit is on the job and not only on the evaluation it
+ * may send: the second comment of a minute never becomes a job, and the delivery is marked processed without one.
+ */
+export function deliveryRateLimit(
+  job: Job,
+): { readonly dedupeKey: string; readonly dedupeWindowSeconds: number } | undefined {
+  return job.type === 'recheck-comment'
+    ? { dedupeKey: recheckRateLimitKey(job.githubRepoId, job.prNumber), dedupeWindowSeconds: RECHECK_WINDOW_SECONDS }
+    : undefined;
 }

@@ -132,7 +132,8 @@ async function expectExactlyTheFixtureSet(db: Kysely<Database>): Promise<void> {
   expect(jobs).toEqual(
     EXPECTED.map(({ deliveryId, job }) => ({
       idempotencyKey: deliveryId,
-      dedupeKey: null,
+      // Only the job of a /recheck comment is sent under a rate limit: the key of its pull request (repository 52002, pull request 7).
+      dedupeKey: job['type'] === 'recheck-comment' ? 'recheck:52002:7' : null,
       job: { ...job, deliveryId },
     })),
   );
