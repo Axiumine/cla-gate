@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-only
 -- Copyright (C) 2026 Giovanni Manzoni
 --
--- 006_pr_evaluation_cancelled (E07-S06): a pull request evaluation can be `cancelled`. Forward-only: never edit this file
+-- 008_pr_evaluation_cancelled (E07-S06): a pull request evaluation can be `cancelled`. Forward-only: never edit this file
 -- once merged.
 --
 -- Migration 001 allowed three values in pr_evaluations.result: in_progress, success and failure. A pull request that is

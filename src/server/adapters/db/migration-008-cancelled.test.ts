@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import type { Database } from './schema.ts';
 import { migratedTestDatabase, seedTenant } from './test-support.ts';
 
-// Migration 006 (E07-S06): the result of a pull request evaluation can be `cancelled`, and no other new value is accepted.
+// Migration 008 (E07-S06): the result of a pull request evaluation can be `cancelled`, and no other new value is accepted.
 
 const CHECK = { code: '23514' };
 const HEAD = 'a'.repeat(40);
