@@ -29,6 +29,7 @@ export function createCheckRunReporter(wiring: CheckRunReporterWiring): CheckRun
     db,
     github,
     writer: new CheckRunWriter({ github, appId, clock, logger }),
+    appId,
     publicBaseUrl,
     logger,
   });

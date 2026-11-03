@@ -6,7 +6,7 @@ import { disabledCommentBody } from '../../domain/reporting/comment-body.ts';
 import type { RunTarget } from '../ports/reporter.ts';
 import { writeCommentSoftly } from './comment-guard.ts';
 import type { CheckRunReporterOptions } from './report-options.ts';
-import { reportIds } from './report-record.ts';
+import { linkKeyOf, reportIds } from './report-record.ts';
 import type { Situation } from './report-situation.ts';
 
 // The comment of a pull request whose repository was switched off (E09-S06): a comment that exists becomes the one-line notice
@@ -28,7 +28,7 @@ export async function rewriteAsDisabled(
   if (commentId === null) {
     return;
   }
-  if (await hasNewerHeadRow(db, scope, { repositoryId, prNumber: target.prNumber, headSha: target.headSha })) {
+  if (await hasNewerHeadRow(db, scope, linkKeyOf(target, situation))) {
     logger.info(reportIds(target), 'comment_skipped_stale');
     return;
   }

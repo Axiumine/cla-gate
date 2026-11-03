@@ -89,6 +89,8 @@ export function commentBody(comment: GitHubIssueComment, repository: string): Re
           },
     issue_url: `${GITHUB_API_ORIGIN}/repos/${repository}/issues/${comment.issueNumber}`,
     html_url: 'https://github.com/x',
+    performed_via_github_app:
+      comment.appId === null ? null : { id: comment.appId, slug: 'cla-gate-test', name: 'CLA Gate Test' },
   };
 }
 

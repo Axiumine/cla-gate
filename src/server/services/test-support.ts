@@ -8,18 +8,22 @@ import {
   abortable,
   COMMIT_SHA,
   commentKey,
+  commentsPage,
   commitKey,
   type FakeInstallation,
   FakeWorld,
   type GitHubMethod,
   membershipKey,
-  mergeKey,
+  mergeBaseOf,
   openPullsPage,
   pageOf,
   permissionKey,
+  postComment,
   pullKey,
   type RecordedCall,
+  reachable,
   repositoryKey,
+  rewriteComment,
   takeFirst,
 } from './fake-github/test-support.ts';
 
@@ -34,6 +38,7 @@ import type {
   GitHubCommitPage,
   GitHubInstallation,
   GitHubIssueComment,
+  GitHubIssueCommentPage,
   GitHubOrgMembership,
   GitHubPullRequest,
   GitHubPullRequestPage,
@@ -252,15 +257,9 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     baseSha: string,
     headSha: string,
   ): Promise<{ readonly mergeBaseSha: string }> {
-    return this.#serveInstallation('compareCommits', githubInstallationId, () => {
-      const key = mergeKey(githubInstallationId, fullName, { baseSha, headSha });
-      const mergeBaseSha =
-        COMMIT_SHA.test(baseSha) && COMMIT_SHA.test(headSha) ? this.state.mergeBases.get(key) : undefined;
-      if (mergeBaseSha === undefined) {
-        throw new GitHubNotFoundError('GET /repos/{owner}/{repo}/compare/{basehead}');
-      }
-      return { mergeBaseSha };
-    });
+    return this.#serveInstallation('compareCommits', githubInstallationId, () =>
+      mergeBaseOf(this.state, githubInstallationId, { fullName, baseSha, headSha }),
+    );
   }
 
   getIssueComment(
@@ -281,18 +280,31 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     commentId: GithubId,
     body: string,
   ): Promise<GitHubIssueComment> {
-    const route = 'PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}';
-    return this.#serveInstallation('updateIssueComment', githubInstallationId, (entry) => {
-      reachable(entry, fullName, route);
-      const key = commentKey(githubInstallationId, fullName, commentId);
-      const comment = this.state.comments.get(key);
-      if (comment === undefined) {
-        throw new GitHubNotFoundError(route);
-      }
-      const rewritten = { ...comment, body };
-      this.state.comments.set(key, rewritten);
-      return rewritten;
-    });
+    return this.#serveInstallation('updateIssueComment', githubInstallationId, (entry) =>
+      rewriteComment(this.state, { entry, fullName, commentId }, body),
+    );
+  }
+
+  listIssueComments(
+    githubInstallationId: GithubId,
+    fullName: string,
+    issueNumber: number,
+    page: number,
+  ): Promise<GitHubIssueCommentPage> {
+    return this.#serveInstallation('listIssueComments', githubInstallationId, (entry) =>
+      commentsPage(this.state, { entry, fullName, issueNumber }, page),
+    );
+  }
+
+  createIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    issueNumber: number,
+    body: string,
+  ): Promise<GitHubIssueComment> {
+    return this.#serveInstallation('createIssueComment', githubInstallationId, (entry) =>
+      postComment(this.state, { entry, fullName, issueNumber }, body),
+    );
   }
 
   listPullRequestsForCommit(
@@ -402,18 +414,6 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
       }
       return read(entry);
     });
-  }
-}
-
-/**
- * A write to a repository the installation reaches, with SHAs GitHub can hold (E09-S05): the adapter sends nothing else to
- * a path, and a repository the installation does not reach is a 404, as it is for GitHub. Names compare without regard to case.
- * @throws GitHubNotFoundError naming `route`.
- */
-function reachable(entry: FakeInstallation, fullName: string, route: string, shas: readonly string[] = []): void {
-  const known = entry.repositories.some((repository) => repository.fullName.toLowerCase() === fullName.toLowerCase());
-  if (!(known && shas.every((sha) => COMMIT_SHA.test(sha)))) {
-    throw new GitHubNotFoundError(route);
   }
 }
 

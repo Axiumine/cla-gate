@@ -3,38 +3,17 @@
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../../shared/github-id.ts';
-import { httpWorld } from '../../adapters/github/http-world/test-support.ts';
-import { testGitHubKey } from '../../config/test-support.ts';
 import { comment } from '../github-comment-contract/test-support.ts';
-import { installation, repository } from '../github-contract/test-support.ts';
-import {
-  FAILING,
-  FULL_NAME,
-  HEAD,
-  INSTALLATION,
-  NAMES,
-  PASSING,
-  REPOSITORY,
-  reportingWorld,
-  withoutTrigger,
-} from './test-support.ts';
+import { adapterWorld } from './adapter-world/test-support.ts';
+import { FAILING, FULL_NAME, HEAD, INSTALLATION, NAMES, PASSING, withoutTrigger } from './test-support.ts';
 
 // The reporter on the real Octokit adapter, over HTTP with MSW (E09-S05): the requests it makes for the lifecycle of a Check
 // Run, in order, with the installation token of the tenant (and, E09-S06, the idempotency of the reports and the rewrite of a
 // comment). The cases of the lifecycle are in the other files, on FakeGitHub.
 
-const signer = testGitHubKey();
 const LISTING = `GET /repos/${FULL_NAME}/commits/${HEAD}/check-runs?check_name=license%2Fcla&filter=latest&per_page=100`;
-
-/** The world: MSW serving the tenant, and a reporter whose client is the adapter. */
-async function adapterWorld() {
-  const github = await httpWorld(signer);
-  github.addInstallation(installation(INSTALLATION, 'org-1'), [repository(REPOSITORY, FULL_NAME)]);
-  const world = await reportingWorld({ github: github.client });
-  /** The requests that were about the Check Run: the token mint is the adapter's own business. */
-  const checkRequests = () => github.requests.filter((request) => !request.includes('/app/'));
-  return { world, github, checkRequests };
-}
+const COMMENTS = `GET /repos/${FULL_NAME}/issues/7/comments?per_page=100&page=1`;
+const COMMENT_POST = `POST /repos/${FULL_NAME}/issues/7/comments`;
 
 test('a first run is listed for, created, and then read and updated by its id when the verdict comes', async () => {
   const { world, github, checkRequests } = await adapterWorld();
@@ -46,6 +25,8 @@ test('a first run is listed for, created, and then read and updated by its id wh
     `POST /repos/${FULL_NAME}/check-runs`,
     `GET /repos/${FULL_NAME}/check-runs/9000001`,
     `PATCH /repos/${FULL_NAME}/check-runs/9000001`,
+    COMMENTS,
+    COMMENT_POST,
   ]);
   const runs = await github.client.listCheckRunsForRef(INSTALLATION, FULL_NAME, HEAD);
   expect(runs).toEqual([
@@ -72,8 +53,10 @@ test('a verdict with no run on the SHA creates a run that is already completed, 
   expect(checkRequests()).toEqual([
     LISTING,
     `POST /repos/${FULL_NAME}/check-runs`,
+    COMMENTS,
     `GET /repos/${FULL_NAME}/check-runs/9000001`,
     `PATCH /repos/${FULL_NAME}/check-runs/9000001`,
+    COMMENTS,
   ]);
   expect(await github.client.listCheckRunsForRef(INSTALLATION, FULL_NAME, HEAD)).toMatchObject([
     { status: 'completed' },
@@ -92,8 +75,11 @@ test('publish twice leaves exactly one run: one POST, and the second publish is 
     `POST /repos/${FULL_NAME}/check-runs`,
     `GET ${run}`,
     `PATCH ${run}`,
+    COMMENTS,
+    COMMENT_POST,
     `GET ${run}`,
     `PATCH ${run}`,
+    `PATCH /repos/${FULL_NAME}/issues/comments/8000001`,
   ]);
   expect(await github.client.listCheckRunsForRef(INSTALLATION, FULL_NAME, HEAD)).toMatchObject([
     { id: 9_000_001, status: 'completed' },

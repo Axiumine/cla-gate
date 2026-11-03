@@ -99,7 +99,7 @@ type GitHubCommentAuthorType = GitHubCommitAccountType | 'Other';
 /**
  * A comment on an issue or a pull request (`GET /repos/{owner}/{repo}/issues/comments/{comment_id}`, E07-S07). A
  * pull request's conversation is its issue's, so the same comment shape serves both. The text is what somebody typed: it is
- * only ever compared with the command, never stored or logged.
+ * only ever compared with the command or the marker, never stored or logged.
  */
 export interface GitHubIssueComment {
   readonly id: GithubId;
@@ -108,6 +108,17 @@ export interface GitHubIssueComment {
   readonly body: string;
   /** The account that wrote it, or null when GitHub shows none. The numeric id is the identity; there is no login. */
   readonly author: { readonly id: GithubId; readonly type: GitHubCommentAuthorType } | null;
+  /**
+   * The id of the GitHub App the comment was posted through (`performed_via_github_app`, E09-S07), or null for a comment a
+   * person wrote. Only GitHub sets it, so it is what tells our comment from one that merely begins with our marker.
+   */
+  readonly appId: GithubId | null;
+}
+
+/** One page of the comments of an issue or pull request, 100 at most, oldest first (E09-S07). `last` is true when GitHub names no next page. */
+export interface GitHubIssueCommentPage {
+  readonly comments: readonly GitHubIssueComment[];
+  readonly last: boolean;
 }
 
 /**
@@ -269,6 +280,34 @@ export interface GitHubClient {
     githubInstallationId: GithubId,
     fullName: string,
     commentId: GithubId,
+    body: string,
+  ): Promise<GitHubIssueComment>;
+
+  /**
+   * One page (1-based, 100 comments) of `GET /repos/{owner}/{repo}/issues/{issue_number}/comments?per_page=100` with the
+   * installation's token (E09-S07, Pull requests: read): the comments of an issue or pull request, oldest first, each with
+   * the App it was posted through. The reporter reads at most five pages of a pull request.
+   * @throws GitHubNotFoundError for a repository or issue GitHub does not have, one the installation does not reach and a name
+   * GitHub cannot hold; GitHubForbiddenError when GitHub refuses the read.
+   */
+  listIssueComments(
+    githubInstallationId: GithubId,
+    fullName: string,
+    issueNumber: number,
+    page: number,
+  ): Promise<GitHubIssueCommentPage>;
+
+  /**
+   * `POST /repos/{owner}/{repo}/issues/{issue_number}/comments` with the installation's token (Pull requests: write; E09-S07): a
+   * new comment on the issue or pull request, written as the App. Always a new comment, never a reuse: the caller looks first.
+   * @throws GitHubNotFoundError for a repository or issue GitHub does not have, one the installation does not reach and a name
+   * GitHub cannot hold; GitHubForbiddenError when the installation lacks Pull requests: write; GitHubUnprocessableError when
+   * GitHub refuses the text or the conversation (locked, an archived repository).
+   */
+  createIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    issueNumber: number,
     body: string,
   ): Promise<GitHubIssueComment>;
 

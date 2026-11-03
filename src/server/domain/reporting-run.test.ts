@@ -56,3 +56,20 @@ test.each([[[]], [['success']], [['in_progress']], [['failure']], [['cancelled',
     expect(signUrl).toBe('https://cla.example.test/sign/4242?pr=7');
   },
 );
+
+test.each([[[]], [['failure']], [['in_progress']], [['success', 'cancelled']]] as const)(
+  'the comment of a passing pull request says it passed, whatever the others at the SHA are doing (%j)',
+  (others: readonly RowResult[]) => {
+    expect(runReport(request(PASSING), others).comment).toEqual({ kind: 'success', headSha: HEAD });
+  },
+);
+
+test.each([[[]], [['success']], [['failure', 'in_progress']]] as const)(
+  'the comment of a failing pull request carries the parts of its own failure whatever the others are (%j)',
+  (others: readonly RowResult[]) => {
+    const { view, comment } = runReport(request(FAILING), others);
+    expect(view.kind).toBe('failure');
+    expect(comment).toEqual({ kind: 'failure', summary: view.kind === 'failure' ? view.summary : [] });
+    expect(comment.kind === 'failure' ? comment.summary.length : 0).toBeGreaterThan(1);
+  },
+);

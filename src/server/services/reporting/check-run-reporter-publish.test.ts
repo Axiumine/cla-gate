@@ -45,7 +45,13 @@ test('a passing verdict completes the run the row records with the success outpu
   });
   expect(stored?.write).not.toHaveProperty('detailsUrl');
   expect(stored?.write).not.toHaveProperty('text');
-  expect(methods(world.fake)).toEqual(['listCheckRunsForRef', 'createCheckRun', 'getCheckRun', 'updateCheckRun']);
+  expect(methods(world.fake)).toEqual([
+    'listCheckRunsForRef',
+    'createCheckRun',
+    'getCheckRun',
+    'updateCheckRun',
+    'listIssueComments',
+  ]);
 });
 
 test('a failing verdict completes the run as a failure with the names, the fix and the sign link as the details link', async () => {
@@ -68,7 +74,7 @@ test('with no run recorded and none on the SHA, the verdict creates a run that i
   const world = await reportingWorld();
   const target = await world.evaluation();
   await world.reporter.publish(target, PASSING, NAMES);
-  expect(methods(world.fake)).toEqual(['listCheckRunsForRef', 'createCheckRun']);
+  expect(methods(world.fake)).toEqual(['listCheckRunsForRef', 'createCheckRun', 'listIssueComments']);
   expect(world.fake.checkRuns[0]?.run).toMatchObject({ status: 'completed', externalId: String(target.evaluationId) });
   expect(world.fake.checkRuns[0]?.write).toMatchObject({ conclusion: 'success', completedAt: new Date(START) });
   expect((await world.rows()).map((row) => row.check_run_id)).toEqual([world.fake.checkRuns[0]?.run.id]);
@@ -101,17 +107,18 @@ test.each([
   expect((await world.rows()).map((row) => row.check_run_id)).toEqual([fresh?.run.id]);
 });
 
-test('publishing twice leaves one run, completed with the same output, and the second call writes nothing to the row', async () => {
+test('publishing twice leaves one run, completed with the same output, and the second call changes no column of the row', async () => {
   const world = await reportingWorld();
   const target = await world.evaluation();
   await world.reporter.started(target);
   await world.reporter.publish(target, FAILING, NAMES);
-  const first = await world.rows();
+  const withoutTime = async () => (await world.rows()).map((row) => ({ ...row, updated_at: null }));
+  const first = await withoutTime();
   const written = world.fake.checkRuns[0]?.write;
   await world.reporter.publish(target, FAILING, NAMES);
   expect(world.fake.checkRuns).toHaveLength(1);
   expect(world.fake.checkRuns[0]?.write).toEqual(written);
-  expect(await world.rows()).toEqual(first);
+  expect(await withoutTime()).toEqual(first);
   expect(methods(world.fake).filter((method) => method === 'createCheckRun')).toHaveLength(1);
 });
 

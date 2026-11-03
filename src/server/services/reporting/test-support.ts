@@ -11,8 +11,9 @@ import { type Evaluation, evaluatePullRequest } from '../../domain/evaluation/in
 import { commitFacts, evaluationInput, signatureFact } from '../../domain/evaluation/test-support.ts';
 import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import { captureLogs, type LogCapture } from '../../test-support.ts';
+import { comment } from '../github-comment-contract/test-support.ts';
 import { commitSha } from '../github-pull-contract/test-support.ts';
-import type { GitHubClient } from '../ports/github.ts';
+import type { GitHubClient, GitHubIssueComment } from '../ports/github.ts';
 import type { ReportTarget, RunTarget } from '../ports/reporter.ts';
 import { FakeClock, FakeGitHub } from '../test-support.ts';
 import { CheckRunReporter } from './check-run-reporter.ts';
@@ -31,6 +32,24 @@ export const HEAD = commitSha(2);
 /** The App the FakeGitHub stands for: the id its runs carry. */
 export const APP = parseGithubId(4242);
 export const START = '2026-11-02T10:00:00Z';
+
+/** The first line of every comment of the platform. */
+export const MARKER = '<!-- cla-platform:license/cla:v1 -->';
+
+/** A comment on pull request 7 that the App wrote: the marker first, posted through the App, by a bot. Override a field to forge it. */
+export function ours(commentId: number, overrides: Partial<GitHubIssueComment> = {}): GitHubIssueComment {
+  return comment(commentId, {
+    body: `${MARKER}\nold text`,
+    appId: APP,
+    author: { id: parseGithubId(9), type: 'Bot' },
+    ...overrides,
+  });
+}
+
+/** The methods of the port a test looked at, in order, that are about the comment of the pull request. */
+export function commentCalls(fake: FakeGitHub): string[] {
+  return fake.calls.map((call) => call.method).filter((method) => method.includes('IssueComment'));
+}
 
 /** The login the job saw for user 1. */
 export const NAMES: DisplayNames = { logins: new Map([[1, 'octocat']]), coAuthors: new Map() };
@@ -126,7 +145,7 @@ export async function reportingWorld(
   const github = options.github ?? fake;
   const writer = new CheckRunWriter({ github, appId: APP, clock, logger });
   const db = options.db ?? raw;
-  const reporter = new CheckRunReporter({ db, github, writer, publicBaseUrl: BASE_URL, logger });
+  const reporter = new CheckRunReporter({ db, github, writer, appId: APP, publicBaseUrl: BASE_URL, logger });
   return {
     db,
     tenant,

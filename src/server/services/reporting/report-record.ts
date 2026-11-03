@@ -11,6 +11,11 @@ import type { Situation } from './report-situation.ts';
 // What the reporter of the evaluation job (E09-S05) leaves behind after a report: the id of the run on the row of the pull
 // request (E09-S04), and one log line made of numeric ids only.
 
+/** The key of the row of the pull request of `target` at its head SHA. */
+export function linkKeyOf(target: RunTarget, situation: Situation): LinkKey {
+  return { repositoryId: situation.repositoryId, prNumber: target.prNumber, headSha: target.headSha };
+}
+
 /** Stores the id of the run on the row of the pull request, unless the row holds it already. */
 export async function rememberRun(
   db: Kysely<Database>,
@@ -21,8 +26,7 @@ export async function rememberRun(
   if (situation.own.checkRunId === checkRunId) {
     return;
   }
-  const key: LinkKey = { repositoryId: situation.repositoryId, prNumber: target.prNumber, headSha: target.headSha };
-  await recordCheckRunId(db, situation.scope, key, checkRunId);
+  await recordCheckRunId(db, situation.scope, linkKeyOf(target, situation), checkRunId);
 }
 
 /** What every line of the reporter's log names: the numeric ids and the head SHA, nothing a person wrote. */

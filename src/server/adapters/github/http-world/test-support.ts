@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import type { TestGitHubKey } from '../../../config/test-support.ts';
 import { CheckRunStore } from '../../../services/fake-check-runs/test-support.ts';
+import { CommentIds, commentsOfIssue, postedComment } from '../../../services/fake-comments/test-support.ts';
 import type { GitHubWorld } from '../../../services/github-contract/test-support.ts';
 import type {
   GitHubClient,
@@ -44,6 +45,9 @@ import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-suppo
 
 const PER_PAGE = 100;
 
+/** The App that posts a comment in this world: the one `GET /app` answers with. */
+const APP = parseGithubId(Number(APP_ID));
+
 /** The installation a made-up token was minted for. */
 const TOKEN_INSTALLATION = /^Bearer ghs_made-up-(\d+)-\d+$/;
 
@@ -65,6 +69,7 @@ interface State {
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
   readonly mergeBases: Map<string, string>;
   readonly comments: Map<string, GitHubIssueComment>;
+  readonly commentIds: CommentIds;
   readonly commitPulls: Map<string, readonly GitHubPullRequestRef[]>;
   readonly checkRuns: CheckRunStore;
   readonly requests: string[];
@@ -296,6 +301,38 @@ function commentRoutes(state: State) {
   ];
 }
 
+/** The routes of the comment the platform keeps on a pull request (E09-S07): the comments of an issue, and a new one posted by the App. */
+function conversationRoutes(state: State) {
+  const issueOf = (params: Record<string, unknown>): number => Number(params['number']);
+  const prefixOf = (request: Request, params: Record<string, unknown>): string =>
+    `${repositoryOf(state, request, params)}/comments/`;
+  return [
+    http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/:number/comments`, ({ request, params }) => {
+      if (!reaches(state, request, params)) {
+        return notFound();
+      }
+      const found = commentsOfIssue(state.comments, prefixOf(request, params), issueOf(params));
+      const { items, link } = pageOf(new URL(request.url), found);
+      const name = `${String(params['owner'])}/${String(params['repo'])}`;
+      return HttpResponse.json(
+        items.map((comment) => commentBody(comment, name)),
+        { headers: link },
+      );
+    }),
+    http.post(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/:number/comments`, async ({ request, params }) => {
+      const { body } = z.object({ body: z.string() }).parse(await request.json());
+      if (!reaches(state, request, params)) {
+        return notFound();
+      }
+      const posted = postedComment({ id: state.commentIds.take(), issueNumber: issueOf(params), appId: APP }, body);
+      state.comments.set(`${prefixOf(request, params)}${posted.id}`, posted);
+      return HttpResponse.json(commentBody(posted, `${String(params['owner'])}/${String(params['repo'])}`), {
+        status: 201,
+      });
+    }),
+  ];
+}
+
 /** Starts MSW with these routes until the test ends; every request is noted in `state.requests`. */
 function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
   const server = setupServer(
@@ -309,6 +346,7 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
     ...installationRoutes(state),
     ...pullRoutes(state),
     ...commentRoutes(state),
+    ...conversationRoutes(state),
     ...checkRoutes({ store: state.checkRuns, reached: (request) => installationOf(state, request) }),
     guardPublicMembers().handler,
   );
@@ -401,6 +439,7 @@ async function startWorld(
     repositoryCommits: new Map(),
     mergeBases: new Map(),
     comments: new Map(),
+    commentIds: new CommentIds(),
     commitPulls: new Map(),
     checkRuns: new CheckRunStore(),
     requests: [],

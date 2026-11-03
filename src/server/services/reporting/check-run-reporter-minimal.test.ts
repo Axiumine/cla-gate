@@ -38,8 +38,12 @@ test('a 422 to the verdict is followed by one minimal POST with the counts and t
     'POST /repos/org-1/repo/check-runs',
     `GET /repos/org-1/repo/commits/${HEAD}/check-runs?check_name=license%2Fcla&filter=latest&per_page=100`,
     'POST /repos/org-1/repo/check-runs',
+    'GET /repos/org-1/repo/issues/7/comments?per_page=100&page=1',
+    'POST /repos/org-1/repo/issues/7/comments',
   ]);
-  const [first, second] = calls.filter((call) => call.method === 'POST').map((call) => bodyOf(call));
+  const [first, second] = calls
+    .filter((call) => call.method === 'POST' && call.path.endsWith('/check-runs'))
+    .map((call) => bodyOf(call));
   expect(first?.output.summary).toContain('everyone');
   expect(second).toEqual({
     status: 'completed',
@@ -63,7 +67,7 @@ test('the minimal summary of a pass holds the counts and the hint, and the concl
   const { world, calls } = await scripted({ [POST]: inOrder(unprocessable, created) });
   const target = await world.evaluation();
   await world.reporter.publish(target, PASSING, NAMES);
-  const minimal = bodyOf(calls.findLast((call) => call.method === 'POST'));
+  const minimal = bodyOf(calls.findLast((call) => call.method === 'POST' && call.path.endsWith('/check-runs')));
   expect(minimal).toMatchObject({
     status: 'completed',
     conclusion: 'success',
@@ -116,8 +120,10 @@ test('a PATCH and then the POST that replaces it answered 422 are followed by a 
     'POST /repos/org-1/repo/check-runs',
     'GET /repos/org-1/repo/check-runs/9000001',
     'PATCH /repos/org-1/repo/check-runs/9000001',
+    'GET /repos/org-1/repo/issues/7/comments?per_page=100&page=1',
+    'POST /repos/org-1/repo/issues/7/comments',
   ]);
-  const last = bodyOf(calls.at(-1));
+  const last = bodyOf(calls.findLast((call) => call.method === 'PATCH'));
   expect(last).toMatchObject({ status: 'completed', conclusion: 'failure' });
   expect(last.output.text).toBeUndefined();
   expect(last.output.summary).not.toContain('everyone');
