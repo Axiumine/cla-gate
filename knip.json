@@ -8,7 +8,6 @@
     "scripts/dev/*.ts",
     "src/server/main.ts!",
     "src/server/migrate.ts!",
-    "src/web/main.tsx!",
     "src/web/i18n/index.ts!",
     "src/web/api/index.ts!",
     "src/web/auth/index.ts!",

@@ -110,11 +110,14 @@ test('the web Vitest project is jsdom, under src/web, with the setup file; the s
   expect(vitestConfig.test?.projects).toEqual([scriptsProject, serverProject, webProject]);
 });
 
-test('knip has src/web/main.tsx as a production entry and leaves the test helpers out of production', () => {
+test('knip leaves src/web/main.tsx to its Vite plugin (index.html names it) and the test helpers out of production', () => {
   const knip = z
     .object({ entry: z.array(z.string()), project: z.array(z.string()) })
     .parse(JSON.parse(repoText('knip.json')));
-  expect(knip.entry).toContain('src/web/main.tsx!');
+  // Listed again, the entry is a configuration hint ("redundant entry pattern") in every run of `yarn knip`.
+  expect(knip.entry).not.toContain('src/web/main.tsx!');
+  expect(knip.entry).not.toContain('src/web/main.tsx');
+  expect(repoText('src/web/index.html')).toContain('<script type="module" src="/main.tsx"></script>');
   expect(knip.entry).toContain('src/web/i18n/index.ts!');
   expect(knip.project).toContain('src/**/*.{ts,tsx}!');
   expect(knip.project).toContain('!src/web/test-support/**!');
