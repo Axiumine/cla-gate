@@ -9,7 +9,7 @@ Items marked (planned) do not exist yet.
 ├── src/server/                  Fastify app; unit tests co-located as *.test.ts
 │   ├── main.ts  migrate.ts      process entries (kept logic-free; covered by boot tests)
 │   ├── boot.ts  app.ts          start-up and signals; the Fastify instance (buildApp); shutdown.ts and its test
-│   ├── boot-config.ts  boot-installations.ts  boot-reconcile.ts  boot-services.ts
+│   ├── boot-app.ts  boot-config.ts  boot-installations.ts  boot-reconcile.ts  boot-services.ts
 │   │                            the parts of start-up: logging the configuration, binding the gate once the policies
 │   │                            exist, reconciling installations, wiring the services
 │   ├── config/                  environment parsing (zod), Secret, TRUST_PROXY parsing; github-app.ts and github-key.ts
