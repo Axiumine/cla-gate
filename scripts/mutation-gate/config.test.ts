@@ -285,12 +285,26 @@ test('with no shard the server scope is the whole of it in one run, which is wha
   expect(strykerConfig.mutate).toEqual(['src/server/**/*.ts', 'src/shared/**/*.ts', ...MUTATE_EXCLUSIONS]);
 });
 
-test('the initial test run has a timeout of 20 minutes, far above the 2.6 minutes the whole suite took on a development machine', () => {
-  // Stryker's default is 5 minutes, and the shared runner needed longer for the whole suite (a run on main stopped there).
-  expect(strykerConfig.dryRunTimeoutMinutes).toBe(20);
-  expect(scriptsConfig.dryRunTimeoutMinutes).toBe(20);
+test('the initial test run has a timeout of 120 minutes: the suite of 25 000 tests the epics lead to, on a runner three times slower than the development machine', () => {
+  // Stryker's default is 5 minutes, and the shared runner needed longer for the whole suite (a run on main stopped there on
+  // 2026-11-02; the first scheduled run, 2026-11-03, died at the 20 minutes this test used to pin). Every shard repeats the
+  // initial run of the tests that reach its files, serially in one process, which is nearly the whole server project for most
+  // shards. Measured on 2026-11-03 for `shared`: 7003 tests in 12 min 37 s on the development machine at a low load, which is
+  // 108 ms per test. The arithmetic is stryker.config.mjs's: 20 000 server tests (80% of a suite of 25 000; 74% now) x 108 ms
+  // x 3 (the slowest runner assumed, docs/quality-gates.md) = 108 minutes, 120 on top of it; and 7003 tests today are 38
+  // minutes on that runner, so 120 is 3.2 times what the run needs now.
+  const MEASURED_TESTS = 7003;
+  const MEASURED_SECONDS = 12 * 60 + 37;
+  const SERVER_TESTS_AT_THE_CEILING = 20_000;
+  const RUNNER_SLOWDOWN = 3;
+  const needed = (tests: number) => (tests * (MEASURED_SECONDS / MEASURED_TESTS) * RUNNER_SLOWDOWN) / 60;
+  expect(needed(SERVER_TESTS_AT_THE_CEILING)).toBeCloseTo(108, 0);
+  expect(needed(MEASURED_TESTS)).toBeCloseTo(37.85, 1);
+  expect(strykerConfig.dryRunTimeoutMinutes).toBe(120);
+  expect(strykerConfig.dryRunTimeoutMinutes).toBeGreaterThan(needed(SERVER_TESTS_AT_THE_CEILING));
+  expect(scriptsConfig.dryRunTimeoutMinutes).toBe(120);
   for (const shard of SERVER_SHARDS) {
-    expect(shardOptions(shard.name).dryRunTimeoutMinutes).toBe(20);
+    expect(shardOptions(shard.name).dryRunTimeoutMinutes).toBe(120);
   }
 });
 

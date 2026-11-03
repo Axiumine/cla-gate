@@ -11,11 +11,11 @@ const CI = '.github/workflows/ci.yml';
 const RELEASE = '.github/workflows/release.yml';
 
 /** A workflow whose parts can be replaced; everything not replaced is valid for ci.yml. */
-function workflow(parts: { on?: string; permissions?: string; job?: string } = {}): string {
+function workflow(parts: { on?: string; permissions?: string; job?: string; id?: string } = {}): string {
   const on = parts.on ?? 'on: pull_request';
   const permissions = parts.permissions ?? 'permissions:\n  contents: read';
   const job = parts.job ?? `    runs-on: ${SELF}\n    timeout-minutes: 15`;
-  return `${on}\n${permissions}\njobs:\n  build:\n${job}\n`;
+  return `${on}\n${permissions}\njobs:\n  ${parts.id ?? 'build'}:\n${job}\n`;
 }
 
 /** The report lines for `text` as the file `file`. */
@@ -171,6 +171,36 @@ test.each([
 test.each([['1'], ['15'], ['0.5'], ['60']])('R4 accepts timeout-minutes: %s', (minutes) => {
   expect(lines(CI, workflow({ job: `    runs-on: ubuntu-24.04\n    timeout-minutes: ${minutes}` }))).toEqual([]);
 });
+
+// The one job with a longer cap (E20-S04): each shard of the mutation job repeats Stryker's initial run of the whole server
+// suite, planned at 120 minutes for 25 000 tests, plus the mutants. The cap is named by file and job, so nothing else gets it.
+const OTHER = '.github/workflows/other.yml';
+const timeout = (minutes: string) => `    runs-on: ${SELF}\n    timeout-minutes: ${minutes}`;
+const tooLong = (file: string, id: string, cap: number, found: string) =>
+  `${file}: job "${id}": R4 timeout-minutes must be a positive number of at most ${cap}, found ${found}`;
+
+test.each([['61'], ['120'], ['180']])('R4 accepts timeout-minutes: %s for the mutation job of ci.yml', (minutes) => {
+  expect(lines(CI, workflow({ id: 'mutation', job: timeout(minutes) }))).toEqual([]);
+});
+
+test.each([['181'], ['360'], ['0'], ['-1'], ['"180"']])(
+  'R4 rejects timeout-minutes: %s for the mutation job of ci.yml, at most 180',
+  (minutes) => {
+    expect(lines(CI, workflow({ id: 'mutation', job: timeout(minutes) }))).toEqual([
+      tooLong(CI, 'mutation', 180, minutes),
+    ]);
+  },
+);
+
+test.each([['61'], ['180']])(
+  'R4 holds every other job of ci.yml, and a job named mutation in another file, to 60 even at timeout-minutes: %s',
+  (minutes) => {
+    expect(lines(CI, workflow({ id: 'build', job: timeout(minutes) }))).toEqual([tooLong(CI, 'build', 60, minutes)]);
+    expect(lines(OTHER, workflow({ id: 'mutation', job: timeout(minutes) }))).toEqual([
+      tooLong(OTHER, 'mutation', 60, minutes),
+    ]);
+  },
+);
 
 test('R4 and R1 are both reported, once each', () => {
   expect(lines(CI, workflow({ job: '    runs-on: ubuntu-latest' })).map((line) => /: (R\d) /.exec(line)?.[1])).toEqual([

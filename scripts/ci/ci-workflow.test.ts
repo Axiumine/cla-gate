@@ -40,14 +40,16 @@ function readYaml(file: string): unknown {
 }
 
 const CI_FILE = '.github/workflows/ci.yml';
-// `mutation` is a matrix job (E20-S04): each shard's job may take the guard's cap of 60 minutes, because the slowest cold
-// run of a shard measured 13 minutes 7 seconds on a development machine and a shared runner may be 2 to 3 times slower
-// (26 to 39 minutes, inside the 50-minute Stryker budget); see the comment on the job in ci.yml and docs/quality-gates.md
-// (Testing, Stryker), which has the measurements of every shard. `postgres` runs the whole suite (8181 tests and growing)
+// `mutation` is a matrix job (E20-S04): each shard's job may take 180 minutes, the one cap above 60 that the runner guard
+// allows (scripts/ci/lib/runner-rules.ts, R4, named by file and job). Every shard repeats Stryker's initial run of the
+// whole server suite: 7003 tests took 12 minutes 37 seconds on a development machine on 2026-11-03 and more than the 20
+// minutes it was given on a shared runner, and the suite is planned to reach 25 000 tests, which is 120 minutes on a runner
+// three times slower, before the mutants; see the comment on the job in ci.yml, stryker.config.mjs and docs/quality-gates.md
+// (Testing, Stryker), which have the arithmetic and the measurements. `postgres` runs the whole suite (8181 tests and growing)
 // one file at a time on a real server, and the shared runners cancelled it twice at 20 minutes while its tests still passed.
 // `coverage` runs the same suite under V8 coverage (4 to 11 minutes, cancelled once at 15 on a busy runner).
 const LONG_JOBS = new Map([
-  ['mutation', 60],
+  ['mutation', 180],
   ['postgres', 45],
   ['coverage', 30],
   ['leaks', 30],
@@ -100,7 +102,7 @@ test('every job but qodana runs on the shared self-hosted runners, qodana on ubu
   for (const [id, job] of [...jobs.entries()]) {
     expect(job['timeout-minutes']).toBeGreaterThan(0);
     // The mutation shards (E20-S04), the leak scenarios (E20-S07, three browser runs and a download) and Qodana (E20-S08, a
-    // 1 GiB linter image) are the long jobs; the guard caps every job at 60.
+    // 1 GiB linter image) are the long jobs; the guard caps every job at 60, the mutation job at 180 (R4).
     expect(job['timeout-minutes']).toBeLessThanOrEqual(LONG_JOBS.get(id) ?? 20);
   }
 });

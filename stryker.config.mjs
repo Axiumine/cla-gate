@@ -101,12 +101,19 @@ export function strykerOptions(scope, shard) {
     thresholds: { high: 95, low: 90, break: 90 },
     incremental: true,
     tempDirName: '.stryker-tmp',
-    // The initial run executes the server project with per-test coverage: 2790 tests took 2 minutes 37 seconds on a
-    // 32-core development machine and, on the shared 8-core runner, more than Stryker's default of 5 minutes (a run on main
-    // stopped there on 2026-11-02, "Initial test run timed out!"). 20 minutes is about 7 times the measured time of the
-    // whole suite, which is the most any shard can need because `related` only narrows it, and still ends a hung run
-    // long before the job timeout.
-    dryRunTimeoutMinutes: 20,
+    // The initial run executes the server project with per-test coverage, in one process (Stryker forces one worker), and
+    // every shard repeats it: it runs the tests whose import graph reaches the shard's files, which for most shards is
+    // nearly the whole project, so the whole project is the most any shard can need. Measured on 2026-11-03 for `shared`, cold,
+    // `--concurrency 7`: 7003 tests in 12 min 37 s on the 32-core development machine at a load average of 5 to 12 (108 ms
+    // per test; file start-up is 62 s of it, so the pool and isolation settings could save 8% at most, and 1117 tests that
+    // each build the app over a fresh PGlite, about 0.5 s apiece, take 92%), and more than 20
+    // minutes at a load average of 50 to 77 here and on the shared runner (the first scheduled run, also 2026-11-03:
+    // "Initial test run timed out!" after exactly the 20 minutes this option had). The ceiling is a suite of 25 000
+    // tests, of which the server project is about 80% (74% now): 20 000 tests x 108 ms = 36 minutes, times 3, the slowest
+    // the shared runners are assumed to be (docs/quality-gates.md, Testing), = 108 minutes, and 120 leaves 11% on top. Today
+    // that is 3.2 times the time the run needs on a runner (7003 x 108 ms x 3 = 38 minutes). The option only ends a run that
+    // hangs; MUTATE_BUDGET_MINUTES and the job timeout (ci.yml) are kept 50 and 60 minutes above it, for the mutants.
+    dryRunTimeoutMinutes: 120,
     reporters: ['clear-text', 'html', 'json'],
     // The list of tests that ran per mutant is thousands of lines of log in CI; the survivors and the score are what matter.
     clearTextReporter: { logTests: false },
