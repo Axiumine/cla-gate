@@ -38,9 +38,10 @@ const HOST_SHAPE = /^(?:[a-z0-9.-]+|\[[0-9a-f:.]+\])$/u;
 
 /**
  * True for the canonical origin of an http or https URL: scheme, host and port, with no path, query, fragment or credentials,
- * and a host of the shape above, so no character that Markdown reads in a link can be in it.
+ * and a host of the shape above, so no character that Markdown reads in a link can be in it. The configuration (`PUBLIC_BASE_URL`)
+ * asks the same question at boot, so an origin the sign link cannot use never gets past the start-up.
  */
-function isHttpOrigin(text: string): boolean {
+export function isHttpOrigin(text: string): boolean {
   if (!URL.canParse(text)) {
     return false;
   }
