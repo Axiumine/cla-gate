@@ -16,6 +16,7 @@
     "src/web/ui/index.ts!",
     "src/web/styles/app.css",
     "src/server/domain/evaluation/index.ts!",
+    "src/server/domain/reporting/encode.ts!",
     "src/shared/pr-evaluation-details.ts!",
     "src/shared/cla-text.ts!",
     "src/shared/cla-markdown.ts!",

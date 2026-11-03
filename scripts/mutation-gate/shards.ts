@@ -51,10 +51,16 @@ export const SERVER_SHARDS: readonly Shard[] = [
   // 14 files, 215 mutants.
   { name: 'db', mutate: ['src/server/adapters/db/**/*.ts'] },
   // 9 + 12 + 5 files, 116 + 285 + 27 mutants (428 in all): the files directly in src/server (app, boot, shutdown, main), the
-  // domain files outside evaluation/ and the service ports.
+  // domain files outside evaluation/ and the service ports. The output encoding of the reporter (E09-S01,
+  // domain/reporting/encode.ts) joins it (pure domain code, no I/O).
   {
     name: 'root-domain-ports',
-    mutate: ['src/server/*.ts', 'src/server/domain/*.ts', 'src/server/services/ports/**/*.ts'],
+    mutate: [
+      'src/server/*.ts',
+      'src/server/domain/*.ts',
+      'src/server/domain/reporting/**/*.ts',
+      'src/server/services/ports/**/*.ts',
+    ],
   },
   // 19 files, 496 mutants.
   { name: 'github-a-o', mutate: ['src/server/adapters/github/[a-o]*.ts'] },
