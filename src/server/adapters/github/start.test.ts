@@ -151,7 +151,10 @@ test.each([
 ])('%s is a warning in production, and the check stays open', async (_name, answer) => {
   const key = testGitHubKey();
   mockApp([key.publicKey], answer);
-  const { result, logs } = start({ ...PRODUCTION, ...credentials(key) }, 30);
+  // The timeout is long enough for the connection to be made: one of 30 ms that fires in the middle of the TLS handshake
+  // leaves a handshake that ends after the test, and the runner reports its error (an unhandled ERR_TLS_CERT_ALTNAME_INVALID)
+  // against whichever test runs next.
+  const { result, logs } = start({ ...PRODUCTION, ...credentials(key) }, 1000);
   const app = await result;
   expect(app?.identity.current()).toBeUndefined();
   expect(logs.lines()).toMatchObject([{ level: 40, msg: 'github.app_check_deferred' }]);
