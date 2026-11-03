@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect } from 'vitest';
 import { z } from 'zod';
+import { DOCUMENT_NAME_MAX_CODE_POINTS } from '../../../../shared/cla-name.ts';
 import { errorResponseSchema } from '../../../../shared/errors.ts';
+import { HOSTILE_NAMES } from '../../../../shared/hostile-names.ts';
 import type { TestAppOptions } from '../../../test-support.ts';
 import { type PersonName, tenantChecksums } from '../../db/tenant-fixture/test-support.ts';
 import { sha256 } from '../../db/test-support.ts';
@@ -73,36 +75,13 @@ export function createAs(world: DocumentWorld, who: PersonName | null, installat
 }
 
 /**
- * Printable names a maintainer could type that are hostile to whatever shows them (E09-S01 keeps the shared corpus,
- * `src/shared/hostile-names.ts`; it did not exist when this story was built, so the entries that fit a 100-code-point
- * document name are repeated here). Each is a valid document name and must come back exactly as it went in.
+ * The names of the shared hostile corpus (`src/shared/hostile-names.ts`, E09-S01) that a document may carry: every printable name
+ * of it but the one of 200 code points, which is over the limit of a document name. Each is a valid document name and must come
+ * back exactly as it went in, and the tests below check the count so that a name that starts to be refused cannot drop out unseen.
  */
-export const HOSTILE_DOCUMENT_NAMES: readonly string[] = [
-  '=HYPERLINK("http://evil.example","x")',
-  '+1+1',
-  '-2+3',
-  '@SUM(A1)',
-  "=cmd|' /C calc'!A0",
-  '[x](http://evil.example)',
-  '<img src=x onerror=alert(1)>',
-  '@everyone',
-  '@org/team',
-  '#1',
-  'org/repo#1',
-  "'; drop table users;--",
-  '![i](http://t.example/p.png)',
-  '<script>alert(1)</script>',
-  '<!-- cla-platform:license/cla:v1 -->',
-  '``` ` ``',
-  'a | b',
-  '&#64;octocat',
-  'trailing backslash \\',
-  '/recheck',
-  'javascript:alert(1)',
-  'שלום مرحبا',
-  '\u{1F469}‍\u{1F4BB}',
-  'a‍b‌c',
-];
+export const HOSTILE_DOCUMENT_NAMES: readonly string[] = HOSTILE_NAMES.filter(
+  (name) => Array.from(name).length <= DOCUMENT_NAME_MAX_CODE_POINTS,
+);
 
 /** Stores `count` installation-wide documents named `nameOf(first)`, `nameOf(first + 1)` and so on for a tenant, past the routes. */
 export async function fillDocuments(

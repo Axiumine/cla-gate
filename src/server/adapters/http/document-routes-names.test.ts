@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { documentResponseSchema } from '../../../shared/cla.ts';
+import { HOSTILE_NAMES } from '../../../shared/hostile-names.ts';
 import {
   auditRows,
   createAs,
   documentCount,
   documentWorld,
   errorCodeOf,
+  HOSTILE_DOCUMENT_NAMES,
   nameOf,
   parsed,
 } from './document-fixture/test-support.ts';
@@ -116,4 +118,10 @@ test('the same name is allowed in two tenants, and in the installation and in a 
     201, 201, 201, 201,
   ]);
   expect([repeated.statusCode, errorCodeOf(repeated)]).toEqual([409, 'document_name_taken']);
+});
+
+test('the hostile names a document is tested with are the shared corpus but the one name over 100 code points', () => {
+  const left = HOSTILE_NAMES.filter((name) => !HOSTILE_DOCUMENT_NAMES.includes(name));
+  expect(left).toEqual(['n'.repeat(200)]);
+  expect(HOSTILE_DOCUMENT_NAMES.length).toBeGreaterThan(20);
 });
