@@ -20,7 +20,7 @@ import { account, commit, pullRequest } from '../github-pull-contract/test-suppo
 import type { JobOutcome } from '../job-registry.ts';
 import { createOrgMembership } from '../org-membership.ts';
 import { createOrgMembershipCache } from '../org-membership-cache.ts';
-import type { EvaluationReporter, ReportTarget } from '../ports/reporter.ts';
+import type { EvaluationReporter, ReportOutcome, ReportTarget } from '../ports/reporter.ts';
 import { FakeClock, FakeGate, FakeGitHub } from '../test-support.ts';
 import { evaluatePr } from './evaluate-pr.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
@@ -30,6 +30,9 @@ type ReportFailureCode = Parameters<EvaluationReporter['failed']>[1];
 
 /** What a cancellation is about (E07-S06): the target of `EvaluationReporter.cancelled`. */
 type CancelTarget = Parameters<EvaluationReporter['cancelled']>[0];
+
+/** What every method of a FakeReporter answers unless a test says otherwise: the report was made (E09-S06). */
+const REPORTED: ReportOutcome = { status: 'reported' };
 
 // The world of the tests of the `evaluate-pr` job (E07-S04): a migrated database with one tenant, a FakeGitHub that serves
 // its installation, repository, pull request and commits, a FakeReporter, an evaluator that is a stub unless a test brings the
@@ -93,6 +96,7 @@ export interface ReporterHooks {
   publish?: ((target: ReportTarget, evaluation: Evaluation, names: DisplayNames) => Promise<void>) | undefined;
   failed?: ((target: ReportTarget, code: ReportFailureCode) => Promise<void>) | undefined;
   cancelled?: ((target: CancelTarget) => Promise<void>) | undefined;
+  enforcementDisabled?: ((target: CancelTarget) => Promise<void>) | undefined;
 }
 
 /** The reporter in memory: every report it was given, in order, and an optional behaviour for each method (E07-S04). */
@@ -107,6 +111,8 @@ export class FakeReporter implements EvaluationReporter {
   readonly failures: { readonly target: ReportTarget; readonly code: ReportFailureCode }[] = [];
   /** The pull requests reported as closed (E07-S06), in order. */
   readonly cancellations: CancelTarget[] = [];
+  /** The pull requests whose repository was reported as switched off (E09-S06), in order. */
+  readonly disabled: CancelTarget[] = [];
   readonly hooks: ReporterHooks = {};
   /** The events of every fake that was given this list, in order (E07-S05). */
   readonly timeline: string[];
@@ -115,28 +121,39 @@ export class FakeReporter implements EvaluationReporter {
     this.timeline = timeline;
   }
 
-  async started(target: ReportTarget): Promise<void> {
+  async started(target: ReportTarget): Promise<ReportOutcome> {
     this.timeline.push('reporter.started');
     this.startedTargets.push(target);
     await this.hooks.started?.(target);
+    return REPORTED;
   }
 
-  async publish(target: ReportTarget, evaluation: Evaluation, names: DisplayNames): Promise<void> {
+  async publish(target: ReportTarget, evaluation: Evaluation, names: DisplayNames): Promise<ReportOutcome> {
     this.timeline.push('reporter.publish');
     this.published.push({ target, evaluation, names });
     await this.hooks.publish?.(target, evaluation, names);
+    return REPORTED;
   }
 
-  async failed(target: ReportTarget, code: ReportFailureCode): Promise<void> {
+  async failed(target: ReportTarget, code: ReportFailureCode): Promise<ReportOutcome> {
     this.timeline.push('reporter.failed');
     this.failures.push({ target, code });
     await this.hooks.failed?.(target, code);
+    return REPORTED;
   }
 
-  async cancelled(target: CancelTarget): Promise<void> {
+  async cancelled(target: CancelTarget): Promise<ReportOutcome> {
     this.timeline.push('reporter.cancelled');
     this.cancellations.push(target);
     await this.hooks.cancelled?.(target);
+    return REPORTED;
+  }
+
+  async enforcementDisabled(target: CancelTarget): Promise<ReportOutcome> {
+    this.timeline.push('reporter.enforcement_disabled');
+    this.disabled.push(target);
+    await this.hooks.enforcementDisabled?.(target);
+    return REPORTED;
   }
 }
 

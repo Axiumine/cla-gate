@@ -210,17 +210,22 @@ function repositoryOf(state: State, request: Request, params: Record<string, unk
   return repositoryKey(installationOf(state, request)?.installation.id, owner, repo);
 }
 
+/** Whether the installation of the token of a request reaches the repository the path names (names compare without regard to case). */
+function reaches(state: State, request: Request, params: Record<string, unknown>): boolean {
+  const name = `${String(params['owner'])}/${String(params['repo'])}`.toLowerCase();
+  return (
+    installationOf(state, request)?.repositories.some((repository) => repository.fullName.toLowerCase() === name) ===
+    true
+  );
+}
+
 /**
  * `GET /repos/{owner}/{repo}/pulls?state=open` (E07-S08): the open pull requests scripted for the repository, newest first,
  * and a 404 for a repository the installation of the token does not reach.
  */
 function openPullsRoute(state: State) {
   return http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/pulls`, ({ request, params }) => {
-    const name = `${String(params['owner'])}/${String(params['repo'])}`.toLowerCase();
-    const reached = installationOf(state, request)?.repositories.some(
-      (repository) => repository.fullName.toLowerCase() === name,
-    );
-    if (reached !== true) {
+    if (!reaches(state, request, params)) {
       return notFound();
     }
     const prefix = `${repositoryOf(state, request, params)}#`;
@@ -265,9 +270,20 @@ function pullRoutes(state: State) {
   ];
 }
 
-/** The routes of the manual re-evaluation (E07-S07): a comment, and the pull requests of a commit. */
+/** The routes of the manual re-evaluation (E07-S07): a comment, and the pull requests of a commit; and (E09-S06) the rewrite of a comment. */
 function commentRoutes(state: State) {
   return [
+    http.patch(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/comments/:id`, async ({ request, params }) => {
+      const { body } = z.object({ body: z.string() }).parse(await request.json());
+      const key = `${repositoryOf(state, request, params)}/comments/${String(params['id'])}`;
+      const found = state.comments.get(key);
+      if (found === undefined || !reaches(state, request, params)) {
+        return notFound();
+      }
+      const rewritten = { ...found, body };
+      state.comments.set(key, rewritten);
+      return HttpResponse.json(commentBody(rewritten, `${String(params['owner'])}/${String(params['repo'])}`));
+    }),
     http.get(`${GITHUB_API_ORIGIN}/repos/:owner/:repo/issues/comments/:id`, ({ request, params }) => {
       const found = state.comments.get(`${repositoryOf(state, request, params)}/comments/${String(params['id'])}`);
       const name = `${String(params['owner'])}/${String(params['repo'])}`;

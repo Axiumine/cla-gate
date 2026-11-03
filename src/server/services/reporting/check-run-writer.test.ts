@@ -231,3 +231,41 @@ test('the log has the installation id, the head SHA, the run id and the state, a
   expect(logs.text()).not.toContain(BASE_URL);
   expect(logs.text()).not.toContain('org-1');
 });
+
+test('a run the caller has just found is updated without a second lookup, and forceNew still posts a new one', async () => {
+  const { fake, writer } = world();
+  fake.addCheckRun(INSTALLATION, FULL_NAME, ours(55));
+  const known = await writer.find(LOCATOR);
+  expect(known).toMatchObject({ id: 55 });
+  const before = fake.calls.length;
+  const { checkRunId } = await writer.upsert({ ...LOCATOR, known: known ?? ours(1), view: SUCCESS });
+  expect(checkRunId).toBe(55);
+  expect(methods(fake).slice(before)).toEqual(['updateCheckRun']);
+  const fresh = await writer.upsert({ ...LOCATOR, known: known ?? ours(1), view: SUCCESS, forceNew: true });
+  expect(fresh.checkRunId).not.toBe(55);
+  expect(methods(fake).slice(before)).toEqual(['updateCheckRun', 'createCheckRun']);
+});
+
+test('the minimal output of a failure is written instead of the full one: the counts and the hint, no sections, no text', async () => {
+  const { fake, writer } = world();
+  const view = {
+    kind: 'failure',
+    headSha: SHA,
+    unsigned: 2,
+    unlinked: 1,
+    summary: [{ kind: 'text', text: 'A section with a name.' }],
+    text: [{ kind: 'text', text: 'More names.' }],
+  } as const;
+  await writer.upsert({ ...LOCATOR, view, minimal: true });
+  expect(fake.checkRuns[0]?.write).toEqual({
+    status: 'completed',
+    conclusion: 'failure',
+    title: 'CLA signature required: 2 unsigned, 1 unlinked',
+    summary:
+      'The CLA check did not pass for commit 0000000 (2 unsigned, 1 unlinked). The details could not be shown here. Comment `/recheck` to run it again.',
+    completedAt: new Date(START),
+  });
+  await writer.upsert({ ...LOCATOR, view });
+  expect(fake.checkRuns[0]?.write?.summary).toBe('A section with a name.');
+  expect(fake.checkRuns[0]?.write?.text).toBe('More names.');
+});

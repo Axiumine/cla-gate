@@ -13,7 +13,7 @@ import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import { captureLogs, type LogCapture } from '../../test-support.ts';
 import { commitSha } from '../github-pull-contract/test-support.ts';
 import type { GitHubClient } from '../ports/github.ts';
-import type { ReportTarget } from '../ports/reporter.ts';
+import type { ReportTarget, RunTarget } from '../ports/reporter.ts';
 import { FakeClock, FakeGitHub } from '../test-support.ts';
 import { CheckRunReporter } from './check-run-reporter.ts';
 import { CheckRunWriter } from './check-run-writer.ts';
@@ -65,6 +65,10 @@ interface EvaluationSpec {
   readonly headSha?: string;
   readonly result?: Database['pr_evaluations']['result'];
   readonly checkRunId?: number;
+  /** The id of the pull request comment the row records. */
+  readonly commentId?: number;
+  /** When the row was last touched; the database's `now()` when absent. */
+  readonly updatedAt?: Date;
   readonly trigger?: ReportTarget['trigger'];
 }
 
@@ -92,6 +96,8 @@ async function storeEvaluation(db: Kysely<Database>, tenant: Tenant, spec: Evalu
     headSha,
     result: spec.result ?? 'in_progress',
     ...(spec.checkRunId === undefined ? {} : { checkRunId: spec.checkRunId }),
+    ...(spec.commentId === undefined ? {} : { commentId: spec.commentId }),
+    ...(spec.updatedAt === undefined ? {} : { updatedAt: spec.updatedAt }),
   });
   return {
     githubInstallationId: INSTALLATION,
@@ -117,9 +123,10 @@ export async function reportingWorld(
   const logs = captureLogs();
   const logger = createLogger({ logLevel: 'info' }, logs.destination);
   const clock = new FakeClock(START);
-  const writer = new CheckRunWriter({ github: options.github ?? fake, appId: APP, clock, logger });
+  const github = options.github ?? fake;
+  const writer = new CheckRunWriter({ github, appId: APP, clock, logger });
   const db = options.db ?? raw;
-  const reporter = new CheckRunReporter({ db, writer, publicBaseUrl: BASE_URL, logger });
+  const reporter = new CheckRunReporter({ db, github, writer, publicBaseUrl: BASE_URL, logger });
   return {
     db,
     tenant,
@@ -131,5 +138,17 @@ export async function reportingWorld(
     logger,
     evaluation: (spec = {}) => storeEvaluation(raw, tenant, spec),
     rows: () => readAllEvaluations(raw),
+  };
+}
+
+/** The target of a report that has no trigger (a cancellation, a repository switched off): `target` without it. */
+export function withoutTrigger(target: ReportTarget): RunTarget {
+  return {
+    githubInstallationId: target.githubInstallationId,
+    githubRepoId: target.githubRepoId,
+    fullName: target.fullName,
+    prNumber: target.prNumber,
+    headSha: target.headSha,
+    evaluationId: target.evaluationId,
   };
 }

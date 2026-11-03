@@ -10,9 +10,10 @@ import {
 } from '../github-contract/test-support.ts';
 import { commitSha } from '../github-pull-contract/test-support.ts';
 import type { GitHubIssueComment, GitHubPullRequestRef } from '../ports/github.ts';
+import { GitHubNotFoundError } from '../ports/github-errors.ts';
 
 // The reads of the manual re-evaluation (E07-S07) in the contract of the GitHub client port: what the fake and the Octokit
-// adapter both answer for a comment and for the pull requests of a commit. The shapes GitHub can send that a port type
+// adapter both answer for a comment and for the pull requests of a commit; and (E09-S06) the rewrite of a comment. The shapes GitHub can send that a port type
 // cannot hold (an author of a type nobody knows, an `issue_url` without a number) are in the adapter's own tests.
 
 const ACME = 'acme/api';
@@ -142,6 +143,71 @@ export const COMMENT_CASES: readonly ContractCase[] = [
       await expectInstallationRefusals(world, (installationId) => [
         () => client.getIssueComment(id(installationId), ACME, id(5001)),
         () => client.listPullRequestsForCommit(id(installationId), ACME, commitSha(2)),
+      ]);
+    },
+  ],
+  [
+    'updateIssueComment rewrites the text of a comment, returns it with the issue it is on and its author, and the next read shows the new text',
+    async ({ client, addInstallation, addIssueComment }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
+      addIssueComment(
+        id(11),
+        ACME,
+        comment(5001, { body: 'old', issueNumber: 12, author: { id: id(9), type: 'Bot' } }),
+      );
+      addIssueComment(id(11), ACME, comment(5002));
+      const rewritten = comment(5001, { body: 'new text', issueNumber: 12, author: { id: id(9), type: 'Bot' } });
+      expect(await client.updateIssueComment(id(11), 'ACME/Api', id(5001), 'new text')).toEqual(rewritten);
+      expect(await client.getIssueComment(id(11), ACME, id(5001))).toEqual(rewritten);
+      expect(await client.getIssueComment(id(11), ACME, id(5002))).toEqual(comment(5002));
+    },
+  ],
+  [
+    'updateIssueComment throws not found for a comment nobody wrote or somebody deleted, one of another installation or repository, a repository the installation does not reach and a name GitHub cannot hold',
+    async ({ client, addInstallation, addIssueComment }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
+      addInstallation(installation(12, 'globex'), [repository(201, 'globex/api')]);
+      addIssueComment(id(12), 'globex/api', comment(5002));
+      addIssueComment(id(11), 'acme/other', comment(5003));
+      const refused = [
+        [ACME, 5001],
+        [ACME, 5002],
+        ['globex/api', 5002],
+        ['acme/other', 5003],
+        ...['acme', 'acme/', '/api', 'acme/../api', 'acme/api/x', 'acme/a b', '../api', 'acme/..'].map(
+          (name) => [name, 5001] as const,
+        ),
+      ] as const;
+      for (const [name, commentId] of refused) {
+        await expect(client.updateIssueComment(id(11), name, id(commentId), 'x')).rejects.toBeInstanceOf(
+          GitHubNotFoundError,
+        );
+      }
+      expect(await client.getIssueComment(id(12), 'globex/api', id(5002))).toEqual(comment(5002));
+    },
+  ],
+  [
+    'updateIssueComment answers a view with a signal that has not aborted, and sends nothing once it has',
+    async ({ client, addInstallation, addIssueComment, reached }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
+      addIssueComment(id(11), ACME, comment(5001));
+      const live = client.withSignal(new AbortController().signal);
+      expect((await live.updateIssueComment(id(11), ACME, id(5001), 'again')).body).toBe('again');
+      const before = reached();
+      const reason = new Error('the job was aborted');
+      await expect(
+        client.withSignal(AbortSignal.abort(reason)).updateIssueComment(id(11), ACME, id(5001), 'never'),
+      ).rejects.toBe(reason);
+      expect(reached()).toBe(before);
+    },
+  ],
+  [
+    'updateIssueComment is refused for an installation the gate refuses, gone for one GitHub no longer has, and suspended for a suspended one',
+    async ({ client, addInstallation, ...world }) => {
+      addInstallation(installation(11, 'acme'));
+      addInstallation(installation(12, 'globex'));
+      await expectInstallationRefusals(world, (installationId) => [
+        () => client.updateIssueComment(id(installationId), ACME, id(5001), 'x'),
       ]);
     },
   ],

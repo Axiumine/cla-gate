@@ -9,7 +9,7 @@ import type { GitHubClient } from '../ports/github.ts';
 import { CheckRunReporter } from './check-run-reporter.ts';
 import { CheckRunWriter } from './check-run-writer.ts';
 
-// The one place the reporter of the evaluation job (E09-S05) is put together; E09-S06 binds it at boot.
+// The one place the reporter of the evaluation job (E09-S05) is put together; `boot-evaluation.ts` binds it at boot (E09-S06).
 
 /** What {@link createCheckRunReporter} builds the reporter from: the stores and ports it runs on, and the App it reports as. */
 export interface CheckRunReporterWiring {
@@ -27,6 +27,7 @@ export function createCheckRunReporter(wiring: CheckRunReporterWiring): CheckRun
   const { db, github, appId, clock, logger, publicBaseUrl } = wiring;
   return new CheckRunReporter({
     db,
+    github,
     writer: new CheckRunWriter({ github, appId, clock, logger }),
     publicBaseUrl,
     logger,

@@ -7,6 +7,7 @@ import type { Logger } from 'pino';
 import type { Database } from './adapters/db/schema.ts';
 import type { GitHubApp } from './adapters/github/start.ts';
 import { buildApp } from './app.ts';
+import { evaluationWiring } from './boot-evaluation.ts';
 import type { InstallationWiring } from './boot-installations.ts';
 import { jobWorkers } from './boot-jobs.ts';
 import { type CreateJobQueue, startQueueOrReport } from './boot-queue.ts';
@@ -15,9 +16,9 @@ import type { Clock } from './services/ports/clock.ts';
 import { failExitOnAbortedStop, type ProcessLike } from './shutdown.ts';
 
 // The application of a started server: the job queue is started after the database, with the workers that run its jobs
-// (E07-S01, E07-S03), and the application is built on both, with the GitHub client of the roles (E11-S05), the verified App
-// identity that `GET /api/meta` reads at each request (E17-S09) and the operator policy (E11-S08). Split from `boot.ts` so
-// that function stays inside the line cap.
+// (E07-S01, E07-S03; the evaluation jobs get the GitHub client and the Check Run reporter, E09-S06), and the application is built
+// on both, with the GitHub client of the roles (E11-S05), the verified App identity that `GET /api/meta` reads at each request
+// (E17-S09) and the operator policy (E11-S08). Split from `boot.ts` so that function stays inside the line cap.
 
 export interface BootAppOptions {
   readonly config: AppConfig;
@@ -38,7 +39,8 @@ export interface BootAppOptions {
  */
 export async function buildBootApp(options: BootAppOptions): Promise<FastifyInstance | undefined> {
   const { config, logger, db, github, wiring, signals } = options;
-  const workers = jobWorkers({ db, config, logger, syncFor: wiring.syncFor, clock: options.clock });
+  const evaluation = evaluationWiring({ config, logger, db, github: github?.client, clock: options.clock });
+  const workers = jobWorkers({ db, config, logger, syncFor: wiring.syncFor, clock: options.clock, evaluation });
   const queue = await startQueueOrReport(config, logger, workers, options.createJobQueue);
   if (queue === undefined) {
     await db.destroy();

@@ -259,6 +259,20 @@ export interface GitHubClient {
   ): Promise<GitHubIssueComment | null>;
 
   /**
+   * `PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}` with the installation's token (Pull requests: write; E09-S06): the
+   * text of a comment the platform wrote becomes `body`. Returns the comment as it now reads.
+   * @throws GitHubNotFoundError for a comment GitHub does not have (deleted), a repository the installation does not reach and a
+   * name GitHub cannot hold; GitHubForbiddenError when the installation lacks Pull requests: write; GitHubUnprocessableError
+   * when GitHub refuses the text (a locked conversation, a body it will not take).
+   */
+  updateIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commentId: GithubId,
+    body: string,
+  ): Promise<GitHubIssueComment>;
+
+  /**
    * `GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls?per_page=100` with the installation's token (E07-S07): the pull
    * requests GitHub associates with a commit, open or closed, whatever repository their head is in (a fork's included),
    * the first 100 of them. Resolves an empty list for a commit or repository GitHub does not have and for a name or SHA

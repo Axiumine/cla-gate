@@ -3,6 +3,7 @@
 import type { Logger } from 'pino';
 import type { GithubId } from '../../../shared/github-id.ts';
 import { renderCheckOutput } from '../../domain/reporting/check-output.ts';
+import { minimalCheckOutput } from '../../domain/reporting/check-output-minimal.ts';
 import type { CheckView } from '../../domain/reporting/check-view.ts';
 import type { Clock } from '../ports/clock.ts';
 import type { CheckRunWrite, GitHubCheckRun, GitHubClient } from '../ports/github.ts';
@@ -41,6 +42,10 @@ export interface UpsertRequest extends RunLocator {
   readonly detailsUrl?: string;
   /** Skip the lookup and create a new run: a person asked for a visible re-run, or the caller has just looked. */
   readonly forceNew?: boolean;
+  /** The run the caller has just found with {@link CheckRunWriter.find}: it is updated without a second lookup. Ignored with `forceNew`. */
+  readonly known?: GitHubCheckRun;
+  /** Write the minimal output of the view (E09-S06: the retry after GitHub answered 422): the counts and the hint, no names, no text. */
+  readonly minimal?: boolean;
 }
 
 export class CheckRunWriter {
@@ -76,7 +81,7 @@ export class CheckRunWriter {
    */
   async upsert(request: UpsertRequest): Promise<{ readonly checkRunId: GithubId }> {
     const write = this.#writeOf(request);
-    const existing = request.forceNew === true ? null : await this.find(request);
+    const existing = request.forceNew === true ? null : (request.known ?? (await this.find(request)));
     if (existing !== null) {
       const updated = await this.#update(request, existing.id, write);
       if (updated !== null) {
@@ -104,7 +109,7 @@ export class CheckRunWriter {
 
   /** The status, conclusion and output of the view, with the time it began or ended and the references of the request. */
   #writeOf(request: UpsertRequest): CheckRunWrite {
-    const output = renderCheckOutput(request.view);
+    const output = request.minimal === true ? minimalCheckOutput(request.view) : renderCheckOutput(request.view);
     const now = this.#options.clock.now();
     return {
       ...output,

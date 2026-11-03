@@ -22,9 +22,10 @@ export interface CoverageCounts {
 }
 
 /**
- * The five things a Check Run can say. The first four names are the values of `pr_evaluations.result` (`cancelled` is the
- * lifecycle value of E07-S06); `enforcement_disabled` is the fifth, for a repository whose maintainers turned the check off.
- * A failure brings its counts, for the title, and the parts of the summary (and, if the sections want one, the text).
+ * The six things a Check Run can say. The first four names are the values of `pr_evaluations.result` (`cancelled` is the
+ * lifecycle value of E07-S06); `enforcement_disabled` is the fifth, for a repository whose maintainers turned the check off, and
+ * `evaluation_failed` the sixth (E09-S06), for an evaluation that could not be completed: a failure that names no one. A
+ * failure brings its counts, for the title, and the parts of the summary (and, if the sections want one, the text).
  */
 export type CheckView =
   | { readonly kind: 'success'; readonly headSha: string; readonly covered: CoverageCounts }
@@ -38,7 +39,8 @@ export type CheckView =
     }
   | { readonly kind: 'in_progress'; readonly headSha: string }
   | { readonly kind: 'cancelled' }
-  | { readonly kind: 'enforcement_disabled' };
+  | { readonly kind: 'enforcement_disabled' }
+  | { readonly kind: 'evaluation_failed' };
 
 /** The `status`, `conclusion` and `output` of a Check Run. A Check Run that is `in_progress` has no conclusion. */
 export interface CheckOutput {

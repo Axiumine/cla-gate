@@ -8,7 +8,7 @@ import { renderParts } from './output-parts.ts';
 // E09-S02: what the Check Run of a head SHA says, as plain data. `renderCheckOutput` is pure: the view in, the `status`,
 // `conclusion` and `output` of the GitHub call out, so a test can pin every sentence a contributor reads. The view of a
 // failure carries the sections that E09-S03 builds (the unsigned people, the unlinked commits, the fix steps), so no name is
-// formatted here: a success, an in-progress, a cancelled and a disabled check name no one at all. The title and the fixed
+// formatted here: a success, an in-progress, a cancelled, a disabled and a could-not-complete check name no one at all. The title and the fixed
 // sentences are written out below and nowhere else; the limits of GitHub (a title up to 100 characters, a summary and a text up
 // to 65 535 UTF-16 code units) are kept by the fixed titles and by `renderParts`.
 
@@ -19,10 +19,15 @@ const TITLES = {
   in_progress: 'Checking CLA signatures',
   cancelled: 'CLA check cancelled',
   enforcement_disabled: 'CLA enforcement is disabled for this repository',
+  evaluation_failed: 'CLA check could not complete',
 } as const;
 
 /** The summary of a cancelled check. */
 const CANCELLED_SUMMARY = 'This pull request was closed before the check finished.';
+
+/** The summary of a check whose evaluation could not be completed (E09-S06): no name, no count, and the way out. */
+const EVALUATION_FAILED_SUMMARY =
+  'Something went wrong while checking this pull request. Comment `/recheck` to try again.';
 
 /**
  * The summary of a check on a repository whose enforcement is off. It is the one place the sentence is written: the
@@ -41,7 +46,7 @@ function renderCount(count: number): string {
 }
 
 /** `N words` for each count that is not zero, in order. Every count is checked, the zero ones too. */
-function countedPhrases(counts: readonly (readonly [count: number, words: string])[]): string[] {
+export function countedPhrases(counts: readonly (readonly [count: number, words: string])[]): string[] {
   return counts.flatMap(([count, words]) => {
     const shown = renderCount(count);
     return count === 0 ? [] : [`${shown} ${words}`];
@@ -58,7 +63,7 @@ function failureTitle(unsigned: number, unlinked: number): string {
 }
 
 /** `4 contributors covered: 2 by signature, 1 by allowlist rule, 1 by maintainer override.`, a zero count left out. */
-function coverageSentence(covered: CoverageCounts): string {
+export function coverageSentence(covered: CoverageCounts): string {
   const reasons = countedPhrases([
     [covered.signature, 'by signature'],
     [covered.allowlist, 'by allowlist rule'],
@@ -110,5 +115,7 @@ export function renderCheckOutput(view: CheckView): CheckOutput {
       return completed('cancelled', TITLES.cancelled, CANCELLED_SUMMARY);
     case 'enforcement_disabled':
       return completed('neutral', TITLES.enforcement_disabled, ENFORCEMENT_DISABLED_SUMMARY);
+    case 'evaluation_failed':
+      return completed('failure', TITLES.evaluation_failed, EVALUATION_FAILED_SUMMARY);
   }
 }

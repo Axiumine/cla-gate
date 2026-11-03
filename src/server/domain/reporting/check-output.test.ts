@@ -28,6 +28,7 @@ test.each([
   ['in_progress', { kind: 'in_progress', headSha: HEAD }, 'in_progress', undefined],
   ['cancelled', { kind: 'cancelled' }, 'completed', 'cancelled'],
   ['enforcement_disabled', { kind: 'enforcement_disabled' }, 'completed', 'neutral'],
+  ['evaluation_failed', { kind: 'evaluation_failed' }, 'completed', 'failure'],
 ] as const)('the %s view is %s with the conclusion %s', (_kind, view, status, conclusion) => {
   const output = renderCheckOutput(view);
   expect(output.status).toBe(status);
@@ -49,6 +50,7 @@ test.each([
   ['in progress', { kind: 'in_progress', headSha: HEAD }, 'Checking CLA signatures'],
   ['cancelled', { kind: 'cancelled' }, 'CLA check cancelled'],
   ['disabled', { kind: 'enforcement_disabled' }, 'CLA enforcement is disabled for this repository'],
+  ['could not complete', { kind: 'evaluation_failed' }, 'CLA check could not complete'],
   ['3 unsigned and 2 unlinked', failure(3, 2), 'CLA signature required: 3 unsigned, 2 unlinked'],
   ['1 unsigned', failure(1, 0), 'CLA signature required: 1 unsigned'],
   ['4 unlinked', failure(0, 4), 'CLA signature required: 4 unlinked'],
@@ -65,6 +67,7 @@ test('no title is longer than 100 characters, even with the largest counts', () 
     { kind: 'in_progress', headSha: HEAD },
     { kind: 'cancelled' },
     { kind: 'enforcement_disabled' },
+    { kind: 'evaluation_failed' },
   ];
   for (const view of views) {
     expect(renderCheckOutput(view).title.length).toBeLessThanOrEqual(100);
@@ -136,6 +139,17 @@ test('every view renders the sentences a contributor reads', () => {
   `);
 });
 
+test('a check whose evaluation could not complete fails with the fixed title and the sentence that sends the contributor to /recheck (E09-S06)', () => {
+  expect(renderCheckOutput({ kind: 'evaluation_failed' })).toMatchInlineSnapshot(`
+    {
+      "conclusion": "failure",
+      "status": "completed",
+      "summary": "Something went wrong while checking this pull request. Comment \`/recheck\` to try again.",
+      "title": "CLA check could not complete",
+    }
+  `);
+});
+
 test('the disabled summary is the one fixed sentence, exported for the reporter to reuse', () => {
   expect(ENFORCEMENT_DISABLED_SUMMARY).toBe(
     'The maintainers turned CLA enforcement off for this repository. If `license/cla` is a required check in branch ' +
@@ -144,12 +158,13 @@ test('the disabled summary is the one fixed sentence, exported for the reporter 
   expect(renderCheckOutput({ kind: 'enforcement_disabled' }).summary).toBe(ENFORCEMENT_DISABLED_SUMMARY);
 });
 
-test('the summaries of a success, an in-progress, a cancelled and a disabled check name no one', () => {
+test('the summaries of a success, an in-progress, a cancelled, a disabled and a could-not-complete check name no one', () => {
   const views: CheckView[] = [
     success({ signature: 2 }),
     { kind: 'in_progress', headSha: HEAD },
     { kind: 'cancelled' },
     { kind: 'enforcement_disabled' },
+    { kind: 'evaluation_failed' },
   ];
   const outputs = views.map((view) => renderCheckOutput(view));
   for (const output of outputs) {

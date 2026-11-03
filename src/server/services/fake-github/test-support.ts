@@ -147,6 +147,7 @@ export type GitHubMethod =
   | 'listRepositoryCommits'
   | 'compareCommits'
   | 'getIssueComment'
+  | 'updateIssueComment'
   | 'listPullRequestsForCommit'
   | 'listOpenPullRequests'
   | 'createCheckRun'

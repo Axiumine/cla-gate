@@ -275,6 +275,26 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     );
   }
 
+  updateIssueComment(
+    githubInstallationId: GithubId,
+    fullName: string,
+    commentId: GithubId,
+    body: string,
+  ): Promise<GitHubIssueComment> {
+    const route = 'PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}';
+    return this.#serveInstallation('updateIssueComment', githubInstallationId, (entry) => {
+      reachable(entry, fullName, route);
+      const key = commentKey(githubInstallationId, fullName, commentId);
+      const comment = this.state.comments.get(key);
+      if (comment === undefined) {
+        throw new GitHubNotFoundError(route);
+      }
+      const rewritten = { ...comment, body };
+      this.state.comments.set(key, rewritten);
+      return rewritten;
+    });
+  }
+
   listPullRequestsForCommit(
     githubInstallationId: GithubId,
     fullName: string,

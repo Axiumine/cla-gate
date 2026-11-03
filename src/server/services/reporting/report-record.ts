@@ -5,7 +5,7 @@ import type { Logger } from 'pino';
 import type { GithubId } from '../../../shared/github-id.ts';
 import { type LinkKey, recordCheckRunId } from '../../adapters/db/pr-evaluation-links.ts';
 import type { Database } from '../../adapters/db/schema.ts';
-import type { ReportTarget } from '../ports/reporter.ts';
+import type { ReportTarget, RunTarget } from '../ports/reporter.ts';
 import type { Situation } from './report-situation.ts';
 
 // What the reporter of the evaluation job (E09-S05) leaves behind after a report: the id of the run on the row of the pull
@@ -25,16 +25,17 @@ export async function rememberRun(
   await recordCheckRunId(db, situation.scope, key, checkRunId);
 }
 
+/** What every line of the reporter's log names: the numeric ids and the head SHA, nothing a person wrote. */
+export function reportIds(target: RunTarget) {
+  return {
+    githubInstallationId: target.githubInstallationId,
+    githubRepoId: target.githubRepoId,
+    prNumber: target.prNumber,
+    headSha: target.headSha,
+  };
+}
+
 /** One line per report: the numeric ids, the head SHA and the id of the run, nothing a person wrote. */
-export function logReport(logger: Logger, target: ReportTarget, checkRunId: GithubId, event: string): void {
-  logger.info(
-    {
-      githubInstallationId: target.githubInstallationId,
-      githubRepoId: target.githubRepoId,
-      prNumber: target.prNumber,
-      headSha: target.headSha,
-      checkRunId,
-    },
-    event,
-  );
+export function logReport(logger: Logger, target: RunTarget, checkRunId: GithubId, event: string): void {
+  logger.info({ ...reportIds(target), checkRunId }, event);
 }
