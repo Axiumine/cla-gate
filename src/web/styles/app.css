@@ -122,6 +122,16 @@
   }
 
   /*
+   * While an overlay is open (E17-S10) the page behind it does not scroll. overlay.tsx puts this class on <html> and sets
+   * the width of the scrollbar it takes away in --scroll-lock-gap, so the page does not jump sideways. Radix does the same
+   * with a <style> element, which style-src 'self' blocks.
+   */
+  html.scroll-locked {
+    overflow: hidden;
+    padding-right: var(--scroll-lock-gap, 0);
+  }
+
+  /*
    * In forced-colors mode the browser replaces every colour with a system one, so a boundary that is only a fill or a shadow
    * disappears. The controls get a border in a system colour there; a component that sets its own border overrides it.
    */

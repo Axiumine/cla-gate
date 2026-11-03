@@ -16,7 +16,7 @@ import {
   TextInput,
 } from './index.ts';
 
-// E17-S06: what holds for the primitives as a set: the page stays free of injected styles (the Content-Security-Policy
+// E17-S06 and E17-S10: what holds for the primitives as a set: the page stays free of injected styles (the Content-Security-Policy
 // allows none, E17-S03), the sources use no raw HTML and take Radix only from `radix-ui`, and one form of them all is accessible.
 
 const OPTIONS = [
@@ -90,6 +90,11 @@ test('the sources of the primitives are all there to be checked', () => {
       './Checkbox.tsx',
       './RadioGroup.tsx',
       './Tabs.tsx',
+      './Dialog.tsx',
+      './AlertDialog.tsx',
+      './DataTable.tsx',
+      './CursorPager.tsx',
+      './overlay.tsx',
       './index.ts',
     ]),
   );
