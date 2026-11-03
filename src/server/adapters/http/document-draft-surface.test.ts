@@ -124,7 +124,7 @@ test('only the statements of the drafts name the table, and only the draft servi
     'adapters/http/document-presenters.ts',
     'services/cla-documents.ts',
     'services/cla-drafts.ts',
-    'services/cla-publish-checks.ts',
+    'services/cla-publish-source.ts',
   ]);
   expect(filesWith(/from '[^']*\/cla-draft-writes\.ts'/)).toEqual([
     'adapters/http/document-presenters.ts',

@@ -144,3 +144,55 @@ export async function activeNumberOf(db: Kysely<Database>, documentId: number): 
     .executeTakeFirstOrThrow();
   return row.major === null ? null : `${row.major}.${row.minor}`;
 }
+
+/** Every version of a document with the transaction id of its row (`xmin`): a row that was updated, even to the value it had, gets a new one. Oldest id first. */
+export async function versionRowsWithXmin(db: Kysely<Database>, documentId: number) {
+  const { rows } = await sql<{ id: number; xmin: string; content_md: string; content_sha256: string }>`
+    select id, xmin::text as xmin, content_md, content_sha256 from cla_versions where document_id = ${documentId} order by id`.execute(
+    db,
+  );
+  return rows;
+}
+
+/**
+ * A signature on the version `versionId` of the document, at `major`, by a new person (a new user row); `revoked` revokes it at
+ * once. The world's own signature is the one on the first version of the installation-wide document.
+ */
+export async function addSignature(
+  world: PublishWorld,
+  spec: { readonly documentId: number; readonly versionId: number; readonly major: number; readonly revoked: boolean },
+): Promise<void> {
+  const githubId = 70_000 + (await world.db.selectFrom('users').select('id').execute()).length;
+  const user = await world.db
+    .insertInto('users')
+    .values({ github_id: githubId, login: `login-${githubId}`, name: `Name ${githubId}`, avatar_url: null })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const version = await world.db
+    .selectFrom('cla_versions')
+    .select('content_sha256')
+    .where('id', '=', spec.versionId)
+    .executeTakeFirstOrThrow();
+  await world.db
+    .insertInto('signatures')
+    .values({
+      installation_id: world.t1.installationId,
+      user_id: user.id,
+      document_id: spec.documentId,
+      version_id: spec.versionId,
+      major: spec.major,
+      content_sha256: version.content_sha256,
+      consent_text_id: 'consent-v1',
+      signer_type: 'individual',
+      source_repository_id: world.t1.repositoryId,
+      source_pr_number: 8,
+    })
+    .execute();
+  if (spec.revoked) {
+    await world.db
+      .updateTable('signatures')
+      .set({ revoked_at: sql`now()`, revoked_by: world.admin.id, revoke_reason: 'signer_request' })
+      .where('user_id', '=', user.id)
+      .execute();
+  }
+}

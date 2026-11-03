@@ -48,12 +48,16 @@ const VERSION_BUMPS = ['major', 'minor'] as const;
 export type VersionBump = (typeof VERSION_BUMPS)[number];
 
 /**
- * Where the text of a new version comes from. Today only the saved draft; E12-S06 adds the copy of an old version as a second
- * member, so the schema is a union keyed by `type` from the start.
+ * Where the text of a new version comes from: the saved draft (E12-S04), or a copy of a version the document already has
+ * (E12-S06, a rollback: the old text is published again as a new row; the old row is never reactivated).
  */
 const publishSourceSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('draft'), revision: z.int().min(1).max(MAX_REVISION) }),
+  z.strictObject({ type: z.literal('version'), versionId: z.int().positive() }),
 ]);
+
+/** The source of a publish, as the body names it. */
+export type PublishSource = z.infer<typeof publishSourceSchema>;
 
 /**
  * The body of `POST .../documents/:documentId/versions`. Strict: a key nobody defined is a 400. `expectedActiveVersionId` is the

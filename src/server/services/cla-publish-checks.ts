@@ -5,16 +5,17 @@ import type { VersionBump } from '../../shared/cla-version.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { nextVersionNumber, type VersionNumber } from '../domain/version-number.ts';
-import { type PreparedClaText, prepareClaText } from './cla-content.ts';
+import type { PreparedClaText } from './cla-content.ts';
 import type { StoredActiveVersion } from './cla-document-types.ts';
-import { lockDraft } from './cla-draft-queries.ts';
+import { checkMinorBump, loadSourceText } from './cla-publish-source.ts';
 import type { VersionPublish } from './cla-publish-types.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 import { countSignaturesAtMajor, findActiveVersion, lockDocument } from './cla-version-queries.ts';
 
 // The checks that decide whether a publish of a version may go on (E12-S04), all made in the transaction of the caller under the
-// lock of the document row and all before anything is written: the expected active version, the number, the draft, a `minor`
-// bump that changes nothing and the confirmation of the re-signing. The transaction that writes is in cla-publish.ts.
+// lock of the document row and all before anything is written: the expected active version, the number, the source of the text
+// (cla-publish-source.ts: the draft, or a version to publish again, E12-S06), a `minor` bump that changes nothing or that rolls
+// back across a major, and the confirmation of the re-signing. The transaction that writes is in cla-publish.ts.
 
 /**
  * Locks the document and checks that the active version is the one the person saw.
@@ -49,24 +50,6 @@ function numberOf(active: VersionNumber | null, bump: VersionBump): VersionNumbe
   return next.number;
 }
 
-/**
- * The text of the new version: the saved draft, locked until the transaction ends, made canonical, checked and hashed again
- * (the draft was checked when it was saved; the check is cheap and the version is for ever).
- * @throws ClaRuleError `draft_conflict` with the revision the draft is at (null: none is saved) when it is not the revision
- * the person published, and the `content_` rules if the stored draft breaks one.
- */
-async function loadSourceText(
-  trx: Transaction<Database>,
-  scope: TenantScope,
-  publish: VersionPublish,
-): Promise<PreparedClaText> {
-  const draft = await lockDraft(trx, scope, publish.documentId);
-  if (draft?.revision !== publish.source.revision) {
-    throw new ClaRuleError('draft_conflict', { currentRevision: draft?.revision ?? null });
-  }
-  return prepareClaText(draft.contentMd);
-}
-
 /** What the re-signing guard found: whether the bump asks everyone to sign again and how many signatures that stales. */
 interface Resigning {
   readonly requiresResigning: boolean;
@@ -96,20 +79,26 @@ async function checkResigning(
 
 /**
  * The checks that decide whether the publish may go on, in order, all before anything is written: the lock and the expected
- * active version, the number, the draft, a `minor` bump that changes nothing, and the confirmation of the re-signing.
+ * active version, the number, the source of the text, a `minor` bump that rolls back across a major or changes nothing, and the
+ * confirmation of the re-signing. `rolledBackFrom` is the id of the version the new one is a copy of, or null for a draft.
  * @throws ClaRuleError the first rule the publish breaks.
  */
 export async function decide(
   trx: Transaction<Database>,
   scope: TenantScope,
   publish: VersionPublish,
-): Promise<{ number: VersionNumber; text: PreparedClaText } & Resigning> {
+): Promise<{ number: VersionNumber; text: PreparedClaText; rolledBackFrom: number | null } & Resigning> {
   const active = await lockActive(trx, scope, publish);
   const number = numberOf(active, publish.bump);
-  const text = await loadSourceText(trx, scope, publish);
+  const source = await loadSourceText(trx, scope, publish);
   // A major bump with the same text is allowed on purpose: it asks everyone to sign again without a change of wording.
-  if (publish.bump === 'minor' && active?.contentSha256 === text.contentSha256) {
-    throw new ClaRuleError('content_unchanged');
+  if (publish.bump === 'minor') {
+    checkMinorBump(active, source);
   }
-  return { number, text, ...(await checkResigning(trx, scope, publish, active)) };
+  return {
+    number,
+    text: source.text,
+    rolledBackFrom: source.copied?.id ?? null,
+    ...(await checkResigning(trx, scope, publish, active)),
+  };
 }

@@ -16,9 +16,10 @@ import { parseInput } from './request-body.ts';
 import { requireTenant, tenantAccess } from './tenant-access.ts';
 import { byDocumentParam, documentIdOf } from './tenant-resolvers.ts';
 
-// The route that publishes a version of a document (E12-S04). The requirement follows the scope of the document
-// (`byDocumentParam`), like the draft the version is made from. The version is the only thing it creates, and no route
-// accepts a change or a delete of one: published versions are immutable (E12-S05 pins the route table).
+// The route that publishes a version of a document (E12-S04), from the saved draft or, as a rollback, from the text of an older
+// version of the same document (E12-S06). The requirement follows the scope of the document (`byDocumentParam`), like the draft
+// the version is made from. The version is the only thing it creates, and no route accepts a change or a delete of one:
+// published versions are immutable (E12-S05 pins the route table).
 
 /** The instance the route is registered on: Fastify with the zod type provider. */
 type Routes = Parameters<FastifyPluginCallbackZod>[0];

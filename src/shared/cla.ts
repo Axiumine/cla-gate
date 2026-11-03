@@ -58,7 +58,7 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * `content_` rules are those of the text of a CLA (E12-S02, `validateClaText`); `draft_conflict` is the save of a draft
  * that another admin saved over meanwhile (E12-S03). The rest are the rules of publishing a version (E12-S04): the rationale,
  * the numbering, the guard against publishing over a version the admin has not seen, and the confirmation that signers will have
- * to sign again.
+ * to sign again. `rollback_requires_major` is the copy of a version of an earlier major published as a minor one (E12-S06).
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -75,6 +75,7 @@ export const CLA_RULE_STATUS = {
   stale_active_version: 409,
   resign_confirmation_required: 409,
   version_conflict: 409,
+  rollback_requires_major: 422,
   not_found: 404,
 } as const;
 

@@ -17,8 +17,8 @@ import type { JobEnqueuer } from './ports/jobs.ts';
 // Publishing a version of a CLA (E12-S04): the one mutation that creates `cla_versions` rows and moves the active pointer. It
 // is one transaction under the lock of the document row, so the checks, the number, the insert, the pointer, the draft, the audit
 // row and the jobs are decided together and either all happen or none does. The checks are in cla-publish-checks.ts, the shapes in
-// cla-publish-types.ts, the statements in cla-version-queries.ts and cla-version-writes.ts; the numbering is `nextVersionNumber`. Whoever publishes later from another source (E12-S06, a copy of an
-// old version) reuses `publishWithin` with a source of its own and changes nothing else.
+// cla-publish-types.ts, the statements in cla-version-queries.ts and cla-version-writes.ts; the numbering is `nextVersionNumber`. A rollback (E12-S06) is the same
+// function with a second source: it publishes a new row with the text and the hash of an old version, and never touches the old row.
 
 /** The unique constraint on `(document_id, major, minor)` of migration 001: the backstop of the numbering. */
 const VERSION_NUMBER_CONSTRAINT = 'cla_versions_document_id_major_minor_key';
@@ -34,7 +34,7 @@ async function publishWithin(
   enqueuer: JobEnqueuer,
   publish: VersionPublish,
 ): Promise<PublishedVersion> {
-  const { number, text, requiresResigning, affectedSignatures } = await decide(trx, scope, publish);
+  const { number, text, rolledBackFrom, requiresResigning, affectedSignatures } = await decide(trx, scope, publish);
   const { documentId, actor } = publish;
   const version = await insertVersion(trx, scope, {
     documentId,
@@ -45,7 +45,10 @@ async function publishWithin(
     rationale: publish.rationale,
   });
   await setActiveVersion(trx, scope, documentId, version.id);
-  await deleteDraft(trx, scope, documentId);
+  // The draft is consumed by the publish that is made from it. A rollback leaves it alone: it is somebody's work in progress.
+  if (publish.source.type === 'draft') {
+    await deleteDraft(trx, scope, documentId);
+  }
   await appendAudit(trx, {
     action: 'cla_version.published',
     installationId: scope.installationId,
@@ -58,6 +61,7 @@ async function publishWithin(
       minor: version.minor,
       bump: publish.bump,
       affected_signatures: affectedSignatures,
+      ...(rolledBackFrom === null ? {} : { rolled_back_from_version_id: rolledBackFrom }),
     },
   });
   if (publish.bump === 'major') {
@@ -67,14 +71,16 @@ async function publishWithin(
 }
 
 /**
- * Publishes the saved draft of a document as its next version and makes it the active one. One transaction under
- * `select ... for update` of the document row, so two publishes that name the same active version cannot both succeed: the
- * second waits, finds the pointer moved and is refused. The rationale is stored with the version and never copied into the audit
- * row. A failure at any step, a throwing enqueuer included, rolls everything back: no version row, no audit row, the pointer
- * and the draft as they were.
- * @throws ClaRuleError `invalid_rationale`, `not_found`, `stale_active_version` (with `activeVersionId`), `first_version_must_be_major`,
- * `draft_conflict` (with `currentRevision`), the `content_` rules, `content_unchanged`, `resign_confirmation_required` (with
- * `affectedSignatures`) and `version_conflict` (the number was taken by a row the lock could not see). Anything the enqueuer rejects with.
+ * Publishes the saved draft of a document, or a copy of one of its versions (a rollback, E12-S06), as its next version and makes it
+ * the active one. One transaction under `select ... for update` of the document row, so two publishes that name the same active
+ * version cannot both succeed: the second waits, finds the pointer moved and is refused. The rationale is stored with the
+ * version and never copied into the audit row. A failure at any step, a throwing enqueuer included, rolls everything back: no
+ * version row, no audit row, the pointer and the draft as they were. A rollback keeps the draft, and its audit row names the
+ * version it copies.
+ * @throws ClaRuleError `invalid_rationale`, `not_found` (the document, or the version to copy), `stale_active_version` (with
+ * `activeVersionId`), `first_version_must_be_major`, `draft_conflict` (with `currentRevision`), the `content_` rules,
+ * `rollback_requires_major`, `content_unchanged`, `resign_confirmation_required` (with `affectedSignatures`) and
+ * `version_conflict` (the number was taken by a row the lock could not see). Anything the enqueuer rejects with.
  */
 export async function publishVersion(
   db: Kysely<Database>,

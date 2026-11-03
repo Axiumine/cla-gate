@@ -71,6 +71,7 @@ test('the limits and the status of each rule are the ones the story names', () =
     stale_active_version: 409,
     resign_confirmation_required: 409,
     version_conflict: 409,
+    rollback_requires_major: 422,
     not_found: 404,
   });
 });
