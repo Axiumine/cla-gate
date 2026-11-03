@@ -32,6 +32,8 @@ test('the registry holds the scoped queries the story lists, so the matrix below
     'services/admin-ledger-queries.ts recordAdminSeen',
     'services/admin-ledger-queries.ts forgetAdminSeen',
     'services/admin-ledger-queries.ts wasAdminSeenSince',
+    'services/audit-log-queries.ts auditLogRows',
+    'services/audit-log-queries.ts listAuditLog',
     'services/document-placement.ts findDocumentPlacement',
     'services/document-placement.ts findSignaturePlacement',
     'services/repo-admin-candidates.ts listRepoAdminCandidates',
@@ -44,6 +46,8 @@ test('the registry holds the scoped queries the story lists, so the matrix below
     'services/repository-queries.ts listEnabledRepositories',
     'services/repository-statements.ts storedStates',
     'services/repository-statements.ts writeChanged',
+    'services/signer-erasure.ts erasureCounts',
+    'services/signer-erasure.ts eraseSigner',
     'services/tenant-queries.ts findTenantRows',
     'services/tenant-queries.ts findAdmittedTenantRows',
     'services/close-pr/close-heads.ts headShasToCancel',
@@ -60,6 +64,8 @@ test('the registry holds the scoped queries the story lists, so the matrix below
     'services/evaluate-pr/signature-facts.ts readSignatures',
     'services/sweep/sweep-rows.ts evaluationStates',
     'services/sweep/sweep-rows.ts staleEvaluations',
+    'services/export/signature-queries.ts countSignatures',
+    'services/export/signature-queries.ts signatureBatch',
   ]);
 });
 

@@ -3,6 +3,7 @@
 import type { Kysely } from 'kysely';
 import { parseGithubId } from '../../../../shared/github-id.ts';
 import { forgetAdminSeen, recordAdminSeen, wasAdminSeenSince } from '../../../services/admin-ledger-queries.ts';
+import { auditLogRows, listAuditLog } from '../../../services/audit-log-queries.ts';
 import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
 import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
@@ -18,6 +19,7 @@ import {
 } from '../../../services/repository-queries.ts';
 import { storedStates, writeChanged } from '../../../services/repository-statements.ts';
 import { releaseTransferred } from '../../../services/repository-transfer.ts';
+import { eraseSigner, erasureCounts } from '../../../services/signer-erasure.ts';
 import {
   findAdmittedTenantRows,
   findTenantRows,
@@ -25,8 +27,18 @@ import {
   type TenantRows,
 } from '../../../services/tenant-queries.ts';
 import type { Database } from '../schema.ts';
+import { EXPORT_TENANT_QUERIES } from '../tenant-export-fixture/test-support.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { JOB_TENANT_QUERIES } from '../tenant-jobs-fixture/test-support.ts';
+import {
+  ledgerOwnersOf,
+  ownersOfAuditRows,
+  ownersOfDocuments,
+  ownersOfGithubIds,
+  ownersOfRepositories,
+  ownersOfSignatures,
+  removedRepositories,
+} from '../tenant-owners/test-support.ts';
 import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from '../tenant-scope.ts';
 
 // The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
@@ -39,18 +51,23 @@ import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from 
 export const TENANT_MODULES = [
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
+  'services/audit-log-queries.ts',
   'services/close-pr/close-heads.ts',
   'services/close-pr/close-rows.ts',
   'services/document-placement.ts',
   'services/evaluate-pr/evaluation-rows.ts',
   'services/evaluate-pr/policy-facts.ts',
   'services/evaluate-pr/signature-facts.ts',
+  'services/export/own-data-queries.ts',
+  'services/export/own-signatures-query.ts',
+  'services/export/signature-queries.ts',
   'services/installation-operator.ts',
   'services/repo-admin-candidates.ts',
   'services/repository-enabled.ts',
   'services/repository-queries.ts',
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
+  'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
   'services/tenant-queries.ts',
 ] as const;
@@ -103,25 +120,6 @@ export type TenantQuery = ScopedQuery | ByDesignQuery;
 const isUniqueViolation: Refusal = (error) =>
   typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
 
-/** The installation that owns each repository stored under these GitHub ids, in any state. */
-async function ownersOfGithubIds(db: Kysely<Database>, githubRepoIds: readonly number[]): Promise<number[]> {
-  if (githubRepoIds.length === 0) {
-    return [];
-  }
-  const rows = await db
-    .selectFrom('repositories')
-    .select('installation_id')
-    .where('github_repo_id', 'in', githubRepoIds)
-    .execute();
-  return rows.map((row) => row.installation_id);
-}
-
-/** The installation that owns each repository with these row ids. */
-async function ownersOfRepositories(db: Kysely<Database>, repositoryIds: readonly number[]): Promise<number[]> {
-  const rows = await db.selectFrom('repositories').select('installation_id').where('id', 'in', repositoryIds).execute();
-  return rows.map((row) => row.installation_id);
-}
-
 /**
  * The installations that own the rows the guard's read returned: the installation and its repository, which the
  * registry always asks for.
@@ -135,38 +133,6 @@ export function ownersOfTenantRows(rows: TenantRows | null): number[] {
     throw new Error('the registry asks for a repository and the read answered none');
   }
   return [rows.installation.id, rows.repository.installation_id];
-}
-
-/** The installation that owns each document with these row ids. */
-async function ownersOfDocuments(db: Kysely<Database>, documentIds: readonly number[]): Promise<number[]> {
-  const rows = await db.selectFrom('cla_documents').select('installation_id').where('id', 'in', documentIds).execute();
-  return rows.map((row) => row.installation_id);
-}
-
-/** The installation that owns each signature with these row ids. */
-async function ownersOfSignatures(db: Kysely<Database>, signatureIds: readonly number[]): Promise<number[]> {
-  const rows = await db.selectFrom('signatures').select('installation_id').where('id', 'in', signatureIds).execute();
-  return rows.map((row) => row.installation_id);
-}
-
-/** The GitHub ids of the repositories that are removed, in any tenant. */
-async function removedRepositories(db: Kysely<Database>): Promise<number[]> {
-  const rows = await db
-    .selectFrom('repositories')
-    .select('github_repo_id')
-    .where('removed_at', 'is not', null)
-    .execute();
-  return rows.map((row) => row.github_repo_id);
-}
-
-/** The installations that hold an entry of the ledger of org admins for this person, found by reading the table. */
-async function ledgerOwnersOf(db: Kysely<Database>, person: number): Promise<number[]> {
-  const rows = await db
-    .selectFrom('installation_admin_seen')
-    .select('installation_id')
-    .where('user_github_id', '=', person)
-    .execute();
-  return rows.map((row) => row.installation_id);
 }
 
 const RENAMED = 'renamed/by-test';
@@ -216,6 +182,40 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
         (await wasAdminSeenSince(db, scope, ids.admin.githubId, new Date('2026-01-01T00:00:00Z')))
           ? ledgerOwnersOf(db, ids.admin.githubId)
           : [],
+    }),
+  },
+  'services/audit-log-queries.ts': {
+    // The audit rows the seed gives each tenant name the tenant's own plain repository as their subject, so the filter on it
+    // finds the tenant's row with its own ids and nothing with another tenant's.
+    auditLogRows: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const rows = await auditLogRows(db, scope, {
+          subjectType: 'repository',
+          subjectId: ids.plain.repositoryId,
+          limit: 10,
+        }).execute();
+        return ownersOfAuditRows(
+          db,
+          rows.map((row) => row.id),
+        );
+      },
+    }),
+    listAuditLog: scoped({
+      takesIds: true,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const page = await listAuditLog(db, scope, {
+          subjectType: 'repository',
+          subjectId: ids.plain.repositoryId,
+          limit: 10,
+        });
+        return ownersOfAuditRows(
+          db,
+          page.items.map((item) => item.id),
+        );
+      },
     }),
   },
   'services/document-placement.ts': {
@@ -374,6 +374,37 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       answers: (_own, other) => ({ own: [], foreign: [other.plain.githubRepoId] }),
     },
   },
+  'services/signer-erasure.ts': {
+    // The person is named by a GitHub id, which belongs to no tenant, so there is no other tenant's id to hand either
+    // function; what they do for a person who signed in two tenants is shown in services/signer-erasure.test.ts and
+    // adapters/http/erasure-tenants.test.ts. The seed gives each tenant its own signer, so the count finds that signer's
+    // signature (as many owners as signatures it counted) and the erasure leaves its audit row.
+    erasureCounts: scoped({
+      takesIds: false,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        const counts = await erasureCounts(db, scope, ids.signer.githubId);
+        return (await ownersOfSignatures(db, [ids.signatureId])).slice(0, counts.signatures);
+      },
+    }),
+    eraseSigner: scoped({
+      takesIds: false,
+      activeOnly: false,
+      run: async (db, scope, ids) => {
+        await eraseSigner(db, scope, { githubUserId: ids.signer.githubId, expectedRows: 1, actor: parseGithubId(1) });
+        const rows = await db
+          .selectFrom('audit_log')
+          .select('id')
+          .where('action', '=', 'signer_pii.erased')
+          .where('subject_id', '=', ids.signer.githubId)
+          .execute();
+        return ownersOfAuditRows(
+          db,
+          rows.map((row) => row.id),
+        );
+      },
+    }),
+  },
   'services/tenant-queries.ts': {
     findTenantRows: scoped({
       takesIds: true,
@@ -397,6 +428,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   },
   // The statements of the job queue (E07): the evaluation rows, the policy facts and the sweep's reads.
   ...JOB_TENANT_QUERIES,
+  // The statements of the exports (E16-S03, E16-S06): the signatures of a document, and a person's own data.
+  ...EXPORT_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

@@ -59,7 +59,7 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 | E13 | Contributor signing flow | BC-03 | 🔴 Must have | ⬜ Todo | 7 | [E13.md](epics/E13.md) |
 | E14 | Repository enablement and allowlist | BC-06 | 🔴 Must have | ⬜ Todo | 7 | [E14.md](epics/E14.md) |
 | E15 | Revocation, overrides and pending PRs | BC-06 | 🟠 Should have | ⬜ Todo | 7 | [E15.md](epics/E15.md) |
-| E16 | Compliance, audit and data protection | BC-07 | 🔴 Must have | ⬜ Todo | 7 | [E16.md](epics/E16.md) |
+| E16 | Compliance, audit and data protection | BC-07 | 🔴 Must have | ⏳ In progress | 7 | [E16.md](epics/E16.md) |
 | E17 | Web application shell and design system | BC-06 | 🔴 Must have | ✅ Done | 11 | [E17.md](epics/E17.md) |
 | E18 | Contributor and maintainer screens | BC-03 / BC-06 | 🔴 Must have | ⬜ Todo | 14 | [E18.md](epics/E18.md) |
 | E19 | Self-hosting kit | BC-09 | 🔴 Must have | ⬜ Todo | 12 | [E19.md](epics/E19.md) |
@@ -72,9 +72,9 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 
 | Status | Stories | Epics |
 |---|---|---|
-| ✅ Done | 107 | 9 |
-| ⏳ In progress | 5 | 4 |
-| ⬜ Todo | 86 | 10 |
+| ✅ Done | 112 | 9 |
+| ⏳ In progress | 7 | 5 |
+| ⬜ Todo | 79 | 9 |
 | Total | 198 | 23 |
 
 ## Dependency and sequencing

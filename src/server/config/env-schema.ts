@@ -13,6 +13,7 @@ import {
   workerConcurrencyField,
 } from './env-fields.ts';
 import { githubFields, githubProblems } from './env-github.ts';
+import { retentionFields } from './retention-fields.ts';
 import { sourceCommitField, sourceUrlField } from './source-fields.ts';
 import { DEFAULT_WEB_ROOT, webRootField } from './web-root.ts';
 
@@ -39,6 +40,7 @@ export const envSchema = z
     SOURCE_COMMIT: sourceCommitField.default(null),
     ...githubFields,
     ...sessionFields,
+    ...retentionFields,
   })
   .superRefine((env, ctx) => {
     // Session cookies are `Secure` and `__Host-` prefixed, so a production deployment is HTTPS by definition.
