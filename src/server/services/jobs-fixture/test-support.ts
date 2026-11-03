@@ -109,8 +109,6 @@ interface Attempt {
   readonly inserted: boolean;
   /** The state of the job that holds the idempotency key, when there is one. */
   readonly state: string | undefined;
-  /** A job that has not started holds the coalesce key, or the throttle slot is taken: a limit refused the row. */
-  readonly limited: boolean;
 }
 
 /** What a send writes into its row: the keys it was given, the key pg-boss would store, and its throttle slot. */
@@ -145,7 +143,7 @@ function valuesOf(send: SendRow) {
  */
 async function attempt(tx: Transaction<Database>, send: SendRow): Promise<Attempt> {
   const { waiting, taken } = limitsOf(send);
-  const { rows } = await sql<{ inserted: boolean; state: string | null; limited: boolean }>`
+  const { rows } = await sql<{ inserted: boolean; state: string | null }>`
     with written as (
       insert into fake_jobs (idempotency_key, dedupe_key, coalesce_key, queue, queue_key, slot_key, slot_on, sent_at, job)
       select ${valuesOf(send)}
@@ -153,10 +151,9 @@ async function attempt(tx: Transaction<Database>, send: SendRow): Promise<Attemp
       on conflict (idempotency_key) do nothing
       returning id)
     select exists (select 1 from written) as inserted,
-      (select state from fake_jobs where idempotency_key = ${send.options.idempotencyKey}) as state,
-      (${waiting} or ${taken}) as limited`.execute(tx);
+      (select state from fake_jobs where idempotency_key = ${send.options.idempotencyKey}) as state`.execute(tx);
   const [row] = rows;
-  return { inserted: row?.inserted === true, state: row?.state ?? undefined, limited: row?.limited === true };
+  return { inserted: row?.inserted === true, state: row?.state ?? undefined };
 }
 
 export interface FakeEnqueuer extends JobEnqueuer {
@@ -183,11 +180,12 @@ export function fakeEnqueuer(clock: Clock = systemClock): FakeEnqueuer {
       if (first.inserted) {
         return 'queued';
       }
-      // A job that is alive keeps its key; then a limit; a job that is over is replaced (as the adapter deletes it and sends again).
+      // A job that is alive keeps its key. With no job under the key a limit refused the row. A job that is over is replaced, as
+      // the adapter deletes it and sends again: it no longer holds the slot it took, and a limit of another job still refuses.
       if (LIVE.includes(first.state ?? '')) {
         return 'already_queued';
       }
-      if (first.limited) {
+      if (first.state === undefined) {
         return 'deduplicated';
       }
       await sql`delete from fake_jobs where idempotency_key = ${options.idempotencyKey}`.execute(tx);

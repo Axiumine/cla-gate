@@ -175,7 +175,10 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
       refusal: isForeignKeyViolation,
       run: async (db, scope, ids) => {
         const failed = await failEvaluation(db, { ...repositoryOf(scope, ids), ...UNSEEN }, 'keep');
-        return failed === null ? [] : ownersOfEvaluations(db, [failed]);
+        return ownersOfEvaluations(
+          db,
+          [failed].filter((row) => row !== null),
+        );
       },
     }),
     evaluationsAtHead: scoped({

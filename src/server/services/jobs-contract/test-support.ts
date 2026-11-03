@@ -143,6 +143,33 @@ async function sweepRepositoryCoalescesWhileItWaits(world: JobsWorld): Promise<v
   expect(await world.liveJobs()).toBe(1);
 }
 
+async function finishedKeyIsSentAgain(world: JobsWorld): Promise<void> {
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1' })).toBe('queued');
+  await world.finishJobs();
+  expect(await world.liveJobs()).toBe(0);
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1' })).toBe('queued');
+  expect(await world.liveJobs()).toBe(1);
+}
+
+async function finishedKeyIsSentAgainInItsOwnWindow(world: JobsWorld): Promise<void> {
+  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: HOUR };
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...window })).toBe('queued');
+  await world.finishJobs();
+  // The finished job is replaced, so it no longer holds the slot it took: the redelivery that reuses its key is not lost.
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...window })).toBe('queued');
+  expect(await world.liveJobs()).toBe(1);
+}
+
+async function finishedKeyMeetsTheWindowOfAnotherJob(world: JobsWorld): Promise<void> {
+  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: HOUR };
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...window })).toBe('queued');
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-2' })).toBe('queued');
+  await world.finishJobs();
+  // The slot belongs to the first job, finished or not: the replacement of the second is dropped by it.
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-2', ...window })).toBe('deduplicated');
+  expect(await world.liveJobs()).toBe(0);
+}
+
 async function coalesceKeyDropsWhileAJobWaits(world: JobsWorld): Promise<void> {
   const coalesce = { coalesceKey: 'sync:70001' };
   expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...coalesce })).toBe('queued');
@@ -243,6 +270,9 @@ export const CONTRACT_CASES: readonly (readonly [string, (world: JobsWorld) => P
   ['a live idempotency key answers already_queued even inside its rate limit window', liveKeyWinsOverTheWindow],
   ['other rate limit keys are other windows', dedupeKeysAreIndependent],
   ['a rolled-back send starts no rate limit window', rolledBackSendDoesNotStartAWindow],
+  ['a finished job is replaced when its idempotency key is sent again', finishedKeyIsSentAgain],
+  ['a finished job does not hold the rate limit slot against its own key', finishedKeyIsSentAgainInItsOwnWindow],
+  ['a replacement still meets the rate limit slot of another job', finishedKeyMeetsTheWindowOfAnotherJob],
   ['a coalesce key drops a send while a job of the key waits', coalesceKeyDropsWhileAJobWaits],
   ['a coalesce key sends again once the first job started', coalesceKeySendsAgainOnceTheFirstJobStarted],
   ['a coalesce key sends again once the first job completed', coalesceKeySendsAgainOnceTheFirstJobCompleted],
