@@ -72,3 +72,17 @@ test.each([
   expect(output).toContain(rule);
   expect(status).toBe(1);
 });
+
+// E17-S11: no `dangerouslySetInnerHTML` anywhere in src/web. The rule reads JSX and createElement calls alike, in a component, a
+// plain module and a test, so the one door for user text (UserText) cannot be bypassed by a file that Biome skips. The spread
+// form, which Biome does not follow, is caught by ESLint (scripts/web/eslint-config.test.ts).
+test.each([
+  ['a component', 'src/web/Page.tsx', '<p dangerouslySetInnerHTML={{ __html: text }} />'],
+  ['a test of a component', 'src/web/ui/Page.test.tsx', '<p dangerouslySetInnerHTML={{ __html: text }} />'],
+  ['a createElement call', 'src/web/ui/page.ts', "createElement('p', { dangerouslySetInnerHTML: { __html: text } })"],
+])('the innerHTML rule fires on %s', (_what, file, expression) => {
+  const source = `import { createElement } from 'react';\nexport function page(text: string) {\n  return ${expression};\n}\n`;
+  const { status, output } = biome(file, source);
+  expect(output).toContain('lint/security/noDangerouslySetInnerHtml');
+  expect(status).toBe(1);
+});

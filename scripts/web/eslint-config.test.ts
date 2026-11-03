@@ -3,14 +3,17 @@
 import { Linter } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { expect, test } from 'vitest';
+import { layerConfigs } from '../eslint-layers.ts';
 import { webConfigs } from './eslint-config.ts';
 
 const linter = new Linter();
 
-/** The rule ids that fire for `code` as if it were the file `filename`, using the real web blocks. */
-function violations(filename: string, code: string): string[] {
+/** The rule ids that fire for `code` as if it were the file `filename`, using the real web blocks and, with `layers`, the layer blocks they follow. */
+function violations(filename: string, code: string, layers: readonly Linter.Config[] = []): string[] {
   const parser = { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.parser } };
-  return linter.verify(code, [parser, ...webConfigs], { filename }).map((message) => message.ruleId ?? 'parse-error');
+  return linter
+    .verify(code, [parser, ...layers, ...webConfigs], { filename })
+    .map((message) => message.ruleId ?? 'parse-error');
 }
 
 const COMPONENT = 'src/web/Panel.tsx';
@@ -179,4 +182,39 @@ test("other code with the same names is not the rule's business: outside src/web
       "export function read(localStorage: Map<string, string>) { return localStorage.get('k'); }",
     ),
   ).toEqual([]);
+});
+
+// E17-S11: no `dangerouslySetInnerHTML` in src/web. Biome's rule reads the JSX attribute and createElement; the ESLint
+// selectors add the object property, which is how a spread reaches an element.
+
+test.each([
+  ['a JSX attribute', 'src/web/Panel.tsx', '<p dangerouslySetInnerHTML={{ __html: text }} />'],
+  ['a spread object', 'src/web/Panel.tsx', '<p {...{ dangerouslySetInnerHTML: { __html: text } }} />'],
+  ['a quoted key', 'src/web/Panel.tsx', "<p {...{ 'dangerouslySetInnerHTML': { __html: text } }} />"],
+  ['a prop object built apart', 'src/web/Panel.tsx', '<p {...unsafe} />'],
+  ['a createElement call', 'src/web/ui/panel.ts', "createElement('p', { dangerouslySetInnerHTML: { __html: text } })"],
+  ['a test', 'src/web/ui/Panel.test.tsx', '<p {...{ dangerouslySetInnerHTML: { __html: text } }} />'],
+])('src/web may not set markup through %s', (what, filename, expression) => {
+  const unsafe =
+    what === 'a prop object built apart' ? 'const unsafe = { dangerouslySetInnerHTML: { __html: text } };\n' : '';
+  const code = `${unsafe}export function Panel({ text }: { text: string }) {\n  return ${expression};\n}`;
+  expect(violations(filename, code, layerConfigs)).toContain(SYNTAX);
+});
+
+test('the same name is not the business of the rule outside src/web, and a string that merely contains it is allowed', () => {
+  const code = 'export const props = { dangerouslySetInnerHTML: { __html: "x" } };';
+  expect(violations('src/server/props.ts', code, layerConfigs)).toEqual([]);
+  expect(violations('src/web/names.ts', "export const NAME = 'dangerouslySetInnerHTML';", layerConfigs)).toEqual([]);
+});
+
+test('the message tells the developer to use UserText', () => {
+  const parser = { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.parser } };
+  const [finding] = linter.verify(
+    'export const p = <p dangerouslySetInnerHTML={{ __html: "x" }} />;',
+    [parser, ...layerConfigs, ...webConfigs],
+    {
+      filename: 'src/web/Panel.tsx',
+    },
+  );
+  expect(finding?.message).toContain('UserText');
 });

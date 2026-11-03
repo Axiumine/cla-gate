@@ -28,3 +28,4 @@ export { StatusMessage, type StatusMessageProps, type StatusTone } from './Statu
 export { type TabItem, Tabs, type TabsProps } from './Tabs.tsx';
 export { Textarea, type TextareaProps } from './Textarea.tsx';
 export { TextInput, type TextInputProps, type TextInputType } from './TextInput.tsx';
+export { UserText, type UserTextProps } from './UserText.tsx';
