@@ -104,3 +104,12 @@ test('a refusal never holds the text: not in its message, not in its details', (
     undefined,
   ]);
 });
+
+test('a text of 204 799 bytes made of setext headings is prepared in under two seconds: no parse waits on the request thread', () => {
+  const raw = 'a\n=\n'.repeat(51_199);
+  const started = performance.now();
+  const prepared = prepareClaText(raw);
+  expect(performance.now() - started).toBeLessThan(2000);
+  expect(prepared.contentSha256).toBe(sha256Hex(prepared.contentMd));
+  expect(prepared.contentMd.length).toBeGreaterThan(204_000);
+});

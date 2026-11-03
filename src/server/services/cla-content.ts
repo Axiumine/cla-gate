@@ -26,8 +26,9 @@ export interface PreparedClaText {
 /**
  * Makes `raw` canonical, validates it and hashes it. The hash is over the canonical text, so the same wording with LF, CRLF
  * or CR line endings, or with a byte order mark, or with more than one final newline, has one hash.
- * @throws ClaRuleError `content_too_large` (with `limitBytes` and `actualBytes`), `content_empty` or
- * `content_invalid_characters`. Neither the error nor its details hold any of the text.
+ * @throws ClaRuleError `content_too_large` (with `limitBytes` and `actualBytes`), `content_empty`,
+ * `content_invalid_characters` or `content_too_deeply_nested`. Neither the error nor its details hold any of the text.
+ * The cost is linear in the size of the text for every text: this runs on the request thread (a draft save, a publish).
  */
 export function prepareClaText(raw: string): PreparedClaText {
   const contentMd = canonicalise(raw);

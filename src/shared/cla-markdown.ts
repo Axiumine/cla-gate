@@ -110,6 +110,11 @@ function literalBlock(md: string): Root {
  * when its address starts with `http://`, `https://` or `mailto:`; otherwise it is its text. A text that nests more than
  * `CLA_MAX_NESTING` levels, which `validateClaText` refuses, is returned as one block of code, so no text can overflow the stack.
  * The web renders the tree into React elements; nothing here is an HTML string.
+ *
+ * The cost is not linear in the size of the text for every text: the parser takes seconds for some texts of 20 KiB and minutes for
+ * some of 200 KiB (hundreds of one-line setext headings, of lazy quote lines or of `[a]` labels in one paragraph). A server must
+ * therefore not call this on the thread that serves requests for a text it has not rendered before: it renders in a worker with a
+ * time limit, once per content hash, and keeps the result (E21). `validateClaText` does not call it for that reason.
  */
 export function renderClaTree(md: string): Root {
   if (opensTooManyContainers(md)) {

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { containerDepth } from './cla-markdown-containers.ts';
 import { CLA_MAX_NESTING, isNestedTooDeeply, nestingOf, opensTooManyContainers } from './cla-markdown-nesting.ts';
-import { blockProcessor, documentProcessor } from './cla-markdown-parse.ts';
+import { documentProcessor } from './cla-markdown-parse.ts';
 import { indentedBullets, nestedBullets, nestedEmphasis, nestedQuotes } from './test-support.ts';
 
-// The depth rule of the CLA text (E12-S07): how the nesting of a text is measured, the line that is refused before it is parsed, and
-// that the cheap parse of the blocks and the whole parse agree on the blocks.
+// The depth rule of the CLA text (E12-S07): how the nesting of a text is measured in a tree, the line that the rendering refuses before
+// it parses, the rule of `validateClaText` and that the line scan of it and the whole parse agree on the blocks.
 
-const blocksOf = (md: string): number => nestingOf(blockProcessor.parse(md)).blocks;
 const wholeOf = (md: string) => nestingOf(documentProcessor().parse(md));
 
 test('the limit is 50 levels', () => {
@@ -34,12 +34,6 @@ test.each([
   ['inline levels in a block', '> - *a **b***\n', 2, 2],
 ])('nestingOf reads %s as %d block levels and %d inline levels', (_label, text, blocks, inlines) => {
   expect(wholeOf(text)).toEqual({ blocks, inlines });
-});
-
-test('the cheap parse reads no inline level at all, and the whole parse reads every one', () => {
-  const text = nestedEmphasis(7);
-  expect(nestingOf(blockProcessor.parse(text))).toEqual({ blocks: 0, inlines: 0 });
-  expect(wholeOf(text)).toEqual({ blocks: 0, inlines: 7 });
 });
 
 const CORPUS = [
@@ -70,8 +64,8 @@ const CORPUS = [
   '>\n> a\n>\n> b\n',
 ];
 
-test.each(CORPUS)('the cheap parse and the whole parse agree on the quotes and lists of %j', (text) => {
-  expect(blocksOf(text)).toBe(wholeOf(text).blocks);
+test.each(CORPUS)('the line scan and the whole parse agree on the quotes and lists of %j', (text) => {
+  expect(containerDepth(text, CLA_MAX_NESTING)).toBe(wholeOf(text).blocks);
 });
 
 test.each([
@@ -122,10 +116,10 @@ test.each([
   expect(opensTooManyContainers(text)).toBe(runaway);
 });
 
-test('a text of 100 KiB of container markers is refused at once, before any parse that would take seconds', () => {
+test('a text of 100 KiB of container markers is refused at once', () => {
   const started = performance.now();
   expect(isNestedTooDeeply('> '.repeat(51_200))).toBe(true);
-  expect(isNestedTooDeeply('- '.repeat(51_200))).toBe(true);
+  expect(isNestedTooDeeply('+ * '.repeat(25_600))).toBe(true);
   expect(isNestedTooDeeply('1. '.repeat(34_000))).toBe(true);
   expect(performance.now() - started).toBeLessThan(2000);
 });

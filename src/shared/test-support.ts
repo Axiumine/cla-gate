@@ -159,3 +159,51 @@ export function nestedEmphasis(depth: number): string {
   }
   return `${text}\n`;
 }
+
+/** A small seeded generator of numbers in [0, 1) (mulberry32): the same seed gives the same texts on every machine. */
+function seededUnit(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let mixed = Math.imul(state ^ (state >>> 15), state | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+const MARKER_PIECES = ['> ', '> ', '>', '- ', '* ', '+ ', '1. ', '2. ', '10) ', '-', '1.'];
+const INDENT_PIECES = ['', '', '', '  ', '   ', '    ', '      '];
+const BODY_PIECES = [
+  'text',
+  'more text',
+  '',
+  '',
+  '# heading',
+  '---',
+  '===',
+  '* * *',
+  '```',
+  '~~~',
+  'text  ',
+  'a *b* c',
+];
+
+/**
+ * `count` short Markdown texts of up to ten lines, made of the pieces that build block structure: indentation of 0 to 6 spaces,
+ * up to three container markers (`>`, bullets, numbers) and a body (text, a blank, a heading, a rule, an underline, a fence).
+ * Most are nonsense, which is the point: they put the rules of CommonMark about containers to work in many orders.
+ */
+export function generatedMarkdown(seed: number, count: number): string[] {
+  const unit = seededUnit(seed);
+  const pick = (pieces: readonly string[]): string => {
+    const index = Math.floor(unit() * pieces.length);
+    return pieces.slice(index, index + 1).join('');
+  };
+  return Array.from({ length: count }, () => {
+    const lines = Array.from({ length: 1 + Math.floor(unit() * 10) }, () => {
+      const markers = Array.from({ length: Math.floor(unit() * 4) }, () => pick(MARKER_PIECES));
+      return `${pick(INDENT_PIECES)}${markers.join('')}${pick(BODY_PIECES)}`;
+    });
+    return `${lines.join('\n')}\n`;
+  });
+}

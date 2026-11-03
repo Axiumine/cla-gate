@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Nodes } from 'mdast';
-import { blockProcessor } from './cla-markdown-parse.ts';
+import { containerDepth } from './cla-markdown-containers.ts';
 
 // How deep a CLA text may nest (E12-S07). A block quote or a list inside another costs the parser, and every step after it, a
-// level of recursion, so the depth is bounded: `validateClaText` refuses a text above `CLA_MAX_NESTING` levels, and the
-// rendering shows a text that is deeper than that as plain text instead of overflowing the stack.
+// level of recursion, so the depth is bounded: `validateClaText` refuses a text above `CLA_MAX_NESTING` levels (read line by line
+// by `cla-markdown-containers.ts`), and the rendering shows a text that is deeper than that, in the tree it parsed, as plain text
+// instead of overflowing the stack.
 
 /** The most block quotes and lists one inside the other (and, in the rendering, the most emphasis, strong text and links). */
 export const CLA_MAX_NESTING = 50;
@@ -82,9 +83,11 @@ export function nestingOf(root: Nodes): Nesting {
 }
 
 /**
- * True when the block quotes and lists of `md` nest above `CLA_MAX_NESTING` levels. Measured on the block structure alone (the
- * parser of `cla-markdown-parse.ts`), so the answer does not wait for the inline phase of a text a request has just sent.
+ * True when the block quotes and lists of `md` nest above `CLA_MAX_NESTING` levels. Read by `containerDepth`, line by line, in time
+ * linear in the size of the text: this runs on the request that saves or publishes a text, and a Markdown parser takes minutes for
+ * some texts of 200 KiB, so none is called here. The rendering checks the tree it parses as well, so a text where the scan and the
+ * parser differ by a level (it happens in odd corners) still cannot overflow the stack.
  */
 export function isNestedTooDeeply(md: string): boolean {
-  return opensTooManyContainers(md) || nestingOf(blockProcessor.parse(md)).blocks > CLA_MAX_NESTING;
+  return containerDepth(md, CLA_MAX_NESTING) > CLA_MAX_NESTING;
 }
