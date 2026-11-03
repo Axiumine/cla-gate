@@ -572,19 +572,22 @@ jobs:
   # `steps.decide.outputs.skip != 'true'` (the `always()` ones as `always() && ...`): scripts/mutation-gate/skip-job.test.ts
   # computes that from this file, so a step added without the gate fails the test.
   #
-  # The shards are shared-runner time that other repositories use too, so one workflow run starts at most two of them at
-  # once (`max-parallel: 2`) and one failed shard does not cancel the others (`fail-fast: false`): each has its own score and
-  # its own cache. A manual run can pick one shard (`shard` input, a `choice` that GitHub validates against its options; a
-  # test keeps the options, the list below and shards.ts equal); the matrix value only ever reaches the job through an
-  # environment variable, never a command line.
+  # The shards are shared-runner time that other repositories use too, so one workflow run starts one of them at a time
+  # (`max-parallel: 1`) and one failed shard does not cancel the others (`fail-fast: false`): each has its own score and
+  # its own cache. It was 2 until 2026-11-03: the first scheduled run held two of the three runners for hours and the pull
+  # request jobs queued behind it, and the nightly run's own `coverage`, `postgres` and `leaks` jobs ask for runners too. A
+  # leg may now take three hours (below), and the maintainer decided on 2026-11-02 not to mind the total time, so the cost,
+  # a cold run of seventeen shards that takes about twice as long, is accepted. A manual run can pick one shard (`shard`
+  # input, a `choice` that GitHub validates against its options; a test keeps the options, the list below and shards.ts
+  # equal); the matrix value only ever reaches the job through an environment variable, never a command line.
   #
   # What `max-parallel` does not do, accepted on 2026-11-02: it limits one workflow run, not the repository. The concurrency
   # group of the workflow is `ci-<event>-<ref>`, so the nightly run, a tag push and a manual run are different groups and can
-  # overlap, each with its own two shards; two overlapping runs ask for four runners while the organisation has three, and
+  # overlap, each with its own shard; three overlapping runs ask for three runners while the organisation has three, and
   # the jobs of other repositories and the `static` and `coverage` of this one wait behind them. Stopping the older run would
   # throw away hours of work, and one group for all events would cancel shards, so the overlap is accepted and not prevented.
-  # The overlap is rarer now that a push to main does not run the job: it takes a manual run or a tag push on top of a
-  # nightly run that is still working. It is listed in docs/ci-runners.md (Known unknowns and risks) and in the Open line of
+  # The overlap is rare: it takes a manual run and a tag push on top of a nightly run that is still working, because a push
+  # to main does not run the job. It is listed in docs/ci-runners.md (Known unknowns and risks) and in the Open line of
   # E20-S04.
   #
   # Every shard has its own incremental file, restored from a cache whose key starts with the shard name and a hash of
@@ -612,12 +615,16 @@ jobs:
       actions: read
       contents: read
     runs-on: [self-hosted, Linux, X64]
-    # 60 minutes is the policy cap for a job on the shared runners (docs/ci-runners.md, R4). Stryker is stopped 10 minutes
-    # earlier (MUTATE_BUDGET_MINUTES below) so that the save and upload steps always get to run.
-    timeout-minutes: 60
+    # 180 minutes, the one job that the runner guard lets run longer than the 60 minutes of every other (R4, docs/ci-runners.md).
+    # Every shard repeats Stryker's initial test run of the whole server suite, serially in one process
+    # (dryRunTimeoutMinutes of stryker.config.mjs: 120 minutes for a suite of 25 000 tests on a runner three times slower than
+    # the development machine), and then needs the mutants (about 18 minutes for the slowest shard here, 54 on such a runner):
+    # 50 more minutes at least. Stryker is stopped 10 minutes before the job (MUTATE_BUDGET_MINUTES below) so that the save
+    # and upload steps always get to run. A test keeps the three numbers in line.
+    timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","config","http-a-v","http-rest","db","root-domain-ports","github-a-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-other","jobs-adapter","evaluate-pr","job-handlers","sweep","scripts"]') }}
     steps:
@@ -714,7 +721,7 @@ jobs:
         env:
           MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
           STRYKER_SHARD: ${{ matrix.shard }}
-          MUTATE_BUDGET_MINUTES: "50"
+          MUTATE_BUDGET_MINUTES: "170"
         run: |
           set -eu
           if [ "$MUTATE_FORCE" = "true" ]; then

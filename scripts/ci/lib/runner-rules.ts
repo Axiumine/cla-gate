@@ -10,6 +10,19 @@ const FORBIDDEN_TRIGGERS: ReadonlySet<string> = new Set(['pull_request_target', 
 /** A job on a shared persistent host may run for an hour at most; the runner's own limit is days. */
 const MAX_TIMEOUT_MINUTES = 60;
 const CONTAINER_KEYS = ['container', 'services'] as const;
+/**
+ * The one exception, named by file and job so that no other job (and no job of the same name in another file) gets it: the
+ * `mutation` job of ci.yml (E20-S04). Each of its shards repeats Stryker's initial run of the whole server suite, serially in
+ * one process, which took 12 min 37 s on the development machine for 7003 tests on 2026-11-03 and is planned for a suite of
+ * 25 000 on a runner three times slower (120 minutes), before the mutants (50 minutes more) and the job's other steps. The
+ * numbers are derived in stryker.config.mjs and kept in line by scripts/mutation-gate/ci-job.test.ts.
+ */
+const LONG_JOB = { file: '.github/workflows/ci.yml', job: 'mutation', maxMinutes: 180 } as const;
+
+/** The most `timeout-minutes` this job of this file may have. */
+function timeoutCap(file: string, job: string): number {
+  return file === LONG_JOB.file && job === LONG_JOB.job ? LONG_JOB.maxMinutes : MAX_TIMEOUT_MINUTES;
+}
 
 function exactRunner(value: unknown): boolean {
   return value === HOSTED_RUNNER || (isList(value) && JSON.stringify(value) === SELF_HOSTED_JSON);
@@ -41,8 +54,9 @@ export function checkRunsOn(file: string, job: string, runsOn: unknown, hostedOn
 }
 
 export function checkTimeout(file: string, job: string, minutes: unknown): Violation[] {
-  const valid = typeof minutes === 'number' && minutes > 0 && minutes <= MAX_TIMEOUT_MINUTES;
-  const message = `timeout-minutes must be a positive number of at most ${MAX_TIMEOUT_MINUTES}, found ${describe(minutes)}`;
+  const cap = timeoutCap(file, job);
+  const valid = typeof minutes === 'number' && minutes > 0 && minutes <= cap;
+  const message = `timeout-minutes must be a positive number of at most ${cap}, found ${describe(minutes)}`;
   return valid ? [] : [{ file, job, rule: 'R4', message }];
 }
 
