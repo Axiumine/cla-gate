@@ -181,7 +181,7 @@ interface InstallationAdminSeenTable {
   seen_at: Date;
 }
 
-/** The work in progress on the text of a CLA (migration 009, E12-S03): one mutable draft per document, `revision` raised by each save. */
+/** The work in progress on the text of a CLA (migration 011, E12-S03): one mutable draft per document, `revision` raised by each save. */
 interface ClaDraftsTable {
   document_id: number;
   installation_id: number;

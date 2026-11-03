@@ -7,7 +7,7 @@ import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 // The writes over the drafts of the CLA documents of a tenant (E12-S03); the reads are in cla-draft-queries.ts. Every
 // statement names the installation in its WHERE clause or its values, next to the document id, so another tenant's document
 // finds nothing and a draft can only be written under the installation that owns its document (the composite foreign key of
-// migration 009 says the same). The rules (the text, the revision, the audit row) are in cla-drafts.ts. Nothing here touches
+// migration 011 says the same). The rules (the text, the revision, the audit row) are in cla-drafts.ts. Nothing here touches
 // `cla_documents`: a draft never changes the active version.
 
 /** What a save leaves: the revision the draft is at now and when it was saved. The text is not read back. */

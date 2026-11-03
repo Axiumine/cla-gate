@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: AGPL-3.0-only
 -- Copyright (C) 2026 Giovanni Manzoni
 --
--- 009_cla_drafts (E12-S03): the work in progress on the text of a CLA. Forward-only: never edit this file once merged, add
+-- 011_cla_drafts (E12-S03): the work in progress on the text of a CLA. Forward-only: never edit this file once merged, add
 -- a new migration instead.
 --
 -- A published version never changes (cla_versions, migration 001), so a maintainer's unfinished text lives in a table of its

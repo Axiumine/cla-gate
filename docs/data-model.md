@@ -1,6 +1,6 @@
 # Data model
 
-The PostgreSQL schema (`migrations/001_initial.sql`, the whole MVP schema; `002` widens the audit metadata allowlist; `003` adds the installation and repository state; `004` allows the account type `Other`; `005` adds `sessions.verified_emails`; `007` adds `installation_admin_seen`; `009` adds `cla_drafts`) and the immutability, erasure and role rules around it. Identity, the immutable signature core and the erasable `signer_pii` table are hard rules 4 and 5 in [`CLAUDE.md`](../CLAUDE.md); authorization and privacy are in [`security.md`](security.md).
+The PostgreSQL schema (`migrations/001_initial.sql`, the whole MVP schema; `002` widens the audit metadata allowlist; `003` adds the installation and repository state; `004` allows the account type `Other`; `005` adds `sessions.verified_emails`; `007` adds `installation_admin_seen`; `011` adds `cla_drafts`) and the immutability, erasure and role rules around it. Identity, the immutable signature core and the erasable `signer_pii` table are hard rules 4 and 5 in [`CLAUDE.md`](../CLAUDE.md); authorization and privacy are in [`security.md`](security.md).
 
 | Table | Purpose and key constraints |
 |---|---|

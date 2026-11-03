@@ -14,7 +14,7 @@ import {
   seedTenant,
 } from './test-support.ts';
 
-// Migration 009 (E12-S03): the table of the drafts of a CLA text. One mutable row per document, tied to its tenant by a
+// Migration 011 (E12-S03): the table of the drafts of a CLA text. One mutable row per document, tied to its tenant by a
 // composite foreign key, and nothing of migration 001 weakened.
 
 const CHECK = { code: '23514' };
@@ -256,7 +256,7 @@ test('the immutability of the versions and the documents is the one migration 00
 
 test('the file creates the one table and touches no trigger, function, constraint or grant of any other', () => {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- test: a migration file of this repository's own folder
-  const text = fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, '009_cla_drafts.sql'), 'utf8');
+  const text = fs.readFileSync(path.join(MIGRATIONS_DIRECTORY, '011_cla_drafts.sql'), 'utf8');
   const statements = text
     .split('\n')
     .filter((line) => !line.trimStart().startsWith('--'))
@@ -269,6 +269,6 @@ test('the file creates the one table and touches no trigger, function, constrain
 
 test('the migration is recorded under its own number, on top of the earlier ones', async () => {
   const { db } = await migratedTestDatabase();
-  const { rows } = await sql<{ name: string }>`select name from schema_migrations where name like '009%'`.execute(db);
-  expect(rows).toEqual([{ name: '009_cla_drafts.sql' }]);
+  const { rows } = await sql<{ name: string }>`select name from schema_migrations where name like '011%'`.execute(db);
+  expect(rows).toEqual([{ name: '011_cla_drafts.sql' }]);
 });
