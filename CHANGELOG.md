@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The `mutation` CI job survives the growth of the suite: Stryker's initial test run, which every shard repeats in one process (7003 tests, 12 min 37 s on a development machine), killed shard `shared` of the first scheduled run at its 20-minute limit, so `dryRunTimeoutMinutes` is 120 (a suite of 25 000 tests on a runner three times slower), the Stryker budget 170 and the job timeout 180 minutes; the runner guard (R4) gives that cap to this job and to no other, and `max-parallel` is 1 instead of 2 so that a cold run no longer holds two of the three shared runners (E20-S04).
 - `qodana.yaml` excludes `JSDeprecatedSymbols`, with the reason above it: Qodana flags zod's `z.iso.datetime(...)` as deprecated (two calls on `main`, six on the compliance branch, a different set each run) while TypeScript and the type-aware `no-deprecated` rule of typescript-eslint, which stay on, report none.
 - Qodana's two `JSDeprecatedSymbols` findings on `main` (`z.iso.datetime()` in `src/shared/auth.ts` and `src/shared/operator.ts`) are fixed by passing the default option explicitly (`{ offset: false }`, UTC only, the same rule as before).
 - The `coverage` CI job may run 30 minutes instead of 15: the suite has grown to about 10 000 tests and a busy shared runner cancelled it once at 15, which is a required check.
