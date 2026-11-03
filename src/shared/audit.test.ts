@@ -54,6 +54,14 @@ test('the twelfth action is installation.sync_failed, added by E07-S05 for a syn
   expect(INSTANCE_ACTIONS.has('installation.sync_failed')).toBe(false);
 });
 
+test('the thirteenth and fourteenth actions are the two document actions of E12-S01, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS.slice(12, 14)).toEqual(['cla_document.created', 'cla_document.renamed']);
+  for (const action of ['cla_document.created', 'cla_document.renamed'] as const) {
+    expect(SYSTEM_ACTIONS.has(action)).toBe(false);
+    expect(INSTANCE_ACTIONS.has(action)).toBe(false);
+  }
+});
+
 test('no action and no metadata key is listed twice', () => {
   expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
   expect(new Set(AUDIT_METADATA_KEYS).size).toBe(AUDIT_METADATA_KEYS.length);

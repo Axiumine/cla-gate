@@ -99,8 +99,14 @@ test('every gap is reported at once, in the order tenant, authenticated, stale, 
   ]);
 });
 
-test('the tables of the application hold no case yet, and the two authenticated routes it has say why they return no tenant data', () => {
-  expect(CROSS_TENANT_CASES).toEqual({});
+test('the tables of the application hold the cases of the routes built so far, and the two authenticated routes it has say why they return no tenant data', () => {
+  expect(Object.keys(CROSS_TENANT_CASES)).toEqual([
+    'POST /api/installations/:installationId/documents',
+    'GET /api/installations/:installationId/documents',
+    'GET /api/installations/:installationId/repositories/:repositoryId/documents',
+    'GET /api/installations/:installationId/documents/:documentId',
+    'PATCH /api/installations/:installationId/documents/:documentId',
+  ]);
   expect(ISOLATION_CASES).toEqual({});
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);

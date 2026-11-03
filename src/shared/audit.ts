@@ -30,6 +30,9 @@ export const AUDIT_ACTIONS = [
   // Added by E07-S05: the sync of an installation failed in every attempt of the queue (the dead-letter handler writes it).
   // The subject is the installation; there is no personal data.
   'installation.sync_failed',
+  // Added by E12-S01: a CLA document was created, or renamed (metadata ids and the kind only, never the name).
+  'cla_document.created',
+  'cla_document.renamed',
   // Instance-wide actions: SYSTEM_ACTIONS and INSTANCE_ACTIONS must be subsets of this list.
   'data_export.created',
   'network_metadata.purged',

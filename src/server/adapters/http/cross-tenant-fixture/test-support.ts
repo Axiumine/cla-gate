@@ -79,8 +79,52 @@ export interface IsolationCase {
   readonly mayShow: (owner: RowOwner, viewer: IsolationViewer) => boolean;
 }
 
-/** The `tenant` routes of the application, keyed `METHOD path`. Empty until a story adds a route (E12 to E16). */
-export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {};
+let documentNumber = 0;
+
+/** A name no document of the world has, for a request that creates or renames: the matrix sends one request as several people. */
+const freshDocumentName = (): string => {
+  documentNumber += 1;
+  return `Matrix document ${documentNumber}`;
+};
+
+const documentsUrl = (target: MatrixTarget): string => `/api/installations/${target.installationId}/documents`;
+
+/** The `tenant` routes of the application, keyed `METHOD path`. A story that adds one adds its case here (E13 to E16). */
+export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
+  // E12-S01. The case creates a document that covers the installation (org admin only); the repository-scoped body is shown in document-routes-create.test.ts.
+  'POST /api/installations/:installationId/documents': {
+    endpointClass: 'installation_write',
+    success: 201,
+    request: (target) => ({
+      method: 'POST',
+      url: documentsUrl(target),
+      payload: { name: freshDocumentName(), kind: 'individual' },
+    }),
+  },
+  'GET /api/installations/:installationId/documents': {
+    endpointClass: 'installation_read',
+    request: (target) => ({ method: 'GET', url: documentsUrl(target) }),
+  },
+  'GET /api/installations/:installationId/repositories/:repositoryId/documents': {
+    endpointClass: 'repository_read',
+    request: (target) => ({
+      method: 'GET',
+      url: `/api/installations/${target.installationId}/repositories/${target.repositoryId}/documents`,
+    }),
+  },
+  'GET /api/installations/:installationId/documents/:documentId': {
+    endpointClass: 'document_read',
+    request: (target) => ({ method: 'GET', url: `${documentsUrl(target)}/${target.documentId}` }),
+  },
+  'PATCH /api/installations/:installationId/documents/:documentId': {
+    endpointClass: 'document_write',
+    request: (target) => ({
+      method: 'PATCH',
+      url: `${documentsUrl(target)}/${target.documentId}`,
+      payload: { name: freshDocumentName() },
+    }),
+  },
+};
 
 /** The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `GET /api/me/signatures`). */
 export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {};

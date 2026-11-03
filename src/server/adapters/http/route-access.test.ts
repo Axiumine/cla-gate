@@ -219,6 +219,11 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /readyz',
     'GET /api/operator/installations',
     'GET /api/meta',
+    'POST /api/installations/:installationId/documents',
+    'GET /api/installations/:installationId/documents',
+    'GET /api/installations/:installationId/repositories/:repositoryId/documents',
+    'GET /api/installations/:installationId/documents/:documentId',
+    'PATCH /api/installations/:installationId/documents/:documentId',
     'POST /webhooks/github',
   ]);
 });

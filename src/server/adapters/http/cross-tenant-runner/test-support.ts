@@ -318,6 +318,9 @@ const operatorTargets = (world: MatrixWorld): MatrixTarget[] => [
   ...crossed(world),
 ];
 
+/** A little more than the minute of the per-person budget of uncached role lookups. */
+const LOOKUP_WINDOW_MS = 61_000;
+
 /**
  * Runs one case of the route table for the operator of `operatorWorld` (E11-S08), with tenant 1 in `state` (active when none
  * is given), then puts it back. An operator who is neither org admin nor admin the ledger remembers is a stranger to every
@@ -345,6 +348,9 @@ export async function assertOperatorCase(
     expect(control.statusCode, `${route} as the admin of the tenant`).toBe(c.success ?? 200);
   }
   await setStateOfTenant1(world, null);
+  // A write asks GitHub again for every request (E11-S01) and a person has 30 uncached lookups a minute (E11-S04): a case
+  // sends more than a dozen as the operator, so the next one starts a minute later, with the budget of a minute ago spent.
+  world.clock.advance(LOOKUP_WINDOW_MS);
 }
 
 /** The query for the owner of a row of a tenant table: its installation, and the person it is about. `signer_pii` and `cla_versions` have no installation column of their own. */
