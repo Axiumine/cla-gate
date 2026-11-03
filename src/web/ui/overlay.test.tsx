@@ -48,6 +48,20 @@ test('with two overlays open the page unlocks when the last one lets go, not the
   expect(root).not.toHaveClass(SCROLL_LOCK_CLASS);
 });
 
+test('a second overlay keeps the gap the first measured: once the lock has taken the scrollbar away, measuring again would give 0 and the page would jump', () => {
+  scrollbarOf(15);
+  const first = lockScroll();
+  expect(root.style.getPropertyValue(SCROLL_GAP_PROPERTY)).toBe('15px');
+  // The scrollbar is gone now that the page cannot scroll: the window and the document are as wide as each other.
+  vi.restoreAllMocks();
+  scrollbarOf(0);
+  const second = lockScroll();
+  expect(root.style.getPropertyValue(SCROLL_GAP_PROPERTY)).toBe('15px');
+  first();
+  second();
+  expect(root.style.getPropertyValue(SCROLL_GAP_PROPERTY)).toBe('');
+});
+
 test('ScrollLock locks while it is mounted and unlocks when it goes', () => {
   const { unmount } = render(<ScrollLock />);
   expect(root).toHaveClass(SCROLL_LOCK_CLASS);
