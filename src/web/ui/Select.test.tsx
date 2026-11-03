@@ -8,6 +8,7 @@ import { expectHostileNamesInert } from '../test-support/hostile.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { Field } from './Field.tsx';
 import { Select } from './Select.tsx';
+import { visibleText } from './user-text.ts';
 
 // E17-S06: Select, the native <select> in the look of the text controls. Inside a Field: Field.test.tsx.
 
@@ -72,15 +73,32 @@ test('a Select and a Field of it pass axe', async () => {
   await expectNoA11yViolations(container);
 });
 
-test('a hostile name as the text of an option is the text of the option', () => {
+test('a hostile name as the text of an option is shown as text, with its invisible and bidirectional characters written out', () => {
   for (const name of HOSTILE_NAMES) {
     const { container, unmount } = renderWithProviders(
       <Select aria-label="Kind" options={[{ value: 'x', label: name }]} />,
     );
-    expect(screen.getByRole('option').textContent).toBe(name);
+    expect(screen.getByRole('option').textContent).toBe(visibleText(name));
     expect(container.querySelectorAll('script, img, a')).toHaveLength(0);
     unmount();
   }
+});
+
+test('a right-to-left override in the label of an option is not drawn as an override: it is written out like UserText does', () => {
+  const label = `repo${String.fromCodePoint(0x202e)}exe.txt`;
+  renderWithProviders(
+    <Select
+      aria-label="Kind"
+      options={[
+        { value: 'x', label },
+        { value: 'y', label: `bell${String.fromCodePoint(7)}and\ttab` },
+      ]}
+    />,
+  );
+  const [bidi, control] = screen.getAllByRole('option');
+  expect(bidi?.textContent).toBe('repo<U+202E>exe.txt');
+  expect(control?.textContent).toBe('bell<U+0007>and<U+0009>tab');
+  expect(bidi).toHaveAttribute('value', 'x');
 });
 
 test('hostile names in the label and the options of a Field stay text', () => {

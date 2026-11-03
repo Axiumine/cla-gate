@@ -4,10 +4,15 @@ import type { ComponentPropsWithRef } from 'react';
 import { classNames } from './class-names.ts';
 import { TEXT_CONTROL_CLASSES } from './control-styles.ts';
 import { useFieldControl } from './field-context.ts';
+import { visibleText } from './user-text.ts';
 
 export interface SelectOption {
   readonly value: string;
-  /** Plain text: an `<option>` cannot hold markup, which is also why a user-controlled label cannot inject any. */
+  /**
+   * Plain text: an `<option>` cannot hold markup, which is also why a user-controlled label cannot inject any. It cannot hold
+   * `<bdi>` either, so `UserText` cannot wrap it: the label goes through the same `visibleText` step instead (E17-S11), and
+   * the controls and bidirectional formatting characters of a name are shown as `<U+XXXX>` and never acted on.
+   */
   readonly label: string;
   readonly disabled?: boolean;
 }
@@ -26,7 +31,7 @@ export function Select({ options, className, ...props }: SelectProps) {
     <select {...props} {...aria} className={classNames(TEXT_CONTROL_CLASSES, className)}>
       {options.map((option) => (
         <option key={option.value} value={option.value} disabled={option.disabled}>
-          {option.label}
+          {visibleText(option.label)}
         </option>
       ))}
     </select>
