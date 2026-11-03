@@ -28,8 +28,15 @@ export type AttachedDocumentScope =
  * The scope of a document by the repository it is stored for (`cla_documents.repository_id`, null when it covers the whole
  * installation): the form the rule takes it in.
  */
-export function scopeOfDocument(repositoryId: number | null): AttachedDocumentScope {
+function scopeOfDocument(repositoryId: number | null): AttachedDocumentScope {
   return repositoryId === null ? { scope: 'installation' } : { scope: 'repository', repositoryId };
+}
+
+/** The scope of the document a repository enforces (null when it has none), in the form the rule takes it in. */
+export function scopeOfAttached(
+  document: { readonly repositoryId: number | null } | null,
+): AttachedDocumentScope | null {
+  return document === null ? null : scopeOfDocument(document.repositoryId);
 }
 
 /**

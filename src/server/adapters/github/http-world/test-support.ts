@@ -6,7 +6,7 @@ import { onTestFinished } from 'vitest';
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import type { TestGitHubKey } from '../../../config/test-support.ts';
-import { CheckRunStore } from '../../../services/fake-check-runs/test-support.ts';
+import { CheckRunStore, type CheckRunWriteRecord } from '../../../services/fake-check-runs/test-support.ts';
 import { CommentIds, commentsOfIssue, postedComment } from '../../../services/fake-comments/test-support.ts';
 import type { GitHubWorld } from '../../../services/github-contract/test-support.ts';
 import type {
@@ -81,6 +81,8 @@ interface State {
 export interface HttpWorld extends GitHubWorld {
   /** `METHOD /path?query` of every request that reached GitHub since the App started, in order. */
   readonly requests: string[];
+  /** Every Check Run write the mocked GitHub accepted (E14-S03), oldest first: what each run was sent, conclusion included. */
+  readonly checkRunWrites: readonly CheckRunWriteRecord[];
 }
 
 /** One page of `items` and the `Link` header that leads to the next, like GitHub's. */
@@ -466,7 +468,7 @@ async function startWorld(
 export async function httpWorld(signer: TestGitHubKey): Promise<HttpWorld> {
   const gate = new FakeGate();
   const { client, state } = await startWorld(signer, gate);
-  return { client, requests: state.requests, ...scripting(state, gate) };
+  return { client, requests: state.requests, checkRunWrites: state.checkRuns.writes, ...scripting(state, gate) };
 }
 
 /** The world behind a gate of the test's own, for example the stored gate of E05-S07: the installations are scripted, the gate is not. */

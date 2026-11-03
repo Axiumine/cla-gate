@@ -78,6 +78,7 @@ test('the limits and the status of each rule are the ones the story names', () =
     document_unpublished: 409,
     repository_enabled: 409,
     forbidden: 403,
+    no_active_cla: 409,
   });
 });
 

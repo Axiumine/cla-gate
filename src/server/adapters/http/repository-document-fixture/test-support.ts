@@ -4,6 +4,7 @@ import {
   REPOSITORY_CLA_DOCUMENT_PATH,
   repositoryDocumentResponseSchema,
 } from '../../../../shared/repository-document.ts';
+import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import type { PersonName } from '../../db/tenant-fixture/test-support.ts';
 import { sha256 } from '../../db/test-support.ts';
 import { type DocumentWorld, parsed } from '../document-fixture/test-support.ts';
@@ -106,4 +107,21 @@ export async function storeDocument(
     await publish(world, row.id);
   }
   return row.id;
+}
+
+/**
+ * Suspends the installation of tenant 1, as GitHub does when its owner suspends the App. The org admin the ledger remembers (E11-S07)
+ * is brought to now, so that a refusal is the state of the tenant and not a stale ledger.
+ */
+export async function suspendTenantOne(world: DocumentWorld): Promise<void> {
+  const now = world.clock.now();
+  await recordAdminSeen(world.db, { installationId: world.t1.installationId }, world.people.admin1.githubId, {
+    seenAt: now,
+    refreshAtOrBefore: now,
+  });
+  await world.db
+    .updateTable('installations')
+    .set({ suspended_at: new Date('2026-10-01T00:00:00Z') })
+    .where('id', '=', world.t1.installationId)
+    .execute();
 }

@@ -6,7 +6,7 @@ import {
   type AttachedDocumentScope,
   requiredRoleForRepository,
   satisfiesRole,
-  scopeOfDocument,
+  scopeOfAttached,
 } from './repository-action.ts';
 
 // The repository-action rule (E14-S01): the role an action on a repository needs, and whether a held role is enough.
@@ -49,7 +49,8 @@ test.each(VIEWER_CAN)('with %s, a %s may administer the repository: %s', (_label
   expect(satisfiesRole(held, requiredRoleForRepository(REPOSITORY, document))).toBe(may);
 });
 
-test('a document is scoped to the installation when it names no repository, and to that repository when it does', () => {
-  expect(scopeOfDocument(null)).toEqual({ scope: 'installation' });
-  expect(scopeOfDocument(41)).toEqual({ scope: 'repository', repositoryId: 41 });
+test('the scope of the document a repository enforces is none for none, the installation for a null repository, the repository otherwise', () => {
+  expect(scopeOfAttached(null)).toBeNull();
+  expect(scopeOfAttached({ repositoryId: null })).toEqual({ scope: 'installation' });
+  expect(scopeOfAttached({ repositoryId: 41 })).toEqual({ scope: 'repository', repositoryId: 41 });
 });

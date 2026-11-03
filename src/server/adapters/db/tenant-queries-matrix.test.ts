@@ -64,6 +64,7 @@ const SCOPED_QUERY_NAMES = [
   'services/repository-document-lock-queries.ts lockRepositoryForDocumentChange',
   'services/repository-document-queries.ts findAttachableDocument',
   'services/repository-document-queries.ts setRepositoryDocument',
+  'services/repository-document-queries.ts readRepositoryChangedAt',
   'services/repository-list-queries.ts listRepositoryEntries',
   'services/repository-queries.ts markRepositoriesRemoved',
   'services/repository-queries.ts renameActiveRepository',

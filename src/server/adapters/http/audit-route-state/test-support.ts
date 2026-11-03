@@ -57,7 +57,7 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
       'repository.cla_document_detached',
     ),
   ),
-  audited(`POST ${REPOSITORY}/enable`, 'E14-S03', 'repository.enabled'),
+  registered(audited(`POST ${REPOSITORY}/enable`, 'E14-S03', 'repository.enabled')),
   audited(`POST ${REPOSITORY}/disable`, 'E14-S04', 'repository.disabled'),
   audited(`POST ${INSTALLATION}/allowlist-entries`, 'E14-S06', 'allowlist_entry.created'),
   audited(`POST ${REPOSITORY}/allowlist-entries`, 'E14-S06', 'allowlist_entry.created'),

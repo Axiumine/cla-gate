@@ -5,7 +5,8 @@ import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 
 // The statements behind attaching a CLA document to a repository and detaching it (E14-S02), besides the lock of the repository
-// (repository-document-lock-queries.ts): the document to attach, and the write of the pointer. Every one names the installation
+// (repository-document-lock-queries.ts): the document to attach, the write of the pointer, and the read of the time a repository
+// last changed (E14-S03). Every one names the installation
 // in its WHERE clause, so a repository or a document of another tenant finds nothing; the composite foreign key
 // `(cla_document_id, installation_id)` of migration 001 is the second line behind that. The rules, the audit row and the job are in
 // repository-document-attach.ts.
@@ -65,6 +66,26 @@ export async function setRepositoryDocument(
     .where('id', '=', repositoryId)
     .where('removed_at', 'is', null)
     .returning('updated_at')
+    .executeTakeFirstOrThrow();
+  return row.updated_at;
+}
+
+/**
+ * When the repository `repositoryId` of the tenant was last changed, which is the moment `setRepositoryEnabled` turned it on when
+ * the caller has just done so in the same transaction (E14-S03): the time that names the change, and so the job it sends.
+ * @throws NoResultError when the tenant has no such repository (the caller holds its lock, so it does not happen).
+ */
+export async function readRepositoryChangedAt(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  repositoryId: number,
+): Promise<Date> {
+  const row = await db
+    .selectFrom('repositories')
+    .select('updated_at')
+    .where('installation_id', '=', scope.installationId)
+    .where('id', '=', repositoryId)
+    .where('removed_at', 'is', null)
     .executeTakeFirstOrThrow();
   return row.updated_at;
 }

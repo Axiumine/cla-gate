@@ -63,6 +63,8 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * every document the repository may not enforce (unknown, another tenant's, another repository's, corporate), `document_unpublished`
  * a document with no active version, `repository_enabled` a detach while enforcement is on, and `forbidden` a role that passed the
  * guard of the repository but is too low for the document the change involves (the answer of the guard itself, from the service).
+ * `no_active_cla` (E14-S03) is turning enforcement on for a repository that has no document attached, or whose document has no
+ * published version yet: there is nothing to enforce.
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -86,6 +88,7 @@ export const CLA_RULE_STATUS = {
   document_unpublished: 409,
   repository_enabled: 409,
   forbidden: 403,
+  no_active_cla: 409,
 } as const;
 
 export type ClaRule = keyof typeof CLA_RULE_STATUS;

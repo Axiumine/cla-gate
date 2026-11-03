@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Role } from '../domain/authz.ts';
-import {
-  type AttachedDocumentScope,
-  requiredRoleForRepository,
-  satisfiesRole,
-  scopeOfDocument,
-} from '../domain/repository-action.ts';
+import { requiredRoleForRepository, satisfiesRole, scopeOfAttached } from '../domain/repository-action.ts';
 import type { ListedDocument, RepositoryEntry } from './repository-entry.ts';
 
 // One repository of the list as the API tells it (`repositoryItemSchema`, E14-S01): the stored entry and the viewer's role
@@ -28,15 +23,10 @@ export interface ListedRepository {
   } | null;
 }
 
-/** What the rule needs of the document a repository enforces: whom it covers. */
-function scopeOf(document: ListedDocument | null): AttachedDocumentScope | null {
-  return document === null ? null : scopeOfDocument(document.repositoryId);
-}
-
 /** The entry as the API tells it, for a viewer who holds `role`. */
 export function present(entry: RepositoryEntry, role: Role): ListedRepository {
   const { document } = entry;
-  const required = requiredRoleForRepository(entry, scopeOf(document));
+  const required = requiredRoleForRepository(entry, scopeOfAttached(document));
   return {
     id: entry.id,
     githubRepoId: entry.githubRepoId,

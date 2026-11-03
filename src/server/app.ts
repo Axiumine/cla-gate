@@ -22,6 +22,7 @@ import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { repositoryDocumentRoutes } from './adapters/http/repository-document-routes.ts';
+import { repositoryEnableRoutes } from './adapters/http/repository-enable-routes.ts';
 import { repositoryListRoutes } from './adapters/http/repository-list-routes.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
@@ -140,7 +141,7 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
  * probes, the operator's list (E11-S08), the documents (E12), the lists of what a person administers (E14-S01), the CLA a
- * repository enforces (E14-S02), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer every
+ * repository enforces (E14-S02), the enforcement switch (E14-S03), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer every
  * path that no route above does, so they are registered last.
  */
 async function registerRoutes(
@@ -161,6 +162,7 @@ async function registerRoutes(
   await app.register(installationRoutes, { db, roles });
   await app.register(repositoryListRoutes, { db, roles });
   await app.register(repositoryDocumentRoutes, { db, enqueuer });
+  await app.register(repositoryEnableRoutes, { db, enqueuer });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });

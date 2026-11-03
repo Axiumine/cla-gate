@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Role } from '../domain/authz.ts';
-import { type AttachedDocumentScope, satisfiesRole, scopeOfDocument } from '../domain/repository-action.ts';
+import { satisfiesRole, scopeOfAttached } from '../domain/repository-action.ts';
 import { requiredRoleForDocumentChange } from '../domain/repository-document-change.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 import type { LockedRepository } from './repository-document-lock-queries.ts';
@@ -18,18 +18,17 @@ function requirePublished(document: AttachableDocument): void {
   }
 }
 
-/** The scope of the document a repository has or is given, null for none: what the role of a change is judged on. */
-function scopeOf(document: { readonly repositoryId: number | null } | null): AttachedDocumentScope | null {
-  return document === null ? null : scopeOfDocument(document.repositoryId);
-}
-
 /**
  * Whether the role the guard let the person in with is enough for the documents this change involves, which only the lock makes
  * certain.
  * @throws ClaRuleError `forbidden`.
  */
 export function requireRole(role: Role, repository: LockedRepository, next: AttachableDocument | null): void {
-  const required = requiredRoleForDocumentChange(repository, scopeOf(repository.document), scopeOf(next));
+  const required = requiredRoleForDocumentChange(
+    repository,
+    scopeOfAttached(repository.document),
+    scopeOfAttached(next),
+  );
   if (!satisfiesRole(role, required)) {
     throw new ClaRuleError('forbidden');
   }

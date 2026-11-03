@@ -5,9 +5,10 @@ import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 
-// The locking read behind attaching a CLA document to a repository and detaching it (E14-S02): the repository under lock with the
-// document it has. It names the installation in its WHERE clause, so a repository of another tenant finds nothing. The other
-// statements are in repository-document-queries.ts, the rules, the audit row and the job in repository-document-attach.ts.
+// The locking read behind attaching a CLA document to a repository and detaching it (E14-S02), and behind turning enforcement on
+// and off (E14-S03): the repository under lock with the document it has. It names the installation in its WHERE clause, so a
+// repository of another tenant finds nothing. The other statements are in repository-document-queries.ts, the rules, the audit row
+// and the job in repository-document-attach.ts and repository-enablement.ts.
 
 /** A repository held for update, with the document it enforces. */
 export interface LockedRepository {
@@ -17,11 +18,18 @@ export interface LockedRepository {
   /** GitHub's id of the installation, which the envelope of a job names. */
   readonly githubInstallationId: GithubId;
   readonly enabled: boolean;
-  /** The document the repository enforces, or null when it has none. `repositoryId` is the repository the document is scoped to, null for one that covers the installation. */
-  readonly document: { readonly id: number; readonly repositoryId: number | null } | null;
+  /**
+   * The document the repository enforces, or null when it has none. `repositoryId` is the repository the document is scoped to,
+   * null for one that covers the installation; `activeVersionId` is the version it points at, null until its first publish.
+   */
+  readonly document: {
+    readonly id: number;
+    readonly repositoryId: number | null;
+    readonly activeVersionId: number | null;
+  } | null;
 }
 
-/** The document `documentId` of the tenant as the lock needs it: whom it covers. The foreign key guarantees the row, so a missing one is an error, not an answer. */
+/** The document `documentId` of the tenant as the lock needs it: whom it covers and whether it is published. The foreign key guarantees the row, so a missing one is an error, not an answer. */
 async function readDocumentScope(
   db: Kysely<Database>,
   scope: TenantScope,
@@ -29,11 +37,11 @@ async function readDocumentScope(
 ): Promise<NonNullable<LockedRepository['document']>> {
   const row = await db
     .selectFrom('cla_documents')
-    .select(['id', 'repository_id'])
+    .select(['id', 'repository_id', 'active_version_id'])
     .where('installation_id', '=', scope.installationId)
     .where('id', '=', documentId)
     .executeTakeFirstOrThrow();
-  return { id: row.id, repositoryId: row.repository_id };
+  return { id: row.id, repositoryId: row.repository_id, activeVersionId: row.active_version_id };
 }
 
 /**

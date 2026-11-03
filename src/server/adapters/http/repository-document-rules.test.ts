@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { recordAdminSeen } from '../../services/admin-ledger-queries.ts';
 import { auditRows, documentWorld, errorCodeOf, tablesOf, withoutRequestId } from './document-fixture/test-support.ts';
 import {
   answerOf,
@@ -13,6 +12,7 @@ import {
   repositoryState,
   setEnabled,
   storeDocument,
+  suspendTenantOne,
 } from './repository-document-fixture/test-support.ts';
 
 // The rules that refuse a change of the CLA a repository enforces (E14-S02): which documents can be attached, that a detach waits for
@@ -136,16 +136,7 @@ test.each([['abc'], ['0'], ['007'], ['-1'], ['1.5']])(
 
 test('a suspended installation refuses the call with 409 installation_suspended, also for the org admin the ledger remembers, and changes nothing', async () => {
   const world = await documentWorld();
-  const now = world.clock.now();
-  await recordAdminSeen(world.db, { installationId: world.t1.installationId }, world.people.admin1.githubId, {
-    seenAt: now,
-    refreshAtOrBefore: now,
-  });
-  await world.db
-    .updateTable('installations')
-    .set({ suspended_at: new Date('2026-10-01T00:00:00Z') })
-    .where('id', '=', world.t1.installationId)
-    .execute();
+  await suspendTenantOne(world);
   const before = await tablesOf(world);
   const attach = await attachAs(world, 'admin1', world.t1.plain.repositoryId, world.t1.documentId);
   const detach = await attachAs(world, 'admin1', world.t1.plain.repositoryId, null);

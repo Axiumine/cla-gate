@@ -10,6 +10,7 @@ import {
   installationListSchema,
 } from '../../../../shared/installations.ts';
 import { REPOSITORY_CLA_DOCUMENT_PATH } from '../../../../shared/repository-document.ts';
+import { REPOSITORY_ENABLE_PATH } from '../../../../shared/repository-enabled.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
 import type { PersonName, RowTable } from '../../db/tenant-fixture/test-support.ts';
@@ -227,6 +228,20 @@ async function attachable(db: Kysely<Database>, target: MatrixTarget): Promise<v
 }
 
 /**
+ * Makes the call of the enable case succeed whoever asks first (E14-S03): the repository of `target` enforces its own published CLA
+ * already, so the call answers `changed: false` and sends no sweep (the world has no queue). The real change is shown by the tests
+ * of the route (repository-enable-routes.test.ts).
+ */
+async function enforcing(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  await versionOne(db, target);
+  await db
+    .updateTable('repositories')
+    .set({ enabled: true, cla_document_id: target.documentId })
+    .where('id', '=', target.repositoryId)
+    .execute();
+}
+
+/**
  * The person the erasure cases (E16-S04) ask about: `member1`, the signer of tenant 1 (E11-S06 fixture). Erasing them ends
  * their session, so the erasure case is the last entry of {@link CROSS_TENANT_CASES}, and its route the last one registered:
  * a case that comes after it would meet a `member1` who is logged out. A case added later goes before it.
@@ -354,6 +369,18 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       method: 'PUT',
       url: REPOSITORY_CLA_DOCUMENT_PATH.replace(':repositoryId', String(target.repositoryId)),
       payload: { documentId: target.documentId },
+    }),
+  },
+  // E14-S03. The same role matrix as the attach: the policy of a repository is the scope of the document it enforces, which the repository
+  // of the case carries itself, so the admin of the repository passes. The path names the repository alone, so the denials with crossed ids
+  // are those of the dedicated tests (repository-enable-tenants.test.ts).
+  [`POST ${REPOSITORY_ENABLE_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    prepare: enforcing,
+    request: (target) => ({
+      method: 'POST',
+      url: REPOSITORY_ENABLE_PATH.replace(':repositoryId', String(target.repositoryId)),
     }),
   },
   [`GET ${ERASURE_PREVIEW_PATH}`]: {
