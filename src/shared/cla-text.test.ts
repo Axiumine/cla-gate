@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { CLA_TEXT_MAX_BYTES, canonicalise, validateClaText } from './cla-text.ts';
+import { indentedBullets, nestedBullets, nestedQuotes } from './test-support.ts';
 
 const at = (...codePoints: number[]): string => String.fromCodePoint(...codePoints);
 const BOM = at(0xfeff);
@@ -138,4 +139,38 @@ test('the problems say what is wrong and never repeat the text', () => {
     'content_invalid_characters',
   ]);
   expect(JSON.stringify(problems)).not.toContain(marker);
+});
+
+test.each([
+  ['block quotes', nestedQuotes],
+  ['bullets opened on one line', nestedBullets],
+  ['lists nested by indentation', indentedBullets],
+])(
+  'validateClaText accepts 50 levels of %s and refuses 51 as content_too_deeply_nested (E12-S07)',
+  (_label, nested) => {
+    expect(validateClaText(nested(50))).toBeNull();
+    expect(validateClaText(nested(51))).toEqual({ rule: 'content_too_deeply_nested' });
+  },
+);
+
+test('a text nested far above the limit is refused as content_too_deeply_nested, and the problem holds nothing of it', () => {
+  const problem = validateClaText(`${'> '.repeat(100_000)}MARKER-OF-A-DEEP-TEXT\n`);
+  expect(problem).toEqual({ rule: 'content_too_deeply_nested' });
+  expect(JSON.stringify(problem)).not.toContain('MARKER');
+});
+
+test.each([
+  ['a 100 KiB run of [', '['.repeat(102_400)],
+  ['a 100 KiB run of *', '*'.repeat(102_400)],
+  ['a 100 KiB run of unmatched emphasis openers', '*a '.repeat(34_000)],
+])('validateClaText accepts %s: it is not deep, and reading it overflows no stack', (_label, text) => {
+  expect(validateClaText(`${text}\n`)).toBeNull();
+});
+
+test.each([
+  ['too large before too deep', `${'> '.repeat(51)}${'a'.repeat(CLA_TEXT_MAX_BYTES)}\n`, 'content_too_large'],
+  ['empty is not deep', '\n', 'content_empty'],
+  ['invalid characters before too deep', `${'> '.repeat(51)}a\u0000\n`, 'content_invalid_characters'],
+])('validateClaText checks the depth after the rules of the characters: %s', (_label, text, rule) => {
+  expect(validateClaText(text)).toMatchObject({ rule });
 });

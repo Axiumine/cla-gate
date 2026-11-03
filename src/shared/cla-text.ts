@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { ClaRule } from './cla.ts';
+import { isNestedTooDeeply } from './cla-markdown-nesting.ts';
 
 // The text of a CLA (E12-S02). The text that is stored is the text that is hashed and shown, so it is made canonical once, in
 // this one place, and the editor of the web project and the server import the same functions and so agree. The hash is over
@@ -72,7 +73,9 @@ function hasForbiddenControl(md: string): boolean {
  * The first rule the canonical text `md` breaks, or `null` when it is a valid CLA text. Checked in this order: more than
  * `CLA_TEXT_MAX_BYTES` bytes of UTF-8 (`content_too_large`), no character that is not white space (`content_empty`), a NUL or
  * another C0 control character but LF and TAB, or a lone surrogate, which no UTF-8 text can hold and the database would
- * store as another character than the one hashed (`content_invalid_characters`). The problem never carries the text.
+ * store as another character than the one hashed (`content_invalid_characters`), and block quotes and lists nested above
+ * `CLA_MAX_NESTING` levels (`content_too_deeply_nested`, E12-S07; read with the same Markdown parser as the rendering, in the
+ * form that reads the blocks alone). The problem never carries the text.
  */
 export function validateClaText(md: string): ClaTextProblem | null {
   const actualBytes = new TextEncoder().encode(md).byteLength;
@@ -84,6 +87,9 @@ export function validateClaText(md: string): ClaTextProblem | null {
   }
   if (!md.isWellFormed() || hasForbiddenControl(md)) {
     return { rule: 'content_invalid_characters' };
+  }
+  if (isNestedTooDeeply(md)) {
+    return { rule: 'content_too_deeply_nested' };
   }
   return null;
 }

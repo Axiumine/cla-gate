@@ -18,6 +18,7 @@
     "src/server/domain/evaluation/index.ts!",
     "src/shared/pr-evaluation-details.ts!",
     "src/shared/cla-text.ts!",
+    "src/shared/cla-markdown.ts!",
     "src/server/services/cla-content.ts!",
     "tests/leaks/scenarios/*.ts",
     "tests/leaks/control/*.ts",

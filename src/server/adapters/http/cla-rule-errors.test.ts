@@ -62,6 +62,12 @@ const REFUSED = [
   },
   { label: 'nothing but white space', code: 'content_empty', details: undefined, text: ' \r\n\t\r\n' },
   {
+    label: 'block quotes nested 51 levels',
+    code: 'content_too_deeply_nested',
+    details: undefined,
+    text: `${'> '.repeat(51)}${HOSTILE_TEXT}`,
+  },
+  {
     label: 'more bytes than the limit',
     code: 'content_too_large',
     details: { limitBytes: 204_800, actualBytes: HOSTILE_TEXT.length + CLA_TEXT_MAX_BYTES + 1 },

@@ -64,6 +64,7 @@ test('the limits and the status of each rule are the ones the story names', () =
     content_too_large: 422,
     content_empty: 422,
     content_invalid_characters: 422,
+    content_too_deeply_nested: 422,
     draft_conflict: 409,
     invalid_rationale: 422,
     first_version_must_be_major: 422,

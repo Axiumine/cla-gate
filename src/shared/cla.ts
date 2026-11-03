@@ -54,8 +54,8 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
 
 /**
  * The rules a request can break, each with the status it is answered with. The server throws them by name and the HTTP
- * layer turns each into the error body of E06-S01 (`code` is the key); later stories of E12 add their own. The three
- * `content_` rules are those of the text of a CLA (E12-S02, `validateClaText`); `draft_conflict` is the save of a draft
+ * layer turns each into the error body of E06-S01 (`code` is the key); later stories of E12 add their own. The four
+ * `content_` rules are those of the text of a CLA (E12-S02, E12-S07, `validateClaText`); `draft_conflict` is the save of a draft
  * that another admin saved over meanwhile (E12-S03). The rest are the rules of publishing a version (E12-S04): the rationale,
  * the numbering, the guard against publishing over a version the admin has not seen, and the confirmation that signers will have
  * to sign again. `rollback_requires_major` is the copy of a version of an earlier major published as a minor one (E12-S06).
@@ -68,6 +68,7 @@ export const CLA_RULE_STATUS = {
   content_too_large: 422,
   content_empty: 422,
   content_invalid_characters: 422,
+  content_too_deeply_nested: 422,
   draft_conflict: 409,
   invalid_rationale: 422,
   first_version_must_be_major: 422,

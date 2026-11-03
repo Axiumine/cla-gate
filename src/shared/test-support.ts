@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 
+import type { Nodes } from 'hast';
 import { AUDIT_METADATA_KEYS } from './audit.ts';
 import type { PrEvaluationDetails } from './pr-evaluation-details.ts';
 
@@ -113,3 +114,48 @@ export const METADATA_CASES: readonly MetadataCase[] = [
   ['null instead of an object', null, false],
   ['a string instead of an object', 'count', false],
 ];
+
+/** Every node of a hast tree, the root first, in document order. The walk is iterative, so a deep tree cannot overflow the stack. */
+export function hastNodes(tree: Nodes): Nodes[] {
+  const found: Nodes[] = [];
+  const pending: Nodes[] = [tree];
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    found.push(node);
+    if ('children' in node) {
+      pending.push(...node.children.toReversed());
+    }
+  }
+  return found;
+}
+
+/** The text of a hast tree: the text nodes in document order, joined. */
+export function hastText(tree: Nodes): string {
+  return hastNodes(tree)
+    .map((node) => (node.type === 'text' ? node.value : ''))
+    .join('');
+}
+
+/** `depth` block quotes one inside the other, around the word `x`: `> > x` for 2. */
+export function nestedQuotes(depth: number): string {
+  return `${'> '.repeat(depth)}x\n`;
+}
+
+/** `depth` bullet lists one inside the other, each opened on the same line: `- - x` for 2. */
+export function nestedBullets(depth: number): string {
+  return `${'- '.repeat(depth)}x\n`;
+}
+
+/** `depth` lists nested by indentation, one item to a line, two more spaces for each level. */
+export function indentedBullets(depth: number): string {
+  const items = Array.from({ length: depth }, (_unused, level) => `${'  '.repeat(level)}- item ${level + 1}`);
+  return `${items.join('\n')}\n`;
+}
+
+/** Emphasis and strong text `depth` deep, one inside the other, around the word `x`. */
+export function nestedEmphasis(depth: number): string {
+  let text = 'x';
+  for (let level = 0; level < depth; level += 1) {
+    text = level % 2 === 0 ? `*a ${text} a*` : `__a ${text} a__`;
+  }
+  return `${text}\n`;
+}

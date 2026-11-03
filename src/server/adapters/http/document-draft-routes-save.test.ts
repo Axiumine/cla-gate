@@ -174,6 +174,7 @@ test.each([
   ['a NUL', 'a\u0000b\n', 'content_invalid_characters'],
   ['a lone surrogate', 'a\uDC00b\n', 'content_invalid_characters'],
   ['a text of 204 801 bytes', `${'a'.repeat(204_800)}\n`, 'content_too_large'],
+  ['block quotes nested 51 levels', `${'> '.repeat(51)}aaaa\n`, 'content_too_deeply_nested'],
 ] as const)('%s is 422 with its own code, and the answer repeats none of the text', async (_label, text, code) => {
   const world = await documentWorld();
   const response = await saveDraftAs(world, 'admin1', wide(world), { contentMd: text, expectedRevision: null });

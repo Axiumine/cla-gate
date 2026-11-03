@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { RATIONALE_MAX_CODE_POINTS } from '../../shared/cla-version.ts';
+import { nestedQuotes } from '../../shared/test-support.ts';
 import { tenantChecksums } from '../adapters/db/tenant-fixture/test-support.ts';
 import { publishVersion as seedVersion } from '../adapters/db/test-support.ts';
 import { publishVersion } from './cla-publish.ts';
@@ -167,6 +168,7 @@ test('a minor bump with different text is allowed, and so is one that differs in
 test.each([
   ['whitespace only', ' \n\t\n', 'content_empty'],
   ['a C0 control character', 'Terms\u0001\n', 'content_invalid_characters'],
+  ['block quotes nested 51 levels', nestedQuotes(51), 'content_too_deeply_nested'],
 ] as const)(
   'a stored draft that breaks a rule of the text, %s, is refused with the rule and nothing is published',
   async (_label, text, rule) => {

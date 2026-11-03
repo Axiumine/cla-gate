@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { CLA_TEXT_MAX_BYTES } from '../../shared/cla-text.ts';
+import { indentedBullets, nestedQuotes } from '../../shared/test-support.ts';
 import { prepareClaText, sha256Hex } from './cla-content.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 
@@ -67,6 +68,8 @@ test.each([
   ['a byte order mark only', '﻿', 'content_empty'],
   ['a NUL', 'a\u0000b', 'content_invalid_characters'],
   ['a lone surrogate', `a${at(0xd800)}`, 'content_invalid_characters'],
+  ['block quotes nested 51 levels', nestedQuotes(51), 'content_too_deeply_nested'],
+  ['lists nested 51 levels', indentedBullets(51), 'content_too_deeply_nested'],
 ])('prepareClaText refuses %s as %s', (_label, raw, rule) => {
   expect(refusal(raw).rule).toBe(rule);
 });
