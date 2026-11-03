@@ -33,6 +33,20 @@ export const AUDIT_ACTIONS = [
   // Instance-wide actions: SYSTEM_ACTIONS and INSTANCE_ACTIONS must be subsets of this list.
   'data_export.created',
   'network_metadata.purged',
+  // Added by E16-S01: the names that the mutation epics (E12 to E16) document for their audit rows. The catalogue test
+  // (src/server/services/audit-catalogue.test.ts) requires them and the call-site scan lists the ones no call site
+  // writes yet as reserved, so a mutation that never lands cannot hide behind a name.
+  'signature.created',
+  'signature.revoked',
+  'signatures.invalidated',
+  'signatures.exported',
+  'commit_override.created',
+  'commit_override.deleted',
+  'allowlist_entry.created',
+  'allowlist_entry.deleted',
+  'repository.cla_document_attached',
+  'repository.cla_document_detached',
+  'signer_pii.erased',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
