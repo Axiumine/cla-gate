@@ -53,7 +53,7 @@ export function isOneLine(text: string): boolean {
 /** True when `text` holds a control, a line or paragraph separator, a bidirectional control or a tag character: nothing GitHub should be sent. */
 export function hasUnsafeCharacter(text: string): boolean {
   return Array.from(text).some((character) => {
-    const code = character.codePointAt(0) ?? 0;
+    const code = Number(character.codePointAt(0)); // a character of Array.from has a code point, so this is never NaN
     return UNSAFE_RANGES.some(([first, last]) => code >= first && code <= last);
   });
 }
