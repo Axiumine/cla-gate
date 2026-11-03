@@ -4,8 +4,12 @@ import { type Kysely, type KyselyPlugin, type PluginTransformQueryArgs, sql } fr
 import { type Mock, vi } from 'vitest';
 import { z } from 'zod';
 import { parseGithubId } from '../../../shared/github-id.ts';
+import { loadMigrationFiles } from '../../adapters/db/migration-files.ts';
+import { migrate } from '../../adapters/db/migrator.ts';
+import { openPgliteDatabase } from '../../adapters/db/pglite.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import {
+  MIGRATIONS_DIRECTORY,
   migratedRuntimeDatabase,
   migratedTestDatabase,
   seedTenant,
@@ -219,9 +223,30 @@ export function githubWorld(gate?: FakeGate): FakeGitHub {
   return fake;
 }
 
+/** What a world is built with: the CLA document, the real engine, the runtime role, or a database of its own. */
+interface WorldOptions {
+  cla?: boolean;
+  engine?: boolean;
+  runtime?: boolean;
+  /** A migrated PGlite of its own instead of the shared one of the test file, for a world whose app destroys the database when it closes (E09-S08). */
+  own?: boolean;
+}
+
+/** A migrated PGlite that belongs to the world that asks for it. */
+async function ownDatabase(): Promise<{ db: Kysely<Database> }> {
+  const db = await openPgliteDatabase();
+  await migrate(db, await loadMigrationFiles(MIGRATIONS_DIRECTORY));
+  return { db };
+}
+
+/** The shared database of the test file, migrated; with the runtime role in place for `runtime`. */
+function sharedDatabase(runtime: boolean | undefined): Promise<{ db: Kysely<Database> }> {
+  return runtime === true ? migratedRuntimeDatabase() : migratedTestDatabase();
+}
+
 /** The tenant `org-1` (installation 5000, repository 9000 `org-1/repo`), admitted, with enforcement on and its CLA document attached. */
-async function seededTenant(options: { cla?: boolean; runtime?: boolean }) {
-  const { db: raw } = await (options.runtime === true ? migratedRuntimeDatabase() : migratedTestDatabase());
+async function seededTenant(options: WorldOptions) {
+  const { db: raw } = await (options.own === true ? ownDatabase() : sharedDatabase(options.runtime));
   const tenant = await seedTenant(raw, 1);
   await sql`update installations set admission_status = 'admitted', admission_reason = null`.execute(raw);
   await raw
@@ -237,9 +262,7 @@ async function seededTenant(options: { cla?: boolean; runtime?: boolean }) {
  * passes unless `engine` brings the real one; `runtime` migrates with the runtime role in place, for the tests that run the
  * job as `cla_app`.
  */
-export async function evaluateWorld(
-  options: { cla?: boolean; engine?: boolean; runtime?: boolean } = {},
-): Promise<EvaluateWorld> {
+export async function evaluateWorld(options: WorldOptions = {}): Promise<EvaluateWorld> {
   const { raw, tenant } = await seededTenant(options);
   const timeline: string[] = [];
   const gate = new FakeGate();

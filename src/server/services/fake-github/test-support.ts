@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
-import { CheckRunStore } from '../fake-check-runs/test-support.ts';
+import { CheckRunStore, type CheckRunWriteRecord } from '../fake-check-runs/test-support.ts';
 import { CommentIds, commentsOfIssue, pageOfComments, postedComment } from '../fake-comments/test-support.ts';
 import type {
   GitHubAppInfo,
@@ -329,6 +329,11 @@ export class FakeWorld {
   /** Adds a Check Run that somebody else posted, or one of ours with an id a test chooses, to a repository (`owner/name`) of an installation. */
   addCheckRun(githubInstallationId: GithubId, fullName: string, run: GitHubCheckRun): void {
     this.state.checkRuns.seed({ installationId: githubInstallationId, fullName }, run);
+  }
+
+  /** Every write a Check Run was sent, oldest first, `POST` and `PATCH` alike, with the id of the run it reached (E09-S08). */
+  get checkRunWrites(): readonly CheckRunWriteRecord[] {
+    return this.state.checkRuns.writes;
   }
 
   /** `listener` is told of every call the fake serves, in order, as it is recorded: what a test uses to order GitHub's calls among other events. */

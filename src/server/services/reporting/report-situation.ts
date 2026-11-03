@@ -44,14 +44,16 @@ export async function readSituation(db: Kysely<Database>, target: RunTarget): Pr
   return { scope, repositoryId: repository.id, rows, own };
 }
 
+/** Where the Check Run of the target's SHA is, with no id: the listing of the commit decides which of its runs is the newest. */
+export function locationOf(target: RunTarget): RunLocator {
+  const [owner = '', repo = ''] = target.fullName.split('/');
+  return { githubInstallationId: target.githubInstallationId, owner, repo, headSha: target.headSha };
+}
+
 /** Where the run of the target's SHA is, and the id the row of the pull request recorded for it. */
 export function locatorOf(target: RunTarget, own: RowAtSha): RunLocator {
-  const [owner = '', repo = ''] = target.fullName.split('/');
   return {
-    githubInstallationId: target.githubInstallationId,
-    owner,
-    repo,
-    headSha: target.headSha,
+    ...locationOf(target),
     ...(own.checkRunId === null ? {} : { existingId: parseGithubId(own.checkRunId) }),
   };
 }

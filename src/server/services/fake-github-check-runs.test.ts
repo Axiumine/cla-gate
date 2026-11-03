@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { foreignRun, PASSED, STARTED } from './github-check-contract/test-support.ts';
 import { id, installation, repository } from './github-contract/test-support.ts';
 import { commitSha } from './github-pull-contract/test-support.ts';
-import { GitHubUnavailableError } from './ports/github-errors.ts';
+import { GitHubNotFoundError, GitHubUnavailableError } from './ports/github-errors.ts';
 import { FakeGitHub } from './test-support.ts';
 
 // The Check Run half of `FakeGitHub` (E09-S05) beyond the contract: what a test reads back of the writes, how the App that
@@ -29,6 +29,20 @@ test('the runs of the world keep the last write each was given, and a seeded run
       [run.id, 11, ACME, { ...PASSED, text: 'details', detailsUrl: 'https://example.org/x' }],
     ],
   );
+});
+
+test('every write is kept in order with the id of the run it reached, which the run itself forgets once the next write replaces it', async () => {
+  const fake = world();
+  const run = await fake.createCheckRun(id(11), ACME, commitSha(2), STARTED);
+  const other = await fake.createCheckRun(id(11), ACME, commitSha(2), STARTED);
+  await fake.updateCheckRun(id(11), ACME, run.id, PASSED);
+  await expect(fake.updateCheckRun(id(11), ACME, id(1), PASSED)).rejects.toBeInstanceOf(GitHubNotFoundError);
+  expect(fake.checkRunWrites).toEqual([
+    { kind: 'create', id: run.id, write: STARTED },
+    { kind: 'create', id: other.id, write: STARTED },
+    { kind: 'update', id: run.id, write: PASSED },
+  ]);
+  expect(fake.checkRuns[0]?.write).toEqual(PASSED);
 });
 
 test('every run the fake posts has its own id and the id of the App the fake stands for', async () => {

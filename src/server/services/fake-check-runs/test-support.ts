@@ -21,6 +21,13 @@ export interface StoredCheckRun {
   readonly write: CheckRunWrite | null;
 }
 
+/** A write the world accepted: a `POST` (`create`) or a `PATCH` (`update`), with the id of the run it reached and what it sent (E09-S08). */
+export interface CheckRunWriteRecord {
+  readonly kind: 'create' | 'update';
+  readonly id: GithubId;
+  readonly write: CheckRunWrite;
+}
+
 /** GitHub compares repository names without regard to case. */
 const sameRepository = (stored: StoredCheckRun, repository: RepositoryRef): boolean =>
   stored.installationId === repository.installationId &&
@@ -33,6 +40,8 @@ export const lacksConclusion = (write: CheckRunWrite): boolean =>
 export class CheckRunStore {
   /** Every run, in the order they were posted or seeded. */
   readonly runs: StoredCheckRun[] = [];
+  /** Every write accepted, oldest first: what a run was sent, which `runs` forgets once the next write replaces it (E09-S08). */
+  readonly writes: CheckRunWriteRecord[] = [];
   #next = 9_000_001;
 
   /** Adds a run that somebody else posted (or one of ours, with the id a test chooses). */
@@ -51,6 +60,7 @@ export class CheckRunStore {
     };
     this.#next += 1;
     this.runs.push({ ...repository, run, write });
+    this.writes.push({ kind: 'create', id: run.id, write });
     return run;
   }
 
@@ -71,6 +81,7 @@ export class CheckRunStore {
       externalId: write.externalId ?? stored.run.externalId,
     };
     this.runs.splice(this.runs.indexOf(stored), 1, { ...stored, run, write });
+    this.writes.push({ kind: 'update', id, write });
     return run;
   }
 

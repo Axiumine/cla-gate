@@ -8,7 +8,7 @@ import type { ReportTarget } from '../ports/reporter.ts';
 import { upsertComment } from './comment-upsert.ts';
 import type { CheckRunReporterOptions } from './report-options.ts';
 import { linkKeyOf, logReport, rememberRun } from './report-record.ts';
-import { locatorOf, readSituation } from './report-situation.ts';
+import { locationOf, locatorOf, readSituation } from './report-situation.ts';
 import { writeRun } from './report-write.ts';
 
 // The two reports of the life of an evaluation (E09-S05): it began (`started`), and it has a verdict (`publish`). Both record the id
@@ -21,13 +21,15 @@ const VISIBLE_RERUNS: ReadonlySet<ReportTarget['trigger']> = new Set(['check_rer
 /**
  * Makes sure the head SHA has a Check Run that is `in_progress`: none on the SHA means a new one, with the id of the row as its
  * external id; one that is not completed is reused untouched; a completed one is left as it is, except for a person's request to
- * run the check again, which gets a fresh run.
+ * run the check again, which gets a fresh run. For that request the run is found by the listing of the SHA and never by the id the
+ * row records (E09-S08): that id is the previous verdict's, and a run an earlier attempt of this job made and crashed before it
+ * could record it is newer, and still in progress.
  * @throws TenantMismatchError, EvaluationRowMissingError and what the GitHub port and the writer throw.
  */
 export async function reportStarted(options: CheckRunReporterOptions, target: ReportTarget): Promise<void> {
   const { db, writer, logger } = options;
   const situation = await readSituation(db, target);
-  const locator = locatorOf(target, situation.own);
+  const locator = VISIBLE_RERUNS.has(target.trigger) ? locationOf(target) : locatorOf(target, situation.own);
   const existing = await writer.find(locator);
   const reuse = existing !== null && (existing.status !== 'completed' || !VISIBLE_RERUNS.has(target.trigger));
   const checkRunId = reuse

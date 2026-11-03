@@ -83,12 +83,26 @@ test.each([['check_rerequested'], ['recheck']] as const)(
     world.fake.addCheckRun(INSTALLATION, FULL_NAME, foreignRun(55, { appId: APP }));
     const target = await world.evaluation({ trigger, checkRunId: 55 });
     await world.reporter.started(target);
-    expect(methods(world.fake)).toEqual(['getCheckRun', 'createCheckRun']);
+    expect(methods(world.fake)).toEqual(['listCheckRunsForRef', 'createCheckRun']);
     const [earlier, fresh] = world.fake.checkRuns;
     expect(earlier?.run).toEqual(foreignRun(55, { appId: APP }));
     expect(earlier?.write).toBeNull();
     expect(fresh?.run).toMatchObject({ status: 'in_progress', externalId: String(target.evaluationId) });
     expect((await world.rows()).map((row) => row.check_run_id)).toEqual([fresh?.run.id]);
+  },
+);
+
+test.each([['check_rerequested'], ['recheck']] as const)(
+  'a re-run whose row records the previous verdict reuses a newer run that is in progress (%s): an attempt crashed before it recorded it',
+  async (trigger) => {
+    const world = await reportingWorld();
+    world.fake.addCheckRun(INSTALLATION, FULL_NAME, foreignRun(55, { appId: APP }));
+    world.fake.addCheckRun(INSTALLATION, FULL_NAME, foreignRun(56, { appId: APP, status: 'in_progress' }));
+    const target = await world.evaluation({ trigger, checkRunId: 55 });
+    await world.reporter.started(target);
+    expect(methods(world.fake)).toEqual(['listCheckRunsForRef']);
+    expect(world.fake.checkRuns).toHaveLength(2);
+    expect((await world.rows()).map((row) => row.check_run_id)).toEqual([56]);
   },
 );
 
