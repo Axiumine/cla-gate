@@ -93,12 +93,24 @@ export async function finishEvaluation(
 const FAILED_DETAILS = JSON.stringify({ code: 'evaluation_failed' });
 
 /**
+ * What {@link failEvaluation} does with a row that already holds a verdict: `keep` leaves a `success`, a `cancelled` and a
+ * `failure` with its reasons as they are (a dead job that comes late must not undo what another run concluded), `replace`
+ * turns them to the dead-letter failure (the re-run of a Check Run that died fails closed: its report is the failure).
+ */
+export type FinalVerdict = 'keep' | 'replace';
+
+/**
  * Sets the evaluation of `key` to `failure` with the details `{ "code": "evaluation_failed" }`, creating the row when
  * there is none (E07-S05): the dead-letter handler's write, one statement, so a retry of the handler leaves one row. A row
- * that exists keeps its reporter columns and its id.
- * @returns the id of the row.
+ * that exists keeps its reporter columns and its id. A row with no result yet (`in_progress`) or that this write made itself is
+ * always changed; one with another verdict is changed only with `replace` (see {@link FinalVerdict}).
+ * @returns the id of the row, or `null` when the row holds a verdict that was kept.
  */
-export async function failEvaluation(db: Kysely<Database>, key: EvaluationKey): Promise<number> {
+export async function failEvaluation(
+  db: Kysely<Database>,
+  key: EvaluationKey,
+  finalVerdict: FinalVerdict,
+): Promise<number | null> {
   const row = await db
     .insertInto('pr_evaluations')
     .values({
@@ -113,11 +125,14 @@ export async function failEvaluation(db: Kysely<Database>, key: EvaluationKey): 
       conflict
         .columns(['repository_id', 'pr_number', 'head_sha'])
         .doUpdateSet({ result: 'failure', details: FAILED_DETAILS, updated_at: sql`now()` })
-        .where('pr_evaluations.installation_id', '=', key.installationId),
+        .where('pr_evaluations.installation_id', '=', key.installationId)
+        .where(
+          sql<boolean>`(${finalVerdict === 'replace'} or pr_evaluations.result = 'in_progress' or pr_evaluations.details = ${FAILED_DETAILS}::jsonb)`,
+        ),
     )
     .returning('id')
-    .executeTakeFirstOrThrow();
-  return row.id;
+    .executeTakeFirst();
+  return row?.id ?? null;
 }
 
 /** The rows of the repository of an installation at one head SHA, one per pull request that was evaluated at it, oldest first. */

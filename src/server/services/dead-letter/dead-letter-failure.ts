@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
-import { failEvaluation } from '../evaluate-pr/evaluation-rows.ts';
+import { type FinalVerdict, failEvaluation } from '../evaluate-pr/evaluation-rows.ts';
 import type { Resolved } from '../evaluate-pr/evaluation-tenant.ts';
 import type { JobOutcome } from '../job-registry.ts';
 import { isInstallationUnavailable } from '../ports/installation-unavailable.ts';
@@ -25,17 +25,35 @@ export interface Failed {
   readonly prNumber: number;
   readonly headSha: string;
   readonly trigger: EnvelopeOf<'evaluate-pr'>['trigger'];
+  /** What happens to a row that already holds a verdict (see {@link FinalVerdict}). */
+  readonly finalVerdict: FinalVerdict;
 }
 
-/** Sets the row of the head SHA to `failure` and completes its Check Run. Both are idempotent: the handler may run again. */
-export async function fail(ports: FailurePorts, job: EnvelopeOf<'evaluate-pr' | 'evaluate-head-sha'>, failed: Failed) {
+/**
+ * Sets the row of the head SHA to `failure` and completes its Check Run. Both are idempotent: the handler may run again.
+ * With `finalVerdict` `keep`, a row that already holds a verdict (another run finished the evaluation after the job died) is left as
+ * it is and its Check Run is not touched: the report is that verdict's.
+ * @returns whether the failure was reported.
+ */
+export async function fail(
+  ports: FailurePorts,
+  job: EnvelopeOf<'evaluate-pr' | 'evaluate-head-sha'>,
+  failed: Failed,
+): Promise<boolean> {
   const { installation, repository } = failed.resolved.tenant;
-  const evaluationId = await failEvaluation(ports.db, {
-    installationId: installation.id,
-    repositoryId: repository.id,
-    prNumber: failed.prNumber,
-    headSha: failed.headSha,
-  });
+  const evaluationId = await failEvaluation(
+    ports.db,
+    {
+      installationId: installation.id,
+      repositoryId: repository.id,
+      prNumber: failed.prNumber,
+      headSha: failed.headSha,
+    },
+    failed.finalVerdict,
+  );
+  if (evaluationId === null) {
+    return false;
+  }
   await ports.reporter.failed(
     {
       githubInstallationId: job.githubInstallationId,
@@ -48,6 +66,7 @@ export async function fail(ports: FailurePorts, job: EnvelopeOf<'evaluate-pr' | 
     },
     'evaluation_failed',
   );
+  return true;
 }
 
 /** Runs `report`, and ends the job as skipped when GitHub says the installation is no longer served. */

@@ -33,7 +33,13 @@ async function failHeadSha(
     return skipped(logger, 'repository_gone');
   }
   for (const { prNumber } of stored) {
-    await fail(ports, job, { resolved, prNumber, headSha: job.headSha, trigger: 'check_rerequested' });
+    await fail(ports, job, {
+      resolved,
+      prNumber,
+      headSha: job.headSha,
+      trigger: 'check_rerequested',
+      finalVerdict: 'replace',
+    });
   }
   return { outcome: 'reported' };
 }

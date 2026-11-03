@@ -32,8 +32,14 @@ async function failPullRequest(
   if (pr.state !== 'open') {
     return skipped(logger, 'pull_request_closed');
   }
-  await fail(ports, job, { resolved, prNumber: job.prNumber, headSha: pr.headSha, trigger: job.trigger });
-  return { outcome: 'reported' };
+  const reported = await fail(ports, job, {
+    resolved,
+    prNumber: job.prNumber,
+    headSha: pr.headSha,
+    trigger: job.trigger,
+    finalVerdict: 'keep',
+  });
+  return reported ? { outcome: 'reported' } : skipped(logger, 'evaluation_final');
 }
 
 /** `evaluate-pr`: the head SHA is the one GitHub shows for the pull request now, which is the one the Check Run belongs to. */

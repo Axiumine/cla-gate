@@ -99,6 +99,43 @@ test('a row that is in progress becomes the failure, keeping its id and the Chec
   expect(world.reporter.failures.map((failure) => failure.target.evaluationId)).toEqual([row.id]);
 });
 
+test.each([
+  ['a success', 'success', { outcome: 'success' }],
+  ['a failure with its reasons', 'failure', { outcome: 'failure', failureCodes: ['unsigned'] }],
+  ['a cancelled evaluation', 'cancelled', {}],
+] as const)(
+  'a row that already holds %s is kept: a dead job that comes late reports nothing and writes nothing',
+  async (_name, result, details) => {
+    const world = await deadWorld();
+    const row = await world.raw
+      .insertInto('pr_evaluations')
+      .values({
+        installation_id: world.tenant.installationId,
+        repository_id: world.tenant.repositoryId,
+        pr_number: PR_NUMBER,
+        head_sha: commitSha(2),
+        result,
+        details: JSON.stringify(details),
+        check_run_id: 555,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    expect(await world.runDead(JOB)).toEqual({ outcome: 'skipped:evaluation_final' });
+    expect(await world.rows()).toEqual([
+      {
+        id: row.id,
+        pr_number: PR_NUMBER,
+        head_sha: commitSha(2),
+        result,
+        details,
+        check_run_id: 555,
+      },
+    ]);
+    expect(world.reporter.failures).toEqual([]);
+    expect(logged(world, 'dead_letter.skipped')).toMatchObject([{ reason: 'evaluation_final' }]);
+  },
+);
+
 test('the handler runs again after a failure and leaves one row: the report is made once per attempt and is idempotent', async () => {
   const world = await deadWorld();
   world.reporter.hooks.failed = () => Promise.reject(OUTAGE);
