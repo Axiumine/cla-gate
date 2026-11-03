@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { CHECK_NAME } from '../../shared/check-name.ts';
+import { CHECK_RUN_NAME } from '../../shared/check.ts';
 import type { GithubId } from '../../shared/github-id.ts';
 import { checkRunFields, checkSuiteFields } from './webhook-routing-fields.ts';
 import { type Delivery, ignored, type Routing, toJob } from './webhook-routing-types.ts';
@@ -37,7 +37,7 @@ function rerun(action: string | undefined, headSha: string, tenant: Tenant, deli
 export function routeCheckRun({ action, payload, context }: Delivery): Routing {
   const parsed = checkRunFields.parse(payload);
   const { name, head_sha: headSha, app } = parsed.check_run;
-  if (name !== CHECK_NAME || !isOurApp(app.id, context.appId)) {
+  if (name !== CHECK_RUN_NAME || !isOurApp(app.id, context.appId)) {
     return ignored('foreign_check');
   }
   return rerun(action, headSha, parsed, context.deliveryId);
