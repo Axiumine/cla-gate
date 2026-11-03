@@ -7,6 +7,7 @@
 #   1. sh scripts/init-secrets.sh      creates secrets/ and .env (only what is missing; it never prints a value)
 #   2. set PUBLIC_BASE_URL in .env     the https origin the public reaches the app on
 #   3. docker compose up --build       postgres, then migrate to completion, then app (setup mode until the GitHub App exists)
+#      docker compose --profile tls up -d   the same plus `caddy`, the optional reverse proxy with automatic TLS (E19-S05)
 #
 # Three services, three jobs. `postgres` provisions its own roles on the first start of an empty volume
 # (scripts/provision-database.sh, passwords from secret files). `migrate` is the only service that holds the owner
@@ -131,6 +132,44 @@ services:
       - backend
       - default
 
+  # The optional reverse proxy (E19-S05), in the profile `tls`: the default `docker compose up` never starts it and never binds
+  # 80 or 443, `docker compose --profile tls up -d` adds only this service, and `docker compose stop caddy` stops only it.
+  # The official image at a pinned minor version and digest, a separate container and no code dependency. It is on the default
+  # network only, so it has no route to PostgreSQL, and the application keeps its own published port (loopback by default).
+  # The certificates live in the named volumes: `docker compose down` keeps them and only `down -v` removes them (Let's
+  # Encrypt limits how many certificates one name gets per week, so do not recreate the volumes in a loop). The public ports
+  # belong to the deployment: 80 and 443 are the defaults here, the recorded exception of docs/ci-runners.md, and CI, the
+  # smoke test and the tests override all three with a random free loopback port above 32768, never with 80 or 443.
+  caddy:
+    image: caddy:2.11@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
+    profiles:
+      - tls
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      # Without CADDY_BIND_ADDRESS the ports are published on every interface, IPv6 included (an address with an AAAA record
+      # must answer the ACME challenge over it); with it, the address and a colon come first.
+      - "${CADDY_BIND_ADDRESS:+${CADDY_BIND_ADDRESS}:}${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_BIND_ADDRESS:+${CADDY_BIND_ADDRESS}:}${CADDY_HTTPS_PORT:-443}:443"
+      - "${CADDY_BIND_ADDRESS:+${CADDY_BIND_ADDRESS}:}${CADDY_HTTPS_PORT:-443}:443/udp"
+    networks:
+      - default
+
 networks:
   default:
     ipam:
@@ -170,3 +209,6 @@ secrets:
 
 volumes:
   cla-postgres-data:
+  # The proxy's certificates and account key, and its configuration (E19-S05).
+  caddy-data:
+  caddy-config:

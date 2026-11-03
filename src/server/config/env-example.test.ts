@@ -13,11 +13,18 @@ const EXAMPLE = path.resolve(import.meta.dirname, '../../../.env.example');
 /** Read by `loadMigrateConfig`, outside the schema. */
 const MIGRATION_ONLY = ['MIGRATION_DATABASE_URL'];
 /**
- * Read by the compose stack and not by the server (E19-S04): where the app's port is published, the subnet of the stack's
- * network, and the address Let's Encrypt writes to (E19-S05). scripts/compose/compose-stack.test.ts keeps the first two in step
- * with docker-compose.yml.
+ * Read by the compose stack and not by the server: where the app's port is published and the subnet of the stack's network
+ * (E19-S04), the address Let's Encrypt writes to and the host side of the proxy's ports (E19-S05).
+ * scripts/compose/compose-stack.test.ts and caddy-service.test.ts keep them in step with docker-compose.yml.
  */
-const COMPOSE_ONLY = ['ACME_EMAIL', 'BIND_ADDRESS', 'EDGE_SUBNET'];
+const COMPOSE_ONLY = [
+  'ACME_EMAIL',
+  'BIND_ADDRESS',
+  'CADDY_BIND_ADDRESS',
+  'CADDY_HTTP_PORT',
+  'CADDY_HTTPS_PORT',
+  'EDGE_SUBNET',
+];
 
 const byName = (a: string, b: string): number => a.localeCompare(b);
 

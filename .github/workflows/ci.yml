@@ -894,6 +894,89 @@ jobs:
         if: ${{ always() && env.CLA_PG_CONTAINER != '' }}
         run: yarn ci:postgres stop
 
+  # The reverse proxy's configuration (E19-S05). Not a required check: it joins the `container` job of E19-S08 when that job exists
+  # and is stable. `yarn ci:caddy validate` runs `caddy validate` on docker/Caddyfile in a throw-away container of the pinned Caddy
+  # image (the one docker-compose.yml runs, a test keeps them equal), once for https://localhost and once for
+  # https://cla.example.com: no network, no published port, no certificate requested, the runner user's own uid, a per-run
+  # container name and the label cla-gate.ci=caddy. `docker run --rm` removes the container when it stops; the last step removes
+  # it when the job is cancelled in between. The image is pulled from Docker Hub by the first run; nothing is pushed.
+  caddy:
+    name: caddy
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. The container needs a Docker
+      # daemon the runner user can reach.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+          if ! docker info >/dev/null 2>&1; then
+            echo "::error title=Runner preflight::the Docker daemon is not reachable by $(id -un): install Docker or add the runner user to the docker group (docs/ci-runners.md)"
+            exit 1
+          fi
+          echo "docker server $(docker version --format '{{.Server.Version}}')"
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # The helper needs Node only; skipping the build scripts also skips the root postinstall, which CI never wants.
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      - name: Validate docker/Caddyfile with the pinned Caddy image
+        run: yarn ci:caddy validate
+      # The name comes from the validate step, never from the event; a job that never got that far skips the step.
+      - name: Remove the Caddy container
+        if: ${{ always() && env.CLA_CADDY_CONTAINER != '' }}
+        run: yarn ci:caddy stop
+
   # Memory leak scenarios (E20-S07), `yarn leaks:control` and then `yarn leaks`. Never a required check and never promoted: it
   # runs only on the nightly schedule, on a manual run and on a v* tag (a release candidate), so a pull request does not wait
   # for it. It waits for `coverage`, so a build that fails the unit tests is not measured. memlab has no exit code for a leak,

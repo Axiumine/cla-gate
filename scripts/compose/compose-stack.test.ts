@@ -27,9 +27,12 @@ test('a service that is not in the file fails the test that asked for it', () =>
   expect(() => serviceNamed(compose, 'nothing')).toThrow('docker-compose.yml has no service nothing');
 });
 
-test('the project is cla-gate and the services are postgres, migrate and app', () => {
+test('the project is cla-gate and the services are postgres, migrate, app and the optional caddy', () => {
   expect(compose.name).toBe('cla-gate');
-  expect(Object.keys(compose.services)).toEqual(['postgres', 'migrate', 'app']);
+  expect(Object.keys(compose.services)).toEqual(['postgres', 'migrate', 'app', 'caddy']);
+  expect(Object.entries(compose.services).filter(([, service]) => service.profiles !== undefined)).toEqual([
+    ['caddy', expect.objectContaining({ profiles: ['tls'] })],
+  ]);
 });
 
 test('postgres is the 18 image with its admin password from a secret file, and publishes no port', () => {
@@ -45,7 +48,7 @@ test('postgres provisions the roles on an empty volume: the script is mounted re
     './scripts/provision-database.sh:/docker-entrypoint-initdb.d/10-provision-database.sh:ro',
     './scripts/provision-database.sql:/opt/cla/provision-database.sql:ro',
   ]);
-  expect(Object.keys(compose.volumes)).toEqual(['cla-postgres-data']);
+  expect(Object.keys(compose.volumes)).toEqual(['cla-postgres-data', 'caddy-data', 'caddy-config']);
   expect(postgres.environment).toEqual({
     POSTGRES_PASSWORD_FILE: '/run/secrets/db_admin_password',
     CLA_OWNER_PASSWORD_FILE: '/run/secrets/db_owner_password',
@@ -116,9 +119,13 @@ test('app restarts unless stopped, has 30 seconds to stop, and is built from the
   expect(app.build).toEqual({ context: '.', args: { SOURCE_COMMIT: withDefault('SOURCE_COMMIT', 'unknown') } });
 });
 
-test('the app port is published on loopback by default, and it is the only port the stack publishes', () => {
+test('the app port is published on loopback by default, and only the proxy of the tls profile publishes anything else', () => {
   expect(app.ports).toEqual([`${withDefault('BIND_ADDRESS', '127.0.0.1')}:${withDefault('PORT', '3000')}:3000`]);
   expect([postgres.ports, migrate.ports]).toEqual([undefined, undefined]);
+  expect(Object.entries(compose.services).flatMap(([name, { ports }]) => (ports === undefined ? [] : [name]))).toEqual([
+    'app',
+    'caddy',
+  ]);
 });
 
 test('the default network has an explicit subnet, and app trusts exactly that subnet as its proxy', () => {
@@ -151,7 +158,11 @@ test('no variable is interpolated that the stack does not document, and no liter
   const text = readText(path.join(ROOT, 'docker-compose.yml'));
   expect(interpolated(text).toSorted(byName)).toEqual(
     [
+      'ACME_EMAIL',
       'BIND_ADDRESS',
+      'CADDY_BIND_ADDRESS',
+      'CADDY_HTTP_PORT',
+      'CADDY_HTTPS_PORT',
       'EDGE_SUBNET',
       'GITHUB_ALLOWED_ACCOUNT_IDS',
       'GITHUB_APP_ID',

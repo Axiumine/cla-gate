@@ -87,20 +87,26 @@ test('exactly 4096 MiB is enough', () => {
   expect(run(preflight('static'), { freeMib: 4096 }).code).toBe(0);
 });
 
-test.each([['postgres'], ['e2e']])('the %s preflight needs a Docker daemon the runner user can reach', (job) => {
-  const missing = run(preflight(job), {});
-  expect(missing.code).toBe(1);
-  expect(missing.out).toContain('::error title=Runner preflight::the Docker daemon is not reachable by');
-  const broken = run(preflight(job), { stubs: { docker: 1 } });
-  expect(broken.code).toBe(1);
-  expect(broken.out).toContain('the Docker daemon is not reachable');
-});
+test.each([['postgres'], ['e2e'], ['caddy']])(
+  'the %s preflight needs a Docker daemon the runner user can reach',
+  (job) => {
+    const missing = run(preflight(job), {});
+    expect(missing.code).toBe(1);
+    expect(missing.out).toContain('::error title=Runner preflight::the Docker daemon is not reachable by');
+    const broken = run(preflight(job), { stubs: { docker: 1 } });
+    expect(broken.code).toBe(1);
+    expect(broken.out).toContain('the Docker daemon is not reachable');
+  },
+);
 
-test.each([['postgres'], ['e2e']])('the %s preflight passes with a working daemon and prints its version', (job) => {
-  const { code, out } = run(preflight(job), { stubs: { docker: 0 } });
-  expect(code).toBe(0);
-  expect(out).toContain('docker server stub docker version --format {{.Server.Version}}');
-});
+test.each([['postgres'], ['e2e'], ['caddy']])(
+  'the %s preflight passes with a working daemon and prints its version',
+  (job) => {
+    const { code, out } = run(preflight(job), { stubs: { docker: 0 } });
+    expect(code).toBe(0);
+    expect(out).toContain('docker server stub docker version --format {{.Server.Version}}');
+  },
+);
 
 test('the semgrep preflight passes with git, curl, tar, python3 and pipx, and needs no Docker', () => {
   const { code, out } = run(preflight('semgrep'), { stubs: { python3: 0, pipx: 0 } });

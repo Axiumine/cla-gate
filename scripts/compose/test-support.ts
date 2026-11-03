@@ -28,6 +28,8 @@ const serviceSchema = z.object({
   read_only: z.boolean().optional(),
   tmpfs: z.array(z.string()).optional(),
   cap_drop: z.array(z.string()).optional(),
+  cap_add: z.array(z.string()).optional(),
+  profiles: z.array(z.string()).optional(),
   security_opt: z.array(z.string()).optional(),
   init: z.boolean().optional(),
   stop_grace_period: z.string().optional(),
@@ -74,6 +76,11 @@ export function serviceNamed(compose: Compose, name: string): Service {
 /** How compose spells a variable with a default (`NAME:-default` between a dollar sign and braces), built so that no test string looks like an unfilled template. */
 export function withDefault(name: string, fallback: string): string {
   return `\${${name}:-${fallback}}`;
+}
+
+/** How compose spells an optional prefix: `NAME` and a colon in front when `NAME` is set and not empty, nothing otherwise. */
+export function withOptionalPrefix(name: string): string {
+  return `\${${name}:+\${${name}}:}`;
 }
 
 /** The `NAME:-default` entries of an `environment:` block, as `NAME` to its default; any other form maps to `undefined`. */

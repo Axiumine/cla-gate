@@ -47,6 +47,7 @@
     "ci:port": "node scripts/ci/free-port.ts",
     "ci:postgres": "node scripts/ci/postgres.ts",
     "ci:e2e": "node scripts/ci/e2e.ts",
+    "ci:caddy": "node scripts/ci/caddy.ts",
     "ci:runners": "node scripts/ci/check-runners.ts",
     "db:up": "node scripts/dev/db.ts up",
     "db:url": "node scripts/dev/db.ts url",
