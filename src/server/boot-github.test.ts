@@ -83,7 +83,10 @@ test('a wrong App id stops the start: nothing is opened or bound, the exit code 
   expect(signals.listenerCount('SIGTERM')).toBe(0);
   expect(logs.lines().find((line) => line['msg'] === 'github.app_check_failed')).toMatchObject({
     level: 60,
-    err: { type: 'ConfigError', message: 'Invalid environment configuration: GITHUB_APP_ID' },
+    err: {
+      type: 'ConfigError',
+      message: 'GITHUB_APP_ID: is not the id of the App that GitHub knows for GITHUB_APP_PRIVATE_KEY',
+    },
   });
 });
 

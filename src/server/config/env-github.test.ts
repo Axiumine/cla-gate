@@ -3,7 +3,8 @@
 import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
 import { AUTH_ENV } from './auth-fixture/test-support.ts';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 import { publicKeyFingerprint } from './github-key.ts';
 import { MASK } from './secret.ts';
 import { escapeNewlines, TEST_WEBHOOK_SECRET, testRsaKey, testUnsuitableKeys } from './test-support.ts';
@@ -113,7 +114,9 @@ test.each([
 ])('a previous key equal to the current one (%s) is a ConfigError naming only the previous variable', (_l, a, b) => {
   const error = capture({ GITHUB_APP_PRIVATE_KEY: a, GITHUB_APP_PRIVATE_KEY_PREVIOUS: b });
   expect(error.variables).toEqual(['GITHUB_APP_PRIVATE_KEY_PREVIOUS']);
-  expect(error.message).toBe('Invalid environment configuration: GITHUB_APP_PRIVATE_KEY_PREVIOUS');
+  expect(error.lines).toEqual([
+    'GITHUB_APP_PRIVATE_KEY_PREVIOUS: must be a different key from GITHUB_APP_PRIVATE_KEY (a rotation keeps the old key here)',
+  ]);
 });
 
 test('a ConfigError about a key never holds any of its text', () => {

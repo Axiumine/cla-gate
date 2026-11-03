@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 
 // SWEEP_INTERVAL_MINUTES (E07-S08): the minutes between two reconciliation sweeps; 0, 5, 10, 15, 20, 30 or 60, default 30,
 // and 0 turns the sweep off. Any other value is a ConfigError.

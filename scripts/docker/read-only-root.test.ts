@@ -74,12 +74,14 @@ const production = [...listFiles('src/server'), ...listFiles('src/shared')].filt
 );
 const usedMembers = new Map(production.map((file) => [file, fileSystemMembers(readText(path.join(ROOT, file)))]));
 
-test('the guard reads the production sources and finds the three that read files', () => {
+test('the guard reads the production sources and finds the four that read files', () => {
   expect(production.length).toBeGreaterThan(200);
-  expect(production.filter((file) => (usedMembers.get(file) ?? []).length > 0)).toEqual([
+  const readers = production.filter((file) => (usedMembers.get(file) ?? []).length > 0);
+  expect(readers.toSorted((a, b) => a.localeCompare(b))).toEqual([
     'src/server/adapters/db/migration-files.ts',
     'src/server/adapters/github/package-version.ts',
     'src/server/adapters/http/spa.ts',
+    'src/server/config/secret-files.ts',
   ]);
 });
 

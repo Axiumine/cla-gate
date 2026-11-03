@@ -77,7 +77,9 @@ test('an invalid lifetime stops the start by name, with nothing opened', async (
   expect(server).toBeUndefined();
   expect(signals.exitCode).toBe(1);
   expect(opened).toBe(false);
-  expect(errors).toEqual(['ConfigError: Invalid environment configuration: SESSION_IDLE_SECONDS']);
+  expect(errors).toEqual([
+    'SESSION_IDLE_SECONDS: must be a whole number of seconds from 300 to 999999999 (digits only)',
+  ]);
 });
 
 test('the login reaches GitHub through the fetch that boot was given (E10-S05)', async () => {

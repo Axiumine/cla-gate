@@ -164,5 +164,7 @@ test('a login in OPERATOR_GITHUB_IDS stops the start before anything is opened, 
   expect(server).toBeUndefined();
   expect(signals.exitCode).toBe(1);
   expect(createDb).not.toHaveBeenCalled();
-  expect(written).toEqual(['ConfigError: Invalid environment configuration: OPERATOR_GITHUB_IDS']);
+  expect(written).toEqual([
+    'OPERATOR_GITHUB_IDS: must be a comma separated list of at most 20 positive whole numbers (GitHub user ids)',
+  ]);
 });

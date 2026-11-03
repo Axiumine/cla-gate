@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { AUTH_ENV, TEST_CLIENT_ID, TEST_CLIENT_SECRET, TEST_SESSION_SECRET } from './auth-fixture/test-support.ts';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 // The login settings of E10-S01: three secrets that production requires, two session lifetimes.
@@ -29,19 +30,32 @@ function capture(env: Record<string, string | undefined>): ConfigError {
 }
 
 test.each([
-  ['SESSION_SECRET', { ...AUTH_ENV, SESSION_SECRET: undefined }],
+  ['unset', { ...AUTH_ENV, SESSION_SECRET: undefined }],
+  ['empty', { ...AUTH_ENV, SESSION_SECRET: '' }],
+])(
+  'production with the GitHub App and a session secret that is %s is a ConfigError naming only SESSION_SECRET',
+  (_label, auth) => {
+    const error = capture({ ...PRODUCTION, ...auth });
+    expect(error.lines).toEqual([
+      'SESSION_SECRET: required in production once a GitHub App is configured; set it, or SESSION_SECRET_FILE',
+    ]);
+  },
+);
+
+test.each([
   ['GITHUB_CLIENT_ID', { ...AUTH_ENV, GITHUB_CLIENT_ID: undefined }],
   ['GITHUB_CLIENT_SECRET', { ...AUTH_ENV, GITHUB_CLIENT_SECRET: undefined }],
-  ['SESSION_SECRET (empty)', { ...AUTH_ENV, SESSION_SECRET: '' }],
-])('production without %s is a ConfigError naming only that variable', (label, auth) => {
+])('production without %s names it, as a missing part of the GitHub App', (name, auth) => {
   const error = capture({ ...PRODUCTION, ...auth });
-  expect(error.variables).toEqual([label.replace(' (empty)', '')]);
-  expect(error.message).toBe(`Invalid environment configuration: ${label.replace(' (empty)', '')}`);
+  expect(error.lines).toEqual([
+    `${name}: required: some GitHub App variables are set, so all five are needed (or none, for setup mode)`,
+  ]);
 });
 
-test('production without any of the three names all of them, sorted, and no value', () => {
-  const error = capture({ ...PRODUCTION });
-  expect(error.variables).toEqual(['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'SESSION_SECRET']);
+test('production in setup mode (no GitHub App, a setup token) needs no session secret, client id or client secret', () => {
+  const env = { NODE_ENV: 'production', PUBLIC_BASE_URL: 'https://cla.example.org', SETUP_TOKEN: 'x'.repeat(32) };
+  const config = loadConfig({ DATABASE_URL: DB, ...env });
+  expect(config).toMatchObject({ mode: 'setup', sessionSecret: undefined });
 });
 
 test('a session secret under 32 characters is refused by name in every environment, and its value is never reported', () => {
@@ -121,5 +135,8 @@ test.each([
 ])('a lifetime with %s is reported by name', (_label, env, names) => {
   const error = capture(env);
   expect(error.variables).toEqual(names);
-  expect(error.message).not.toMatch(/\d{3,}/);
+  // The rules quote limits (300, 999999999), so only a value of four characters or more can be told from them.
+  for (const value of Object.values(env).filter((given) => given.length >= 4)) {
+    expect(error.message).not.toContain(value);
+  }
 });

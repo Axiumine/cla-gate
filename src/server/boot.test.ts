@@ -117,14 +117,12 @@ test('a failing shutdown is logged and sets the exit code', async () => {
 
 test('an invalid configuration is reported by variable name and nothing starts', async () => {
   const signals = new FakeProcess();
-  const err = vi.fn();
+  const err = vi.fn<(line: string) => void>();
   const createDb = vi.fn();
   const server = await boot({ env: { PORT: 'http', LOG_LEVEL: 'loud' }, signals, createDb, err });
   expect(server).toBeUndefined();
   expect(signals.exitCode).toBe(1);
-  expect(err).toHaveBeenCalledExactlyOnceWith(
-    'ConfigError: Invalid environment configuration: DATABASE_URL, LOG_LEVEL, PORT',
-  );
+  expect(err.mock.calls.map(([line]) => line.split(':')[0])).toEqual(['DATABASE_URL', 'LOG_LEVEL', 'PORT']);
   expect(createDb).not.toHaveBeenCalled();
   expect(signals.listenerCount('SIGTERM')).toBe(0);
 });
@@ -133,7 +131,9 @@ test('without an err sink the report goes to stderr', async () => {
   const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
   const signals = new FakeProcess();
   await boot({ env: {}, signals });
-  expect(stderr).toHaveBeenCalledExactlyOnceWith('ConfigError: Invalid environment configuration: DATABASE_URL\n');
+  expect(stderr).toHaveBeenCalledExactlyOnceWith(
+    'DATABASE_URL: must be a postgres:// or postgresql:// connection string (required; set it, or DATABASE_URL_FILE)\n',
+  );
 });
 
 test('a port that is taken fails the start, releases the database and sets the exit code', async () => {
