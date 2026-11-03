@@ -45,9 +45,11 @@ const CI_FILE = '.github/workflows/ci.yml';
 // (26 to 39 minutes, inside the 50-minute Stryker budget); see the comment on the job in ci.yml and docs/quality-gates.md
 // (Testing, Stryker), which has the measurements of every shard. `postgres` runs the whole suite (8181 tests and growing)
 // one file at a time on a real server, and the shared runners cancelled it twice at 20 minutes while its tests still passed.
+// `coverage` runs the same suite under V8 coverage (4 to 11 minutes, cancelled once at 15 on a busy runner).
 const LONG_JOBS = new Map([
   ['mutation', 60],
   ['postgres', 45],
+  ['coverage', 30],
   ['leaks', 30],
   ['qodana', 30],
 ]);

@@ -169,7 +169,9 @@ jobs:
   coverage:
     name: coverage
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 15
+    # 30 minutes, not the 15 of `static`: the whole suite (10 000 tests and growing, with jsdom for the web project) runs
+    # under V8 coverage and took 4 to 11 minutes on the shared runners, and was cancelled once at 15 while they were busy.
+    timeout-minutes: 30
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Also the first look at a
       # runner's capabilities (docs/ci-runners.md, Known unknowns): the log shows who runs here and how much room is left.
