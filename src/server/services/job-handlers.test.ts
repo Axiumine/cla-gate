@@ -421,10 +421,10 @@ test('sweep-repository sweeps with the ports it is given for the signal of the j
   });
   expect(verdict).toEqual({ status: 'completed', output: { outcome: 'swept' } });
   expect(evaluatePorts).toHaveBeenCalledExactlyOnceWith(signal);
-  expect((await world.queued()).map((sent) => [sent.idempotencyKey, sent.dedupeKey, sent.job.type])).toEqual([
+  expect((await world.queued()).map((sent) => [sent.idempotencyKey, sent.coalesceKey, sent.job.type])).toEqual([
     [
       `sweep-repository:job-6:${String(REPOSITORY)}:${String(PR_NUMBER)}`,
-      `policy_change:${String(REPOSITORY)}:${String(PR_NUMBER)}`,
+      `evaluation:${String(REPOSITORY)}:${String(PR_NUMBER)}`,
       'evaluate-pr',
     ],
   ]);

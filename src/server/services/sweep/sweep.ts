@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
 import type { Database } from '../../adapters/db/schema.ts';
-import { SWEEP_INSTALLATION_WINDOW_SECONDS } from '../../domain/sweep.ts';
+import { sweepInstallationCoalesceKey } from '../../domain/sweep.ts';
 import { listServedInstallationIds } from '../installation-queries.ts';
 import type { ReconcileOutcome } from '../installation-reconcile.ts';
 import type { JobOutcome } from '../job-registry.ts';
@@ -21,8 +21,8 @@ export interface SweepDeps {
 
 /**
  * Reconciles the installations and sends a `sweep-installation` job for each one that is admitted, not suspended and not
- * deleted, in one transaction. Each send has a dedupe key per installation, so a sweep that is retried, or two that
- * overlap, start one job per installation in the window.
+ * deleted, in one transaction. Each send has a coalesce key per installation, so a sweep that is retried, or two that
+ * overlap, leave one waiting job per installation.
  * @throws what GitHub (the list of installations), the database or the queue throws: the job fails and the queue retries
  * it. The sync of one installation that fails is not one of them: it is logged by the reconciliation and left to the next run.
  */
@@ -37,8 +37,7 @@ export async function sweep(deps: SweepDeps, context: SweepContext): Promise<Job
         { type: 'sweep-installation', githubInstallationId },
         {
           idempotencyKey: `sweep:${context.jobId}:${String(githubInstallationId)}`,
-          dedupeKey: `sweep-installation:${String(githubInstallationId)}`,
-          dedupeWindowSeconds: SWEEP_INSTALLATION_WINDOW_SECONDS,
+          coalesceKey: sweepInstallationCoalesceKey(githubInstallationId),
         },
       );
       dropped += outcome === 'deduplicated' ? 1 : 0;

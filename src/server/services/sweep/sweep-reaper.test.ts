@@ -17,7 +17,7 @@ import {
 } from './test-support.ts';
 
 // The reaper (E07-S08): an evaluation `in_progress` for more than 30 minutes belongs to a job that was lost. A pull request that
-// was closed is cleared the way a close clears it (E07-S06); one that is open is evaluated again under the dedupe window.
+// was closed is cleared the way a close clears it (E07-S06); one that is open is evaluated again under the coalesce key of its pull request.
 
 const closePull = (world: Awaited<ReturnType<typeof sweepWorld>>, number = 7): void => {
   world.fake.addPullRequest(INSTALLATION, FULL_NAME, pullRequest(number, { state: 'closed' }));
@@ -89,13 +89,13 @@ test('an evaluation with a verdict is not touched, however old, and a closed pul
   expect(await resultsOf(world)).toEqual([[7, HEAD, 'success']]);
 });
 
-test('a lost evaluation of an open pull request at its head SHA is queued again under the dedupe window of the sweep', async () => {
+test('a lost evaluation of an open pull request at its head SHA is queued again under the coalesce key of its pull request', async () => {
   const world = await sweepWorld();
   await seedAged(world, { prNumber: 7, headSha: HEAD, result: 'in_progress', ageMinutes: 45 });
   await world.runSweep();
-  expect(
-    world.enqueuer.calls.map((call) => [call.job.type, call.options.dedupeKey, call.options.dedupeWindowSeconds]),
-  ).toEqual([['evaluate-pr', 'sweep:9000:7', 300]]);
+  expect(world.enqueuer.calls.map((call) => [call.job.type, call.options.coalesceKey])).toEqual([
+    ['evaluate-pr', 'evaluation:9000:7'],
+  ]);
   expect(world.calls()).toEqual(['listOpenPullRequests']);
   world.clock.advance(MINUTE);
   await world.runSweep(undefined, 'sweep-2');

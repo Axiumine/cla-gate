@@ -22,6 +22,7 @@ import {
   fakeEnqueuer,
   type SentJob,
   sentJobs,
+  setJobStates,
 } from '../jobs-fixture/test-support.ts';
 import { FakeClock } from '../test-support.ts';
 import { sweepPolicyChange } from './policy-sweep.ts';
@@ -30,7 +31,7 @@ import type { SweepContext, SweepPorts } from './sweep-ports.ts';
 
 // The world of the tests of the scheduled sweep (E07-S08): the world of the `evaluate-pr` tests (a migrated database with one
 // admitted tenant whose repository is enabled, a FakeGitHub that serves its repository and open pull request 7, a
-// FakeReporter, a captured log), a queue in a table of the test database whose dedupe window follows a clock that moves by
+// FakeReporter, a captured log), a queue in a table of the test database whose rate limit windows follow a clock that moves by
 // hand, and the queue as a handler sees it in memory.
 
 export { FULL_NAME, INSTALLATION, PR_NUMBER, REPOSITORY };
@@ -57,7 +58,7 @@ export const NEWER_HEAD = commitSha(5);
 export const MINUTE = 60_000;
 
 export interface SweepWorld extends EvaluateWorld {
-  /** The time the dedupe windows of the queue and the age of the evaluations follow: it stands still until a test moves it. */
+  /** The time the age of the evaluations and the rate limit windows of the queue follow: it stands still until a test moves it. */
   readonly clock: FakeClock;
   readonly enqueuer: FakeEnqueuer;
   readonly pending: FakePendingJobs;
@@ -73,6 +74,8 @@ export interface SweepWorld extends EvaluateWorld {
   readonly queued: () => Promise<SentJob[]>;
   /** The numbers of the pull requests an `evaluate-pr` job is queued for, in the order queued. */
   readonly queuedPulls: () => Promise<number[]>;
+  /** A worker takes every job of the queue and starts it: none waits any more, so a coalesced send is not dropped for it. */
+  readonly startJobs: () => Promise<void>;
 }
 
 /** The world of the `evaluate-pr` tests with the queue of the sweep. `options` are those of {@link evaluateWorld}. */
@@ -104,6 +107,7 @@ export async function sweepWorld(options: Parameters<typeof evaluateWorld>[0] = 
     runSweep: (job = SWEEP_JOB, jobId = 'sweep-1') => sweepInstallation(sweepPorts, job, context(jobId)),
     runPolicySweep: (job = POLICY_JOB, jobId = 'policy-1') => sweepPolicyChange(evaluatePorts, job, context(jobId)),
     queued,
+    startJobs: () => setJobStates(world.raw, 'active'),
     queuedPulls: async () => (await queued()).flatMap(({ job }) => (job.type === 'evaluate-pr' ? [job.prNumber] : [])),
   };
 }

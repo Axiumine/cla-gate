@@ -49,7 +49,7 @@ test('a rejected, a suspended and a deleted installation get no job, and a job t
   }
 });
 
-test('each job has its own dedupe key and a window of a minute, and its idempotency key names the run and the installation', async () => {
+test('each job has its own coalesce key, and its idempotency key names the run and the installation', async () => {
   const world = await sweepWorld();
   await addNeighbour(world, 2);
   await sweep(deps(world).deps, world.context('sweep-job-9'));
@@ -58,22 +58,20 @@ test('each job has its own dedupe key and a window of a minute, and its idempote
       job: { type: 'sweep-installation', githubInstallationId: INSTALLATION },
       options: {
         idempotencyKey: 'sweep:sweep-job-9:5000',
-        dedupeKey: 'sweep-installation:5000',
-        dedupeWindowSeconds: 60,
+        coalesceKey: 'sweep-installation:5000',
       },
     },
     {
       job: { type: 'sweep-installation', githubInstallationId: 10_000 },
       options: {
         idempotencyKey: 'sweep:sweep-job-9:10000',
-        dedupeKey: 'sweep-installation:10000',
-        dedupeWindowSeconds: 60,
+        coalesceKey: 'sweep-installation:10000',
       },
     },
   ]);
 });
 
-test('a run that is retried sends nothing twice, and two runs inside the window start one job per installation', async () => {
+test('a run that is retried sends nothing twice, and two runs while the job waits leave one job per installation', async () => {
   const world = await sweepWorld();
   const { deps: sweepDeps } = deps(world);
   await sweep(sweepDeps, world.context('sweep-1'));
@@ -87,7 +85,7 @@ test('a run that is retried sends nothing twice, and two runs inside the window 
       .filter((line) => line['msg'] === 'sweep.fanned_out')
       .map((line) => line['deduplicated']),
   ).toEqual([0, 0, 1]);
-  world.clock.advance(2 * MINUTE);
+  await world.startJobs();
   await sweep(sweepDeps, world.context('sweep-3'));
   expect(await sent(world)).toEqual([5000, 5000]);
 });

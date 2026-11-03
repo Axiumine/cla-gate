@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { parseGithubId } from '../../shared/github-id.ts';
 import {
+  evaluationCoalesceKey,
   evaluationKey,
   isStale,
   MAX_SWEPT_PULLS,
   needsSweepEvaluation,
   STALE_AFTER_SECONDS,
-  SWEEP_EVALUATION_WINDOW_SECONDS,
-  SWEEP_INSTALLATION_WINDOW_SECONDS,
   SWEEP_INTERVALS,
   SWEEP_PAGE_SIZE,
+  sweepInstallationCoalesceKey,
 } from './sweep.ts';
 
 // The pure rules of the sweep (E07-S08).
@@ -25,8 +26,6 @@ test('the numbers of the epic are spelled out, so that changing one has to chang
   expect(SWEEP_PAGE_SIZE).toBe(100);
   expect(MAX_SWEPT_PULLS / SWEEP_PAGE_SIZE).toBe(10);
   expect(STALE_AFTER_SECONDS).toBe(1800);
-  expect(SWEEP_EVALUATION_WINDOW_SECONDS).toBe(300);
-  expect(SWEEP_INSTALLATION_WINDOW_SECONDS).toBe(60);
 });
 
 test('every interval but 0 divides an hour into whole parts, so the cron of it repeats evenly', () => {
@@ -68,4 +67,22 @@ test('the key of an evaluation names the pull request and the head SHA, so two h
   expect(evaluationKey(7, 'a'.repeat(40))).toBe(`7@${'a'.repeat(40)}`);
   expect(evaluationKey(7, 'b'.repeat(40))).not.toBe(evaluationKey(7, 'a'.repeat(40)));
   expect(evaluationKey(8, 'a'.repeat(40))).not.toBe(evaluationKey(7, 'a'.repeat(40)));
+});
+
+test('the evaluation of a pull request is coalesced per repository and pull request: the digits of the two ids cannot join into another pair', () => {
+  expect(evaluationCoalesceKey(parseGithubId(9000), 7)).toBe('evaluation:9000:7');
+  const keys = [
+    evaluationCoalesceKey(parseGithubId(9000), 7),
+    evaluationCoalesceKey(parseGithubId(9000), 70),
+    evaluationCoalesceKey(parseGithubId(900), 70),
+    evaluationCoalesceKey(parseGithubId(90_007), 1),
+  ];
+  expect(new Set(keys).size).toBe(keys.length);
+});
+
+test('a sweep-installation is coalesced per installation', () => {
+  expect(sweepInstallationCoalesceKey(parseGithubId(70_001))).toBe('sweep-installation:70001');
+  expect(sweepInstallationCoalesceKey(parseGithubId(70_002))).not.toBe(
+    sweepInstallationCoalesceKey(parseGithubId(70_001)),
+  );
 });

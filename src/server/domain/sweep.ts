@@ -5,6 +5,7 @@
 // requests it asks to be evaluated again. A webhook delivery that never arrived (GitHub's outage, ours, a lost job) leaves a
 // pull request with no result for its head SHA; the sweep finds those and nothing else, so it spends the API budget on the
 // pull requests that need it and leaves the ones with a final result alone.
+import type { GithubId } from '../../shared/github-id.ts';
 
 /**
  * The minutes between two sweeps `SWEEP_INTERVAL_MINUTES` may name, 0 meaning no sweep. Only the divisors of an hour (and the
@@ -24,11 +25,18 @@ export const SWEEP_PAGE_SIZE = 100;
 /** Seconds an evaluation may stay `in_progress` before the sweep takes it for lost: 30 minutes, well past the last retry of a job. */
 export const STALE_AFTER_SECONDS = 30 * 60;
 
-/** Seconds in which a pull request takes one evaluation from the sweep: a second send inside the window is dropped (5 minutes). */
-export const SWEEP_EVALUATION_WINDOW_SECONDS = 5 * 60;
+/**
+ * The coalesce key of the evaluation a sweep (or a change of policy) asks for, one per pull request: the send is dropped while an
+ * evaluation of that pull request is waiting, because it will read the pull request and the policy when it runs.
+ */
+export function evaluationCoalesceKey(githubRepoId: GithubId, prNumber: number): string {
+  return `evaluation:${String(githubRepoId)}:${String(prNumber)}`;
+}
 
-/** Seconds in which an installation takes one `sweep-installation` job: a retry of the `sweep` that fans them out sends none twice. */
-export const SWEEP_INSTALLATION_WINDOW_SECONDS = 60;
+/** The coalesce key of the `sweep-installation` job of one installation: a sweep that meets one still waiting sends none twice. */
+export function sweepInstallationCoalesceKey(githubInstallationId: GithubId): string {
+  return `sweep-installation:${String(githubInstallationId)}`;
+}
 
 /** The key of the evaluation of one pull request at one head SHA: what the stored states of a repository are looked up by. */
 export const evaluationKey = (prNumber: number, headSha: string): string => `${String(prNumber)}@${headSha}`;

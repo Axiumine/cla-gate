@@ -36,7 +36,7 @@ test('every open pull request is sent to be evaluated with the trigger policy_ch
   );
 });
 
-test('each evaluation is sent under the dedupe key of its pull request and a window of 60 seconds, and under the idempotency key of the run', async () => {
+test('each evaluation is sent under the coalesce key of its pull request and the idempotency key of the run', async () => {
   const world = await sweepWorld();
   await world.runPolicySweep(POLICY_JOB, 'policy-9');
   expect(world.enqueuer.calls).toEqual([
@@ -50,8 +50,7 @@ test('each evaluation is sent under the dedupe key of its pull request and a win
       },
       options: {
         idempotencyKey: 'sweep-repository:policy-9:9000:7',
-        dedupeKey: 'policy_change:9000:7',
-        dedupeWindowSeconds: 60,
+        coalesceKey: 'evaluation:9000:7',
       },
     },
   ]);
@@ -84,16 +83,17 @@ test('the evaluations it sent are then done by the evaluate-pr job: the pull req
   expect(world.reporter.published).toHaveLength(1);
 });
 
-test('a second run inside the window of a pull request sends nothing for it and one after the window sends again', async () => {
+test('a second run sends nothing for a pull request whose evaluation still waits, and one after that evaluation started sends again', async () => {
   const world = await sweepWorld();
   await world.runPolicySweep(POLICY_JOB, 'policy-1');
-  world.clock.advance(59 * 1000);
+  world.clock.advance(10 * MINUTE);
   await world.runPolicySweep(POLICY_JOB, 'policy-2');
   expect(await world.queuedPulls()).toEqual([7]);
   expect(world.logs.lines()).toContainEqual(
     expect.objectContaining({ msg: 'sweep_repository.swept', queued: 0, deduplicated: 1 }),
   );
-  world.clock.advance(2 * 1000);
+  // The evaluation that started may have read the policy before the change this run is for.
+  await world.startJobs();
   await world.runPolicySweep(POLICY_JOB, 'policy-3');
   expect(await world.queuedPulls()).toEqual([7, 7]);
 });
@@ -112,7 +112,7 @@ test('a retry of the same run sends nothing more: the job that is queued already
 test('the reason of the job does not change what the run does', async () => {
   const world = await sweepWorld();
   await world.runPolicySweep({ ...POLICY_JOB, reason: 'repository_enabled' }, 'policy-1');
-  world.clock.advance(5 * MINUTE);
+  await world.startJobs();
   await world.runPolicySweep({ ...POLICY_JOB, reason: 'override_changed' }, 'policy-2');
   expect(await world.queuedPulls()).toEqual([7, 7]);
   expect((await world.queued()).map(({ job }) => (job.type === 'evaluate-pr' ? job.trigger : job.type))).toEqual([

@@ -52,7 +52,7 @@ async function run(ports: PolicySweepPorts, job: Job, context: PolicySweepContex
 
 /**
  * Evaluates the open pull requests of a repository again because its policy changed: at most ten pages of 100, and one
- * `evaluate-pr` job with the trigger `policy_change` for each, under a dedupe window of a minute per pull request.
+ * `evaluate-pr` job with the trigger `policy_change` for each, coalesced per pull request.
  * - Ends `skipped:<reason>` with no GitHub call for a repository that is not the installation's (the ids of the payload are
  *   keys, and the repository is looked up under the installation) and for one that is not evaluated: a rejected, deleted or
  *   suspended installation, a removed or a disabled repository. Ends `skipped:repository_gone` when GitHub no longer shows the

@@ -42,6 +42,11 @@ async function realWorld(): Promise<JobsWorld> {
     await db.destroy();
     expect(errors).toEqual([]);
   });
+  const setStates = async (state: 'active' | 'completed') => {
+    await sql`
+      update pgboss.job set state = ${state}::pgboss.job_state
+      where state in ('created', 'retry', 'active')`.execute(owner);
+  };
   return {
     enqueuer: queue.enqueuer,
     db,
@@ -50,6 +55,8 @@ async function realWorld(): Promise<JobsWorld> {
         select count(*)::int as n from pgboss.job where state in ('created', 'retry', 'active')`.execute(owner);
       return rows[0]?.n ?? 0;
     },
+    startJobs: () => setStates('active'),
+    finishJobs: () => setStates('completed'),
   };
 }
 

@@ -12,25 +12,34 @@ import type { Job } from '../../domain/jobs.ts';
 /**
  * What `enqueue` did. `queued`: the job is on the queue. `already_queued`: nothing was sent because a job sent under the
  * same idempotency key is still alive, so that job will finish what this send was for. `deduplicated`: nothing was sent
- * because a `dedupeKey` was used in the same window, so no job will ever run for this send. An implementation
+ * because a `dedupeKey` was used in the same window, or a job of the same `coalesceKey` was still waiting, so no job will
+ * ever run for this send. An implementation
  * answers `already_queued` before `deduplicated` when both apply. The two must not be confused: the first leaves a
  * delivery to its live job, the second leaves it to nobody.
  */
 export type EnqueueOutcome = 'queued' | 'already_queued' | 'deduplicated';
 
 /**
- * How a send is made idempotent and, optionally, throttled. `idempotencyKey` names the send: while a job sent under
- * the same key is alive, another send under it creates nothing. `dedupeKey` and `dedupeWindowSeconds` go together: a
- * send under a `dedupeKey` that was already used in the same window is dropped, which is how a burst of events about one
- * pull request becomes one job. A window is pg-boss's throttle slot of `dedupeWindowSeconds` seconds, starting at a
- * multiple of that length counted from the epoch (E07-S01): two sends a second apart on either side of a slot boundary
- * are both accepted, which the burst case does not mind. Neither of the two is optional on its own. A job type that the
- * queue serialises per key (`evaluate-pr`, one run per pull request at a time, E07-S02) carries that key as its only
- * pg-boss key, so there the window is per serialisation key: every `dedupeKey` of the same pull request shares it.
+ * How a send is made idempotent and, optionally, limited. `idempotencyKey` names the send: while a job sent under the same
+ * key is alive, another send under it creates nothing. Two limits exist, they do different things, and a send carries at
+ * most one of them:
+ * - `coalesceKey` is for a send whose job, when it runs, reads the state the send is about (the policy of a repository, a
+ *   pull request): the send is dropped while a job of the same key is still waiting (`created` or `retry`), because that job
+ *   is going to see what this send is for. A job that is running or over does not stop it: it may have read the state before
+ *   the change. On a job type that the queue serialises per key (`evaluate-pr`, one run per pull request at a time,
+ *   E07-S02) the key is the serialisation key: every waiting job of that pull request counts, whoever sent it and whatever
+ *   `coalesceKey` it carried, because pg-boss has one key per job. Two transactions that look at the same moment may both
+ *   send; the cost is one redundant job, never a lost one.
+ * - `dedupeKey` and `dedupeWindowSeconds` are a rate limit and go together: a send under a `dedupeKey` that was already used in
+ *   the same window is dropped whatever became of the first job, which is how a command that anyone can repeat costs one
+ *   job a window. A window is pg-boss's throttle slot of `dedupeWindowSeconds` seconds, starting at a multiple of that
+ *   length counted from the epoch (E07-S01): two sends a second apart on either side of a slot boundary are both accepted.
+ *   On a serialised job type the slot is per serialisation key, shared by every `dedupeKey` of the same pull request.
  */
 export type EnqueueOptions = { readonly idempotencyKey: string } & (
-  | { readonly dedupeKey?: undefined; readonly dedupeWindowSeconds?: undefined }
-  | { readonly dedupeKey: string; readonly dedupeWindowSeconds: number }
+  | { readonly coalesceKey?: undefined; readonly dedupeKey?: undefined; readonly dedupeWindowSeconds?: undefined }
+  | { readonly coalesceKey: string; readonly dedupeKey?: undefined; readonly dedupeWindowSeconds?: undefined }
+  | { readonly coalesceKey?: undefined; readonly dedupeKey: string; readonly dedupeWindowSeconds: number }
 );
 
 /**

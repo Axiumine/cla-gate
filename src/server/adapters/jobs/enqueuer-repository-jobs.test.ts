@@ -38,7 +38,7 @@ test('the three queues of the repository-level jobs are named like their job typ
   }
 });
 
-test('a sweep-repository goes to its own queue, throttled per repository by a window of 60 seconds, and is not serialised', async () => {
+test('a sweep-repository goes to its own queue, keyed per repository for the coalesce check, with no window, and is not serialised', async () => {
   const boss = fakeBoss();
   const enqueuer = new PgBossEnqueuer(boss);
   const outcome = await inTransaction((tx) =>
@@ -53,13 +53,21 @@ test('a sweep-repository goes to its own queue, throttled per repository by a wi
       githubRepoId: TARGET.githubRepoId,
       reason: 'override_changed',
     },
-    { id: jobIdFor('change-1'), db: SOME_CONNECTION, singletonKey: 'sweep-repository:9000', singletonSeconds: 60 },
+    { id: jobIdFor('change-1'), db: SOME_CONNECTION, singletonKey: 'sweep-repository:9000' },
   );
 });
 
-test('a second sweep-repository for the repository inside the window is deduplicated by the adapter, and one for another repository is sent', async () => {
+test('a second sweep-repository for the repository while the first waits is deduplicated by the adapter without a send, and one for another repository is sent', async () => {
   const boss = fakeBoss();
-  boss.send.mockResolvedValueOnce('job-1').mockResolvedValueOnce(null).mockResolvedValueOnce('job-2');
+  boss.send.mockResolvedValueOnce('job-1').mockResolvedValueOnce('job-2');
+  // The lookups, in order: the job under the id and the waiting job of the key, for each send.
+  boss.findJobs
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([{ id: jobIdFor('a'), state: 'created' }])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([]);
   const enqueuer = new PgBossEnqueuer(boss);
   const send = (githubRepoId: number, idempotencyKey: string) =>
     inTransaction((tx) =>
@@ -75,8 +83,12 @@ test('a second sweep-repository for the repository inside the window is deduplic
   expect(await send(9001, 'c')).toBe('queued');
   expect(boss.send.mock.calls.map(([, , options]) => options.singletonKey)).toEqual([
     'sweep-repository:9000',
-    'sweep-repository:9000',
     'sweep-repository:9001',
+  ]);
+  expect(boss.findJobs.mock.calls.filter(([, options]) => options.queued === true)).toEqual([
+    ['sweep-repository', { key: 'sweep-repository:9000', queued: true, limit: 1, db: SOME_CONNECTION }],
+    ['sweep-repository', { key: 'sweep-repository:9000', queued: true, limit: 1, db: SOME_CONNECTION }],
+    ['sweep-repository', { key: 'sweep-repository:9001', queued: true, limit: 1, db: SOME_CONNECTION }],
   ]);
 });
 

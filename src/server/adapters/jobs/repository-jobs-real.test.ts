@@ -34,7 +34,7 @@ import { migrateJobQueues } from './migrate-queues.ts';
 import { startJobQueue } from './runtime.ts';
 
 // The repository-level jobs on a real PostgreSQL (E07-S09): their queues come from the migrate step with their policies, the
-// dedupe window of `sweep-repository` drops a second send for one repository and not for another, the finalisations of one
+// coalescing of `sweep-repository` drops a second send for one repository only while the first waits for a worker, the finalisations of one
 // pull request (and of one repository) never overlap while others run in parallel, a job type with no handler keeps its jobs,
 // and a change of policy over the real queue ends in one evaluation of the open pull request. It needs real connections and the
 // runtime role, so it runs in the CI `postgres` job and skips on PGlite; the code it goes through is covered by the unit tests.
@@ -122,17 +122,6 @@ const jobsOf = async (owner: Kysely<Database>, queue: string): Promise<JobRow[]>
 
 const statesOf = async (owner: Kysely<Database>, queue: string) => (await jobsOf(owner, queue)).map((job) => job.state);
 
-/**
- * Waits for the start of the next window of 60 seconds when fewer than ten seconds of this one are left: pg-boss's throttle
- * windows start at multiples of their length, so two sends a moment apart can fall on either side of a boundary.
- */
-async function inAWindow(): Promise<void> {
-  const into = Date.now() % 60_000;
-  if (into > 50_000) {
-    await sleep(60_100 - into);
-  }
-}
-
 const eventually = (check: () => Promise<void> | void): Promise<void> =>
   vi.waitFor(check, { timeout: 60_000, interval: 200 });
 
@@ -167,12 +156,17 @@ realPostgresRolesOnly(
   },
 );
 
+/** A worker takes every job of `queue` that waits, and returns their ids: they are `active` now. */
+async function take(world: Scene, queue: string): Promise<string[]> {
+  const jobs = await world.raw.fetch(queue, { batchSize: 10 });
+  return jobs.map((job) => job.id);
+}
+
 realPostgresRolesOnly(
-  'the dedupe window drops a second sweep-repository for one repository, whatever its reason, and not one for another repository',
+  'a second sweep-repository for one repository is dropped while the first waits, whatever its reason, and is sent once that one runs or is done: the run may have read the policy before the change',
   async () => {
     const world = await scene();
     const queue = await world.start();
-    await inAWindow();
     expect(await sweepRepository(world, queue, { idempotencyKey: 'a', reason: 'allowlist_changed' })).toBe('queued');
     expect(await sweepRepository(world, queue, { idempotencyKey: 'b', reason: 'override_changed' })).toBe(
       'deduplicated',
@@ -189,6 +183,19 @@ realPostgresRolesOnly(
     expect(await sweepRepository(world, queue, { idempotencyKey: 'a', reason: 'allowlist_changed' })).toBe(
       'already_queued',
     );
+    // Both runs started: a change now is not covered by them, so it gets a run of its own, and only one while that waits.
+    const started = await take(world, 'sweep-repository');
+    expect(started).toHaveLength(2);
+    expect(await sweepRepository(world, queue, { idempotencyKey: 'd', reason: 'signature_revoked' })).toBe('queued');
+    expect(await sweepRepository(world, queue, { idempotencyKey: 'e', reason: 'signature_revoked' })).toBe(
+      'deduplicated',
+    );
+    await world.raw.complete('sweep-repository', started);
+    expect(await statesOf(world.owner, 'sweep-repository')).toEqual(['completed', 'completed', 'created']);
+    // The first run is over for good: the next change is covered by the run that waits, and after that one a new run.
+    await world.raw.complete('sweep-repository', await take(world, 'sweep-repository'));
+    expect(await sweepRepository(world, queue, { idempotencyKey: 'f', reason: 'signature_revoked' })).toBe('queued');
+    expect(await statesOf(world.owner, 'sweep-repository')).toEqual(['completed', 'completed', 'completed', 'created']);
   },
 );
 
@@ -417,13 +424,18 @@ realPostgresRolesOnly(
     const world = await scene();
     const reporter = new FakeReporter();
     const queue = await world.start(policyRegistry(world.db, reporter));
-    await inAWindow();
-    expect(await sweepRepository(world, queue, { idempotencyKey: 'a', reason: 'cla_version_published' })).toBe(
-      'queued',
-    );
-    expect(await sweepRepository(world, queue, { idempotencyKey: 'b', reason: 'allowlist_changed' })).toBe(
-      'deduplicated',
-    );
+    // Both edits are made in one transaction, so no worker can take the first before the second is sent.
+    const outcomes = await world.db.transaction().execute(async (tx) => {
+      const send = (idempotencyKey: string, reason: SweepRepositoryReason) =>
+        enqueueSweepRepository(tx, queue.enqueuer, {
+          githubInstallationId: INSTALLATION,
+          githubRepoId: REPOSITORY,
+          idempotencyKey,
+          reason,
+        });
+      return [await send('a', 'cla_version_published'), await send('b', 'allowlist_changed')];
+    });
+    expect(outcomes).toEqual(['queued', 'deduplicated']);
     await eventually(async () => {
       expect(await statesOf(world.owner, 'evaluate-pr')).toEqual(['completed']);
     });

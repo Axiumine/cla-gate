@@ -3,11 +3,7 @@
 import type { Transaction } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
-import {
-  SWEEP_REPOSITORY_WINDOW_SECONDS,
-  type SweepRepositoryReason,
-  sweepRepositoryDedupeKey,
-} from '../domain/repository-jobs.ts';
+import { type SweepRepositoryReason, sweepRepositoryCoalesceKey } from '../domain/repository-jobs.ts';
 import type { EnqueueOutcome, JobEnqueuer } from './ports/jobs.ts';
 
 // How a change of policy asks for work on a repository (E07-S09). The callers (E12, E14, E15) send these jobs in the transaction
@@ -26,10 +22,11 @@ export interface RepositoryJobTarget {
 }
 
 /**
- * Asks for the open pull requests of a repository to be evaluated again because of `reason`. The send is throttled per
- * repository (`sweep-repository:${githubRepoId}`, a window of a minute): rapid edits collapse into one run, and the run reads the
- * policy when it runs, so it covers the edits that were dropped. `deduplicated` therefore means that a run is going to read
- * the change, not that it is lost.
+ * Asks for the open pull requests of a repository to be evaluated again because of `reason`. The send is coalesced per
+ * repository (`sweep-repository:${githubRepoId}`): while a run waits for a worker, further edits send nothing, because that run
+ * reads the policy when it starts and so covers them. `deduplicated` therefore means that a run is going to read the change, not
+ * that it is lost. A run that is already going, or is over, does not count: it may have read the policy before this change, so
+ * the send queues a new run.
  */
 export function enqueueSweepRepository(
   tx: Transaction<Database>,
@@ -40,11 +37,7 @@ export function enqueueSweepRepository(
   return enqueuer.enqueue(
     tx,
     { type: 'sweep-repository', githubInstallationId, githubRepoId, reason },
-    {
-      idempotencyKey,
-      dedupeKey: sweepRepositoryDedupeKey(githubRepoId),
-      dedupeWindowSeconds: SWEEP_REPOSITORY_WINDOW_SECONDS,
-    },
+    { idempotencyKey, coalesceKey: sweepRepositoryCoalesceKey(githubRepoId) },
   );
 }
 

@@ -55,7 +55,7 @@ test('a result for another pull request at the same head SHA is no result either
   expect(await world.queuedPulls()).toEqual([7]);
 });
 
-test('the job sent is an evaluate-pr of the pull request with the trigger sweep, under a dedupe window of 5 minutes per pull request', async () => {
+test('the job sent is an evaluate-pr of the pull request with the trigger sweep, under the coalesce key of the pull request', async () => {
   const world = await sweepWorld();
   await world.runSweep();
   expect(world.enqueuer.calls).toEqual([
@@ -69,20 +69,19 @@ test('the job sent is an evaluate-pr of the pull request with the trigger sweep,
       },
       options: {
         idempotencyKey: 'sweep:sweep-1:9000:7',
-        dedupeKey: 'sweep:9000:7',
-        dedupeWindowSeconds: 300,
+        coalesceKey: 'evaluation:9000:7',
       },
     },
   ]);
 });
 
-test('a pull request whose job is still queued is not queued again by the next sweep, and a sweep after the window is', async () => {
+test('a pull request whose job still waits is not queued again by the next sweep, and a sweep after that job started is', async () => {
   const world = await sweepWorld();
   await world.runSweep(SWEEP_JOB, 'sweep-1');
   world.clock.advance(4 * MINUTE);
   await world.runSweep(SWEEP_JOB, 'sweep-2');
   expect(await world.queuedPulls()).toEqual([7]);
-  world.clock.advance(2 * MINUTE);
+  await world.startJobs();
   await world.runSweep(SWEEP_JOB, 'sweep-3');
   expect(await world.queuedPulls()).toEqual([7, 7]);
 });

@@ -250,10 +250,7 @@ realPostgresRolesOnly(
     const stored = await world.owner.selectFrom('pr_evaluations').select(['pr_number', 'result']).execute();
     expect(stored).toHaveLength(1);
     expect(['success', 'failure']).toContain(stored[0]?.result);
-    // a second sweep once the window of the installation is over: its job runs, finds the verdict and queues nothing
-    await sql`update pgboss.job set singleton_on = singleton_on - interval '61 seconds' where name = 'sweep-installation'`.execute(
-      world.owner,
-    );
+    // a second sweep once the job of the installation ran: a new job runs, finds the verdict and queues nothing
     expect(await world.raw.send('sweep', { type: 'sweep' })).not.toBeNull();
     await eventually(async () => {
       expect(await states(world.owner, 'sweep-installation')).toEqual(['completed', 'completed']);
@@ -264,7 +261,7 @@ realPostgresRolesOnly(
 );
 
 realPostgresRolesOnly(
-  'two sweeps inside the window start one sweep-installation job for the installation',
+  'a sweep starts a sweep-installation job for the installation again once the previous one has run',
   async () => {
     const world = await scene();
     await world.start(sweepingRegistry(world.db, new FakeReporter()), 0);
@@ -276,6 +273,6 @@ realPostgresRolesOnly(
     await eventually(async () => {
       expect(await states(world.owner, 'sweep')).toEqual(['completed', 'completed']);
     });
-    expect(await jobsOf(world.owner, 'sweep-installation')).toHaveLength(1);
+    expect(await jobsOf(world.owner, 'sweep-installation')).toHaveLength(2);
   },
 );

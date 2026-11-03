@@ -19,10 +19,27 @@ export interface JobsWorld {
   readonly db: Kysely<Database>;
   /** How many live jobs the queue holds now, committed ones only. */
   readonly liveJobs: () => Promise<number>;
+  /** A worker takes every live job and starts it: the jobs are `active`, and no longer waiting. */
+  readonly startJobs: () => Promise<void>;
+  /** A worker finishes every live job: the jobs are `completed`, and no longer live. */
+  readonly finishJobs: () => Promise<void>;
 }
 
 const SYNC: Job = { type: 'sync-installation', githubInstallationId: parseGithubId(70_001) };
 const OTHER: Job = { type: 'sync-installation', githubInstallationId: parseGithubId(70_002) };
+/** A rate limit that no test crosses by waiting: an epoch-aligned window of an hour cannot end between two sends a moment apart. */
+const HOUR = 3600;
+
+/** The `evaluate-pr` job of pull request `prNumber` of repository 9000, the type the queue serialises per pull request (E07-S02). */
+function evaluation(prNumber: number, trigger: 'pull_request' | 'sweep' | 'policy_change' | 'recheck'): Job {
+  return {
+    type: 'evaluate-pr',
+    githubInstallationId: parseGithubId(70_001),
+    githubRepoId: parseGithubId(9000),
+    prNumber,
+    trigger,
+  };
+}
 
 /** Sends `job` in a transaction of its own that commits. */
 function committed(world: JobsWorld, job: Job, options: Parameters<JobEnqueuer['enqueue']>[2]) {
@@ -69,14 +86,14 @@ async function otherKeysAreOtherJobs(world: JobsWorld): Promise<void> {
 }
 
 async function dedupeWindowDropsTheSecond(world: JobsWorld): Promise<void> {
-  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: 60 };
+  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: HOUR };
   expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...window })).toBe('queued');
   expect(await committed(world, SYNC, { idempotencyKey: 'key-2', ...window })).toBe('deduplicated');
   expect(await world.liveJobs()).toBe(1);
 }
 
 async function liveKeyWinsOverTheWindow(world: JobsWorld): Promise<void> {
-  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: 60 };
+  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: HOUR };
   expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...window })).toBe('queued');
   expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...window })).toBe('already_queued');
   expect(await world.liveJobs()).toBe(1);
@@ -84,14 +101,14 @@ async function liveKeyWinsOverTheWindow(world: JobsWorld): Promise<void> {
 
 async function dedupeKeysAreIndependent(world: JobsWorld): Promise<void> {
   const send = (key: string, dedupeKey: string) =>
-    committed(world, SYNC, { idempotencyKey: key, dedupeKey, dedupeWindowSeconds: 60 });
+    committed(world, SYNC, { idempotencyKey: key, dedupeKey, dedupeWindowSeconds: HOUR });
   expect(await send('key-1', 'sync:70001')).toBe('queued');
   expect(await send('key-2', 'sync:70002')).toBe('queued');
   expect(await world.liveJobs()).toBe(2);
 }
 
 async function rolledBackSendDoesNotStartAWindow(world: JobsWorld): Promise<void> {
-  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: 60 };
+  const window = { dedupeKey: 'sync:70001', dedupeWindowSeconds: HOUR };
   await world.db
     .transaction()
     .execute(async (tx) => {
@@ -103,7 +120,7 @@ async function rolledBackSendDoesNotStartAWindow(world: JobsWorld): Promise<void
   expect(await world.liveJobs()).toBe(1);
 }
 
-async function sweepRepositoryWindowIsPerRepository(world: JobsWorld): Promise<void> {
+async function sweepRepositoryCoalescesWhileItWaits(world: JobsWorld): Promise<void> {
   const send = (githubRepoId: number, idempotencyKey: string) =>
     world.db.transaction().execute((tx) =>
       enqueueSweepRepository(tx, world.enqueuer, {
@@ -117,6 +134,85 @@ async function sweepRepositoryWindowIsPerRepository(world: JobsWorld): Promise<v
   expect(await send(9000, 'change-2')).toBe('deduplicated');
   expect(await send(9001, 'change-3')).toBe('queued');
   expect(await world.liveJobs()).toBe(2);
+  // The first run started, so it may have read the policy before the third change: that change gets a run of its own.
+  await world.startJobs();
+  expect(await send(9000, 'change-4')).toBe('queued');
+  expect(await send(9000, 'change-5')).toBe('deduplicated');
+  await world.finishJobs();
+  expect(await send(9000, 'change-6')).toBe('queued');
+  expect(await world.liveJobs()).toBe(1);
+}
+
+async function coalesceKeyDropsWhileAJobWaits(world: JobsWorld): Promise<void> {
+  const coalesce = { coalesceKey: 'sync:70001' };
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...coalesce })).toBe('queued');
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-2', ...coalesce })).toBe('deduplicated');
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-3', coalesceKey: 'sync:70002' })).toBe('queued');
+  expect(await world.liveJobs()).toBe(2);
+}
+
+async function coalesceKeySendsAgainOnceTheFirstJobStarted(world: JobsWorld): Promise<void> {
+  const coalesce = { coalesceKey: 'sync:70001' };
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...coalesce })).toBe('queued');
+  await world.startJobs();
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-2', ...coalesce })).toBe('queued');
+  expect(await world.liveJobs()).toBe(2);
+}
+
+async function coalesceKeySendsAgainOnceTheFirstJobCompleted(world: JobsWorld): Promise<void> {
+  const coalesce = { coalesceKey: 'sync:70001' };
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...coalesce })).toBe('queued');
+  await world.finishJobs();
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-2', ...coalesce })).toBe('queued');
+  expect(await world.liveJobs()).toBe(1);
+}
+
+async function coalescedSendOfTheSameKeyIsAlreadyQueued(world: JobsWorld): Promise<void> {
+  const coalesce = { coalesceKey: 'sync:70001' };
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...coalesce })).toBe('queued');
+  expect(await committed(world, SYNC, { idempotencyKey: 'key-1', ...coalesce })).toBe('already_queued');
+  expect(await world.liveJobs()).toBe(1);
+}
+
+async function serialisedTypeCoalescesPerPullRequest(world: JobsWorld): Promise<void> {
+  const coalesce = (prNumber: number) => ({ coalesceKey: `evaluation:9000:${String(prNumber)}` });
+  // A webhook evaluation waits; the sweep and the policy change are covered by it, whatever their own keys are.
+  expect(await committed(world, evaluation(7, 'pull_request'), { idempotencyKey: 'hook-1' })).toBe('queued');
+  expect(await committed(world, evaluation(7, 'sweep'), { idempotencyKey: 'sweep-1', ...coalesce(7) })).toBe(
+    'deduplicated',
+  );
+  expect(
+    await committed(world, evaluation(7, 'policy_change'), { idempotencyKey: 'policy-1', coalesceKey: 'other-key' }),
+  ).toBe('deduplicated');
+  expect(await committed(world, evaluation(8, 'sweep'), { idempotencyKey: 'sweep-2', ...coalesce(8) })).toBe('queued');
+  // A webhook send is never dropped: it carries no key, and a second evaluation of the same pull request waits behind the first.
+  expect(await committed(world, evaluation(7, 'pull_request'), { idempotencyKey: 'hook-2' })).toBe('queued');
+  expect(await world.liveJobs()).toBe(3);
+}
+
+async function serialisedTypeSendsAgainOnceTheEvaluationRan(world: JobsWorld): Promise<void> {
+  const coalesce = { coalesceKey: 'evaluation:9000:7' };
+  expect(await committed(world, evaluation(7, 'sweep'), { idempotencyKey: 'sweep-1', ...coalesce })).toBe('queued');
+  await world.startJobs();
+  expect(await committed(world, evaluation(7, 'policy_change'), { idempotencyKey: 'policy-1', ...coalesce })).toBe(
+    'queued',
+  );
+  await world.finishJobs();
+  expect(await committed(world, evaluation(7, 'policy_change'), { idempotencyKey: 'policy-2', ...coalesce })).toBe(
+    'queued',
+  );
+  expect(await world.liveJobs()).toBe(1);
+}
+
+async function rateLimitOutlivesTheJob(world: JobsWorld): Promise<void> {
+  const limit = { dedupeKey: 'recheck:9000:7', dedupeWindowSeconds: HOUR };
+  expect(await committed(world, evaluation(7, 'recheck'), { idempotencyKey: 'recheck-1', ...limit })).toBe('queued');
+  await world.finishJobs();
+  expect(await committed(world, evaluation(7, 'recheck'), { idempotencyKey: 'recheck-2', ...limit })).toBe(
+    'deduplicated',
+  );
+  expect(await committed(world, evaluation(8, 'recheck'), { idempotencyKey: 'recheck-3', ...limit })).toBe('queued');
+  expect(await world.liveJobs()).toBe(1);
 }
 
 async function finaliseChecksHaveNoWindow(world: JobsWorld): Promise<void> {
@@ -143,10 +239,23 @@ export const CONTRACT_CASES: readonly (readonly [string, (world: JobsWorld) => P
   ['a repeated idempotency key leaves one job and answers already_queued', repeatedKeyLeavesOne],
   ['a repeated idempotency key inside one transaction leaves one job', repeatedKeyInOneTransactionLeavesOne],
   ['other idempotency keys are other jobs', otherKeysAreOtherJobs],
-  ['a send inside a dedupe window is deduplicated', dedupeWindowDropsTheSecond],
-  ['a live idempotency key answers already_queued even inside its dedupe window', liveKeyWinsOverTheWindow],
-  ['other dedupe keys are other windows', dedupeKeysAreIndependent],
-  ['a rolled-back send starts no dedupe window', rolledBackSendDoesNotStartAWindow],
-  ['a sweep-repository window is per repository (E07-S09)', sweepRepositoryWindowIsPerRepository],
+  ['a send inside a rate limit window is deduplicated', dedupeWindowDropsTheSecond],
+  ['a live idempotency key answers already_queued even inside its rate limit window', liveKeyWinsOverTheWindow],
+  ['other rate limit keys are other windows', dedupeKeysAreIndependent],
+  ['a rolled-back send starts no rate limit window', rolledBackSendDoesNotStartAWindow],
+  ['a coalesce key drops a send while a job of the key waits', coalesceKeyDropsWhileAJobWaits],
+  ['a coalesce key sends again once the first job started', coalesceKeySendsAgainOnceTheFirstJobStarted],
+  ['a coalesce key sends again once the first job completed', coalesceKeySendsAgainOnceTheFirstJobCompleted],
+  ['a live idempotency key answers already_queued inside a coalesce key', coalescedSendOfTheSameKeyIsAlreadyQueued],
+  ['a serialised type coalesces per pull request, whoever sent the waiting job', serialisedTypeCoalescesPerPullRequest],
+  ['a serialised type takes a send again once its evaluation ran', serialisedTypeSendsAgainOnceTheEvaluationRan],
+  [
+    'a rate limit outlives the job it dropped nothing for, and is per pull request on a serialised type',
+    rateLimitOutlivesTheJob,
+  ],
+  [
+    'a sweep-repository is coalesced per repository and not by a job that started (E07-S09)',
+    sweepRepositoryCoalescesWhileItWaits,
+  ],
   ['finalisations of a pull request are all queued, with no window (E07-S09)', finaliseChecksHaveNoWindow],
 ];

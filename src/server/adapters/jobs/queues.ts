@@ -30,8 +30,9 @@ export type QueuePolicy = 'standard' | 'singleton' | 'exclusive';
  * repository, and one per (repository, pull request) as for `evaluate-pr`, so two finalisations of one pull request never
  * overlap. The policy holds within one queue only, so a finalisation does not wait for an `evaluate-pr` that is in
  * flight; how that is closed is E14-S04's (the evaluation re-reads whether enforcement is on in its last step, before it
- * writes anything). `sweep-repository` is `standard`: its jobs are throttled per repository by a dedupe key
- * (`domain/repository-jobs.ts`), and a run only sends `evaluate-pr` jobs, which the queue of `evaluate-pr` serialises.
+ * writes anything). `sweep-repository` is `standard`: its jobs are coalesced per repository by a coalesce key
+ * (`domain/repository-jobs.ts`; the enqueuer looks for a waiting job of the key, so a change that comes while a run is going
+ * is not lost), and a run only sends `evaluate-pr` jobs, which the queue of `evaluate-pr` serialises.
  *
  * `sweep` is `exclusive` (E07-S08): at most one job in `created`, `retry` or `active` at a time, so a sweep that is still
  * running (or waiting to be retried) when the scheduler's next tick comes makes that tick send nothing, and two sweeps never

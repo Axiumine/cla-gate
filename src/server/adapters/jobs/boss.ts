@@ -68,11 +68,19 @@ export interface Boss {
   /**
    * The jobs of the queue that match every option given: the `id`, or the `data` the job's payload contains (a JSON
    * containment, so `{ prNumber: 7 }` matches a payload with more fields), and with `queued` only the jobs that wait, which
-   * are `created` and `retry` and not `active` (E07-S06). Oldest first, 1,000 at most.
+   * are `created` and `retry` and not `active` (E07-S06), and with `key` only the jobs of that `singletonKey` (E07-S01). Oldest
+   * first, `limit` at most (1,000 by default).
    */
   findJobs(
     name: string,
-    options: { readonly id?: string; readonly data?: object; readonly queued?: boolean; readonly db?: Db },
+    options: {
+      readonly id?: string;
+      readonly key?: string;
+      readonly data?: object;
+      readonly queued?: boolean;
+      readonly limit?: number;
+      readonly db?: Db;
+    },
   ): Promise<readonly { readonly id: string; readonly state: string }[]>;
   deleteJob(name: string, id: string, options: { readonly db: Db }): Promise<unknown>;
   /**

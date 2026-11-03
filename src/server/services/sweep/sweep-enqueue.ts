@@ -1,41 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../../shared/github-id.ts';
-import { POLICY_CHANGE_WINDOW_SECONDS, policyChangeDedupeKey } from '../../domain/repository-jobs.ts';
-import { SWEEP_EVALUATION_WINDOW_SECONDS } from '../../domain/sweep.ts';
+import { evaluationCoalesceKey } from '../../domain/sweep.ts';
 import type { SweepContext, SweepPorts } from './sweep-ports.ts';
 
-// How a sweep asks for an evaluation (E07-S08, E07-S09): one `evaluate-pr` job per pull request, under a dedupe window per
-// pull request, so a sweep that meets a pull request whose job is still waiting, running or retrying does not queue it again,
-// and a pull request that keeps failing costs one job per window and not one per sweep. The scheduled sweep (trigger
-// `sweep`, a window of five minutes) and the sweep of a repository whose policy changed (trigger `policy_change`, a window of
-// one minute) differ in nothing else.
+// How a sweep asks for an evaluation (E07-S08, E07-S09): one `evaluate-pr` job per pull request, coalesced per pull request, so a
+// sweep that meets a pull request whose job is still waiting (or retrying) does not queue it again: that job reads the pull request
+// and the policy when it runs. A job that is already running does not stop the send, because it may have read the policy before
+// the change that asks for the sweep. The scheduled sweep (trigger `sweep`) and the sweep of a repository whose policy changed
+// (trigger `policy_change`) differ in the trigger and the name of the send, and nothing else.
 
-/** How one kind of sweep names its sends: why the evaluation exists, and the keys that make the sends idempotent and throttled. */
+/** How one kind of sweep names its sends: why the evaluation exists, and the key that makes each send idempotent. */
 export interface EvaluationRequest {
   readonly trigger: 'sweep' | 'policy_change';
   /** Names the send of one pull request by the run `jobId`, so a retry of the run finds its own jobs. */
   readonly idempotencyKey: (jobId: string, githubRepoId: GithubId, prNumber: number) => string;
-  /** The key of the dedupe window of one pull request. */
-  readonly dedupeKey: (githubRepoId: GithubId, prNumber: number) => string;
-  readonly windowSeconds: number;
 }
 
-/** The scheduled sweep (E07-S08): a window of five minutes per pull request. */
+/** The scheduled sweep (E07-S08). */
 export const SWEEP_REQUEST: EvaluationRequest = {
   trigger: 'sweep',
   idempotencyKey: (jobId, githubRepoId, prNumber) => `sweep:${jobId}:${String(githubRepoId)}:${String(prNumber)}`,
-  dedupeKey: (githubRepoId, prNumber) => `sweep:${String(githubRepoId)}:${String(prNumber)}`,
-  windowSeconds: SWEEP_EVALUATION_WINDOW_SECONDS,
 };
 
-/** The sweep of a repository whose policy changed (E07-S09): a window of one minute per pull request. */
+/** The sweep of a repository whose policy changed (E07-S09). */
 export const POLICY_CHANGE_REQUEST: EvaluationRequest = {
   trigger: 'policy_change',
   idempotencyKey: (jobId, githubRepoId, prNumber) =>
     `sweep-repository:${jobId}:${String(githubRepoId)}:${String(prNumber)}`,
-  dedupeKey: policyChangeDedupeKey,
-  windowSeconds: POLICY_CHANGE_WINDOW_SECONDS,
 };
 
 /** How the sends of one call ended. */
@@ -74,8 +66,7 @@ export async function enqueueEvaluations(
         { type: 'evaluate-pr', githubInstallationId, githubRepoId, prNumber, trigger: request.trigger },
         {
           idempotencyKey: request.idempotencyKey(context.jobId, githubRepoId, prNumber),
-          dedupeKey: request.dedupeKey(githubRepoId, prNumber),
-          dedupeWindowSeconds: request.windowSeconds,
+          coalesceKey: evaluationCoalesceKey(githubRepoId, prNumber),
         },
       );
       if (outcome === 'queued') {

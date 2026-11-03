@@ -12,7 +12,7 @@ import type { StaleEvaluation } from './sweep-rows.ts';
 // The reaper of the sweep (E07-S08): the evaluations that have been `in_progress` for more than 30 minutes belong to a job that
 // was lost (a crash, a queue that dropped it, a reporter that never answered). The reaper settles each by what GitHub shows
 // of its pull request now: closed, and the work is cleared the way a close does (E07-S06); open at the head SHA the row
-// is for, and the evaluation is sent again, under the dedupe window of the sweep, by the same decision that treats every other pull request
+// is for, and the evaluation is sent again, under the coalesce key of its pull request, by the same decision that treats every other pull request
 // (a stale row is a pull request that needs one); open at another head SHA, and the row belongs to a superseded commit that
 // nothing will finish, so its Check Run is reported cancelled and the row set `cancelled`, where it would be found again by
 // every sweep.

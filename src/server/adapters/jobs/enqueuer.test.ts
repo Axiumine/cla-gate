@@ -100,6 +100,71 @@ test('a dedupe window on an evaluate-pr job throttles per pull request: the seri
   });
 });
 
+test('a coalesce key looks for a job of the key that has not started, and sends under it when there is none', async () => {
+  const boss = fakeBoss();
+  const options = { idempotencyKey: GUID, coalesceKey: 'sync:70001' };
+  expect(await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, options))).toBe('queued');
+  expect(boss.findJobs.mock.calls).toEqual([
+    ['sync-installation', { id: jobIdFor(GUID), db: SOME_CONNECTION }],
+    ['sync-installation', { key: 'sync:70001', queued: true, limit: 1, db: SOME_CONNECTION }],
+  ]);
+  expect(boss.send).toHaveBeenCalledExactlyOnceWith('sync-installation', JOB, {
+    id: jobIdFor(GUID),
+    db: SOME_CONNECTION,
+    singletonKey: 'sync:70001',
+  });
+});
+
+test.each([['created'], ['retry']])(
+  'a coalesce key and a job of the key in state %s that is another send: deduplicated, and nothing is sent',
+  async (state) => {
+    const boss = fakeBoss();
+    boss.findJobs.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'another-job', state }]);
+    const options = { idempotencyKey: GUID, coalesceKey: 'sync:70001' };
+    expect(await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, options))).toBe('deduplicated');
+    expect(boss.send).not.toHaveBeenCalled();
+  },
+);
+
+test.each([['created'], ['retry'], ['active']])(
+  'a coalesce key and a live job under the id of the send in state %s: already_queued, before the key is looked at',
+  async (state) => {
+    const boss = fakeBoss();
+    boss.findJobs.mockResolvedValueOnce([{ id: JOB_ID_OF_THE_ROW, state }]);
+    const options = { idempotencyKey: GUID, coalesceKey: 'sync:70001' };
+    expect(await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, options))).toBe('already_queued');
+    expect(boss.findJobs).toHaveBeenCalledOnce();
+    expect(boss.send).not.toHaveBeenCalled();
+  },
+);
+
+test('a coalesce key does not stop a send because of a job under the id that is over: the send goes on, and replaces it', async () => {
+  const boss = fakeBoss();
+  boss.findJobs
+    .mockResolvedValueOnce([{ id: JOB_ID_OF_THE_ROW, state: 'completed' }])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([{ id: JOB_ID_OF_THE_ROW, state: 'completed' }]);
+  boss.send.mockResolvedValueOnce(null).mockResolvedValueOnce('job-2');
+  const options = { idempotencyKey: GUID, coalesceKey: 'sync:70001' };
+  expect(await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, JOB, options))).toBe('queued');
+  expect(boss.deleteJob).toHaveBeenCalledExactlyOnceWith('sync-installation', jobIdFor(GUID), { db: SOME_CONNECTION });
+});
+
+test('a coalesce key on an evaluate-pr job is the serialisation key of its pull request, and it is sent without a window', async () => {
+  const boss = fakeBoss();
+  const options = { idempotencyKey: GUID, coalesceKey: 'evaluation:9001:42' };
+  await inTransaction((tx) => new PgBossEnqueuer(boss).enqueue(tx, EVALUATION, options));
+  expect(boss.findJobs.mock.calls[1]).toEqual([
+    'evaluate-pr',
+    { key: '9001:42', queued: true, limit: 1, db: SOME_CONNECTION },
+  ]);
+  expect(boss.send).toHaveBeenCalledExactlyOnceWith('evaluate-pr', EVALUATION, {
+    id: jobIdFor(GUID),
+    db: SOME_CONNECTION,
+    singletonKey: '9001:42',
+  });
+});
+
 test('a window that is not a whole number of seconds is refused for a serialised job too', async () => {
   const boss = fakeBoss();
   const options = { idempotencyKey: GUID, dedupeKey: 'recheck:9001:42', dedupeWindowSeconds: 0.5 };

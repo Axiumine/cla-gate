@@ -5,7 +5,7 @@ import { parseGithubId } from '../../shared/github-id.ts';
 import { migratedTestDatabase } from '../adapters/db/test-support.ts';
 import { jobEnvelopeSchema } from '../domain/job-envelope.ts';
 import { SWEEP_REPOSITORY_REASONS } from '../domain/repository-jobs.ts';
-import { createJobsTable, fakeEnqueuer, sentJobs } from './jobs-fixture/test-support.ts';
+import { createJobsTable, fakeEnqueuer, sentJobs, setJobStates } from './jobs-fixture/test-support.ts';
 import {
   enqueueFinaliseCheck,
   enqueueFinaliseRepository,
@@ -37,7 +37,7 @@ async function world() {
   };
 }
 
-test('a sweep-repository is sent as the envelope of the story, under the dedupe key of its repository and a window of 60 seconds', async () => {
+test('a sweep-repository is sent as the envelope of the story, under the coalesce key of its repository', async () => {
   const w = await world();
   const outcome = await w.send((tx) =>
     enqueueSweepRepository(tx, w.enqueuer, { ...TARGET, reason: 'cla_version_published' }),
@@ -51,7 +51,7 @@ test('a sweep-repository is sent as the envelope of the story, under the dedupe 
         githubRepoId: REPOSITORY,
         reason: 'cla_version_published',
       },
-      options: { idempotencyKey: 'change-1', dedupeKey: 'sweep-repository:9000', dedupeWindowSeconds: 60 },
+      options: { idempotencyKey: 'change-1', coalesceKey: 'sweep-repository:9000' },
     },
   ]);
   expect((await sentJobs(w.db)).map(({ job }) => jobEnvelopeSchema.parse(job))).toHaveLength(1);
@@ -68,7 +68,7 @@ test.each(SWEEP_REPOSITORY_REASONS)(
   },
 );
 
-test('rapid edits of one repository collapse into one job, whatever their reasons, and another repository has its own window', async () => {
+test('rapid edits of one repository collapse into the job that waits, whatever their reasons, and a run that started does not absorb the next edit', async () => {
   const w = await world();
   const send = (githubRepoId: number, idempotencyKey: string, reason: (typeof SWEEP_REPOSITORY_REASONS)[number]) =>
     w.send((tx) =>
@@ -80,11 +80,11 @@ test('rapid edits of one repository collapse into one job, whatever their reason
       }),
     );
   expect(await send(9000, 'a', 'allowlist_changed')).toBe('queued');
-  w.clock.advance(10_000);
   expect(await send(9000, 'b', 'override_changed')).toBe('deduplicated');
   expect(await send(9001, 'c', 'override_changed')).toBe('queued');
-  w.clock.advance(51_000);
+  await setJobStates(w.db, 'active');
   expect(await send(9000, 'd', 'override_changed')).toBe('queued');
+  expect(await send(9000, 'e', 'override_changed')).toBe('deduplicated');
   expect((await sentJobs(w.db)).map(({ idempotencyKey }) => idempotencyKey)).toEqual(['a', 'c', 'd']);
 });
 
