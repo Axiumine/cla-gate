@@ -26,6 +26,8 @@ import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
 import { requireRouteAccess } from './adapters/http/route-access.ts';
 import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
+import { setupRoutes } from './adapters/http/setup-routes.ts';
+import type { SetupSessions } from './adapters/http/setup-sessions.ts';
 import { signatureCsvRoutes } from './adapters/http/signature-csv-routes.ts';
 import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
@@ -79,6 +81,8 @@ export interface AppOptions {
    * not configured is none.
    */
   readonly appIdentity?: { current(): { readonly slug: string } | undefined } | undefined;
+  /** The sessions the setup token unlocks (E19-S06), in setup mode only. Defaults to an empty store on `clock`; a test passes its own to read it. */
+  readonly setupSessions?: SetupSessions | undefined;
 }
 
 /**
@@ -136,8 +140,9 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
- * probes, the operator's list (E11-S08), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer
- * every path that no route above does, so they are registered last.
+ * probes, the operator's list (E11-S08), the public `GET /api/meta` (E17-S09), the first-run setup (E19-S06, whose unlock and
+ * manifest exist in setup mode only) and the webhook (E06). The app's files answer every path that no route above does, so
+ * they are registered last.
  */
 async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: Clock): Promise<void> {
   const { config, db } = options;
@@ -150,6 +155,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await app.register(operatorRoutes, { db });
   await app.register(documentRoutes, { db, enqueuer });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
+  await app.register(setupRoutes, { config, clock, sessions: options.setupSessions });
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });
   await app.register(webhookRoutes, {

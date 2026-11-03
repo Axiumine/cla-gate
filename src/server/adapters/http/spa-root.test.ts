@@ -81,7 +81,7 @@ test.each(['test', 'production'] as const)(
     const app = Fastify();
     registerErrorHandlers(app);
     onTestFinished(() => app.close());
-    await registerWeb(app, { nodeEnv, webRoot: fixture.root });
+    await registerWeb(app, { nodeEnv, webRoot: fixture.root, mode: 'normal' });
     expect((await app.inject({ url: '/signatures', headers: HTML })).body).toBe(INDEX_HTML);
   },
 );

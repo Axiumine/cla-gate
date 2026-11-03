@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, onTestFinished, test } from 'vitest';
+import { manifestResponseSchema, unlockResponseSchema } from '../shared/setup.ts';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { boot } from './boot.ts';
@@ -79,6 +80,36 @@ test('a setup token while the App is configured is ignored with a warning that n
     msg: 'SETUP_TOKEN is ignored while a GitHub App is configured; remove it',
   });
   expect(logs.text()).not.toContain(TEST_SETUP_TOKEN);
+});
+
+test('a server booted in setup mode offers the first-run flow over a real socket: status, unlock and manifest (E19-S06)', async () => {
+  const { server, logs } = await start({ ...PRODUCTION, SETUP_TOKEN: TEST_SETUP_TOKEN });
+  const address = server?.address ?? '';
+  const status = await fetch(`${address}/api/setup/status`);
+  expect(await status.json()).toEqual({ mode: 'setup' });
+  const unlock = await fetch(`${address}/api/setup/unlock`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: TEST_SETUP_TOKEN }),
+  });
+  expect(unlock.status).toBe(200);
+  const cookie = unlock.headers.get('set-cookie')?.split(';')[0] ?? '';
+  const { csrfToken } = unlockResponseSchema.parse(await unlock.json());
+  const manifest = await fetch(`${address}/api/setup/manifest`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin: PRODUCTION.PUBLIC_BASE_URL,
+      cookie,
+      'x-csrf-token': csrfToken,
+    },
+    body: JSON.stringify({ ownerType: 'user', appName: 'CLA Gate', allowOtherAccounts: false }),
+  });
+  expect(manifest.status).toBe(200);
+  const answer = manifestResponseSchema.parse(await manifest.json());
+  expect(answer.manifest.hook_attributes).toEqual({ url: 'https://cla.example.org/webhooks/github', active: true });
+  expect(logs.text()).not.toContain(csrfToken);
+  expect(logs.text()).not.toContain(answer.state);
 });
 
 test('without a token there is no warning in normal mode, and the mode is still logged', async () => {

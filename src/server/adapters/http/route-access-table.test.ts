@@ -3,6 +3,7 @@
 import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
+import { TEST_SETUP_TOKEN } from '../../config/test-support.ts';
 import { testApp } from '../../test-support.ts';
 import { declaredAccess, PUBLIC_ROUTES, WEBHOOK_ROUTES } from './route-access-model.ts';
 import { accessProblem } from './route-access-problems.ts';
@@ -98,19 +99,37 @@ test('every route of the table declares a valid access', async () => {
   expect(table.filter((entry) => declaredAccess(entry.access) === undefined).map(nameOf)).toEqual([]);
 });
 
+/** The routes of PUBLIC_ROUTES that exist in setup mode only (E19-S06): the status is registered whatever the mode. */
+const SETUP_MODE_ONLY = ['POST /api/setup/unlock', 'POST /api/setup/manifest'];
+
 test('the routes declared public are exactly PUBLIC_ROUTES, so a new public route is a reviewed edit of the constant', async () => {
   const { table } = await tableOfTheApp();
   const declared = table.filter((entry) => entry.access === 'public').map(nameOf);
-  expect(sorted(declared)).toEqual(sorted(PUBLIC_ROUTES));
+  // The application with the login configured is in normal mode: the unlock and the manifest of the setup are not registered.
+  expect(sorted(declared)).toEqual(sorted(PUBLIC_ROUTES.filter((name) => !SETUP_MODE_ONLY.includes(name))));
   expect(sorted(declared)).toEqual([
     'GET /*',
     'GET /api/auth/callback',
     'GET /api/auth/login',
     'GET /api/meta',
+    'GET /api/setup/status',
     'GET /healthz',
     'GET /readyz',
     'HEAD /*',
   ]);
+});
+
+test('in setup mode the routes declared public are exactly PUBLIC_ROUTES less the routes of the login, which has no App to talk to', async () => {
+  seen.length = 0;
+  const { app } = await testApp({
+    env: { SETUP_TOKEN: TEST_SETUP_TOKEN, NODE_ENV: 'test', WEB_ROOT: webFixture().root },
+  });
+  await app.ready();
+  const declared = app.routeAccess.filter((entry) => entry.access === 'public').map(nameOf);
+  expect(sorted(declared)).toEqual(sorted(PUBLIC_ROUTES.filter((name) => !name.startsWith('GET /api/auth/'))));
+  expect(app.routeAccess.filter((entry) => accessProblem(entry.method, entry.url, entry.access) !== undefined)).toEqual(
+    [],
+  );
 });
 
 test('the route declared webhook is exactly POST /webhooks/github', async () => {

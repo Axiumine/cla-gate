@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { APP_EVENTS } from '../../shared/github-app.ts';
 import { routeCheckRun, routeCheckSuite } from './webhook-routing-checks.ts';
 import { routeIssueComment } from './webhook-routing-comments.ts';
 import { appAuthorizationFields, installationFields } from './webhook-routing-fields.ts';
@@ -20,14 +21,12 @@ import {
 /**
  * The events the App is subscribed to, the ones in the `Events` row of `docs/github-app.md`. The router has exactly one
  * row for each (the type of `ROUTES` makes the compiler check it, and a test checks the document). `installation`,
- * `installation_repositories` and `github_app_authorization` always arrive, whatever the App subscribes to.
- * @internal Exported for the tests and for the App manifest (E19), which subscribes to the same list (Knip ignores `@internal` exports in production mode).
+ * `installation_repositories` and `github_app_authorization` always arrive, whatever the App subscribes to. The App manifest
+ * (E19-S06) subscribes to the first four, `APP_EVENTS` of `src/shared/github-app.ts`, which this list starts with.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export const SUBSCRIBED_EVENTS = [
-  'pull_request',
-  'check_run',
-  'check_suite',
-  'issue_comment',
+  ...APP_EVENTS,
   'installation',
   'installation_repositories',
   'github_app_authorization',

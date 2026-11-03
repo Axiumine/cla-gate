@@ -94,6 +94,8 @@ export interface TestAppOptions {
   readonly jobQueue?: JobQueue;
   /** The verified identity of the GitHub App, for the install address of `GET /api/meta` (E17-S09). Defaults to none. */
   readonly appIdentity?: AppOptions['appIdentity'];
+  /** The sessions the setup token unlocks (E19-S06), in setup mode. Defaults to the app's own empty store; a test passes one to read what a route did to it. */
+  readonly setupSessions?: AppOptions['setupSessions'];
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */

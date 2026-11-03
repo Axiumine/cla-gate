@@ -6,6 +6,8 @@ import fastifyStatic, { type FastifyStaticOptions } from '@fastify/static';
 import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { WEBHOOK_PATH } from '../../../shared/routes.ts';
 import type { AppConfig } from '../../config/env.ts';
+import { AppError } from './errors.ts';
+import { decodedPathname, isSetupUrl } from './spa-url.ts';
 
 // Serving the single-page app from the API's own origin (E17-S03): the files of `dist/web`, the `index.html` that every
 // route of the app falls back to, and the cache rules of both. No CORS plugin is registered anywhere, so a page on another
@@ -21,18 +23,6 @@ const REVALIDATE = 'no-cache';
 
 /** What belongs to the server and never to the app: its answers are JSON, so a miss under these is a 404 and never `index.html`. */
 const SERVER_PATHS = ['/api', '/healthz', '/readyz', WEBHOOK_PATH];
-
-/**
- * The path of a request target, decoded as the file routes decode it (so that `%2e` is the dot it spells), or undefined for
- * an escape that cannot be decoded. The router refuses such an escape before any handler runs, so that case is the guard's.
- */
-function decodedPathname(url: string): string | undefined {
-  try {
-    return decodeURI(url.slice(0, url.search(/\?|$/)));
-  } catch {
-    return undefined;
-  }
-}
 
 /** Whether a decoded path is one of {@link SERVER_PATHS} or below one (`/api/x`, not `/apix`). Not case-sensitive, so no spelling slips through. */
 function isServerPath(pathname: string): boolean {
@@ -101,7 +91,10 @@ const PUBLIC_NO_SESSION: { readonly access: 'public'; readonly session: 'none' }
  * limit (an `onRequest` hook of the route): `index.html` is sent for them whether or not a file of that name exists. The
  * `reply.sendFile` it uses is the one that `@fastify/static` gives this scope.
  */
-const fileRoutes: FastifyPluginAsync<{ readonly root: string }> = async (scope, { root }) => {
+const fileRoutes: FastifyPluginAsync<{ readonly root: string; readonly hideSetup: boolean }> = async (
+  scope,
+  { root, hideSetup },
+) => {
   scope.addHook('onRoute', (route) => {
     route.config = { ...route.config, ...PUBLIC_NO_SESSION };
     // The library answers a directory or a path it refuses with `reply.callNotFound()` and then resolves with nothing. The 404
@@ -115,7 +108,11 @@ const fileRoutes: FastifyPluginAsync<{ readonly root: string }> = async (scope, 
     };
   });
   // Async on purpose: a Fastify hook that sends a reply hands the reply back (it resolves when the file has gone out); a sync two-argument hook would never finish.
+  // While the GitHub App is configured the setup page does not exist (E19-S06): its paths get the standard 404, not the app.
   scope.addHook('preHandler', async (request, reply) => {
+    if (hideSetup && isSetupUrl(request.url)) {
+      throw new AppError(404, 'not_found');
+    }
     return isAppPage(request) ? reply.sendFile(INDEX) : undefined;
   });
   await scope.register(fastifyStatic, staticOptions(root));
@@ -141,12 +138,16 @@ function webRootToServe(config: Pick<AppConfig, 'nodeEnv' | 'webRoot'>, logger: 
 
 /**
  * Serves the single-page app from `config.webRoot` (see {@link webRootToServe} for when it does not): its files from every
- * path that no route of the API answers, and `index.html` for the pages of the app. Call it after the routes of the API,
- * so that its wildcard never shadows one (an exact route always wins anyway).
+ * path that no route of the API answers, and `index.html` for the pages of the app, except the setup page and what is below
+ * it while the GitHub App is configured, which get the standard `404` (E19-S06). Call it after the routes of the API, so that
+ * its wildcard never shadows one (an exact route always wins anyway).
  */
-export async function registerWeb(app: FastifyInstance, config: Pick<AppConfig, 'nodeEnv' | 'webRoot'>): Promise<void> {
+export async function registerWeb(
+  app: FastifyInstance,
+  config: Pick<AppConfig, 'nodeEnv' | 'webRoot' | 'mode'>,
+): Promise<void> {
   const root = webRootToServe(config, app.log);
   if (root !== undefined) {
-    await app.register(fileRoutes, { root });
+    await app.register(fileRoutes, { root, hideSetup: config.mode === 'normal' });
   }
 }
