@@ -266,8 +266,11 @@ realPostgresRolesOnly(
     const world = await scene();
     await world.start(sweepingRegistry(world.db, new FakeReporter()), 0);
     expect(await world.raw.send('sweep', { type: 'sweep' })).not.toBeNull();
+    // The job of the installation has run, not only the sweep that sent it: a second sweep that finds it still waiting
+    // sends nothing, because the waiting job covers it (the coalescing of E07-S08).
     await eventually(async () => {
       expect(await states(world.owner, 'sweep')).toEqual(['completed']);
+      expect(await states(world.owner, 'sweep-installation')).toEqual(['completed']);
     });
     expect(await world.raw.send('sweep', { type: 'sweep' })).not.toBeNull();
     await eventually(async () => {
