@@ -68,7 +68,8 @@ export const SERVER_SHARDS: readonly Shard[] = [
   { name: 'services-installation', mutate: ['src/server/services/i*.ts'] },
   // 18 files, 516 mutants: every other service (audit-*, repository-*, admission-policies, and the webhook intake's
   // tenant-filter, failure-throttle, log-limiter, webhook-deliveries). About 500 is the target; this one is a little over it.
-  // The signature export (E16-S03, `services/export/`) is read here too: three files, whose mutants are not counted yet.
+  // The export code (E16-S03 and E16-S06, `services/export/`) is read here too: eleven files, whose mutants are not counted yet.
+  // Count them and split the shard when the total passes the target.
   { name: 'services-other', mutate: ['src/server/services/[!i]*.ts', 'src/server/services/export/**/*.ts'] },
   // The job queue and its workers (E07): pg-boss runtime, producer, queue policy, serialisation, workers and the sweep schedule.
   { name: 'jobs-adapter', mutate: ['src/server/adapters/jobs/**/*.ts'] },
