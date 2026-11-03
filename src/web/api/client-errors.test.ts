@@ -4,6 +4,7 @@ import { HttpResponse, http } from 'msw';
 import { expect, test } from 'vitest';
 import { sessionRoute } from '../../shared/auth-contract.ts';
 import { server } from '../test-support/server.ts';
+import { createApiClient } from './client.ts';
 import { ApiError, ContractError, NetworkError } from './errors.ts';
 import {
   answer,
@@ -11,6 +12,7 @@ import {
   asNetworkError,
   createThing,
   envelope,
+  fakeCsrf,
   getThing,
   json,
   listThings,
@@ -189,6 +191,20 @@ test('an aborted call rejects with the original AbortError, not a NetworkError',
   const error = await pending;
   expect(error).not.toBeInstanceOf(NetworkError);
   expect(error).toMatchObject({ name: 'AbortError' });
+});
+
+test('an AbortError the caller did not ask for (the browser cancelled the fetch) passes through as it is, since no signal of the call is aborted', async () => {
+  const cancelled = new DOMException('The operation was aborted.', 'AbortError');
+  const client = createApiClient({ fetch: () => Promise.reject(cancelled), csrf: fakeCsrf('csrf-token') });
+  const error = await rejection(client.call(listThings));
+  expect(error).toBe(cancelled);
+  expect(error).not.toBeInstanceOf(NetworkError);
+});
+
+test('any other rejection of fetch is a NetworkError, whatever its name', async () => {
+  const refused = new DOMException('The network connection was lost.', 'NetworkError');
+  const client = createApiClient({ fetch: () => Promise.reject(refused), csrf: fakeCsrf('csrf-token') });
+  expect(asNetworkError(await rejection(client.call(listThings))).cause).toBe(refused);
 });
 
 test('a signal that is already aborted rejects at once with its own reason', async () => {

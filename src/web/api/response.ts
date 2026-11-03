@@ -18,9 +18,17 @@ const UNEXPECTED_RESPONSE = 'unexpected_response';
  */
 export const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
-/** An abort is not a failure of the network: the caller asked for it, and it passes through as the original error. */
+/**
+ * An abort is not a failure of the network: it passes through as the original error. The caller's signal says it asked for it;
+ * a fetch that the browser itself cancelled (a navigation, a page that is being left) rejects with an `AbortError` while no
+ * signal of the call is aborted. It is read by its name and not with `instanceof Error`, which a `DOMException` of another
+ * realm (an iframe, jsdom) does not satisfy.
+ */
 function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
-  return signal?.aborted === true || (error instanceof Error && error.name === 'AbortError');
+  return (
+    signal?.aborted === true ||
+    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+  );
 }
 
 /** Waits for `work`; a rejection is a {@link NetworkError}, except an abort, which rejects with the original error. */
