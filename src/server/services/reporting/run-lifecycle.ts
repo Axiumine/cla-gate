@@ -9,7 +9,7 @@ import { upsertComment } from './comment-upsert.ts';
 import type { CheckRunReporterOptions } from './report-options.ts';
 import { linkKeyOf, logReport, rememberRun } from './report-record.ts';
 import { locationOf, locatorOf, readSituation } from './report-situation.ts';
-import { writeRun } from './report-write.ts';
+import { writeRun, writeSharedRun } from './report-write.ts';
 import { liveSiblings } from './shared-sha.ts';
 
 // The two reports of the life of an evaluation (E09-S05): it began (`started`), and it has a verdict (`publish`). Both record the id
@@ -49,7 +49,8 @@ export async function reportStarted(options: CheckRunReporterOptions, target: Re
  * Writes the verdict of `target` to its Check Run, then to the comment of the pull request. The view of the run is this pull
  * request's own, unless another pull request that is open at the same SHA is failing or still being evaluated, which is then what
  * the run says (`failure` over `in_progress` over `success`); the rows of closed pull requests, and of ones whose head moved on,
- * count for nothing (see {@link liveSiblings}). The comment always says this pull request's own verdict (E09-S07).
+ * count for nothing (see {@link liveSiblings}). With such a pull request at the SHA a finished view is also written to the newest
+ * run of the App on the SHA, so two runs made by a race both end. The comment always says this pull request's own verdict (E09-S07).
  * @throws TenantMismatchError, EvaluationRowMissingError, InvalidSignLinkError for a base URL that cannot make a sign link, and
  * what the GitHub port and the writer throw.
  */
@@ -75,7 +76,8 @@ export async function reportPublished(
     },
     siblings.map((row) => row.result),
   );
-  const checkRunId = await writeRun(options, target, {
+  const write = siblings.length === 0 ? writeRun : writeSharedRun;
+  const checkRunId = await write(options, target, {
     ...locatorOf(target, situation.own),
     view: report.view,
     externalId: String(target.evaluationId),

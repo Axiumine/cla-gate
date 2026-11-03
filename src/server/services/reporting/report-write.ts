@@ -6,6 +6,7 @@ import { ReportRejectedError, type RunTarget } from '../ports/reporter.ts';
 import type { UpsertRequest } from './check-run-writer.ts';
 import type { CheckRunReporterOptions } from './report-options.ts';
 import { reportIds } from './report-record.ts';
+import { locationOf } from './report-situation.ts';
 
 // The write of a Check Run with the fallback of E09-S06: when GitHub answers 422 to the full output (a body it will not take),
 // the write is repeated once with the minimal output, which holds the counts and the `/recheck` hint and no name. The conclusion
@@ -38,4 +39,27 @@ export async function writeRun(
     }
     throw error;
   }
+}
+
+/**
+ * Writes `request` as {@link writeRun} does, for a head SHA that other pull requests stand at, and then brings the newest run of
+ * this App on the SHA to the same view when it is not the run just written. Two pull requests that start at the same moment can
+ * each create a run; each then finishes its own, and the newer one, the one GitHub shows and gates the merge on, would stay as the
+ * last writer to it left it. A view that is still `in_progress` converges nothing: the pull request that is still running settles
+ * the runs when it finishes. The recorded id stays the one of the run just written.
+ * @throws what {@link writeRun} throws, and what the GitHub port throws for the listing.
+ */
+export async function writeSharedRun(
+  options: CheckRunReporterOptions,
+  target: RunTarget,
+  request: UpsertRequest,
+): Promise<GithubId> {
+  const checkRunId = await writeRun(options, target, request);
+  if (request.view.kind !== 'in_progress') {
+    const newest = await options.writer.find(locationOf(target));
+    if (newest !== null && newest.id !== checkRunId) {
+      await writeRun(options, target, { ...request, known: newest });
+    }
+  }
+  return checkRunId;
 }

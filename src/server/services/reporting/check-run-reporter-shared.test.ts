@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
-import { FAILING, NAMES, PASSING, reportingWorld } from './test-support.ts';
+import { FAILING, NAMES, PASSING, reportingWorld, startTogether } from './test-support.ts';
 
 // Several open pull requests can share one head SHA, and the Check Run belongs to the SHA (E09-S05). The run says the worst
 // `result` among the rows (`failure` over `in_progress` over `success`); each pull request keeps its own row, and the reporter
@@ -67,18 +67,7 @@ test('two pull requests on one SHA at the same moment each create a run, each ro
   const world = await reportingWorld();
   const first = await world.evaluation();
   const second = await world.evaluation({ prNumber: 8 });
-  const arrived = Promise.withResolvers<undefined>();
-  let listings = 0;
-  const meet = (): Promise<undefined> => {
-    listings += 1;
-    if (listings === 2) {
-      arrived.resolve(undefined);
-    }
-    return arrived.promise;
-  };
-  world.fake.beforeNext('listCheckRunsForRef', meet);
-  world.fake.beforeNext('listCheckRunsForRef', meet);
-  await Promise.all([world.reporter.started(first), world.reporter.started(second)]);
+  await startTogether(world, [first, second]);
   expect(world.fake.checkRuns).toHaveLength(2);
   const [row7, row8] = await world.rows();
   expect(new Set([row7?.check_run_id, row8?.check_run_id]).size).toBe(2);

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import type { Logger } from 'pino';
 import { parseGithubId } from '../../../shared/github-id.ts';
 import { insertEvaluation, readAllEvaluations } from '../../adapters/db/pr-evaluation-links-fixture/test-support.ts';
@@ -76,6 +76,12 @@ export interface ReportingWorld {
   readonly evaluation: (spec?: EvaluationSpec) => Promise<ReportTarget>;
   /** The rows of `pr_evaluations`, oldest first. */
   readonly rows: () => ReturnType<typeof readAllEvaluations>;
+  /** Gives every row of pull request `prNumber` the result the job stores when it finishes, and the details it stores with it. */
+  readonly settle: (
+    prNumber: number,
+    result: Database['pr_evaluations']['result'],
+    details?: Readonly<Record<string, unknown>>,
+  ) => Promise<void>;
 }
 
 /** What a test chooses of a pull request: the rest is pull request 7 at `HEAD`, evaluated on a `pull_request` event. */
@@ -157,6 +163,11 @@ export async function reportingWorld(
     logger,
     evaluation: (spec = {}) => storeEvaluation(raw, tenant, spec),
     rows: () => readAllEvaluations(raw),
+    settle: async (prNumber, result, details = {}) => {
+      await sql`update pr_evaluations set result = ${result}, details = ${JSON.stringify(details)}::jsonb where pr_number = ${prNumber}`.execute(
+        raw,
+      );
+    },
   };
 }
 
@@ -166,6 +177,26 @@ export const MOVED = commitSha(5);
 /** What GitHub lists for the commit `HEAD` (`GET .../commits/{sha}/pulls`): the pull requests, as `pullRef` makes them. */
 export function listed(world: ReportingWorld, ...pulls: ReturnType<typeof pullRef>[]): void {
   world.fake.setCommitPullRequests(INSTALLATION, FULL_NAME, HEAD, pulls);
+}
+
+/**
+ * Starts `targets` at the same moment: each lists the runs of the SHA before any of them creates one, so each creates its own
+ * (two pull requests at one SHA, or the same pull request twice, E09-S05).
+ */
+export async function startTogether(world: ReportingWorld, targets: readonly ReportTarget[]): Promise<void> {
+  const arrived = Promise.withResolvers<undefined>();
+  let listings = 0;
+  const meet = (): Promise<undefined> => {
+    listings += 1;
+    if (listings === targets.length) {
+      arrived.resolve(undefined);
+    }
+    return arrived.promise;
+  };
+  targets.forEach(() => {
+    world.fake.beforeNext('listCheckRunsForRef', meet);
+  });
+  await Promise.all(targets.map((target) => world.reporter.started(target)));
 }
 
 /** The target of a report that has no trigger (a cancellation, a repository switched off): `target` without it. */
