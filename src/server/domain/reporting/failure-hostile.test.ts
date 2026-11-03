@@ -7,14 +7,11 @@ import type { FailureRequest } from './failure-report.ts';
 import { failureReport } from './failure-report.ts';
 import { MAX_OUTPUT_UNITS } from './output-parts.ts';
 import {
-  actor,
-  evaluationOf,
-  finding,
+  allNames,
+  everySlot,
   HOSTILE_ROWS,
   hasUnsafeCharacter,
   outsideCodeSpans,
-  requestOf,
-  sha,
   showZeroWidth,
   unguardedMarks,
 } from './test-support.ts';
@@ -32,18 +29,6 @@ const HEADINGS = [
   '### How to fix',
   '### Not blocking',
 ];
-
-/** A request that puts `name` in every slot: one unsigned login, one unlinked author, one unlinked committer, one co-author. */
-function everySlot(name: string): FailureRequest {
-  return requestOf({
-    evaluation: evaluationOf({
-      actors: [actor(1, ['opener', 'author'])],
-      findings: [finding(2, name, 'author'), finding(2, name, 'committer')],
-      advisories: [{ code: 'co_author_unresolved', sha: sha(3) }],
-    }),
-    names: { logins: new Map([[1, name]]), coAuthors: new Map([[sha(3), [name]]]) },
-  });
-}
 
 /** The title and summary of the Check Run for a request, as one text. */
 function outputOf(request: FailureRequest): string {
@@ -107,19 +92,6 @@ test.each(HOSTILE_ROWS)(
     expect(summary.length).toBeLessThanOrEqual(MAX_OUTPUT_UNITS);
   },
 );
-
-/** Both lists in every slot at once: 34 unsigned people, 34 unlinked commits, and the co-authors of one commit. */
-function allNames(): FailureRequest {
-  const names = [...HOSTILE_NAMES, ...HOSTILE_CONTROL_NAMES];
-  return requestOf({
-    evaluation: evaluationOf({
-      actors: names.map((_name, index) => actor(index + 1, ['opener', 'author'])),
-      findings: names.map((name, index) => finding(index + 1, name, index % 2 === 0 ? 'author' : 'committer')),
-      advisories: [{ code: 'co_author_unresolved', sha: sha(900) }],
-    }),
-    names: { logins: new Map(names.map((name, index) => [index + 1, name])), coAuthors: new Map([[sha(900), names]]) },
-  });
-}
 
 test('both lists in every slot at once give the report that is stored in the snapshot', async () => {
   const rendered = showZeroWidth(outputOf(allNames()));

@@ -143,6 +143,31 @@ export function requestOf(parts: Partial<FailureRequest> = {}): FailureRequest {
   };
 }
 
+/** A request that puts `name` in every slot: one unsigned login, one unlinked author, one unlinked committer, one co-author. */
+export function everySlot(name: string): FailureRequest {
+  return requestOf({
+    evaluation: evaluationOf({
+      actors: [actor(1, ['opener', 'author'])],
+      findings: [finding(2, name, 'author'), finding(2, name, 'committer')],
+      advisories: [{ code: 'co_author_unresolved', sha: sha(3) }],
+    }),
+    names: { logins: new Map([[1, name]]), coAuthors: new Map([[sha(3), [name]]]) },
+  });
+}
+
+/** Both lists in every slot at once: 34 unsigned people, 34 unlinked commits, and the co-authors of one commit. */
+export function allNames(): FailureRequest {
+  const names = [...HOSTILE_NAMES, ...HOSTILE_CONTROL_NAMES];
+  return requestOf({
+    evaluation: evaluationOf({
+      actors: names.map((_name, index) => actor(index + 1, ['opener', 'author'])),
+      findings: names.map((name, index) => finding(index + 1, name, index % 2 === 0 ? 'author' : 'committer')),
+      advisories: [{ code: 'co_author_unresolved', sha: sha(900) }],
+    }),
+    names: { logins: new Map(names.map((name, index) => [index + 1, name])), coAuthors: new Map([[sha(900), names]]) },
+  });
+}
+
 /** The summary of the Check Run for a request: the report, rendered the way the writer sends it. */
 export function summaryOf(request: FailureRequest): string {
   return renderCheckOutput(failureReport(request).view).summary;
