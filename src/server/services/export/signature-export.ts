@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Readable } from 'node:stream';
-import type { Kysely } from 'kysely';
+import type { ControlledTransaction, Kysely } from 'kysely';
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import type { TenantScope } from '../../adapters/db/tenant-scope.ts';
@@ -56,13 +56,15 @@ export async function openSignatureExport(
 ): Promise<SignatureExport> {
   const rowCount = await recordExport(db, scope, filter, options.actor);
   const trx = await db.startTransaction().setIsolationLevel('repeatable read').setAccessMode('read only').execute();
-  try {
-    if ((await countSignatures(trx, scope, filter)) !== rowCount) {
-      throw new ExportChangedError();
-    }
-  } catch (error) {
-    await trx.rollback().execute();
-    throw error;
+  const current = await countSignatures(trx, scope, filter).catch((error: unknown) => abandon(trx, error));
+  if (current !== rowCount) {
+    return abandon(trx, new ExportChangedError());
   }
   return { rowCount, stream: csvStream(trx, scope, filter, options.onReleaseError) };
+}
+
+/** Gives the connection back and rethrows `reason`: nothing was sent, so nothing is left to commit. */
+async function abandon(trx: ControlledTransaction<Database>, reason: unknown): Promise<never> {
+  await trx.rollback().execute();
+  throw reason;
 }

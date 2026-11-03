@@ -28,7 +28,7 @@ export const AUDIT_LOG_MAX_LIMIT = 200;
 export const auditLogItemSchema = z.object({
   id: z.int().positive(),
   /** ISO 8601 in UTC with milliseconds. */
-  occurredAt: z.iso.datetime(),
+  occurredAt: z.iso.datetime({ offset: false }),
   /** Not narrowed to `AUDIT_ACTIONS`: a row outlives the release that wrote it, and a page must still be readable. */
   action: z.string().min(1),
   actor: z.object({ githubId: githubIdSchema, login: z.string().nullable() }).nullable(),

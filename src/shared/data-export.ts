@@ -16,7 +16,7 @@ export const DATA_EXPORT_SCHEMA_VERSION = 1;
 export const DATA_EXPORT_AUDIT_LIMIT = 1000;
 
 /** An instant as ISO 8601 in UTC with milliseconds. */
-const instant = z.iso.datetime();
+const instant = z.iso.datetime({ offset: false });
 
 const id = z.int().positive();
 
