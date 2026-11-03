@@ -27,8 +27,9 @@ Items marked (planned) do not exist yet.
 │   │                            transaction and advisory-lock helpers, the branded installation row id,
 │   │                            PGlite dialect and test helpers (test only, outside the build; the independent
 │   │                            connections of the real-Postgres tests are in real-postgres/test-support.ts and
-│   │                            re-exported by test-support.ts); tenant-scope.ts (`TenantScope`, `assertRepositoryInTenant`;
-│   │                            tenant-fixture/, tenant-registry/ and tenant-scan/ are test only: the two tenants, the registry of
+│   │                            re-exported by test-support.ts); document-lock.ts (the row lock of a document) and violations.ts (the constraint a failed
+│   │                            statement broke); tenant-scope.ts (`TenantScope`, `assertRepositoryInTenant`;
+│   │                            tenant-fixture/, tenant-registry/, tenant-registry-documents/, -drafts/ and -versions/ and tenant-scan/ are test only: the two tenants, the registry of
 │   │                            tenant queries and the source scan of the cross-tenant tests); the session store (sessions.ts with sessions-create,
 │   │                            -delete, -model, -read, -row and -touch.ts; sessions-fixture/ is test only) and the
 │   │                            user upsert (users.ts)
@@ -71,6 +72,10 @@ Items marked (planned) do not exist yet.
 │   │                            (502, 503 and 429), role-cache-slot.ts, operator-guard.ts and operator-routes.ts; spa.ts (serves the
 │   │                            single-page app from WEB_ROOT: the files, the index.html fallback, the cache rules) and meta-routes.ts
 │   │                            (`GET /api/meta`); spa-fixture/ is test only;
+│   │                            the CLA documents (E12): document-routes.ts (registers them), document-collection-routes.ts,
+│   │                            document-create-route.ts, document-item-routes.ts, document-draft-routes.ts, document-version-routes.ts,
+│   │                            document-history-routes.ts, document-resolvers.ts, document-presenters.ts, cursor.ts (the opaque page
+│   │                            cursor), request-body.ts (`parseInput`), cla-rule-errors.ts; document-fixture/ is test only;
 │   │                            test-support.ts, webhook-table-fixture/, auth-fixture/, login-fixture/, callback-fixture/,
 │   │                            tenant-guard-fixture/, cross-tenant-fixture/, cross-tenant-runner/ and cross-tenant-canary/ are test only
 │   ├── domain/                  admission.ts (who is served, pure), eligibility.ts (when an installation or repository
@@ -81,7 +86,7 @@ Items marked (planned) do not exist yet.
 │   │                            authz.ts (`decide`, the role decision table), tenant-state.ts (`tenantState`), operator.ts
 │   │                            (`isOperator`, `createOperatorPolicy`); the job envelopes (job-envelope.ts), the retry bounds (job-retry.ts),
 │   │                            recheck.ts (the `/recheck` rules and the rate limit key), sweep.ts and repository-jobs.ts (the
-│   │                            coalesce keys and reasons of the sweep and the repository-level jobs);
+│   │                            coalesce keys and reasons of the sweep and the repository-level jobs); version-number.ts (the next version number of a document);
 │   │                            test-support.ts is test only
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
@@ -109,11 +114,21 @@ Items marked (planned) do not exist yet.
 │                                role-lookups.ts and role-lookup-budget.ts (the cache in front of the lookups, 30 a minute), tenant-queries.ts,
 │                                tenant-authorization.ts and tenant-authorizer.ts (the guard's reads and decision), admin-ledger.ts and
 │                                admin-ledger-queries.ts (the ledger of org admins), document-placement.ts, operator-policies.ts;
-│                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only
+│                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only;
+│                                the CLA documents (E12): cla-documents.ts, cla-document-changes.ts, cla-document-queries.ts, cla-document-writes.ts,
+│                                cla-document-rows.ts and cla-document-types.ts; cla-drafts.ts, cla-draft-queries.ts and cla-draft-writes.ts;
+│                                cla-publish.ts, cla-publish-checks.ts, cla-publish-source.ts, cla-publish-types.ts, cla-version-queries.ts,
+│                                cla-version-rows.ts, cla-version-writes.ts, cla-version-sweeps.ts and cla-enforcing-queries.ts; cla-history.ts,
+│                                cla-history-queries.ts and cla-history-rows.ts; cla-content.ts (`prepareClaText`, the hash) and
+│                                cla-rule-error.ts; publish-fixture/ is test only
 ├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
-│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts, operator.ts (the operator list); the route
+│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts, operator.ts (the operator list); the CLA documents (E12): cla.ts (kinds,
+│                                rule codes and statuses, the document schemas), cla-name.ts (the name rules), cla-text.ts (the canonical text),
+│                                cla-version.ts and cla-history.ts (publish and history), cla-markdown.ts (the sanitising pipeline), cla-markdown-parse.ts,
+│                                cla-markdown-nesting.ts and the line scan cla-markdown-containers.ts, -items.ts, -leaf.ts and -lines.ts,
+│                                snapshots/ (the rendered files); the route
 │                                descriptors the SPA calls (`defineRoute`): contract.ts, auth-contract.ts, meta.ts (`GET /api/meta`); error-codes.ts
 │                                (the codes the SPA can see); hostile-names.ts (the hostile-name corpus, test only))
 ├── src/web/                     the React 19 SPA (Vite 8, Tailwind CSS 4); built to dist/web and served by the server; tests co-located
