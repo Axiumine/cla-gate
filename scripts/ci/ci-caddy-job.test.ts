@@ -47,7 +47,7 @@ test('the job has no container, no services, no permissions of its own, no secre
   expect(job.permissions).toBeUndefined();
   expect(job.env).toBeUndefined();
   expect(job.steps.filter((step) => step['continue-on-error'] !== undefined || step.env !== undefined)).toEqual([]);
-  const text = ciText.slice(ciText.indexOf('\n  caddy:\n'), ciText.indexOf('\n  # Memory leak scenarios'));
+  const text = ciText.slice(ciText.indexOf('\n  caddy:\n'), ciText.indexOf('\n  # The container smoke test'));
   expect(text).not.toMatch(/^ +(container|services|ports):/m);
   expect(text).not.toContain('secrets.');
   expect(text).not.toContain('--publish');

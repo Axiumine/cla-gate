@@ -29,8 +29,8 @@ const DF_ROOM = (mib: number) =>
   `printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n/dev/x 99999999 1 ${mib * 1024} 1%% /\\n'`;
 
 interface Machine {
-  /** Tools to provide as stubs that exit with the given code; a missing key means "not installed". */
-  readonly stubs?: Readonly<Record<string, number>>;
+  /** Tools to provide as stubs that exit with the given code, or run the given shell text; a missing key means "not installed". */
+  readonly stubs?: Readonly<Record<string, number | string>>;
   /** Default tools (git, curl, tar) to leave out. */
   readonly without?: readonly string[];
   /** MiB of free space the stub `df` reports. */
@@ -42,7 +42,8 @@ function run(script: string, machine: Machine) {
   const bin = tempDir();
   const stubs = { git: 0, curl: 0, tar: 0, ...machine.stubs };
   for (const [tool, code] of Object.entries(stubs).filter(([name]) => !(machine.without ?? []).includes(name))) {
-    writeExecutable(path.join(bin, tool), `#!/bin/sh\necho "stub ${tool} $*"\nexit ${code}\n`);
+    const body = typeof code === 'string' ? code : `echo "stub ${tool} $*"\nexit ${code}`;
+    writeExecutable(path.join(bin, tool), `#!/bin/sh\n${body}\n`);
   }
   writeExecutable(path.join(bin, 'df'), `#!/bin/sh\n${DF_ROOM(machine.freeMib ?? 10_000)}\n`);
   for (const tool of ['awk', 'uname', 'id']) {
@@ -87,7 +88,7 @@ test('exactly 4096 MiB is enough', () => {
   expect(run(preflight('static'), { freeMib: 4096 }).code).toBe(0);
 });
 
-test.each([['postgres'], ['e2e'], ['caddy']])(
+test.each([['postgres'], ['e2e'], ['caddy'], ['container']])(
   'the %s preflight needs a Docker daemon the runner user can reach',
   (job) => {
     const missing = run(preflight(job), {});
@@ -99,7 +100,7 @@ test.each([['postgres'], ['e2e'], ['caddy']])(
   },
 );
 
-test.each([['postgres'], ['e2e'], ['caddy']])(
+test.each([['postgres'], ['e2e'], ['caddy'], ['container']])(
   'the %s preflight passes with a working daemon and prints its version',
   (job) => {
     const { code, out } = run(preflight(job), { stubs: { docker: 0 } });
@@ -107,6 +108,20 @@ test.each([['postgres'], ['e2e'], ['caddy']])(
     expect(out).toContain('docker server stub docker version --format {{.Server.Version}}');
   },
 );
+
+test('the container preflight also needs Compose v2, and says so when only the daemon is there', () => {
+  const withoutCompose = 'if [ "$1" = compose ]; then exit 1; fi\necho "stub docker $*"';
+  const { code, out } = run(preflight('container'), { stubs: { docker: withoutCompose } });
+  expect(code).toBe(1);
+  expect(out).toContain('::error title=Runner preflight::Docker Compose v2 (docker compose) is not available to');
+  expect(out).not.toContain('the Docker daemon is not reachable');
+});
+
+test('the container preflight prints the versions of the daemon and of Compose', () => {
+  const { code, out } = run(preflight('container'), { stubs: { docker: 0 } });
+  expect(code).toBe(0);
+  expect(out).toContain('docker server stub docker version --format {{.Server.Version}}, stub docker compose version');
+});
 
 test('the semgrep preflight passes with git, curl, tar, python3 and pipx, and needs no Docker', () => {
   const { code, out } = run(preflight('semgrep'), { stubs: { python3: 0, pipx: 0 } });

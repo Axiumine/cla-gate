@@ -14,6 +14,7 @@ afterEach(() => {
   vi.doUnmock('./lib/postgres-cli.ts');
   vi.doUnmock('./lib/e2e-cli.ts');
   vi.doUnmock('./lib/caddy-cli.ts');
+  vi.doUnmock('../smoke/cli.ts');
   vi.doUnmock('./lib/guard-cli.ts');
   vi.resetModules();
   vi.restoreAllMocks();
@@ -24,6 +25,7 @@ const ENTRIES: ReadonlyMap<string, () => Promise<unknown>> = new Map([
   ['postgres.ts', () => import('./postgres.ts')],
   ['e2e.ts', () => import('./e2e.ts')],
   ['caddy.ts', () => import('./caddy.ts')],
+  ['smoke.ts', () => import('./smoke.ts')],
   ['check-runners.ts', () => import('./check-runners.ts')],
 ]);
 
@@ -88,6 +90,15 @@ test('caddy hands its arguments, the environment, the streams and the real depen
     systemDeps,
   );
   expect(process.exitCode).toBe(4);
+});
+
+test('smoke hands its arguments, the environment, the streams and the real dependencies to the CLI', async () => {
+  const runSmokeCli = vi.fn(() => Promise.resolve(5));
+  vi.doMock('../smoke/cli.ts', () => ({ runSmokeCli }));
+  const stdIo = await runEntry('smoke.ts', ['stop']);
+  const { cliDeps } = await import('../smoke/system.ts');
+  expect(runSmokeCli).toHaveBeenCalledExactlyOnceWith(['stop'], process.env, stdIo, cliDeps);
+  expect(process.exitCode).toBe(5);
 });
 
 test('check-runners checks the repository root by default', async () => {
