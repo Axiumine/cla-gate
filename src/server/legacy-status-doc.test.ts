@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { existsSync, readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { expect, test } from 'vitest';
 import { CHECK_RUN_NAME } from '../shared/check.ts';
 import { LEGACY_STATUS_NOTICE } from '../shared/notices.ts';
@@ -191,4 +192,11 @@ test('every table of the page uses the separator |---| per column, and the page 
   const separators = DOC.split('\n').filter((line) => line.startsWith('|') && /^[\s|:-]+$/u.test(line));
   expect(separators).toEqual(['|---|---|---|']);
   expect(DOC).not.toContain('@');
+});
+
+test('the Check name row of the Settings table in docs/github-app.md links to this page', () => {
+  const row = APP_DOC.split('\n').find((line) => line.startsWith('| Check name |'));
+  expect(row, 'docs/github-app.md has no Check name row').toBeDefined();
+  const page = basename(DOC_PATH);
+  expect(row).toContain(`[${page}](${page})`);
 });
