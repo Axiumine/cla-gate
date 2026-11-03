@@ -21,6 +21,7 @@
     "src/server/domain/reporting/encode.ts!",
     "src/server/domain/reporting/failure-report.ts!",
     "src/server/domain/reporting/output-parts.ts!",
+    "src/shared/notices.ts!",
     "src/shared/pr-evaluation-details.ts!",
     "src/shared/cla-text.ts!",
     "src/shared/cla-markdown.ts!",
