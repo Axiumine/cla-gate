@@ -175,6 +175,30 @@ function stallNext(fake: FakeGitHub): { readonly arrived: Promise<void>; readonl
 
 export type ContractCase = readonly [name: string, run: (world: GitHubWorld) => Promise<void>];
 
+/**
+ * What every read of the port answers for the three installations a test sets up with `addInstallation` as 11, 12 and
+ * never (13): the gate refuses the first (`InstallationNotAdmittedError`, and no request reaches GitHub), the second is
+ * suspended (`InstallationSuspendedError`), GitHub no longer has the third (`InstallationGoneError`). `reads` lists the
+ * calls to try for an installation id.
+ */
+export async function expectInstallationRefusals(
+  world: Pick<GitHubWorld, 'refuse' | 'suspend' | 'reached'>,
+  reads: (installationId: number) => readonly (() => Promise<unknown>)[],
+): Promise<void> {
+  world.refuse(id(11), 'rejected');
+  world.suspend(id(12), new Date('2026-11-01T09:30:00Z'));
+  for (const call of reads(11)) {
+    await expect(call()).rejects.toEqual(new InstallationNotAdmittedError('rejected'));
+  }
+  expect(world.reached()).toBe(0);
+  for (const call of reads(12)) {
+    await expect(call()).rejects.toEqual(new InstallationSuspendedError(id(12)));
+  }
+  for (const call of reads(13)) {
+    await expect(call()).rejects.toEqual(new InstallationGoneError(id(13)));
+  }
+}
+
 /** The cases, as `test.each` rows. */
 export const CONTRACT_CASES: readonly ContractCase[] = [
   [

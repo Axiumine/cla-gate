@@ -103,32 +103,33 @@ export class FakeReporter implements EvaluationReporter {
   /** The pull requests reported as closed (E07-S06), in order. */
   readonly cancellations: CancelTarget[] = [];
   readonly hooks: ReporterHooks = {};
-  readonly #timeline: string[];
+  /** The events of every fake that was given this list, in order (E07-S05). */
+  readonly timeline: string[];
 
   constructor(timeline: string[] = []) {
-    this.#timeline = timeline;
+    this.timeline = timeline;
   }
 
   async started(target: ReportTarget): Promise<void> {
-    this.#timeline.push('reporter.started');
+    this.timeline.push('reporter.started');
     this.startedTargets.push(target);
     await this.hooks.started?.(target);
   }
 
   async publish(target: ReportTarget, evaluation: Evaluation): Promise<void> {
-    this.#timeline.push('reporter.publish');
+    this.timeline.push('reporter.publish');
     this.published.push({ target, evaluation });
     await this.hooks.publish?.(target, evaluation);
   }
 
   async failed(target: ReportTarget, code: ReportFailureCode): Promise<void> {
-    this.#timeline.push('reporter.failed');
+    this.timeline.push('reporter.failed');
     this.failures.push({ target, code });
     await this.hooks.failed?.(target, code);
   }
 
   async cancelled(target: CancelTarget): Promise<void> {
-    this.#timeline.push('reporter.cancelled');
+    this.timeline.push('reporter.cancelled');
     this.cancellations.push(target);
     await this.hooks.cancelled?.(target);
   }

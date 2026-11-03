@@ -7,7 +7,7 @@ import { isInstallationUnavailable } from '../ports/installation-unavailable.ts'
 import { evaluateOpen, evaluationKey } from './evaluate-open.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
 import { type EvaluationKey, findEvaluation, type StoredResult } from './evaluation-rows.ts';
-import { loadTenant, resolveRepository } from './evaluation-tenant.ts';
+import { loadPullRequest } from './evaluation-tenant.ts';
 
 // The `evaluate-pr` job (E07-S04): the protocol around the pure engine. The job names a pull request by numeric ids and is
 // told nothing else; everything it decides on is read now, from GitHub and from the database, in a fixed order:
@@ -51,19 +51,15 @@ async function alreadyEvaluated(
 
 async function run(ports: EvaluatePrPorts, job: Job, context: EvaluatePrContext): Promise<JobOutcome> {
   const { logger } = context;
-  const tenant = await loadTenant(ports.db, job);
-  if (typeof tenant === 'string') {
-    return skipped(logger, tenant);
+  const loaded = await loadPullRequest(ports, job);
+  if (typeof loaded === 'string') {
+    return skipped(logger, loaded);
   }
-  const resolved = await resolveRepository(ports, job, tenant);
-  if (resolved === null) {
-    return skipped(logger, 'repository_gone');
-  }
-  const pr = await ports.github.getPullRequest(job.githubInstallationId, resolved.fullName, job.prNumber);
+  const { resolved, pr } = loaded;
   if (pr?.state !== 'open') {
     return skipped(logger, pr === null ? 'pull_request_not_found' : 'pull_request_closed');
   }
-  if (await alreadyEvaluated(ports, job, context, evaluationKey(tenant, job, pr))) {
+  if (await alreadyEvaluated(ports, job, context, evaluationKey(resolved.tenant, job, pr))) {
     logger.info('evaluate_pr.unchanged');
     return { outcome: 'unchanged' };
   }

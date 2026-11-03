@@ -27,10 +27,13 @@ const FAKE_APP: GitHubAppInfo = {
   permissions: { checks: 'write', metadata: 'read', pull_requests: 'read' },
 };
 
-/** `work`, or a rejection with the reason of `signal` as soon as it aborts, whichever comes first. */
-export function abortable<T>(signal: AbortSignal | undefined, work: Promise<T>): Promise<T> {
+/**
+ * What `work` returns, or a rejection with the reason of `signal` as soon as it aborts, whichever comes first. `work` starts
+ * at once, aborted or not; it is a function so that the promise it makes is returned, never left dangling.
+ */
+export function abortable<T>(signal: AbortSignal | undefined, work: () => Promise<T>): Promise<T> {
   if (signal === undefined) {
-    return work;
+    return work();
   }
   return new Promise<T>((resolve, reject) => {
     const onAbort = (): void => {
@@ -42,9 +45,11 @@ export function abortable<T>(signal: AbortSignal | undefined, work: Promise<T>):
       }
     };
     signal.addEventListener('abort', onAbort, { once: true });
-    work.then(resolve, reject).finally(() => {
-      signal.removeEventListener('abort', onAbort);
-    });
+    work()
+      .then(resolve, reject)
+      .finally(() => {
+        signal.removeEventListener('abort', onAbort);
+      });
   });
 }
 

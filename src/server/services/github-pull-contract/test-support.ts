@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect } from 'vitest';
-import { type ContractCase, id, installation, repository } from '../github-contract/test-support.ts';
-import type { GitHubAccountRef, GitHubCommit, GitHubPullRequest } from '../ports/github.ts';
 import {
-  GitHubNotFoundError,
-  InstallationGoneError,
-  InstallationNotAdmittedError,
-  InstallationSuspendedError,
-} from '../ports/github-errors.ts';
+  type ContractCase,
+  expectInstallationRefusals,
+  id,
+  installation,
+  repository,
+} from '../github-contract/test-support.ts';
+import type { GitHubAccountRef, GitHubCommit, GitHubPullRequest } from '../ports/github.ts';
+import { GitHubNotFoundError } from '../ports/github-errors.ts';
 
 // The reads of the evaluation job (E07-S10) in the contract of the GitHub client port: what the fake and the Octokit
 // adapter both answer for a pull request, its commits, the history behind a head and a comparison. The shapes GitHub
@@ -218,27 +219,15 @@ export const PULL_CASES: readonly ContractCase[] = [
   ],
   [
     'the reads of the evaluation are refused for an installation the gate refuses, gone for one GitHub no longer has, and suspended for a suspended one',
-    async ({ client, addInstallation, refuse, suspend, reached }) => {
+    async ({ client, addInstallation, ...world }) => {
       addInstallation(installation(11, 'acme'));
       addInstallation(installation(12, 'globex'));
-      const reads = (installationId: number) => [
+      await expectInstallationRefusals(world, (installationId) => [
         () => client.getPullRequest(id(installationId), ACME, 7),
         () => client.listPullRequestCommits(id(installationId), ACME, 7, 1),
         () => client.listRepositoryCommits(id(installationId), ACME, commitSha(1), 1),
         () => client.compareCommits(id(installationId), ACME, commitSha(1), commitSha(2)),
-      ];
-      refuse(id(11), 'rejected');
-      suspend(id(12), new Date('2026-11-01T09:30:00Z'));
-      for (const call of reads(11)) {
-        await expect(call()).rejects.toEqual(new InstallationNotAdmittedError('rejected'));
-      }
-      expect(reached()).toBe(0);
-      for (const call of reads(12)) {
-        await expect(call()).rejects.toEqual(new InstallationSuspendedError(id(12)));
-      }
-      for (const call of reads(13)) {
-        await expect(call()).rejects.toEqual(new InstallationGoneError(id(13)));
-      }
+      ]);
     },
   ],
 ];

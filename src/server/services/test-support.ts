@@ -294,7 +294,7 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     }
     const hook = takeFirst(hooks, method);
     const scripted = takeFirst(failures, method);
-    await abortable(signal, hook?.run() ?? Promise.resolve());
+    await abortable(signal, () => hook?.run() ?? Promise.resolve());
     if (scripted !== undefined) {
       throw scripted.error;
     }

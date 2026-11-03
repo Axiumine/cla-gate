@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
-import { loadTenant, resolveRepository } from '../evaluate-pr/evaluation-tenant.ts';
+import { loadPullRequest } from '../evaluate-pr/evaluation-tenant.ts';
 import type { JobOutcome } from '../job-registry.ts';
 import { isInstallationUnavailable } from '../ports/installation-unavailable.ts';
 import type { PendingJobs } from '../ports/jobs.ts';
@@ -30,15 +30,11 @@ const skipped = (logger: Logger, reason: string): JobOutcome => {
 
 async function run(ports: ClosePrPorts, job: Job, context: ClosePrContext): Promise<JobOutcome> {
   const { logger } = context;
-  const tenant = await loadTenant(ports.db, job);
-  if (typeof tenant === 'string') {
-    return skipped(logger, tenant);
+  const loaded = await loadPullRequest(ports, job);
+  if (typeof loaded === 'string') {
+    return skipped(logger, loaded);
   }
-  const resolved = await resolveRepository(ports, job, tenant);
-  if (resolved === null) {
-    return skipped(logger, 'repository_gone');
-  }
-  const pr = await ports.github.getPullRequest(job.githubInstallationId, resolved.fullName, job.prNumber);
+  const { resolved, pr } = loaded;
   if (pr?.state === 'open') {
     return skipped(logger, 'pull_request_open');
   }
