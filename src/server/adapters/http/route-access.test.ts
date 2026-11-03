@@ -186,7 +186,15 @@ test.each([
 });
 
 test('the constants are the routes of the story, spelled out here on purpose', () => {
-  expect(PUBLIC_ROUTES).toEqual(['GET /healthz', 'GET /readyz', 'GET /api/auth/login', 'GET /api/auth/callback']);
+  expect(PUBLIC_ROUTES).toEqual([
+    'GET /healthz',
+    'GET /readyz',
+    'GET /api/auth/login',
+    'GET /api/auth/callback',
+    'GET /api/meta',
+    'GET /*',
+    'HEAD /*',
+  ]);
   expect(WEBHOOK_ROUTES).toEqual(['POST /webhooks/github']);
 });
 
@@ -210,6 +218,7 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /healthz',
     'GET /readyz',
     'GET /api/operator/installations',
+    'GET /api/meta',
     'POST /webhooks/github',
   ]);
 });
@@ -329,5 +338,35 @@ test('a tenant route that changes data and declares itself read keeps the app fr
   );
   await expect(app.ready()).rejects.toThrow(
     "route POST /api/installations/:installationId/things is a tenant route that changes data, so its mode must be 'write'",
+  );
+});
+
+test('a route whose declaration is added by the onRoute hook of a plugin scope is recorded with it, since the guard acts on the config the route ends with', async () => {
+  const { app } = await testApp();
+  await app.register((scope, _options, done) => {
+    scope.addHook('onRoute', (route) => {
+      route.config = { ...route.config, access: 'public' };
+    });
+    scope.get('/from-the-scope', { exposeHeadRoute: false }, () => 'x');
+    done();
+  });
+  await app.ready();
+  expect(app.routeAccess.filter((entry) => entry.url === '/from-the-scope')).toEqual([
+    { method: 'GET', url: '/from-the-scope', access: 'public' },
+  ]);
+});
+
+test('a declaration that a plugin scope adds is checked like any other: a value that is not one keeps the app from becoming ready', async () => {
+  const { app } = await testApp();
+  await app.register((scope, _options, done) => {
+    scope.addHook('onRoute', (route) => {
+      // @ts-expect-error -- a made-up kind: the types refuse it, and the check when the app becomes ready must too
+      route.config = { ...route.config, access: 'admin' };
+    });
+    scope.get('/from-the-scope', { exposeHeadRoute: false }, () => 'x');
+    done();
+  });
+  await expect(app.ready()).rejects.toThrow(
+    'route GET /from-the-scope declares a config.access that is not one of public, authenticated, webhook, operator, tenant',
   );
 });

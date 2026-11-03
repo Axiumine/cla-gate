@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (C) 2026 Giovanni Manzoni -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CLA Platform</title>
+    <meta name="color-scheme" content="light dark" />
+    <!-- The icon is a file of our own origin (src/web/public): a data: URI would be blocked by img-src 'self', and without a link the browser asks for /favicon.ico and gets the 404 envelope. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- The blocking theme script (E17-S05), built by scripts/web/theme-init-build.ts; vite-ignore only keeps Vite from warning that a classic script cannot be bundled, and is removed from the built page. -->
+    <script vite-ignore src="/theme-init.js"></script>
+    <link rel="stylesheet" href="/styles/app.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

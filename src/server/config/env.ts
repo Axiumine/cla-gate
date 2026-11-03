@@ -25,6 +25,10 @@ export interface AppConfig {
   /** Minutes between two reconciliation sweeps (E07-S08): 5, 10, 15, 20, 30 or 60, or 0 for none. */
   readonly sweepIntervalMinutes: SweepInterval;
   readonly github: GithubConfig;
+  /** The directory the single-page app is served from (E17-S03): absolute, `dist/web` unless `WEB_ROOT` says otherwise. */
+  readonly webRoot: string;
+  /** Where the corresponding source of the running version is (E17-S09, AGPL section 13): the repository and, when the build knows it, the commit. */
+  readonly source: { readonly url: string; readonly commit: string | null };
 }
 
 /** Thrown for an invalid environment. Carries variable NAMES only: a value must never reach an error message or log. */
@@ -52,6 +56,8 @@ function toAppConfig(env: ValidEnv): AppConfig {
     workerConcurrency: env.WORKER_CONCURRENCY,
     sweepIntervalMinutes: env.SWEEP_INTERVAL_MINUTES,
     github: toGithubConfig(env),
+    webRoot: env.WEB_ROOT,
+    source: { url: env.SOURCE_URL, commit: env.SOURCE_COMMIT },
   };
 }
 

@@ -9,7 +9,7 @@ Items marked (planned) do not exist yet.
 ├── src/server/                  Fastify app; unit tests co-located as *.test.ts
 │   ├── main.ts  migrate.ts      process entries (kept logic-free; covered by boot tests)
 │   ├── boot.ts  app.ts          start-up and signals; the Fastify instance (buildApp); shutdown.ts and its test
-│   ├── boot-config.ts  boot-installations.ts  boot-reconcile.ts  boot-services.ts
+│   ├── boot-app.ts  boot-config.ts  boot-installations.ts  boot-reconcile.ts  boot-services.ts
 │   │                            the parts of start-up: logging the configuration, binding the gate once the policies
 │   │                            exist, reconciling installations, wiring the services
 │   ├── boot-app.ts  boot-queue.ts  boot-jobs.ts
@@ -18,7 +18,7 @@ Items marked (planned) do not exist yet.
 │   │                            epic uses, the `evaluation` option E09 binds)
 │   ├── config/                  environment parsing (zod), Secret, TRUST_PROXY parsing; github-app.ts and github-key.ts
 │   │                            (App id and PEM, masked), allowed-accounts.ts (GITHUB_ALLOWED_ACCOUNT_IDS), operator-ids.ts
-│   │                            (OPERATOR_GITHUB_IDS), env-github.ts
+│   │                            (OPERATOR_GITHUB_IDS), web-root.ts (WEB_ROOT), source-fields.ts (SOURCE_URL, SOURCE_COMMIT), env-github.ts
 │   │                            (the GitHub variables and their cross-field rules, webhook secrets included) and
 │   │                            github-config.ts (the settings the server reads), auth-fields.ts and auth.ts (login
 │   │                            variables, the login settings, `callbackUrl`, the start-up lines), migrate-config.ts
@@ -68,7 +68,9 @@ Items marked (planned) do not exist yet.
 │   │                            `RouteAccessError`), route-access-model.ts (the kinds, `PUBLIC_ROUTES`, `declaredAccess`),
 │   │                            route-access-problems.ts (`accessProblem`) and route-access-guard.ts (the preHandler), tenant-access.ts
 │   │                            (`tenantAccess`, `request.tenant`), tenant-resolvers.ts, tenant-guard.ts, upstream-failure.ts
-│   │                            (502, 503 and 429), role-cache-slot.ts, operator-guard.ts and operator-routes.ts;
+│   │                            (502, 503 and 429), role-cache-slot.ts, operator-guard.ts and operator-routes.ts; spa.ts (serves the
+│   │                            single-page app from WEB_ROOT: the files, the index.html fallback, the cache rules) and meta-routes.ts
+│   │                            (`GET /api/meta`); spa-fixture/ is test only;
 │   │                            test-support.ts, webhook-table-fixture/, auth-fixture/, login-fixture/, callback-fixture/,
 │   │                            tenant-guard-fixture/, cross-tenant-fixture/, cross-tenant-runner/ and cross-tenant-canary/ are test only
 │   ├── domain/                  admission.ts (who is served, pure), eligibility.ts (when an installation or repository
@@ -111,8 +113,39 @@ Items marked (planned) do not exist yet.
 ├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
-│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts, operator.ts (the operator list))
-├── src/web/                     (planned) React SPA
+│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check-name.ts, operator.ts (the operator list); the route
+│                                descriptors the SPA calls (`defineRoute`): contract.ts, auth-contract.ts, meta.ts (`GET /api/meta`); error-codes.ts
+│                                (the codes the SPA can see); hostile-names.ts (the hostile-name corpus, test only))
+├── src/web/                     the React 19 SPA (Vite 8, Tailwind CSS 4); built to dist/web and served by the server; tests co-located
+│   ├── main.tsx  zod-config.ts  index.html
+│   │                            the entry (kept logic-free; zod-config.ts turns off Zod's eval probe and is its first import) and the page
+│   ├── App.tsx  providers.tsx  router.tsx  route-access.ts
+│   │                            the app, the providers (I18nProvider outermost), the code-based routes and the access each declares (`withAccess`)
+│   ├── public/                  files copied as they are to the root of dist/web (favicon.svg)
+│   ├── api/                     the typed client over the shared route descriptors: client.ts (`createApiClient`), exchange.ts, request.ts,
+│   │                            response.ts, errors.ts (ApiError, ContractError, NetworkError), retry-after.ts, query-client.ts, index.ts;
+│   │                            test-support.ts (MSW helpers) is test only
+│   ├── auth/                    session.ts (the query ['auth','session']), auth.ts, guard.ts, hooks.ts, navigate.ts, return-to.ts, use-logout.ts,
+│   │                            UserMenu, Avatar, LoginLink, LogoutButton, SessionEndedBanner, index.ts
+│   ├── i18n/                    messages.ts (the English catalog), translate.ts (`t`, `t.plural`), interpolate.ts, format.ts (`formatUtc`),
+│   │                            context.ts, I18nProvider.tsx, Timestamp.tsx, index.ts; test-support.ts is test only
+│   ├── layout/                  AppShell (skip link, header, main landmark, live region), PrimaryNav, nav-items.ts, SourceFooter (the AGPL
+│   │                            section 13 offer), use-page.ts, use-focus-on-navigation.ts
+│   ├── meta/                    meta.ts (the `GET /api/meta` query) and source-link.ts (an https link only)
+│   ├── pages/                   LandingPage, LoginFailedPage
+│   ├── states/                  LoadingState, EmptyState, ErrorState, QueryBoundary, RootErrorBoundary, RouterErrorComponent, NotFoundPage,
+│   │                            CrashFallback, RetryButton, RequestId, error-message.ts (`errors.<code>` words only), error-facts.ts,
+│   │                            crash-log.ts, use-countdown.ts, use-after.ts, reload-page.ts, index.ts
+│   ├── styles/                  tokens.css (design tokens, light and dark), app.css (Tailwind: preflight and utilities only)
+│   ├── theme/                   model.ts, storage.ts (the one file that touches Web Storage: `cla.theme`), theme-init.ts (the blocking
+│   │                            /theme-init.js), ThemeProvider, ThemeToggle, context.ts, index.ts
+│   ├── ui/                      the primitives, the only place that imports radix-ui: Button, Field, TextInput, Textarea, Checkbox, RadioGroup,
+│   │                            Select, Tabs, Badge (badge-status.ts), StatusMessage, Heading, Dialog, AlertDialog (AlertDialogActions),
+│   │                            DataTable (DataTableHeading, data-table-columns), CursorPager (cursor-trail, use-cursor-trail), overlay.tsx,
+│   │                            use-keep-focus, UserText and user-text.ts (the safe text step), field-context, index.ts
+│   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
+│                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
+│                                theme.ts, tailwind.ts and vitest.setup.ts
 ├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
@@ -149,7 +182,10 @@ Items marked (planned) do not exist yet.
 │                                report, cli) and tests; a port of the Python tool; README.md describes the tool
 ├── scripts/ci/                  CI helpers, run natively: free-port, postgres (start/stop the CI database container),
 │                                check-runners (the workflow guard); logic and tests in lib/
-├── scripts/dev/                 db.ts: local database on a random port (up, down, url, run); install-hooks.ts: the postinstall; logic and tests in lib/
+├── scripts/dev/                 db.ts: local database on a random port (up, down, url, run); dev.ts: the Fastify and Vite dev servers (`yarn dev`); install-hooks.ts: the postinstall; logic and tests in lib/
+├── scripts/web/                 the web wiring: eslint-config.ts (the inline-text and Web Storage rules), theme-init-build.ts (bundles /theme-init.js),
+│                                test-support.ts, and the tests: vite-build.test.ts (builds the SPA and judges the output), vite-config, wiring,
+│                                serving-wiring, theme-wiring, theme-init-build, zod-jitless and biome
 ├── .local/                      (git-ignored) the port that yarn db:up chose
 ├── types/                       ambient .d.ts for tools without types (eslint-plugin-no-unsanitized)
 ├── e2e/                         Playwright specs (smoke, canary), global-setup.ts, fixtures and visual baselines in __screenshots__/
@@ -162,10 +198,11 @@ Items marked (planned) do not exist yet.
 ├── lefthook.yml  biome.json  eslint.config.mjs  fta.json  knip.json  vitest.config.ts
 ├── stryker.config.mjs  vitest.projects.ts  vitest.stryker.config.ts  vitest.stryker-scripts.config.ts
 ├── playwright.config.ts  qodana.yaml  trivy.yaml  .semgrepignore  .trivyignore
-├── vite.config.ts  Dockerfile                                                 (planned)
+├── vite.config.ts                                                             the SPA build and the dev server (src/web is its root)
+├── Dockerfile                                                                 (planned)
 ├── .nvmrc  mise.toml  .yarnrc.yml  package.json  yarn.lock  .gitattributes
 ├── tsconfig.json                solution-style root (files: [])
-├── tsconfig.base.json  tsconfig.server.json  tsconfig.server.test.json
+├── tsconfig.base.json  tsconfig.server.json  tsconfig.server.test.json  tsconfig.web.json
 ├── tsconfig.scripts.json  tsconfig.e2e.json  tsconfig.node.json
 ├── README.md  CLAUDE.md  CONTRIBUTING.md  CHANGELOG.md
 ```

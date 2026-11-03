@@ -5,6 +5,7 @@
   "files": { "ignoreUnknown": true, "includes": ["**"] },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "javascript": { "formatter": { "quoteStyle": "single" } },
+  "css": { "parser": { "tailwindDirectives": true } },
   "markdown": { "formatter": { "enabled": false }, "linter": { "enabled": false } },
   "linter": {
     "rules": {
@@ -14,8 +15,17 @@
         "useLiteralKeys": "off"
       }
     },
-    "domains": { "playwright": "none" }
+    "domains": { "playwright": "none", "react": "none" }
   },
-  "overrides": [{ "includes": ["e2e/**"], "linter": { "domains": { "playwright": "recommended" } } }],
+  "overrides": [
+    { "includes": ["e2e/**"], "linter": { "domains": { "playwright": "recommended" } } },
+    {
+      "includes": ["src/web/**"],
+      "linter": {
+        "domains": { "react": "recommended" },
+        "rules": { "a11y": "error", "security": { "noDangerouslySetInnerHtml": "error" } }
+      }
+    }
+  ],
   "assist": { "actions": { "source": { "organizeImports": "on" } } }
 }

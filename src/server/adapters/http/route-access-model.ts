@@ -53,8 +53,9 @@ export interface RouteAccessEntry {
 
 /**
  * The routes that may be `public` (`METHOD path`): nobody is asked who they are. A closed list: a new public route is a
- * reviewed edit of this constant, and the route-table test pins it. E17 (the static page handler and `GET /api/meta`) and
- * E19 (the setup routes, registered in setup mode only) add theirs in their own change, each with a changed test.
+ * reviewed edit of this constant, and the route-table test pins it. `GET /api/meta` and the file routes of the single-page
+ * app (E17: `GET /*` and `HEAD /*`, one route that answers both) are in it; E19 (the setup routes, registered in setup mode only)
+ * adds its own in its own change, with a changed test.
  * @internal Exported for the route-table test (Knip ignores `@internal` exports in production mode).
  */
 export const PUBLIC_ROUTES: readonly string[] = [
@@ -62,6 +63,9 @@ export const PUBLIC_ROUTES: readonly string[] = [
   'GET /readyz',
   'GET /api/auth/login',
   'GET /api/auth/callback',
+  'GET /api/meta',
+  'GET /*',
+  'HEAD /*',
 ];
 
 /**

@@ -11,7 +11,7 @@ import { pickSystemFreePort } from '../../scripts/ci/lib/ports.ts';
 import { openPgliteDatabase } from './adapters/db/pglite.ts';
 import type { Database } from './adapters/db/schema.ts';
 import { createLogger } from './adapters/http/logger.ts';
-import { buildApp } from './app.ts';
+import { type AppOptions, buildApp } from './app.ts';
 import type { CreateJobQueue } from './boot-queue.ts';
 import { type AppConfig, loadConfig } from './config/env.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
@@ -92,6 +92,8 @@ export interface TestAppOptions {
   readonly operators?: OperatorPolicies;
   /** The job queue the app reports on and stops (E07-S01). Defaults to none. */
   readonly jobQueue?: JobQueue;
+  /** The verified identity of the GitHub App, for the install address of `GET /api/meta` (E17-S09). Defaults to none. */
+  readonly appIdentity?: AppOptions['appIdentity'];
 }
 
 /** The real app on a database, logging into memory, closed after the test. Add routes before the first request. */

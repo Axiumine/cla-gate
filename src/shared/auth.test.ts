@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { loginFailedPath, loginFailureReasonSchema, logoutRequestSchema, sessionResponseSchema } from './auth.ts';
+import {
+  LOGIN_FAILED_PATH,
+  loginFailedPath,
+  loginFailureReasonSchema,
+  logoutRequestSchema,
+  sessionResponseSchema,
+} from './auth.ts';
 
 const BODY = {
   user: { githubId: 1001, login: 'alice', name: 'Alice', avatarUrl: null },
@@ -34,6 +40,10 @@ test.each([
 ] as const)('the failure reason %s leads to %s', (reason, path) => {
   expect(loginFailureReasonSchema.parse(reason)).toBe(reason);
   expect(loginFailedPath(reason)).toBe(path);
+});
+
+test('the login-failed screen is at /login/failed, which the router registers by this constant', () => {
+  expect(LOGIN_FAILED_PATH).toBe('/login/failed');
 });
 
 test.each(['', 'unknown', 'STATE_MISMATCH', 'state_mismatch ', 7])('%j is not a login failure reason', (reason) => {

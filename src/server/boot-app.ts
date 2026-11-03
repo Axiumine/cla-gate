@@ -14,8 +14,10 @@ import type { AppConfig } from './config/env.ts';
 import type { Clock } from './services/ports/clock.ts';
 import { failExitOnAbortedStop, type ProcessLike } from './shutdown.ts';
 
-// The application of a started server (E07-S01, E07-S03): the job queue is started after the database, with the workers that run
-// its jobs, and the application is built on both. Split from `boot.ts` so that function stays inside the line cap.
+// The application of a started server: the job queue is started after the database, with the workers that run its jobs
+// (E07-S01, E07-S03), and the application is built on both, with the GitHub client of the roles (E11-S05), the verified App
+// identity that `GET /api/meta` reads at each request (E17-S09) and the operator policy (E11-S08). Split from `boot.ts` so
+// that function stays inside the line cap.
 
 export interface BootAppOptions {
   readonly config: AppConfig;
@@ -50,6 +52,7 @@ export async function buildBootApp(options: BootAppOptions): Promise<FastifyInst
     clock: options.clock,
     fetch: options.fetch,
     github: github?.client,
+    appIdentity: github?.identity,
     operators: wiring.operators,
     jobQueue: failExitOnAbortedStop(queue, logger, signals),
   });

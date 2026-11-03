@@ -13,6 +13,7 @@ import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
 import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
+import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
@@ -21,6 +22,7 @@ import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
 import { requireRouteAccess } from './adapters/http/route-access.ts';
 import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
+import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
 import { webhookRoutes } from './adapters/http/webhook-routes.ts';
@@ -66,6 +68,12 @@ export interface AppOptions {
    * `OPERATOR_GITHUB_IDS` names, or to none when it is unset (the owner of the App is not known without the GitHub client).
    */
   readonly operators?: OperatorPolicies | undefined;
+  /**
+   * The verified identity of the GitHub App (E05-S02): `GET /api/meta` (E17-S09) builds the install address from its slug,
+   * read at each request because the check can succeed after the server is listening. Defaults to none, and an App that is
+   * not configured is none.
+   */
+  readonly appIdentity?: { current(): { readonly slug: string } | undefined } | undefined;
 }
 
 /**
@@ -122,6 +130,31 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 }
 
 /**
+ * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
+ * probes, the operator's list (E11-S08), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer
+ * every path that no route above does, so they are registered last.
+ */
+async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: Clock): Promise<void> {
+  const { config, db } = options;
+  await app.register(healthRoutes, {
+    db,
+    readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
+    queue: options.jobQueue,
+  });
+  await app.register(operatorRoutes, { db });
+  await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
+  await app.register(webhookRoutes, {
+    secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
+    clock,
+    appId: config.github.appId,
+    db,
+    enqueuer: options.enqueuer ?? options.jobQueue?.enqueuer ?? notWiredEnqueuer,
+    deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
+  });
+  await registerWeb(app, config);
+}
+
+/**
  * The Fastify application, fully wired but not listening: tests call `app.inject()`, `boot()` calls `listen()`.
  * Routes are declared with zod schemas (fastify-type-provider-zod), so input is validated and output serialised
  * against the same contract that `src/shared` exports.
@@ -154,22 +187,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const roleCache = options.roleCache ?? new RoleCache({ clock });
   registerRoleCache(app, roleCache);
   await registerLoginChecks(app, options, clock, roleCache);
-  await app.register(healthRoutes, {
-    db,
-    readinessTimeoutMs: options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
-    queue: options.jobQueue,
-  });
-
-  await app.register(operatorRoutes, { db });
-
-  await app.register(webhookRoutes, {
-    secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
-    clock,
-    appId: config.github.appId,
-    db,
-    enqueuer: options.enqueuer ?? options.jobQueue?.enqueuer ?? notWiredEnqueuer,
-    deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
-  });
+  await registerRoutes(app, options, clock);
 
   closeQueueThenDatabase(app, db, options.jobQueue);
   return app;

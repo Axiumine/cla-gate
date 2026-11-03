@@ -3,12 +3,15 @@
 import path from 'node:path';
 import process from 'node:process';
 import { afterEach, expect, test, vi } from 'vitest';
+import { systemServersDeps } from './lib/dev-children.ts';
 import { systemDeps } from './lib/dev-db-cli.ts';
 import { systemHookDeps } from './lib/install-hooks.ts';
 
 afterEach(() => {
   process.exitCode = undefined;
   vi.doUnmock('./lib/dev-db-cli.ts');
+  vi.doUnmock('./lib/dev-children.ts');
+  vi.doUnmock('./lib/dev-servers.ts');
   vi.doUnmock('./lib/install-hooks.ts');
   vi.resetModules();
 });
@@ -42,4 +45,16 @@ test('install-hooks hands the repository root, the environment and the real depe
   const root = path.resolve(import.meta.dirname, '../..');
   expect(installHooks).toHaveBeenCalledExactlyOnceWith(root, process.env, systemHookDeps, stdIo);
   expect(process.exitCode).toBe(4);
+});
+
+test('dev hands the repository root, the environment and the real dependencies to the dev servers', async () => {
+  const runDevServers = vi.fn(() => Promise.resolve(6));
+  vi.doMock('./lib/dev-children.ts', () => ({ systemServersDeps }));
+  vi.doMock('./lib/dev-servers.ts', () => ({ runDevServers }));
+  vi.resetModules();
+  await import('./dev.ts');
+  const { stdIo } = await import('../ci/lib/io.ts');
+  const root = path.resolve(import.meta.dirname, '../..');
+  expect(runDevServers).toHaveBeenCalledExactlyOnceWith({ root, env: process.env, deps: systemServersDeps, io: stdIo });
+  expect(process.exitCode).toBe(6);
 });

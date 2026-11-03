@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import vitestConfig from '../../vitest.config.ts';
-import { scriptsProject, serverProject } from '../../vitest.projects.ts';
+import { scriptsProject, serverProject, webProject } from '../../vitest.projects.ts';
 import vitestStrykerConfig from '../../vitest.stryker.config.ts';
 import vitestStrykerScriptsConfig from '../../vitest.stryker-scripts.config.ts';
 import { exists } from '../ci/lib/test-support.ts';
@@ -127,7 +127,8 @@ test('the mutated files are all server and shared code except tests, test-suppor
 test('the Vitest config of the mutation run holds the node server project and nothing else', () => {
   expect(vitestStrykerConfig.test?.projects).toEqual([serverProject]);
   expect(serverProject).toMatchObject({ test: { name: 'server', environment: 'node', include: ['src/**/*.test.ts'] } });
-  expect(vitestConfig.test?.projects).toEqual([scriptsProject, serverProject]);
+  // The web project needs jsdom, which Stryker cannot drive: it is in the full config only (E17-S01).
+  expect(vitestConfig.test?.projects).toEqual([scriptsProject, serverProject, webProject]);
   expect(vitestStrykerConfig.test?.coverage).toBeUndefined();
 });
 
