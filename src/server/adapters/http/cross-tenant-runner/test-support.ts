@@ -5,6 +5,7 @@ import { expect } from 'vitest';
 import { z } from 'zod';
 import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import { StubRoleLookup } from '../../../services/role-table-fixture/test-support.ts';
+import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
   type PersonName,
@@ -68,11 +69,15 @@ function headersOf(
  * The world of the matrix: the real app (routes are added before the first request), two tenants with five people who are
  * logged in, and a `StubRoleLookup` that answers what GitHub says about them. `ask(who, spec)` sends a request as `who`
  * (nobody: no cookie); a state-changing one carries the origin and the token the app demands. `env` adds to the login
- * settings of the app (the operator ids of E11-S08, for instance).
+ * settings of the app (the operator ids of E11-S08, for instance); `app` adds the one option of the app a test sets (the queue the
+ * publish of a major version sends its jobs to, E12-S04).
  */
-export async function matrixWorld(env: Readonly<Record<string, string>> = {}) {
+export async function matrixWorld(
+  env: Readonly<Record<string, string>> = {},
+  app: Pick<TestAppOptions, 'enqueuer'> = {},
+) {
   const roles = new StubRoleLookup();
-  const world = await authWorld(env, { github: roles });
+  const world = await authWorld(env, { github: roles, ...app });
   const seeded = await twoTenants(world.db, roles);
   const sessions = {
     admin1: await world.login(seeded.people.admin1.githubId),
@@ -178,14 +183,27 @@ async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCa
   }
 }
 
+/** Sends the request of the case as `who` to a call that must succeed, after the case has put the resource in the state it expects. */
+async function askAllowed(world: MatrixWorld, c: CrossTenantCase, who: PersonName, target: MatrixTarget) {
+  await c.prepare?.(world.db, target);
+  const spec = c.request(target);
+  const url = await c.urlFor?.(world.db, target);
+  const payload = await c.bodyFor?.(world.db, target);
+  return world.ask(who, {
+    ...spec,
+    ...(url === undefined ? {} : { url }),
+    ...(payload === undefined ? {} : { payload }),
+  });
+}
+
 /** The calls that are allowed: the admin of the organisation, and the admin of the repository where the role matrix lets them. */
 async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
   const plan = planOf(c.endpointClass, world.t1);
   const success = c.success ?? 200;
-  expect((await world.ask('admin1', c.request(plan.ok))).statusCode, `${route} as its own admin`).toBe(success);
+  expect((await askAllowed(world, c, 'admin1', plan.ok)).statusCode, `${route} as its own admin`).toBe(success);
   if (plan.repoAdminPasses) {
     expect(
-      (await world.ask('repoAdmin1', c.request(plan.ok))).statusCode,
+      (await askAllowed(world, c, 'repoAdmin1', plan.ok)).statusCode,
       `${route} as the admin of the repository`,
     ).toBe(success);
   } else {
@@ -293,7 +311,7 @@ export async function assertInactiveCase(
     const refused = await denialProbe(world, route)('admin1', c.request(plan.ok), 409, ` of a ${state} tenant`);
     expect(refused.body, `${route} of a ${state} tenant`).toContain(`"code":"${conflictCode(state)}"`);
   } else {
-    const served = await world.ask('admin1', c.request(plan.ok));
+    const served = await askAllowed(world, c, 'admin1', plan.ok);
     expect(served.statusCode, `${route} of a ${state} tenant as the admin the ledger remembers`).toBe(c.success ?? 200);
   }
   await setStateOfTenant1(world, null);
@@ -318,6 +336,9 @@ const operatorTargets = (world: MatrixWorld): MatrixTarget[] => [
   ...crossed(world),
 ];
 
+/** A little more than the minute of the per-person budget of uncached role lookups. */
+const LOOKUP_WINDOW_MS = 61_000;
+
 /**
  * Runs one case of the route table for the operator of `operatorWorld` (E11-S08), with tenant 1 in `state` (active when none
  * is given), then puts it back. An operator who is neither org admin nor admin the ledger remembers is a stranger to every
@@ -341,10 +362,13 @@ export async function assertOperatorCase(
     ).toEqual(unknown);
   }
   if (state === null) {
-    const control = await world.ask('admin1', c.request(planOf(c.endpointClass, world.t1).ok));
+    const control = await askAllowed(world, c, 'admin1', planOf(c.endpointClass, world.t1).ok);
     expect(control.statusCode, `${route} as the admin of the tenant`).toBe(c.success ?? 200);
   }
   await setStateOfTenant1(world, null);
+  // A write asks GitHub again for every request (E11-S01) and a person has 30 uncached lookups a minute (E11-S04): a case
+  // sends more than a dozen as the operator, so the next one starts a minute later, with the budget of a minute ago spent.
+  world.clock.advance(LOOKUP_WINDOW_MS);
 }
 
 /** The query for the owner of a row of a tenant table: its installation, and the person it is about. `signer_pii` and `cla_versions` have no installation column of their own. */

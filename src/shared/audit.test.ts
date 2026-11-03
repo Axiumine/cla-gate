@@ -54,6 +54,28 @@ test('the twelfth action is installation.sync_failed, added by E07-S05 for a syn
   expect(INSTANCE_ACTIONS.has('installation.sync_failed')).toBe(false);
 });
 
+test('the thirteenth and fourteenth actions are the two document actions of E12-S01, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS.slice(12, 14)).toEqual(['cla_document.created', 'cla_document.renamed']);
+  for (const action of ['cla_document.created', 'cla_document.renamed'] as const) {
+    expect(SYSTEM_ACTIONS.has(action)).toBe(false);
+    expect(INSTANCE_ACTIONS.has(action)).toBe(false);
+  }
+});
+
+test('the fifteenth and sixteenth actions are the two draft actions of E12-S03, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS.slice(14, 16)).toEqual(['cla_draft.saved', 'cla_draft.discarded']);
+  for (const action of ['cla_draft.saved', 'cla_draft.discarded'] as const) {
+    expect(SYSTEM_ACTIONS.has(action)).toBe(false);
+    expect(INSTANCE_ACTIONS.has(action)).toBe(false);
+  }
+});
+
+test('the seventeenth action is the publication of a version, E12-S04, performed by a person and belonging to a tenant', () => {
+  expect(AUDIT_ACTIONS[16]).toBe('cla_version.published');
+  expect(SYSTEM_ACTIONS.has('cla_version.published')).toBe(false);
+  expect(INSTANCE_ACTIONS.has('cla_version.published')).toBe(false);
+});
+
 test('no action and no metadata key is listed twice', () => {
   expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length);
   expect(new Set(AUDIT_METADATA_KEYS).size).toBe(AUDIT_METADATA_KEYS.length);

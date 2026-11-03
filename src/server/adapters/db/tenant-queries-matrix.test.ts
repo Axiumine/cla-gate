@@ -20,59 +20,84 @@ const containingOwner = (owner: number): unknown => expect.arrayContaining([owne
 
 const byIds = scoped.filter(([, query]) => query.takesIds);
 
-async function world() {
+/** The two tenants on a fresh database, in the state the query needs: some entries arrange more rows than `twoTenants` stores. */
+async function world(query: Pick<ScopedQuery, 'arrange'> = {}) {
   const { db } = await migratedTestDatabase();
   const tenants = await twoTenants(db);
+  await query.arrange?.(db, [tenants.t1, tenants.t2]);
   return { db, ...tenants };
 }
 
+/** Every scoped query the registry holds, in the order of the registry. */
+const SCOPED_QUERY_NAMES = [
+  'adapters/db/tenant-scope.ts assertRepositoryInTenant',
+  'services/admin-ledger-queries.ts recordAdminSeen',
+  'services/admin-ledger-queries.ts forgetAdminSeen',
+  'services/admin-ledger-queries.ts wasAdminSeenSince',
+  'services/audit-log-queries.ts auditLogRows',
+  'services/audit-log-queries.ts listAuditLog',
+  'services/cla-document-queries.ts findDocument',
+  'services/cla-document-queries.ts listDocuments',
+  'services/cla-document-queries.ts listRepositoryDocuments',
+  'services/cla-document-writes.ts countDocuments',
+  'services/cla-document-writes.ts insertDocument',
+  'services/cla-document-writes.ts updateDocumentName',
+  'services/cla-draft-queries.ts findDraft',
+  'services/cla-draft-queries.ts lockDraft',
+  'services/cla-draft-queries.ts findDraftRevision',
+  'services/cla-draft-writes.ts insertDraft',
+  'services/cla-draft-writes.ts updateDraft',
+  'services/cla-draft-writes.ts deleteDraft',
+  'services/cla-enforcing-queries.ts listEnforcingRepositories',
+  'services/cla-history-queries.ts listVersions',
+  'services/cla-history-queries.ts findVersion',
+  'services/cla-version-queries.ts lockDocument',
+  'services/cla-version-queries.ts findActiveVersion',
+  'services/cla-version-queries.ts countSignaturesAtMajor',
+  'services/cla-version-writes.ts insertVersion',
+  'services/cla-version-writes.ts setActiveVersion',
+  'services/document-placement.ts findDocumentPlacement',
+  'services/document-placement.ts findSignaturePlacement',
+  'services/repo-admin-candidates.ts listRepoAdminCandidates',
+  'services/repository-enabled.ts setRepositoryEnabled',
+  'services/repository-queries.ts markRepositoriesRemoved',
+  'services/repository-queries.ts renameActiveRepository',
+  'services/repository-queries.ts findActiveRepositoryByGithubId',
+  'services/repository-queries.ts findRepositoryByGithubId',
+  'services/repository-queries.ts listActiveRepositoryIds',
+  'services/repository-queries.ts listEnabledRepositories',
+  'services/repository-statements.ts storedStates',
+  'services/repository-statements.ts writeChanged',
+  'services/signer-erasure.ts erasureCounts',
+  'services/signer-erasure.ts eraseSigner',
+  'services/tenant-queries.ts findTenantRows',
+  'services/tenant-queries.ts findAdmittedTenantRows',
+  'services/close-pr/close-heads.ts headShasToCancel',
+  'services/close-pr/close-rows.ts evaluationsOfPullRequest',
+  'services/close-pr/close-rows.ts cancelEvaluation',
+  'services/evaluate-pr/evaluation-rows.ts findEvaluation',
+  'services/evaluate-pr/evaluation-rows.ts startEvaluation',
+  'services/evaluate-pr/evaluation-rows.ts finishEvaluation',
+  'services/evaluate-pr/evaluation-rows.ts failEvaluation',
+  'services/evaluate-pr/evaluation-rows.ts evaluationsAtHead',
+  'services/evaluate-pr/policy-facts.ts readPolicy',
+  'services/evaluate-pr/policy-facts.ts readAllowlist',
+  'services/evaluate-pr/policy-facts.ts readOverrides',
+  'services/evaluate-pr/signature-facts.ts readSignatures',
+  'services/sweep/sweep-rows.ts evaluationStates',
+  'services/sweep/sweep-rows.ts staleEvaluations',
+  'services/export/signature-queries.ts countSignatures',
+  'services/export/signature-queries.ts signatureBatch',
+];
+
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {
-  expect(scoped.map(([name]) => name)).toEqual([
-    'adapters/db/tenant-scope.ts assertRepositoryInTenant',
-    'services/admin-ledger-queries.ts recordAdminSeen',
-    'services/admin-ledger-queries.ts forgetAdminSeen',
-    'services/admin-ledger-queries.ts wasAdminSeenSince',
-    'services/audit-log-queries.ts auditLogRows',
-    'services/audit-log-queries.ts listAuditLog',
-    'services/document-placement.ts findDocumentPlacement',
-    'services/document-placement.ts findSignaturePlacement',
-    'services/repo-admin-candidates.ts listRepoAdminCandidates',
-    'services/repository-enabled.ts setRepositoryEnabled',
-    'services/repository-queries.ts markRepositoriesRemoved',
-    'services/repository-queries.ts renameActiveRepository',
-    'services/repository-queries.ts findActiveRepositoryByGithubId',
-    'services/repository-queries.ts findRepositoryByGithubId',
-    'services/repository-queries.ts listActiveRepositoryIds',
-    'services/repository-queries.ts listEnabledRepositories',
-    'services/repository-statements.ts storedStates',
-    'services/repository-statements.ts writeChanged',
-    'services/signer-erasure.ts erasureCounts',
-    'services/signer-erasure.ts eraseSigner',
-    'services/tenant-queries.ts findTenantRows',
-    'services/tenant-queries.ts findAdmittedTenantRows',
-    'services/close-pr/close-heads.ts headShasToCancel',
-    'services/close-pr/close-rows.ts evaluationsOfPullRequest',
-    'services/close-pr/close-rows.ts cancelEvaluation',
-    'services/evaluate-pr/evaluation-rows.ts findEvaluation',
-    'services/evaluate-pr/evaluation-rows.ts startEvaluation',
-    'services/evaluate-pr/evaluation-rows.ts finishEvaluation',
-    'services/evaluate-pr/evaluation-rows.ts failEvaluation',
-    'services/evaluate-pr/evaluation-rows.ts evaluationsAtHead',
-    'services/evaluate-pr/policy-facts.ts readPolicy',
-    'services/evaluate-pr/policy-facts.ts readAllowlist',
-    'services/evaluate-pr/policy-facts.ts readOverrides',
-    'services/evaluate-pr/signature-facts.ts readSignatures',
-    'services/sweep/sweep-rows.ts evaluationStates',
-    'services/sweep/sweep-rows.ts staleEvaluations',
-    'services/export/signature-queries.ts countSignatures',
-    'services/export/signature-queries.ts signatureBatch',
-  ]);
+  expect(scoped.map(([name]) => name)).toEqual(SCOPED_QUERY_NAMES);
 });
 
 test.each(scoped)(
   "%s: called for a tenant with that tenant's ids it answers with the rows of that tenant only",
   async (_name, query) => {
-    const { db, t1, t2 } = await world();
+    const { db, t1, t2 } = await world(query);
     const first = await attempt(query, db, { installationId: t1.installationId }, t1);
     expect(first).toEqual({ kind: 'rows', owners: containingOwner(t1.installationId) });
     expect(first.kind === 'rows' ? first.owners.filter((owner) => owner !== t1.installationId) : []).toEqual([]);
@@ -85,7 +110,7 @@ test.each(scoped)(
 test.each(byIds)(
   '%s: called for tenant 1 with the ids of tenant 2 it answers nothing, or refuses, and changes nothing',
   async (_name, query) => {
-    const { db, t1, t2 } = await world();
+    const { db, t1, t2 } = await world(query);
     const before = await tenantChecksums(db);
     const outcome = await attempt(query, db, { installationId: t1.installationId }, t2);
     expect(outcome).toEqual(query.refusal === undefined ? { kind: 'rows', owners: [] } : { kind: 'refused' });
@@ -96,7 +121,7 @@ test.each(byIds)(
 test.each(scoped.filter(([, query]) => query.activeOnly))(
   '%s: with every repository of the tenant removed it finds nothing, or refuses, and changes nothing',
   async (_name, query) => {
-    const { db, t1 } = await world();
+    const { db, t1 } = await world(query);
     await db
       .updateTable('repositories')
       .set({ removed_at: new Date('2026-06-01T00:00:00Z') })

@@ -55,7 +55,7 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 | E09 | Check Run and PR comment reporting | BC-04 | 🔴 Must have | ⬜ Todo | 9 | [E09.md](epics/E09.md) |
 | E10 | Authentication and sessions | BC-02 | 🔴 Must have | ⏳ In progress | 8 | [E10.md](epics/E10.md) |
 | E11 | Authorization and tenant isolation | BC-02 | 🔴 Must have | ✅ Done | 8 | [E11.md](epics/E11.md) |
-| E12 | CLA documents and versions | BC-03 | 🔴 Must have | ⬜ Todo | 7 | [E12.md](epics/E12.md) |
+| E12 | CLA documents and versions | BC-03 | 🔴 Must have | ⏳ In progress | 7 | [E12.md](epics/E12.md) |
 | E13 | Contributor signing flow | BC-03 | 🔴 Must have | ⬜ Todo | 7 | [E13.md](epics/E13.md) |
 | E14 | Repository enablement and allowlist | BC-06 | 🔴 Must have | ⬜ Todo | 7 | [E14.md](epics/E14.md) |
 | E15 | Revocation, overrides and pending PRs | BC-06 | 🟠 Should have | ⬜ Todo | 7 | [E15.md](epics/E15.md) |
@@ -72,9 +72,9 @@ The platform is self-hosted only: one instance per server with one GitHub App, s
 
 | Status | Stories | Epics |
 |---|---|---|
-| ✅ Done | 112 | 9 |
-| ⏳ In progress | 7 | 5 |
-| ⬜ Todo | 79 | 9 |
+| ✅ Done | 118 | 9 |
+| ⏳ In progress | 8 | 6 |
+| ⬜ Todo | 72 | 8 |
 | Total | 198 | 23 |
 
 ## Dependency and sequencing

@@ -40,6 +40,55 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { account_id: 4244, account_type: 'other', reason_code: 'policy_changed' },
     },
   ],
+  'services/cla-document-changes.ts#cla_document.created': [
+    {
+      action: 'cla_document.created',
+      subject: { type: 'cla_document', id: 12 },
+      metadata: { document_id: 12, repository_id: null, kind: 'individual' },
+    },
+    {
+      action: 'cla_document.created',
+      subject: { type: 'cla_document', id: 13 },
+      metadata: { document_id: 13, repository_id: 9000, kind: 'corporate' },
+    },
+  ],
+  'services/cla-document-changes.ts#cla_document.renamed': [
+    { action: 'cla_document.renamed', subject: { type: 'cla_document', id: 12 }, metadata: { document_id: 12 } },
+  ],
+  'services/cla-drafts.ts#cla_draft.discarded': [
+    {
+      action: 'cla_draft.discarded',
+      subject: { type: 'cla_document', id: 12 },
+      metadata: { document_id: 12, revision: 3 },
+    },
+  ],
+  'services/cla-drafts.ts#cla_draft.saved': [
+    {
+      action: 'cla_draft.saved',
+      subject: { type: 'cla_document', id: 12 },
+      metadata: { document_id: 12, revision: 1 },
+    },
+  ],
+  'services/cla-publish.ts#cla_version.published': [
+    {
+      action: 'cla_version.published',
+      subject: { type: 'cla_version', id: 21 },
+      metadata: { document_id: 12, version_id: 21, major: 1, minor: 0, bump: 'major', affected_signatures: 0 },
+    },
+    {
+      action: 'cla_version.published',
+      subject: { type: 'cla_version', id: 22 },
+      metadata: {
+        document_id: 12,
+        version_id: 22,
+        major: 1,
+        minor: 1,
+        bump: 'minor',
+        affected_signatures: 40,
+        rolled_back_from_version_id: 21,
+      },
+    },
+  ],
   'services/dead-letter/dead-letter-sync.ts#installation.sync_failed': [
     {
       action: 'installation.sync_failed',

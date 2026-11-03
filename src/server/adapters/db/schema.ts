@@ -181,6 +181,16 @@ interface InstallationAdminSeenTable {
   seen_at: Date;
 }
 
+/** The work in progress on the text of a CLA (migration 011, E12-S03): one mutable draft per document, `revision` raised by each save. */
+interface ClaDraftsTable {
+  document_id: number;
+  installation_id: number;
+  content_md: string;
+  revision: Generated<number>;
+  updated_by: number;
+  updated_at: Generated<Date>;
+}
+
 /** Every table created by the migrations except schema_migrations, which only the runner touches. */
 export interface Database {
   users: UsersTable;
@@ -197,4 +207,5 @@ export interface Database {
   webhook_deliveries: WebhookDeliveriesTable;
   audit_log: AuditLogTable;
   installation_admin_seen: InstallationAdminSeenTable;
+  cla_drafts: ClaDraftsTable;
 }

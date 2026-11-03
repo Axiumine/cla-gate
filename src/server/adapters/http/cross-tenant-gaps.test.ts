@@ -101,6 +101,17 @@ test('every gap is reported at once, in the order tenant, authenticated, stale, 
 
 test('the tables of the application hold the cases of the routes the stories added, and the two authenticated routes it has say why they return no tenant data', () => {
   expect(Object.keys(CROSS_TENANT_CASES)).toEqual([
+    'POST /api/installations/:installationId/documents',
+    'GET /api/installations/:installationId/documents',
+    'GET /api/installations/:installationId/repositories/:repositoryId/documents',
+    'GET /api/installations/:installationId/documents/:documentId',
+    'PATCH /api/installations/:installationId/documents/:documentId',
+    'GET /api/installations/:installationId/documents/:documentId/draft',
+    'PUT /api/installations/:installationId/documents/:documentId/draft',
+    'DELETE /api/installations/:installationId/documents/:documentId/draft',
+    'POST /api/installations/:installationId/documents/:documentId/versions',
+    'GET /api/installations/:installationId/documents/:documentId/versions',
+    'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
     'GET /api/installations/:installationId/erasure-preview',

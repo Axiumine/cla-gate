@@ -69,7 +69,9 @@ export const SERVER_SHARDS: readonly Shard[] = [
   // 18 files, 516 mutants: every other service (audit-*, repository-*, admission-policies, and the webhook intake's
   // tenant-filter, failure-throttle, log-limiter, webhook-deliveries). About 500 is the target; this one is a little over it.
   // The export code (E16-S03 and E16-S06, `services/export/`) is read here too: eleven files, whose mutants are not counted yet.
-  // Count them and split the shard when the total passes the target.
+  // Count them and split the shard when the total passes the target. The CLA document code of E12 (23 files, `services/cla-*.ts`)
+  // falls in this shard too, and its mutants are not counted either: measure the shard before the next epic joins it, and
+  // cut `cla-*` out with a letter range (`c*` and `[!ic]*`, as `i*` is cut out above) when it is over the target.
   { name: 'services-other', mutate: ['src/server/services/[!i]*.ts', 'src/server/services/export/**/*.ts'] },
   // The job queue and its workers (E07): pg-boss runtime, producer, queue policy, serialisation, workers and the sweep schedule.
   { name: 'jobs-adapter', mutate: ['src/server/adapters/jobs/**/*.ts'] },

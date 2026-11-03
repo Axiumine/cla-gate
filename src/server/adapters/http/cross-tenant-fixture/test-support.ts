@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { Kysely } from 'kysely';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
+import type { Database } from '../../db/schema.ts';
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
+import { sha256 } from '../../db/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
@@ -54,6 +57,22 @@ export interface CrossTenantCase {
   readonly request: (target: MatrixTarget) => RequestSpec;
   /** The status of the answer to the person the call is for. Defaults to 200. */
   readonly success?: number;
+  /**
+   * Puts the resource of `target` in the state the request expects. The runner calls it before each call that must succeed,
+   * for a request that succeeds once and not twice (a save that names the revision it read).
+   */
+  readonly prepare?: (db: Kysely<Database>, target: MatrixTarget) => Promise<void>;
+  /**
+   * The body of a call that must succeed, when it depends on the database at that moment (a publish names the version it
+   * replaces, which each success changes). The runner reads it after `prepare` and sends it in place of the body of `request`.
+   */
+  readonly bodyFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<object>;
+  /**
+   * The URL of a call that must succeed, when it names a row that `prepare` creates (the version of a document, E12-S05). The runner
+   * reads it after `prepare` and sends it in place of the URL of `request`, which holds an id that names nothing and serves the
+   * calls that are denied before the row is looked up.
+   */
+  readonly urlFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<string>;
 }
 
 /** A row a response names, by table and `id` (`signature_id` for `signer_pii`). */
@@ -88,6 +107,94 @@ export interface IsolationCase {
   readonly stable?: (body: unknown) => unknown;
 }
 
+let documentNumber = 0;
+
+/** A name no document of the world has, for a request that creates or renames: the matrix sends one request as several people. */
+const freshDocumentName = (): string => {
+  documentNumber += 1;
+  return `Matrix document ${documentNumber}`;
+};
+
+const documentsUrl = (target: MatrixTarget): string => `/api/installations/${target.installationId}/documents`;
+
+const draftUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/draft`;
+
+/** Brings the draft of the document of `target` to revision 1, saving one first when it has none: the save of the matrix names revision 1. */
+async function draftAtFirstRevision(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
+  await db
+    .insertInto('cla_drafts')
+    .values({
+      document_id: target.documentId,
+      installation_id: target.installationId,
+      content_md: 'Matrix draft\n',
+      updated_by: person.id,
+    })
+    .onConflict((conflict) => conflict.column('document_id').doUpdateSet({ revision: 1 }))
+    .execute();
+}
+
+const versionsUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/versions`;
+
+/** The body of a publish that succeeds now: the saved draft as a major version over the version the document points at (none: the first). */
+async function publishBody(db: Kysely<Database>, target: MatrixTarget): Promise<object> {
+  const document = await db
+    .selectFrom('cla_documents')
+    .select('active_version_id')
+    .where('id', '=', target.documentId)
+    .executeTakeFirstOrThrow();
+  return {
+    source: { type: 'draft', revision: 1 },
+    bump: 'major',
+    rationale: 'Published by the matrix',
+    expectedActiveVersionId: document.active_version_id,
+    acknowledgeResigning: true,
+  };
+}
+
+/** Gives the document of `target` its version 1.0 when it has none, and points the document at it, as a publish would leave it. */
+async function versionOne(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  const existing = await db
+    .selectFrom('cla_versions')
+    .select('id')
+    .where('document_id', '=', target.documentId)
+    .executeTakeFirst();
+  if (existing !== undefined) {
+    return;
+  }
+  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
+  const version = await db
+    .insertInto('cla_versions')
+    .values({
+      document_id: target.documentId,
+      major: 1,
+      minor: 0,
+      content_md: 'Matrix version\n',
+      content_sha256: sha256('Matrix version\n'),
+      published_by: person.id,
+      rationale: 'Made for the matrix',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .updateTable('cla_documents')
+    .set({ active_version_id: version.id })
+    .where('id', '=', target.documentId)
+    .execute();
+}
+
+/** The URL of the first version of the document of `target`, which `versionOne` made if there was none. */
+async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Promise<string> {
+  const version = await db
+    .selectFrom('cla_versions')
+    .select('id')
+    .where('document_id', '=', target.documentId)
+    .orderBy('id')
+    .limit(1)
+    .executeTakeFirstOrThrow();
+  return `${versionsUrl(target)}/${version.id}`;
+}
+
 /**
  * The person the erasure cases (E16-S04) ask about: `member1`, the signer of tenant 1 (E11-S06 fixture). Erasing them ends
  * their session, so the erasure case is the last entry of {@link CROSS_TENANT_CASES}, and its route the last one registered:
@@ -97,6 +204,89 @@ const ERASED_IN_THE_MATRIX = 31_004;
 
 /** The `tenant` routes of the application, keyed `METHOD path`. A story that adds a route (E12 to E16) adds its case here. */
 export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
+  // E12-S01. The case creates a document that covers the installation (org admin only); the repository-scoped body is shown in document-routes-create.test.ts.
+  'POST /api/installations/:installationId/documents': {
+    endpointClass: 'installation_write',
+    success: 201,
+    request: (target) => ({
+      method: 'POST',
+      url: documentsUrl(target),
+      payload: { name: freshDocumentName(), kind: 'individual' },
+    }),
+  },
+  'GET /api/installations/:installationId/documents': {
+    endpointClass: 'installation_read',
+    request: (target) => ({ method: 'GET', url: documentsUrl(target) }),
+  },
+  'GET /api/installations/:installationId/repositories/:repositoryId/documents': {
+    endpointClass: 'repository_read',
+    request: (target) => ({
+      method: 'GET',
+      url: `/api/installations/${target.installationId}/repositories/${target.repositoryId}/documents`,
+    }),
+  },
+  'GET /api/installations/:installationId/documents/:documentId': {
+    endpointClass: 'document_read',
+    request: (target) => ({ method: 'GET', url: `${documentsUrl(target)}/${target.documentId}` }),
+  },
+  'PATCH /api/installations/:installationId/documents/:documentId': {
+    endpointClass: 'document_write',
+    request: (target) => ({
+      method: 'PATCH',
+      url: `${documentsUrl(target)}/${target.documentId}`,
+      payload: { name: freshDocumentName() },
+    }),
+  },
+  // E12-S03. The save names revision 1, which `prepare` restores before each call that must succeed.
+  'GET /api/installations/:installationId/documents/:documentId/draft': {
+    endpointClass: 'document_read',
+    request: (target) => ({ method: 'GET', url: draftUrl(target) }),
+  },
+  'PUT /api/installations/:installationId/documents/:documentId/draft': {
+    endpointClass: 'document_write',
+    prepare: draftAtFirstRevision,
+    request: (target) => ({
+      method: 'PUT',
+      url: draftUrl(target),
+      payload: { contentMd: 'Saved by the matrix\n', expectedRevision: 1 },
+    }),
+  },
+  'DELETE /api/installations/:installationId/documents/:documentId/draft': {
+    endpointClass: 'document_write',
+    success: 204,
+    request: (target) => ({ method: 'DELETE', url: draftUrl(target) }),
+  },
+  // E12-S04. A publish consumes the draft and moves the pointer, so each call that must succeed gets a draft at revision 1 and the
+  // version the document points at then. The tenants' repositories enforce nothing, so no job is sent.
+  'POST /api/installations/:installationId/documents/:documentId/versions': {
+    endpointClass: 'document_write',
+    success: 201,
+    prepare: draftAtFirstRevision,
+    bodyFor: publishBody,
+    request: (target) => ({
+      method: 'POST',
+      url: versionsUrl(target),
+      payload: {
+        source: { type: 'draft', revision: 1 },
+        bump: 'major',
+        rationale: 'Published by the matrix',
+        expectedActiveVersionId: null,
+        acknowledgeResigning: true,
+      },
+    }),
+  },
+  // E12-S05. The history is read only. The version a call reads is made by `prepare` (a document of the matrix may have none), so the URL
+  // of a call that must succeed names it; the one in `request` names no version, which is what the denied calls need.
+  'GET /api/installations/:installationId/documents/:documentId/versions': {
+    endpointClass: 'document_read',
+    request: (target) => ({ method: 'GET', url: versionsUrl(target) }),
+  },
+  'GET /api/installations/:installationId/documents/:documentId/versions/:versionId': {
+    endpointClass: 'document_read',
+    prepare: versionOne,
+    urlFor: firstVersionUrl,
+    request: (target) => ({ method: 'GET', url: `${versionsUrl(target)}/${target.documentId}` }),
+  },
   [`GET ${AUDIT_LOG_PATH}`]: {
     endpointClass: 'installation_read',
     request: (target) => ({

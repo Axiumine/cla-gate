@@ -20,13 +20,13 @@ import type { TenantResolver, TenantTarget } from './tenant-access.ts';
 // guard answers with the uniform 404.
 
 /** An id as a path carries it: plain digits, no sign, no leading zero, and within what a number holds exactly. */
-const idText = z
+export const idText = z
   .string()
   .regex(/^[1-9]\d*$/)
   .transform(Number)
   .pipe(z.int().positive());
 
-const installationParams = z.object({ installationId: idText.pipe(installationRowIdSchema) });
+export const installationParams = z.object({ installationId: idText.pipe(installationRowIdSchema) });
 
 const repositoryParams = z.object({
   repositoryId: idText,
@@ -34,7 +34,7 @@ const repositoryParams = z.object({
 });
 
 /** The parameters of the route as the schema reads them. @throws AppError 400 when one is not an id. */
-function paramsOf<T extends z.ZodType>(schema: T, request: FastifyRequest): z.infer<T> {
+export function paramsOf<T extends z.ZodType>(schema: T, request: FastifyRequest): z.infer<T> {
   const parsed = schema.safeParse(request.params);
   if (!parsed.success) {
     throw new AppError(400, 'bad_request');
@@ -133,4 +133,14 @@ export function bySignatureParam(db: Kysely<Database>): TenantResolver {
     const { installationId, signatureId } = paramsOf(signatureParams, request);
     return documentTarget(db, installationId, await findSignaturePlacement(db, { installationId }, signatureId));
   };
+}
+
+/** The `:documentId` of a route that has passed its guard. @throws AppError 400 when it is not a positive integer in plain digits. */
+export function documentIdOf(request: FastifyRequest): number {
+  return paramsOf(documentParams, request).documentId;
+}
+
+/** The `:repositoryId` of a route that has passed its guard. @throws AppError 400 when it is not a positive integer in plain digits. */
+export function repositoryIdOf(request: FastifyRequest): number {
+  return paramsOf(repositoryParams, request).repositoryId;
 }

@@ -131,15 +131,28 @@ test('the authenticated routes are the session read, the logout and the export o
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the tenant routes are the ones the stories added', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, and the four of the audit log, the signature export and the erasure', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
-  expect(table.filter((entry) => typeof entry.access === 'object').map(nameOf)).toEqual([
-    'GET /api/installations/:installationId/audit-log',
-    'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
-    'GET /api/installations/:installationId/erasure-preview',
-    'POST /api/installations/:installationId/erasures',
-  ]);
+  expect(sorted(table.filter((entry) => typeof entry.access === 'object').map(nameOf))).toEqual(
+    sorted([
+      'POST /api/installations/:installationId/documents',
+      'GET /api/installations/:installationId/documents',
+      'GET /api/installations/:installationId/repositories/:repositoryId/documents',
+      'GET /api/installations/:installationId/documents/:documentId',
+      'PATCH /api/installations/:installationId/documents/:documentId',
+      'GET /api/installations/:installationId/documents/:documentId/draft',
+      'PUT /api/installations/:installationId/documents/:documentId/draft',
+      'DELETE /api/installations/:installationId/documents/:documentId/draft',
+      'POST /api/installations/:installationId/documents/:documentId/versions',
+      'GET /api/installations/:installationId/documents/:documentId/versions',
+      'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
+      'GET /api/installations/:installationId/audit-log',
+      'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+      'GET /api/installations/:installationId/erasure-preview',
+      'POST /api/installations/:installationId/erasures',
+    ]),
+  );
 });
 
 test('every tenant route the application gets is read or write and write when it changes data', async () => {

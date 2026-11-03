@@ -23,7 +23,7 @@ test.each([
   ['DELETE', sql`delete from cla_versions`, 'cla_versions is immutable: DELETE'],
   [
     'TRUNCATE (with every table that references it, so the foreign keys do not object first)',
-    sql`truncate cla_versions, cla_documents, repositories, signatures, signer_pii, commit_overrides, allowlist_entries, pr_evaluations`,
+    sql`truncate cla_versions, cla_documents, cla_drafts, repositories, signatures, signer_pii, commit_overrides, allowlist_entries, pr_evaluations`,
     'cla_versions is immutable: TRUNCATE',
   ],
   ['TRUNCATE of a parent table with CASCADE', sql`truncate cla_documents cascade`, 'is immutable: TRUNCATE'],

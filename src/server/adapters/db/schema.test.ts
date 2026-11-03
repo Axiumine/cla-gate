@@ -128,6 +128,14 @@ const COLUMNS = {
     metadata: true,
   },
   installation_admin_seen: { installation_id: true, user_github_id: true, seen_at: true },
+  cla_drafts: {
+    document_id: true,
+    installation_id: true,
+    content_md: true,
+    revision: true,
+    updated_by: true,
+    updated_at: true,
+  },
 } satisfies { [Table in keyof Database]: Record<keyof Database[Table], true> };
 
 const BY_NAME = (a: string, b: string): number => a.localeCompare(b);

@@ -2,7 +2,7 @@
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "root": true,
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "ignoreUnknown": true, "includes": ["**"] },
+  "files": { "ignoreUnknown": true, "includes": ["**", "!src/shared/snapshots"] },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "javascript": { "formatter": { "quoteStyle": "single" } },
   "css": { "parser": { "tailwindDirectives": true } },

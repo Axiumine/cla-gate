@@ -39,6 +39,14 @@ import {
   ownersOfSignatures,
   removedRepositories,
 } from '../tenant-owners/test-support.ts';
+import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/test-support.ts';
+import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
+import {
+  ENFORCING_READS,
+  HISTORY_READS,
+  VERSION_READS,
+  VERSION_WRITES,
+} from '../tenant-registry-versions/test-support.ts';
 import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from '../tenant-scope.ts';
 
 // The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
@@ -54,6 +62,14 @@ export const TENANT_MODULES = [
   'services/audit-log-queries.ts',
   'services/close-pr/close-heads.ts',
   'services/close-pr/close-rows.ts',
+  'services/cla-document-queries.ts',
+  'services/cla-document-writes.ts',
+  'services/cla-draft-queries.ts',
+  'services/cla-draft-writes.ts',
+  'services/cla-enforcing-queries.ts',
+  'services/cla-history-queries.ts',
+  'services/cla-version-queries.ts',
+  'services/cla-version-writes.ts',
   'services/document-placement.ts',
   'services/evaluate-pr/evaluation-rows.ts',
   'services/evaluate-pr/policy-facts.ts',
@@ -97,6 +113,11 @@ export interface ScopedQuery {
   readonly activeOnly: boolean;
   /** Set for a function that turns a foreign id away with an error instead of answering nothing; the error is told by this. */
   readonly refusal?: Refusal;
+  /**
+   * Puts the world of the matrix in the state the entry needs, for both tenants, before the matrix takes its checksums (a
+   * repository that enforces a document, a second version to point at). Without it an entry has only the rows `twoTenants` stores.
+   */
+  readonly arrange?: (db: Kysely<Database>, tenants: readonly TenantWorld[]) => Promise<void>;
   readonly run: (db: Kysely<Database>, scope: TenantScope, ids: TenantWorld) => Promise<readonly number[]>;
 }
 
@@ -218,6 +239,14 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       },
     }),
   },
+  'services/cla-document-queries.ts': DOCUMENT_READS,
+  'services/cla-document-writes.ts': DOCUMENT_WRITES,
+  'services/cla-draft-queries.ts': DRAFT_READS,
+  'services/cla-draft-writes.ts': DRAFT_WRITES,
+  'services/cla-enforcing-queries.ts': ENFORCING_READS,
+  'services/cla-history-queries.ts': HISTORY_READS,
+  'services/cla-version-queries.ts': VERSION_READS,
+  'services/cla-version-writes.ts': VERSION_WRITES,
   'services/document-placement.ts': {
     findDocumentPlacement: scoped({
       takesIds: true,

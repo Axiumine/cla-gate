@@ -29,6 +29,9 @@ const audited = (route: string, story: string, ...actions: string[]): Documented
   built: false,
 });
 
+/** The same row once the application registers the route: the change that adds the route flips it. */
+const registered = (entry: DocumentedMutation): DocumentedMutation => ({ ...entry, built: true });
+
 const exempt = (route: string, story: string, reason: string, built = false): DocumentedMutation => ({
   route,
   story,
@@ -40,11 +43,11 @@ const exempt = (route: string, story: string, reason: string, built = false): Do
 export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
   exempt('POST /webhooks/github', 'E11-S01', 'webhook', true),
   exempt('POST /api/auth/logout', 'E10-S06', 'session', true),
-  audited(`POST ${INSTALLATION}/documents`, 'E12-S01', 'cla_document.created'),
-  audited(`PATCH ${DOCUMENT}`, 'E12-S01', 'cla_document.renamed'),
-  audited(`PUT ${DOCUMENT}/draft`, 'E12-S03', 'cla_draft.saved'),
-  audited(`DELETE ${DOCUMENT}/draft`, 'E12-S03', 'cla_draft.discarded'),
-  audited(`POST ${DOCUMENT}/versions`, 'E12-S04', 'cla_version.published'),
+  registered(audited(`POST ${INSTALLATION}/documents`, 'E12-S01', 'cla_document.created')),
+  registered(audited(`PATCH ${DOCUMENT}`, 'E12-S01', 'cla_document.renamed')),
+  registered(audited(`PUT ${DOCUMENT}/draft`, 'E12-S03', 'cla_draft.saved')),
+  registered(audited(`DELETE ${DOCUMENT}/draft`, 'E12-S03', 'cla_draft.discarded')),
+  registered(audited(`POST ${DOCUMENT}/versions`, 'E12-S04', 'cla_version.published')),
   audited('POST /api/sign', 'E13-S04', 'signature.created'),
   audited(
     `PUT ${REPOSITORY}/cla-document`,

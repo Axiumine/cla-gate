@@ -61,7 +61,10 @@ test('every route of the table that switches the limit off is on the RATE_LIMIT_
   expect(table.flatMap((route) => rateLimitProblem(route.method, route.url, route.config) ?? [])).toEqual([]);
 });
 
-test('the routes with a budget of their own are the four of the story, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
+/** `expect.any` is typed `any`; as `unknown` it can sit in an object literal. */
+const anyFunction: unknown = expect.any(Function);
+
+test('the routes with a budget of their own are the four of the login, the save of a draft, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
   const own = table.filter((route) => typeof limitOf(route) === 'object');
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
@@ -73,6 +76,7 @@ test('the routes with a budget of their own are the four of the story, the signa
       'GET /api/auth/login',
       'GET /api/auth/session',
       'POST /api/auth/logout',
+      'PUT /api/installations/:installationId/documents/:documentId/draft',
       csv,
       mine,
     ].toSorted((a, b) => a.localeCompare(b)),
@@ -82,6 +86,14 @@ test('the routes with a budget of their own are the four of the story, the signa
     'GET /api/auth/callback': { max: 20, timeWindow: 60_000, cache: 10_000 },
     'POST /api/auth/logout': { max: 20, timeWindow: 60_000, cache: 10_000 },
     'GET /api/auth/session': { max: 120, timeWindow: 60_000, cache: 10_000 },
+    // E12-S03: 30 saves a minute for each person, counted after the guard (hook preHandler) and keyed on the person.
+    'PUT /api/installations/:installationId/documents/:documentId/draft': {
+      max: 30,
+      timeWindow: 60_000,
+      cache: 10_000,
+      hook: 'preHandler',
+      keyGenerator: anyFunction,
+    },
   });
   // The exports key their budget on the person and check it after the guard of the route access (E16-S03, E16-S06).
   expect(Object.entries(budgets)).toContainEqual([
