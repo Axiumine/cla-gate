@@ -20,7 +20,7 @@ import type { TenantResolver, TenantTarget } from './tenant-access.ts';
 // guard answers with the uniform 404.
 
 /** An id as a path carries it: plain digits, no sign, no leading zero, and within what a number holds exactly. */
-const idText = z
+export const idText = z
   .string()
   .regex(/^[1-9]\d*$/)
   .transform(Number)

@@ -15,8 +15,11 @@ export const DOCUMENT_PATH = `${DOCUMENTS_PATH}/:documentId`;
 /** The draft of one document: read, save and discard (E12-S03). */
 export const DRAFT_PATH = `${DOCUMENT_PATH}/draft`;
 
-/** The versions of one document: publish (E12-S04); the history and the exact text come with E12-S05. */
+/** The versions of one document: the history (E12-S05) and publish (E12-S04). Nothing else hangs on it: a version never changes. */
 export const VERSIONS_PATH = `${DOCUMENT_PATH}/versions`;
+
+/** One version of a document with its exact text (E12-S05): read only. `:versionId` is `cla_versions.id`. */
+export const VERSION_PATH = `${VERSIONS_PATH}/:versionId`;
 
 /** The documents a repository admin sees for one repository (E12-S01). */
 export const REPOSITORY_DOCUMENTS_PATH = '/api/installations/:installationId/repositories/:repositoryId/documents';
@@ -91,8 +94,8 @@ export const createDocumentRequestSchema = z.strictObject({
 /** The body of `PATCH .../documents/:documentId`: the new name, cleaned like the one at creation. */
 export const renameDocumentRequestSchema = z.strictObject({ name: z.string() });
 
-/** The query of the document list: a plain-digit `limit` of 1 to 100 and the `cursor` an earlier page answered with. */
-export const listDocumentsQuerySchema = z.strictObject({
+/** The query of a paged list (the documents of E12-S01, the versions of E12-S05): a plain-digit `limit` of 1 to 100 and the `cursor` an earlier page answered with. */
+export const pageQuerySchema = z.strictObject({
   limit: z
     .string()
     .regex(/^[1-9]\d{0,2}$/)

@@ -30,7 +30,12 @@ import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { JOB_TENANT_QUERIES } from '../tenant-jobs-fixture/test-support.ts';
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
-import { ENFORCING_READS, VERSION_READS, VERSION_WRITES } from '../tenant-registry-versions/test-support.ts';
+import {
+  ENFORCING_READS,
+  HISTORY_READS,
+  VERSION_READS,
+  VERSION_WRITES,
+} from '../tenant-registry-versions/test-support.ts';
 import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from '../tenant-scope.ts';
 
 // The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
@@ -50,6 +55,7 @@ export const TENANT_MODULES = [
   'services/cla-draft-queries.ts',
   'services/cla-draft-writes.ts',
   'services/cla-enforcing-queries.ts',
+  'services/cla-history-queries.ts',
   'services/cla-version-queries.ts',
   'services/cla-version-writes.ts',
   'services/document-placement.ts',
@@ -309,6 +315,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   'services/cla-draft-queries.ts': DRAFT_READS,
   'services/cla-draft-writes.ts': DRAFT_WRITES,
   'services/cla-enforcing-queries.ts': ENFORCING_READS,
+  'services/cla-history-queries.ts': HISTORY_READS,
   'services/cla-version-queries.ts': VERSION_READS,
   'services/cla-version-writes.ts': VERSION_WRITES,
   'services/document-placement.ts': {

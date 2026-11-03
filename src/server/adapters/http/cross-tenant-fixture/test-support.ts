@@ -3,6 +3,7 @@
 import type { Kysely } from 'kysely';
 import type { Database } from '../../db/schema.ts';
 import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
+import { sha256 } from '../../db/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
@@ -62,6 +63,12 @@ export interface CrossTenantCase {
    * replaces, which each success changes). The runner reads it after `prepare` and sends it in place of the body of `request`.
    */
   readonly bodyFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<object>;
+  /**
+   * The URL of a call that must succeed, when it names a row that `prepare` creates (the version of a document, E12-S05). The runner
+   * reads it after `prepare` and sends it in place of the URL of `request`, which holds an id that names nothing and serves the
+   * calls that are denied before the row is looked up.
+   */
+  readonly urlFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<string>;
 }
 
 /** A row a response names, by table and `id` (`signature_id` for `signer_pii`). */
@@ -136,6 +143,49 @@ async function publishBody(db: Kysely<Database>, target: MatrixTarget): Promise<
   };
 }
 
+/** Gives the document of `target` its version 1.0 when it has none, and points the document at it, as a publish would leave it. */
+async function versionOne(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  const existing = await db
+    .selectFrom('cla_versions')
+    .select('id')
+    .where('document_id', '=', target.documentId)
+    .executeTakeFirst();
+  if (existing !== undefined) {
+    return;
+  }
+  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
+  const version = await db
+    .insertInto('cla_versions')
+    .values({
+      document_id: target.documentId,
+      major: 1,
+      minor: 0,
+      content_md: 'Matrix version\n',
+      content_sha256: sha256('Matrix version\n'),
+      published_by: person.id,
+      rationale: 'Made for the matrix',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .updateTable('cla_documents')
+    .set({ active_version_id: version.id })
+    .where('id', '=', target.documentId)
+    .execute();
+}
+
+/** The URL of the first version of the document of `target`, which `versionOne` made if there was none. */
+async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Promise<string> {
+  const version = await db
+    .selectFrom('cla_versions')
+    .select('id')
+    .where('document_id', '=', target.documentId)
+    .orderBy('id')
+    .limit(1)
+    .executeTakeFirstOrThrow();
+  return `${versionsUrl(target)}/${version.id}`;
+}
+
 /** The `tenant` routes of the application, keyed `METHOD path`. A story that adds one adds its case here (E13 to E16). */
 export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
   // E12-S01. The case creates a document that covers the installation (org admin only); the repository-scoped body is shown in document-routes-create.test.ts.
@@ -208,6 +258,18 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
         acknowledgeResigning: true,
       },
     }),
+  },
+  // E12-S05. The history is read only. The version a call reads is made by `prepare` (a document of the matrix may have none), so the URL
+  // of a call that must succeed names it; the one in `request` names no version, which is what the denied calls need.
+  'GET /api/installations/:installationId/documents/:documentId/versions': {
+    endpointClass: 'document_read',
+    request: (target) => ({ method: 'GET', url: versionsUrl(target) }),
+  },
+  'GET /api/installations/:installationId/documents/:documentId/versions/:versionId': {
+    endpointClass: 'document_read',
+    prepare: versionOne,
+    urlFor: firstVersionUrl,
+    request: (target) => ({ method: 'GET', url: `${versionsUrl(target)}/${target.documentId}` }),
   },
 };
 

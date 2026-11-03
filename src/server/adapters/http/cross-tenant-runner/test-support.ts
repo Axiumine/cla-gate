@@ -187,8 +187,13 @@ async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCa
 async function askAllowed(world: MatrixWorld, c: CrossTenantCase, who: PersonName, target: MatrixTarget) {
   await c.prepare?.(world.db, target);
   const spec = c.request(target);
+  const url = await c.urlFor?.(world.db, target);
   const payload = await c.bodyFor?.(world.db, target);
-  return world.ask(who, payload === undefined ? spec : { ...spec, payload });
+  return world.ask(who, {
+    ...spec,
+    ...(url === undefined ? {} : { url }),
+    ...(payload === undefined ? {} : { payload }),
+  });
 }
 
 /** The calls that are allowed: the admin of the organisation, and the admin of the repository where the role matrix lets them. */

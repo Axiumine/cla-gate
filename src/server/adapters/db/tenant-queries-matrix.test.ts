@@ -47,6 +47,8 @@ test('the registry holds the scoped queries the story lists, so the matrix below
     'services/cla-draft-writes.ts updateDraft',
     'services/cla-draft-writes.ts deleteDraft',
     'services/cla-enforcing-queries.ts listEnforcingRepositories',
+    'services/cla-history-queries.ts listVersions',
+    'services/cla-history-queries.ts findVersion',
     'services/cla-version-queries.ts lockDocument',
     'services/cla-version-queries.ts findActiveVersion',
     'services/cla-version-queries.ts countSignaturesAtMajor',

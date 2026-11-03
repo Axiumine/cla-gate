@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'vitest';
 import { serverSources } from '../db/tenant-scan/test-support.ts';
+import { publishVersion } from '../db/test-support.ts';
 import { auditRows, documentsPath, documentWorld, saveDraftAs } from './document-fixture/test-support.ts';
 
 // Where a draft can be seen (E12-S03). A draft is the work in progress of the admins of a scope, and it is not part of any
@@ -27,7 +28,12 @@ const sources = serverSources(SERVER);
 /** The URL of a `GET` route filled with the ids of tenant 1's repository-scoped document, or a refusal to guess an id this sweep does not know. */
 function urlFor(
   route: string,
-  ids: { readonly installationId: number; readonly documentId: number; readonly repositoryId: number },
+  ids: {
+    readonly installationId: number;
+    readonly documentId: number;
+    readonly repositoryId: number;
+    readonly versionId: number;
+  },
 ): string {
   return route.replaceAll(/:(\w+)/g, (_match, name: string) => {
     switch (name) {
@@ -37,6 +43,8 @@ function urlFor(
         return String(ids.documentId);
       case 'repositoryId':
         return String(ids.repositoryId);
+      case 'versionId':
+        return String(ids.versionId);
       default:
         throw new Error(
           `the sweep for draft text cannot fill :${name} of ${route}: teach urlFor which resource it names`,
@@ -51,8 +59,19 @@ test('the text of a draft is in the answer of no route that answers today but th
   const scoped = { installationId: world.t1.installationId, documentId: world.t1.scoped.documentId };
   await saveDraftAs(world, 'admin1', wide, { contentMd: `${MARKER} wide\n`, expectedRevision: null });
   await saveDraftAs(world, 'repoAdmin1', scoped, { contentMd: `${MARKER} scoped\n`, expectedRevision: 1 });
+  // A version of the same document, so that the routes of the history answer with a version and not with a 404 in this sweep.
+  const published = await publishVersion(world.db, scoped.documentId, world.t1.publisherId, {
+    major: 1,
+    minor: 0,
+    text: 'Published wording\n',
+  });
   await world.app.ready();
-  const ids = { ...wide, documentId: scoped.documentId, repositoryId: world.t1.scoped.repositoryId };
+  const ids = {
+    ...wide,
+    documentId: scoped.documentId,
+    repositoryId: world.t1.scoped.repositoryId,
+    versionId: published.id,
+  };
   const reads = world.app.routeAccess.filter(
     (entry) => entry.method === 'GET' && !entry.url.endsWith('/documents/:documentId/draft'),
   );

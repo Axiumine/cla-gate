@@ -13,9 +13,9 @@ import {
   DRAFT_PATH,
   documentListResponseSchema,
   isKindSupported,
-  listDocumentsQuerySchema,
   MAX_DOCUMENTS_PER_INSTALLATION,
   PAGE_SIZE,
+  pageQuerySchema,
   REPOSITORY_DOCUMENTS_PATH,
   renameDocumentRequestSchema,
   repositoryDocumentsResponseSchema,
@@ -109,7 +109,7 @@ test.each([
   ['a cursor', { cursor: 'abc' }, { cursor: 'abc' }],
   ['both', { limit: '1', cursor: 'abc' }, { limit: 1, cursor: 'abc' }],
 ])('a list query of %s is read', (_label, query, read) => {
-  expect(listDocumentsQuerySchema.parse(query)).toEqual(read);
+  expect(pageQuerySchema.parse(query)).toEqual(read);
 });
 
 test.each([
@@ -122,7 +122,7 @@ test.each([
   ['a cursor of 1025 characters', { cursor: 'a'.repeat(1025) }],
   ['an unknown key', { page: '2' }],
 ])('a list query with %s is refused', (_label, query) => {
-  expect(listDocumentsQuerySchema.safeParse(query).success).toBe(false);
+  expect(pageQuerySchema.safeParse(query).success).toBe(false);
 });
 
 test('a document is parsed with its times as ISO 8601 and the detail adds the draft flag', () => {

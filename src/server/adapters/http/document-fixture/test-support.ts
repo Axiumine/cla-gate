@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { expect } from 'vitest';
 import { z } from 'zod';
 import { errorResponseSchema } from '../../../../shared/errors.ts';
 import type { TestAppOptions } from '../../../test-support.ts';
 import { type PersonName, tenantChecksums } from '../../db/tenant-fixture/test-support.ts';
+import { sha256 } from '../../db/test-support.ts';
 import { matrixWorld } from '../cross-tenant-runner/test-support.ts';
 
 // The world of the CLA documents route tests (E12-S01): the two tenants and five people of the cross-tenant matrix, on the
@@ -156,4 +158,82 @@ export function discardDraftAs(
   documentId: number,
 ) {
   return world.ask(who, { method: 'DELETE', url: draftPath(installationId, documentId) });
+}
+
+/** The path of the version `versionId` of the document `documentId` of the installation `installationId`. */
+export const versionPath = (installationId: number, documentId: number, versionId: number | string): string =>
+  `${versionsPath(installationId, documentId)}/${versionId}`;
+
+/** Reads a page of the history of a document as `who`; `query` is the query string with its `?`, or nothing. */
+export function listVersionsAs(
+  world: DocumentWorld,
+  who: PersonName | null,
+  target: { readonly installationId: number; readonly documentId: number },
+  query = '',
+) {
+  return world.ask(who, { method: 'GET', url: `${versionsPath(target.installationId, target.documentId)}${query}` });
+}
+
+/** Reads one version of a document with its text as `who`. */
+export function readVersionAs(
+  world: DocumentWorld,
+  who: PersonName | null,
+  target: { readonly installationId: number; readonly documentId: number },
+  versionId: number | string,
+) {
+  return world.ask(who, { method: 'GET', url: versionPath(target.installationId, target.documentId, versionId) });
+}
+
+/**
+ * Saves `spec.text` as the draft of a document and publishes it through the routes, as `who`: a minor version over the one the
+ * document points at now, with the rationale `Because`, unless the rest of `spec` changes the body. Answers the response of the publish.
+ */
+export async function publishTextAs(
+  world: DocumentWorld,
+  who: PersonName,
+  target: { readonly installationId: number; readonly documentId: number },
+  spec: { readonly text: string } & Readonly<Record<string, unknown>>,
+) {
+  const { text, ...over } = spec;
+  const document = await world.db
+    .selectFrom('cla_documents')
+    .select('active_version_id')
+    .where('id', '=', target.documentId)
+    .executeTakeFirstOrThrow();
+  const draft = await world.db
+    .selectFrom('cla_drafts')
+    .select('revision')
+    .where('document_id', '=', target.documentId)
+    .executeTakeFirst();
+  const saved = await saveDraftAs(world, who, target, { contentMd: text, expectedRevision: draft?.revision ?? null });
+  expect(saved.statusCode).toBe(200);
+  return publishAs(world, who, target, {
+    source: { type: 'draft', revision: (draft?.revision ?? 0) + 1 },
+    bump: 'minor',
+    rationale: 'Because',
+    expectedActiveVersionId: document.active_version_id,
+    ...over,
+  });
+}
+
+/** Stores a version of a document past the routes, with the rationale as given; the hash is the one of the text. */
+export async function storeVersion(
+  world: DocumentWorld,
+  documentId: number,
+  spec: { readonly major: number; readonly minor: number; readonly text: string; readonly rationale: string },
+): Promise<number> {
+  const row = await world.db
+    .insertInto('cla_versions')
+    .values({
+      document_id: documentId,
+      major: spec.major,
+      minor: spec.minor,
+      content_md: spec.text,
+      content_sha256: sha256(spec.text),
+      published_by: world.t1.publisherId,
+      rationale: spec.rationale,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return row.id;
 }

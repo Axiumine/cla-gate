@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, NoResultError } from 'kysely';
 import { listEnforcingRepositories } from '../../../services/cla-enforcing-queries.ts';
+import { findVersion, listVersions } from '../../../services/cla-history-queries.ts';
 import { countSignaturesAtMajor, findActiveVersion, lockDocument } from '../../../services/cla-version-queries.ts';
 import { insertVersion, setActiveVersion } from '../../../services/cla-version-writes.ts';
 import type { Database } from '../schema.ts';
@@ -23,6 +24,17 @@ const REGISTRY_TEXT = 'Text stored by the registry\n';
 /** The installation that owns each document with these row ids, found by reading the table. */
 async function ownersOfDocuments(db: Kysely<Database>, documentIds: readonly number[]): Promise<number[]> {
   const rows = await db.selectFrom('cla_documents').select('installation_id').where('id', 'in', documentIds).execute();
+  return rows.map((row) => row.installation_id);
+}
+
+/** The installation that owns each version with these row ids, through its document. */
+async function ownersOfVersions(db: Kysely<Database>, versionIds: readonly number[]): Promise<number[]> {
+  const rows = await db
+    .selectFrom('cla_versions as v')
+    .innerJoin('cla_documents as d', 'd.id', 'v.document_id')
+    .select('d.installation_id')
+    .where('v.id', 'in', versionIds)
+    .execute();
   return rows.map((row) => row.installation_id);
 }
 
@@ -104,6 +116,33 @@ export const ENFORCING_READS: Readonly<Record<string, ScopedQuery>> = {
             db,
             repositories.map((repository) => repository.githubRepoId),
           );
+    },
+  },
+};
+
+/** The reads of the history of a document (E12-S05): the versions in order, and one version with its text. The world has version 1.0 on the installation-wide document of each tenant. */
+export const HISTORY_READS: Readonly<Record<string, ScopedQuery>> = {
+  listVersions: {
+    kind: 'scoped',
+    takesIds: true,
+    activeOnly: false,
+    run: async (db, scope, ids) => {
+      const versions = await listVersions(db, scope, ids.documentId, { limit: 10, from: null });
+      return versions.length === 0
+        ? []
+        : ownersOfVersions(
+            db,
+            versions.map((version) => version.id),
+          );
+    },
+  },
+  findVersion: {
+    kind: 'scoped',
+    takesIds: true,
+    activeOnly: false,
+    run: async (db, scope, ids) => {
+      const version = await findVersion(db, scope, ids.documentId, ids.versionId);
+      return version === null ? [] : ownersOfVersions(db, [version.id]);
     },
   },
 };

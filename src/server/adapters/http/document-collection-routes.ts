@@ -5,8 +5,8 @@ import type { Kysely } from 'kysely';
 import {
   DOCUMENTS_PATH,
   documentListResponseSchema,
-  listDocumentsQuerySchema,
   PAGE_SIZE,
+  pageQuerySchema,
   REPOSITORY_DOCUMENTS_PATH,
   repositoryDocumentsResponseSchema,
 } from '../../../shared/cla.ts';
@@ -34,7 +34,7 @@ export function listRoute(app: Routes, db: Kysely<Database>): void {
     },
     async (request, reply) => {
       const tenant = requireTenant(request);
-      const query = parseInput(listDocumentsQuerySchema, request.query);
+      const query = parseInput(pageQuerySchema, request.query);
       const from = query.cursor === undefined ? null : readPositionCursor(query.cursor);
       const page = await listDocumentPage(db, tenant, { limit: query.limit ?? PAGE_SIZE.default, from });
       setNoStore(reply);
