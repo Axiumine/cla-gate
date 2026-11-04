@@ -40,8 +40,9 @@ function heldBack(reply: FastifyReply, seconds: number): AppError {
  * `POST /api/setup/unlock` (E19-S06): compares the SHA-256 digests of the token it was given and the configured one in
  * constant time, answers a wrong one with `401 invalid_setup_token` and counts it; past the limit of the throttle it answers
  * `429` before it reads the token, the right one included. A right token opens a session: the cookie and the CSRF token, in
- * the body (a `204` has no body to carry it). It logs and stores nothing of the token, the session or the CSRF token, and a
- * body that is not `{token}` is a `400` that no counter sees.
+ * the body (a `204` has no body to carry it). It logs and stores nothing of the token, the session or the CSRF token (the events
+ * `setup.unlock.ok` and `setup.unlock.failed` of E19-S11 carry the request id and nothing else), and a body that is not
+ * `{token}` is a `400` that no counter sees.
  */
 export function unlockRoute(app: Routes, options: UnlockRouteOptions): void {
   app.post(
@@ -56,10 +57,12 @@ export function unlockRoute(app: Routes, options: UnlockRouteOptions): void {
       const { token } = parseInput(unlockRequestSchema, request.body);
       if (!sameSecret(options.token.reveal(), token)) {
         options.throttle.recordFailure(request.ip);
+        request.log.warn('setup.unlock.failed');
         throw new AppError(401, SETUP_ERROR_CODES.invalidToken);
       }
       const session = options.sessions.open();
       setSetupCookie(reply, session.id);
+      request.log.info('setup.unlock.ok');
       return { csrfToken: session.csrfToken };
     },
   );

@@ -21,7 +21,9 @@ export interface ManifestRouteOptions extends SetupGuardDeps {
  * `POST /api/setup/manifest` (E19-S06): needs the setup session (cookie, CSRF token and `Origin`, see
  * {@link requireSetupSession}, checked before the body is read) and answers with the manifest, the address to post it to and
  * a `state` that belongs to that session alone and replaces the one it had. The body is read by `parseInput`, so anything
- * the request schema refuses is a `400` before the manifest or the address is built. The `state` and the session are never logged.
+ * the request schema refuses is a `400` before the manifest or the address is built. The `state` and the session are never
+ * logged; the event `setup.manifest.issued` (E19-S11) carries the request id and nothing else. Once the credentials have been
+ * handed out, the guard answers `409 setup_already_issued` instead (E19-S11).
  */
 export function manifestRoute(app: Routes, options: ManifestRouteOptions): void {
   app.post(
@@ -37,6 +39,7 @@ export function manifestRoute(app: Routes, options: ManifestRouteOptions): void 
         appName: body.appName,
         allowOtherAccounts: body.allowOtherAccounts,
       });
+      request.log.info('setup.manifest.issued');
       return { actionUrl: manifestActionUrl(body, state), manifest, state };
     },
   );

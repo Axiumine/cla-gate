@@ -18,9 +18,12 @@ const SETUP_ENV: Readonly<Record<string, string>> = {
   PUBLIC_BASE_URL: SETUP_ORIGIN,
 };
 
-/** The app in setup mode (`env` adds to {@link SETUP_ENV}), closed after the test. */
-export function setupApp(options: Omit<TestAppOptions, 'db'> = {}): Promise<TestApp> {
-  return testApp({ ...options, env: { ...SETUP_ENV, ...options.env }, db: unreachableDatabase() });
+/**
+ * The app in setup mode (`env` adds to {@link SETUP_ENV}), closed after the test. Nothing of the setup reads the database, so
+ * it is one that is never reached unless a test gives one (E19-S11: the test that looks into every table for a secret).
+ */
+export function setupApp(options: TestAppOptions = {}): Promise<TestApp> {
+  return testApp({ ...options, env: { ...SETUP_ENV, ...options.env }, db: options.db ?? unreachableDatabase() });
 }
 
 /** What an unlock gave the browser: the cookie to send back and the token to send in `x-csrf-token`. */

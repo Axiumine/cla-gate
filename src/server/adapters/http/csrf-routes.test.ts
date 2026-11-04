@@ -9,19 +9,28 @@ test('the exempt set is exactly the webhook route, spelled out here on purpose',
   expect(CSRF_EXEMPT).toEqual(['POST /webhooks/github']);
 });
 
-test('the setup routes are the status, the unlock and the manifest, spelled out here on purpose', () => {
-  expect(SETUP_ROUTES).toEqual(['GET /api/setup/status', 'POST /api/setup/unlock', 'POST /api/setup/manifest']);
+test('the setup routes are the status, the unlock, the manifest and the conversion, spelled out here on purpose', () => {
+  expect(SETUP_ROUTES).toEqual([
+    'GET /api/setup/status',
+    'POST /api/setup/unlock',
+    'POST /api/setup/manifest',
+    'POST /api/setup/convert',
+  ]);
 });
 
-test.each(['POST /api/setup/unlock', 'POST /api/setup/manifest'])('%s is skipped by name, with no flag', (name) => {
-  const [method = '', url = ''] = name.split(' ');
-  expect(skipsCsrfCheck(method, url, undefined)).toBe(true);
-});
+test.each(['POST /api/setup/unlock', 'POST /api/setup/manifest', 'POST /api/setup/convert'])(
+  '%s is skipped by name, with no flag',
+  (name) => {
+    const [method = '', url = ''] = name.split(' ');
+    expect(skipsCsrfCheck(method, url, undefined)).toBe(true);
+  },
+);
 
 test.each([
   ['another method of the unlock', 'PUT', '/api/setup/unlock'],
   ['a path below the unlock', 'POST', '/api/setup/unlock/x'],
-  ['the conversion, which E19-S11 adds', 'POST', '/api/setup/convert'],
+  ['a path below the conversion', 'POST', '/api/setup/convert/x'],
+  ['another method of the conversion', 'PUT', '/api/setup/convert'],
   ['the login logout', 'POST', '/api/auth/logout'],
 ])('%s is not skipped', (_label, method, url) => {
   expect(skipsCsrfCheck(method, url, undefined)).toBe(false);

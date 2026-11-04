@@ -96,6 +96,7 @@ test('the exemption reasons are webhook, session and setup, and no registered ro
       .toSorted((a, b) => a.localeCompare(b)),
   ).toEqual([
     'POST /api/auth/logout session',
+    'POST /api/setup/convert setup',
     'POST /api/setup/manifest setup',
     'POST /api/setup/unlock setup',
     'POST /webhooks/github webhook',

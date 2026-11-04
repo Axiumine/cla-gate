@@ -39,6 +39,7 @@ import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer, JobQueue } from './services/ports/jobs.ts';
+import type { ManifestConversion } from './services/ports/manifest-conversion.ts';
 import { RoleCache } from './services/role-cache.ts';
 import { createTenantAuthorizer, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
 
@@ -53,9 +54,9 @@ export interface AppOptions {
   readonly readinessTimeoutMs?: number;
   /** Where the session lifetimes, the rate limit (E10-S02, E10-S08) and the webhook route (E06-S01) take "now" from. Defaults to the wall clock. */
   readonly clock?: Clock | undefined;
-  /** How the login reaches GitHub (E10-S05). Defaults to the global `fetch`; tests intercept it with MSW. */
+  /** How the login (E10-S05) and the setup's conversion (E19-S11) reach GitHub. Defaults to the global `fetch`; tests intercept it with MSW. */
   readonly fetch?: typeof fetch | undefined;
-  /** The ceiling of each call to GitHub during the login (E10-S05). Defaults to 10 seconds. */
+  /** The ceiling of each call to GitHub during the login (E10-S05) and of the setup's conversion (E19-S11). Defaults to 10 seconds. */
   readonly githubTimeoutMs?: number | undefined;
   /** Where the webhook route sends the job of a delivery (E06-S06). Defaults to the queue's own, and without a queue to one that fails every send. */
   readonly enqueuer?: JobEnqueuer;
@@ -83,6 +84,8 @@ export interface AppOptions {
   readonly appIdentity?: { current(): { readonly slug: string } | undefined } | undefined;
   /** The sessions the setup token unlocks (E19-S06), in setup mode only. Defaults to an empty store on `clock`; a test passes its own to read it. */
   readonly setupSessions?: SetupSessions | undefined;
+  /** How the setup trades GitHub's one-time code for the App's credentials (E19-S11). Defaults to the one over `fetch`; a test passes its own. */
+  readonly manifestConversion?: ManifestConversion | undefined;
 }
 
 /**
@@ -155,7 +158,14 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await app.register(operatorRoutes, { db });
   await app.register(documentRoutes, { db, enqueuer });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
-  await app.register(setupRoutes, { config, clock, sessions: options.setupSessions });
+  await app.register(setupRoutes, {
+    config,
+    clock,
+    sessions: options.setupSessions,
+    fetch: options.fetch,
+    githubTimeoutMs: options.githubTimeoutMs,
+    conversion: options.manifestConversion,
+  });
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });
   await app.register(webhookRoutes, {

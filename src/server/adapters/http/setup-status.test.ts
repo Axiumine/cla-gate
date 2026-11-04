@@ -63,7 +63,7 @@ test.each<['GET' | 'POST' | 'DELETE', string]>([
   expect(errorResponseSchema.parse(response.json()).error.code).toBe('not_found');
 });
 
-test('the setup mode registers the unlock, the manifest and the session read beside the status, and normal mode the status alone', async () => {
+test('the setup mode registers the unlock, the manifest, the session read and the conversion beside the status, and normal mode the status alone', async () => {
   const setup = await setupApp();
   const normal = await testApp({ env: AUTH_ENV });
   const setupRoutes = (app: typeof setup.app) =>
@@ -73,6 +73,7 @@ test('the setup mode registers the unlock, the manifest and the session read bes
     'POST /api/setup/unlock',
     'POST /api/setup/manifest',
     'GET /api/setup/session',
+    'POST /api/setup/convert',
   ]);
   expect(setupRoutes(normal.app)).toEqual(['GET /api/setup/status']);
 });

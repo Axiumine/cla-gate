@@ -20,16 +20,17 @@ declare module 'fastify' {
 export const CSRF_EXEMPT: readonly string[] = [`POST ${WEBHOOK_PATH}`];
 
 /**
- * The routes of the first-run setup (E19-S06). The manifest runs its own cookie, CSRF token and `Origin` check (the setup
- * session, not a login, carries the token) and the unlock is what opens that session, so neither has one to be checked
- * against; the hook skips them by name and they need no flag. The status is a `GET`, which is never checked. E19-S11 adds
- * the conversion.
+ * The routes of the first-run setup (E19-S06). The manifest and the conversion (E19-S11) run their own cookie, CSRF token and
+ * `Origin` check (the setup session, not a login, carries the token) and the unlock is what opens that session, so none of
+ * them has one to be checked against; the hook skips them by name and they need no flag. The status is a `GET`, which is
+ * never checked.
  * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
  */
 export const SETUP_ROUTES: readonly string[] = [
   'GET /api/setup/status',
   'POST /api/setup/unlock',
   'POST /api/setup/manifest',
+  'POST /api/setup/convert',
 ];
 
 /** The two lists, as a parameter so a test can try a list that is not empty. */

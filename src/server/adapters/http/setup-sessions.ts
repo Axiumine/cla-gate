@@ -5,7 +5,8 @@ import type { Clock } from '../../services/ports/clock.ts';
 
 // The sessions of the first-run setup (E19-S06): what an unlock opens and the cookie names. In memory only, in this process,
 // so a restart ends them all, and nothing about them is ever written down or logged. There is no database behind the setup
-// (no actor exists before the App does), and at most three people can be unlocked at once.
+// (no actor exists before the App does), and at most three people can be unlocked at once. The one fact that is not about a
+// session, that the credentials of an App were handed out (E19-S11), is kept here too and ends with the process.
 
 /**
  * Thirty minutes without a request ends a session.
@@ -30,7 +31,7 @@ export interface SetupSession {
   readonly id: string;
   /** What every setup `POST` besides the unlock presents in `x-csrf-token`. */
   readonly csrfToken: string;
-  /** The `state` of the manifest issued last to this session and not yet used, or undefined before the first one. */
+  /** The `state` of the manifest issued last to this session and not yet used, or undefined before the first one and after it was used (E19-S11). */
   state: string | undefined;
   /** When the session was last used, in milliseconds since the epoch. */
   seenAt: number;
@@ -45,12 +46,19 @@ export interface SetupSessions {
   renew(session: SetupSession): void;
   /** Gives `session` a new `state`, replacing the one it had: only the last manifest issued can be completed. */
   issueState(session: SetupSession): string;
+  /** Uses the `state` of `session` up (E19-S11): a conversion that reached GitHub's verdict cannot be completed a second time with it. */
+  consumeState(session: SetupSession): void;
+  /** Whether this process has handed out the credentials of an App (E19-S11). It stays so until the process restarts, whichever session asks. */
+  readonly credentialsIssued: boolean;
+  /** Records that the credentials of an App were handed out: the manifest and the conversion answer `409` from now on. */
+  markCredentialsIssued(): void;
 }
 
 /** An empty store on `clock`. */
 export function createSetupSessions(clock: Clock): SetupSessions {
   // A `Map` keeps insertion order and a session is moved to the back whenever it is used, so the first entry is the one used longest ago.
   const live = new Map<string, SetupSession>();
+  let credentialsIssued = false;
   const nowMs = (): number => clock.now().getTime();
 
   /** Forgets the sessions that have been idle too long. They are in order of use, so the first live one ends the walk. */
@@ -85,6 +93,15 @@ export function createSetupSessions(clock: Clock): SetupSessions {
     issueState(session) {
       session.state = randomValue();
       return session.state;
+    },
+    consumeState(session) {
+      session.state = undefined;
+    },
+    get credentialsIssued() {
+      return credentialsIssued;
+    },
+    markCredentialsIssued() {
+      credentialsIssued = true;
     },
   };
 }

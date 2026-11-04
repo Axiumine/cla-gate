@@ -92,3 +92,27 @@ test('a state is issued to a session, replaces the one before, and is different 
   expect(other.state).toBeUndefined();
   expect(sessions.issueState(other)).not.toBe(second);
 });
+
+test('a state that is consumed is gone from its session alone, and a new one can be issued after it (E19-S11)', () => {
+  const { sessions } = store();
+  const [mine, other] = [sessions.open(), sessions.open()];
+  const kept = sessions.issueState(other);
+  sessions.issueState(mine);
+  sessions.consumeState(mine);
+  expect(mine.state).toBeUndefined();
+  expect(other.state).toBe(kept);
+  expect(sessions.issueState(mine)).toMatch(BASE64URL_43);
+});
+
+test('the credentials were issued for no one until they are, then for every session and for as long as the process lives (E19-S11)', () => {
+  const { clock, sessions } = store();
+  const early = sessions.open();
+  expect(sessions.credentialsIssued).toBe(false);
+  sessions.markCredentialsIssued();
+  expect(sessions.credentialsIssued).toBe(true);
+  clock.advance(SETUP_IDLE_MS * 10);
+  expect(sessions.find(early.id)).toBeUndefined();
+  sessions.open();
+  expect(sessions.credentialsIssued).toBe(true);
+  expect(store().sessions.credentialsIssued).toBe(false);
+});

@@ -99,8 +99,13 @@ test('every route of the table declares a valid access', async () => {
   expect(table.filter((entry) => declaredAccess(entry.access) === undefined).map(nameOf)).toEqual([]);
 });
 
-/** The routes of PUBLIC_ROUTES that exist in setup mode only (E19-S06, E19-S07): the status is registered whatever the mode. */
-const SETUP_MODE_ONLY = ['POST /api/setup/unlock', 'POST /api/setup/manifest', 'GET /api/setup/session'];
+/** The routes of PUBLIC_ROUTES that exist in setup mode only (E19-S06, E19-S07, E19-S11): the status is registered whatever the mode. */
+const SETUP_MODE_ONLY = [
+  'POST /api/setup/unlock',
+  'POST /api/setup/manifest',
+  'GET /api/setup/session',
+  'POST /api/setup/convert',
+];
 
 test('the routes declared public are exactly PUBLIC_ROUTES, so a new public route is a reviewed edit of the constant', async () => {
   const { table } = await tableOfTheApp();

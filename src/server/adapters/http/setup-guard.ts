@@ -23,7 +23,9 @@ export interface SetupGuardDeps {
  * that passed them: a request from another site, or from nobody, learns nothing of how its input is read. A passing request
  * starts the idle time of the session over, in the store and in the cookie.
  * @throws AppError 403 `origin_mismatch` for an `Origin` that is missing or not ours, 401 `setup_locked` for a request with no
- * live session, 403 `csrf_invalid` for a missing or wrong token.
+ * live session, 403 `csrf_invalid` for a missing or wrong token, and, for a request that passed all three, 409
+ * `setup_already_issued` once this process has handed out the credentials of an App (E19-S11): a second App is not created by
+ * accident, so the manifest and the conversion both stop there, until the process restarts.
  */
 export function requireSetupSession(request: FastifyRequest, reply: FastifyReply, deps: SetupGuardDeps): SetupSession {
   if (request.headers.origin !== deps.origin) {
@@ -36,6 +38,9 @@ export function requireSetupSession(request: FastifyRequest, reply: FastifyReply
   // `x-csrf-token` is `CSRF_HEADER` of the shared auth contract (E10-S03).
   if (!sameSecret(session.csrfToken, request.headers['x-csrf-token'])) {
     throw new AppError(403, 'csrf_invalid');
+  }
+  if (deps.sessions.credentialsIssued) {
+    throw new AppError(409, SETUP_ERROR_CODES.alreadyIssued);
   }
   deps.sessions.renew(session);
   setSetupCookie(reply, session.id);
