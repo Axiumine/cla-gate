@@ -42,3 +42,15 @@ export function listNames(directory: string): string[] {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- the secrets directory of the stack's own temporary directory
   return fs.readdirSync(directory);
 }
+
+/**
+ * Replaces `file` with `text` and a line break, mode 0444, the way `install -m 0444` does (the key rotation guide of E19-S09): a
+ * new file in the same directory, renamed over the old one, so that a file the owner may not write can be replaced.
+ */
+export function replaceSecret(file: string, text: string): void {
+  const temporary = path.join(path.dirname(file), `.new.${path.basename(file)}`);
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- a file of the secrets directory of the stack's own temporary directory
+  fs.writeFileSync(temporary, `${text}\n`, { mode: 0o444 });
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- a file of the secrets directory of the stack's own temporary directory
+  fs.renameSync(temporary, file);
+}

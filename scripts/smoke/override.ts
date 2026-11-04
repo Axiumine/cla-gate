@@ -19,6 +19,8 @@ export interface OverrideOptions {
   readonly names: StackNames;
   /** Absolute path of the checkout: the build context. */
   readonly context: string;
+  /** Keys a scenario adds to a service (E19-S12), such as `extra_hosts`; they come after the labels, so they win. A service the file lacks is refused. */
+  readonly services?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 
 /**
@@ -28,6 +30,11 @@ export interface OverrideOptions {
  */
 export function overrideFor(composeText: string, options: OverrideOptions): string {
   const compose = composeSchema.parse(parse(composeText, { merge: true }));
+  const extra = new Map(Object.entries(options.services ?? {}));
+  const unknown = [...extra.keys()].filter((name) => !Object.hasOwn(compose.services, name));
+  if (unknown.length > 0) {
+    throw new Error(`the compose file has no service ${unknown.join(', ')}`);
+  }
   const labels = runLabels(options.names.run);
   const labelled = () => ({ labels });
   const service = (build: unknown) =>
@@ -35,7 +42,9 @@ export function overrideFor(composeText: string, options: OverrideOptions): stri
       ? labelled()
       : { image: options.names.image, build: { context: options.context, labels }, labels };
   return stringify({
-    services: Object.fromEntries(Object.entries(compose.services).map(([name, body]) => [name, service(body.build)])),
+    services: Object.fromEntries(
+      Object.entries(compose.services).map(([name, body]) => [name, { ...service(body.build), ...extra.get(name) }]),
+    ),
     networks: Object.fromEntries(Object.keys(compose.networks).map((name) => [name, labelled()])),
     volumes: Object.fromEntries(Object.keys(compose.volumes).map((name) => [name, labelled()])),
   });

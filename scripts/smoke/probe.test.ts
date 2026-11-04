@@ -3,14 +3,21 @@
 import { expect, test } from 'vitest';
 import type { ExecResult } from '../ci/lib/exec.ts';
 import { fail, ok } from '../ci/lib/test-support.ts';
-import { execIn, inspectService, output, sqlAs } from './probe.ts';
+import { execIn, inspectContainer, inspectService, lifetimeMs, output, sqlAs } from './probe.ts';
 
 // E19-S08: how the scenarios look into a running stack. docker is a stub that records its arguments.
 
 const CONTAINER = {
   Id: 'abc123',
+  RestartCount: 0,
   Config: { User: '10001:10001', Env: ['NODE_ENV=production'], Labels: { 'cla-gate.ci': 'container' } },
-  State: { Status: 'running', ExitCode: 0, Health: { Status: 'healthy' } },
+  State: {
+    Status: 'running',
+    ExitCode: 0,
+    StartedAt: '2026-11-04T10:00:00.000Z',
+    FinishedAt: '0001-01-01T00:00:00Z',
+    Health: { Status: 'healthy' },
+  },
   HostConfig: { ReadonlyRootfs: true, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true'], PortBindings: null },
   NetworkSettings: { Ports: { '5432/tcp': null, '3000/tcp': [{ HostIp: '127.0.0.1', HostPort: '41000' }] } },
 };
@@ -44,7 +51,12 @@ test('inspectService asks compose for the id of the service and docker for what 
 });
 
 test('a container without a health check has no Health in the state', async () => {
-  const state = { Status: 'exited', ExitCode: 0 };
+  const state = {
+    Status: 'exited',
+    ExitCode: 0,
+    StartedAt: '2026-11-04T10:00:00Z',
+    FinishedAt: '2026-11-04T10:00:03Z',
+  };
   const probe = stub(ok('abc123\n'), ok(JSON.stringify({ ...CONTAINER, State: state })));
   expect((await inspectService(probe, 'migrate')).State.Health).toBeUndefined();
 });
@@ -119,4 +131,28 @@ test.each([
 
 test('output joins what a command printed on both streams', () => {
   expect(output({ code: 1, stdout: 'a\n', stderr: 'b\n' })).toBe('a\nb');
+});
+
+test('inspectContainer asks docker for the container by id or name, and names what it was for in the error', async () => {
+  const probe = stub(ok(), ok(JSON.stringify(CONTAINER)));
+  expect((await inspectContainer(probe, 'cla-run-1')).RestartCount).toBe(0);
+  expect(probe.calls).toEqual([['docker', 'inspect', '--format', '{{json .}}', 'cla-run-1']]);
+  await expect(inspectContainer(stub(ok(), fail('Error: No such object: x')), 'x', 'the proxy')).rejects.toThrow(
+    'docker inspect the proxy failed: Error: No such object: x',
+  );
+  await expect(inspectContainer(stub(ok(), fail('Error: No such object: x')), 'x')).rejects.toThrow(
+    'docker inspect x failed',
+  );
+});
+
+test('the restart count and the times of the start and the end are read from the state', async () => {
+  const probe = stub(ok('abc\n'), ok(JSON.stringify({ ...CONTAINER, RestartCount: 2 })));
+  const container = await inspectService(probe, 'app');
+  expect([container.RestartCount, container.State.StartedAt]).toEqual([2, '2026-11-04T10:00:00.000Z']);
+});
+
+test('the lifetime of a container is the time from its start to its end, in milliseconds', async () => {
+  const state = { ...CONTAINER.State, Status: 'exited', FinishedAt: '2026-11-04T10:00:00.730Z' };
+  const probe = stub(ok('abc\n'), ok(JSON.stringify({ ...CONTAINER, State: state })));
+  expect(lifetimeMs(await inspectService(probe, 'app'))).toBe(730);
 });

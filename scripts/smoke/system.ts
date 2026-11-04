@@ -7,6 +7,7 @@ import { execWithTimeout, realExec } from '../ci/lib/exec.ts';
 import { pickSystemFreePort } from '../ci/lib/ports.ts';
 import type { SmokeCliDeps } from './cli.ts';
 import type { StackDeps } from './stack-types.ts';
+import type { Clock } from './wait.ts';
 
 // E19-S08: the real dependencies of the container smoke test: docker on the PATH, crypto randomness, a bind probe on
 // 127.0.0.1 for the ports, this checkout, and reports/smoke for the logs (git-ignored, uploaded by the workflow on a failure).
@@ -26,4 +27,10 @@ export const stackDeps: StackDeps = {
   root: ROOT,
   env: process.env,
   logsDirectory: path.join(ROOT, 'reports', 'smoke'),
+};
+
+/** The wall of the real world for the scenarios that wait: a clock that only goes forward, and a sleep that really sleeps. */
+export const clock: Clock = {
+  now: () => performance.now(),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };

@@ -7,6 +7,9 @@ import { PGBOSS_SCHEMA } from './queues.ts';
 /** The unprivileged role the application connects as (`scripts/provision-database.sql`). It owns nothing. */
 const RUNTIME_ROLE = 'cla_app';
 
+/** The name the grants are serialised under (E19-S12): hashed to the key of a transaction-level advisory lock. */
+const GRANTS_LOCK_NAME = 'migrate:runtime-grants';
+
 /**
  * Grants the runtime role what pg-boss needs at run time and nothing it could change the schema with (E07-S01): use of
  * the schema, DML on its tables, use of its sequences, execution of its functions. There is no `CREATE` on the schema, no
@@ -15,6 +18,11 @@ const RUNTIME_ROLE = 'cla_app';
  * migration, a queue with a table of its own), and every run of the migrate step repeats the grants on what exists, so a
  * database that predates them is brought in line. Like migration 001, it does nothing when the role does not exist (a
  * plain install or PGlite).
+ *
+ * Two migrate steps that run at once (two `docker compose run migrate`, or a rolling deploy) take turns here (E19-S12): a
+ * transaction-level advisory lock is the first statement. Without it the second `grant usage on schema` fails with
+ * `tuple concurrently updated`, because PostgreSQL does not lock the catalogue row of an object that two sessions grant on
+ * at the same time. The lock ends with the transaction, so there is nothing to release.
  * @param db A connection of the migration owner: only the owner can grant on the tables it owns.
  */
 export async function grantRuntimeAccess(db: Kysely<Database>): Promise<'granted' | 'skipped'> {
@@ -34,6 +42,7 @@ export async function grantRuntimeAccess(db: Kysely<Database>): Promise<'granted
     sql`alter default privileges in schema ${schema} grant execute on functions to ${role}`,
   ];
   await db.transaction().execute(async (trx) => {
+    await sql`select pg_advisory_xact_lock(hashtextextended(${GRANTS_LOCK_NAME}, 0))`.execute(trx);
     for (const statement of statements) {
       await statement.execute(trx);
     }

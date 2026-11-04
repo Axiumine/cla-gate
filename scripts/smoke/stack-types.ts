@@ -28,9 +28,24 @@ export interface StackOptions {
   readonly profiles?: readonly string[];
   /** Lines for .env besides the smoke test's own (the port, the origin, the network); these win. */
   readonly settings?: Readonly<Record<string, string>>;
+  /**
+   * Only these services are started and waited for (E19-S12); the rest is left to the scenario. The image is still built, so a
+   * `docker compose run` of a service that is not started finds it. Empty or missing: every service of the active profiles.
+   */
+  readonly services?: readonly string[];
+  /**
+   * Names of dotenv settings (`CADDY_HTTP_PORT`) that each get a random free port above 32768 of their own, drawn again with
+   * the application's port when one is taken (E19-S12). The ports end up in `environment`, so a scenario can read them.
+   */
+  readonly ports?: readonly string[];
+  /** Keys added to a service in the compose override (`extra_hosts`), by service name (E19-S12). A name the compose file lacks is refused. */
+  readonly overrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 
 export type Run = (args: readonly string[]) => Promise<ExecResult>;
+
+/** One shell script in, its outcome out. */
+export type RunScript = (script: string) => Promise<ExecResult>;
 
 /** What identifies a running stack and survives being copied to another process (Vitest's `provide` and `inject`). */
 export interface StackInfo {
@@ -54,6 +69,12 @@ export interface Stack extends StackInfo {
   readonly docker: Run;
   /** The content of `secrets/<name>` without its line break: for assertions about what must stay secret. */
   readonly secret: (name: string) => string;
+  /**
+   * Runs a shell script in the `work` directory of the stack's own directory, with `docker compose` standing for this project
+   * (its name, files, profiles and settings) and `git` for the checkout, so that a command line of the operator guides runs as
+   * the guide prints it (E19-S12). `set -eu` is on: the first failing line ends the script.
+   */
+  readonly shell: RunScript;
   /** Writes the redacted logs of every service to the log directory and returns the path. */
   readonly saveLogs: () => Promise<string>;
   /** Saves the logs, then `down --volumes`, removes the image and the temporary directory. Throws what failed, after doing the rest. */

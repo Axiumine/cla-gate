@@ -980,7 +980,10 @@ jobs:
   # The container smoke test (E19-S08). Not a required check: it becomes one only once it has been stable (CONTRIBUTING.md,
   # Repository protection). It builds the image from the checkout and starts the operator stack of docker-compose.yml on the
   # runner's Docker daemon, with the real scripts/init-secrets.sh, and reads it from outside: setup-mode boot, hardening and
-  # role separation (`yarn smoke`, tests/smoke/). Before that it checks the compose file for the default and the `tls` profile.
+  # role separation on the stack of the global setup, then the scenarios of E19-S12, each on a stack of its own under its own
+  # compose project name and volumes (configured mode, failure injection, backup and restore, the `tls` profile) (`yarn smoke`,
+  # tests/smoke/). Before that it checks the compose file for the default and the `tls` profile. The `tls` scenario publishes
+  # Caddy on random loopback ports above 32768 and never on 80 or 443.
   # Docker is shared with other repositories (docs/ci-runners.md, Containers and cleanup), so the run has a name of its own,
   # CLA_SMOKE_RUN, built from the run id and attempt and set before docker runs; every container, network, volume and image of
   # the test carries the labels cla-gate.ci=container and cla-gate.run=<that name>. The test removes its stack in its own

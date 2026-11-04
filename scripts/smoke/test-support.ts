@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach } from 'vitest';
 import type { Exec, ExecResult } from '../ci/lib/exec.ts';
 import { realExec } from '../ci/lib/exec.ts';
-import { ok } from '../ci/lib/test-support.ts';
+import { ok, readText } from '../ci/lib/test-support.ts';
 import { tempDir } from '../code-caps/test-support.ts';
 import { removeDirectory } from './files.ts';
 import type { Stack, StackDeps } from './stack-types.ts';
@@ -26,8 +26,20 @@ export interface Call {
   readonly env: Readonly<Record<string, string>> | undefined;
 }
 
-/** The compose verb of a `docker compose` call (`up`, `down`, `logs`), or the first word of any other docker call. */
+/** The script `Stack.shell` (E19-S12) hands to `sh -c`, as the verb of that call. */
+const SHELL = 'shell';
+
+/** The verb of the call to the secrets script, which really runs. */
+const INIT_SCRIPT = 'init-secrets';
+
+/**
+ * The compose verb of a `docker compose` call (`up`, `down`, `logs`), or the first word of any other docker call; `shell` for a
+ * script given to `sh -c` and `init-secrets` for the run of scripts/init-secrets.sh.
+ */
 export function verbOf(call: Call): string {
+  if (call.file === 'sh') {
+    return call.args[0] === '-c' ? SHELL : INIT_SCRIPT;
+  }
   const [first = '', ...rest] = call.args;
   if (first !== 'compose') {
     return first;
@@ -37,6 +49,24 @@ export function verbOf(call: Call): string {
     words.splice(0, 2);
   }
   return words[0] ?? '';
+}
+
+/** The verbs of the compose calls that start and stop the stack, in order. */
+export function lifecycle(calls: readonly Call[]): string[] {
+  return calls.map((call) => verbOf(call)).filter((verb) => verb === 'up' || verb === 'down');
+}
+
+/** The dotenv file of a stack's directory. */
+export const DOTENV = '.env';
+
+/** The settings of the dotenv file the stack wrote, as a map. */
+export function settingsOf(directory: string): Map<string, string> {
+  const lines = readText(path.join(directory, DOTENV))
+    .split('\n')
+    .filter((line) => /^[A-Z][A-Z0-9_]*=/.test(line));
+  return new Map(
+    lines.map((line): [string, string] => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]),
+  );
 }
 
 export interface Script {
@@ -60,7 +90,7 @@ export function track(stack: Stack): Stack {
   return stack;
 }
 
-/** `StackDeps` for the real checkout with docker scripted: `sh` (the secrets script) really runs, everything else is answered. */
+/** `StackDeps` for the real checkout with docker scripted: `sh` running the secrets script really runs, everything else is answered. */
 export function scripted(script: Script = {}): {
   readonly deps: StackDeps;
   readonly calls: Call[];
@@ -74,10 +104,10 @@ export function scripted(script: Script = {}): {
   const exec: Exec = (file, args, env) => {
     const call = { file, args, env };
     calls.push(call);
-    if (file === 'sh') {
+    const verb = verbOf(call);
+    if (verb === INIT_SCRIPT) {
       return realExec(file, args, env);
     }
-    const verb = verbOf(call);
     const queue = replies.get(verb) ?? [];
     const index = used.get(verb) ?? 0;
     used.set(verb, index + 1);

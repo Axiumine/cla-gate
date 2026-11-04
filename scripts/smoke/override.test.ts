@@ -78,3 +78,31 @@ test('a compose file with other names gets the same treatment, so a new service 
 test('a file that is not a compose file is refused', () => {
   expect(() => overrideFor('services: 3\n', { names: NAMES, context: CONTEXT })).toThrow();
 });
+
+test('keys a scenario adds to a service (E19-S12) come after its labels, and the other services are left as they were', () => {
+  const services = { app: { extra_hosts: ['api.github.com:127.0.0.1'], labels: { 'cla-gate.ci': 'mine' } } };
+  const added = fileSchema
+    .extend({ services: z.record(z.string(), resourceSchema.extend({ extra_hosts: z.array(z.string()).optional() })) })
+    .parse(parse(overrideFor(COMPOSE, { names: NAMES, context: CONTEXT, services })));
+  expect(added.services['app']).toEqual({
+    image: NAMES.image,
+    build: { context: CONTEXT, labels: LABELS },
+    labels: { 'cla-gate.ci': 'mine' },
+    extra_hosts: ['api.github.com:127.0.0.1'],
+  });
+  expect(added.services['migrate']).toEqual(serviceOf('migrate'));
+  expect(added.services['postgres']).toEqual({ labels: LABELS });
+});
+
+test('keys for a service the file does not declare are refused, naming each; an empty map changes nothing', () => {
+  const services = { nope: { init: true }, nothing: { init: true } };
+  expect(() => overrideFor(COMPOSE, { names: NAMES, context: CONTEXT, services })).toThrow(
+    'the compose file has no service nope, nothing',
+  );
+  expect(() => overrideFor(COMPOSE, { names: NAMES, context: CONTEXT, services: { constructor: {} } })).toThrow(
+    'no service constructor',
+  );
+  expect(overrideFor(COMPOSE, { names: NAMES, context: CONTEXT, services: {} })).toBe(
+    overrideFor(COMPOSE, { names: NAMES, context: CONTEXT }),
+  );
+});

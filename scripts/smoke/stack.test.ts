@@ -10,30 +10,25 @@ import { listNames } from './files.ts';
 import { COPIED } from './prepare.ts';
 import { connect, startStack } from './stack.ts';
 import type { StackDeps } from './stack-types.ts';
-import { callsOf, FIRST_SUBNET, LAST_SUBNET, ROOT, scripted, track, verbOf } from './test-support.ts';
+import {
+  callsOf,
+  DOTENV,
+  FIRST_SUBNET,
+  LAST_SUBNET,
+  lifecycle,
+  ROOT,
+  scripted,
+  settingsOf,
+  track,
+  verbOf,
+} from './test-support.ts';
 
 // E19-S08: the lifecycle of a smoke stack, with docker scripted and the real checkout, the real scripts/init-secrets.sh and
 // real temporary directories.
 
 const COMPOSE = readText(path.join(ROOT, 'docker-compose.yml'));
 const PROJECT = 'cla-smoke-local-abcd1234-boot';
-const DOTENV = '.env';
 const TAKEN = 'Error response from daemon: driver failed programming external connectivity: port is already allocated';
-
-/** The settings of the dotenv file the stack wrote, as a map. */
-function settingsOf(directory: string): Map<string, string> {
-  const lines = readText(path.join(directory, DOTENV))
-    .split('\n')
-    .filter((line) => /^[A-Z][A-Z0-9_]*=/.test(line));
-  return new Map(
-    lines.map((line): [string, string] => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]),
-  );
-}
-
-/** The verbs of the compose calls that start and stop the stack, in order. */
-function lifecycle(calls: Parameters<typeof verbOf>[0][]): string[] {
-  return calls.map((call) => verbOf(call)).filter((verb) => verb === 'up' || verb === 'down');
-}
 
 test('the files a stack copies cover every bind mount of the compose file, the dotenv template and the secrets script', () => {
   const shape = z.object({ services: z.record(z.string(), z.object({ volumes: z.array(z.string()).optional() })) });

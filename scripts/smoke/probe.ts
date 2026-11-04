@@ -11,6 +11,7 @@ import type { Stack } from './stack-types.ts';
 /** The part of `docker inspect` the scenarios read. */
 const containerSchema = z.object({
   Id: z.string(),
+  RestartCount: z.number(),
   Config: z.object({
     User: z.string(),
     Env: z.array(z.string()),
@@ -19,6 +20,8 @@ const containerSchema = z.object({
   State: z.object({
     Status: z.string(),
     ExitCode: z.number(),
+    StartedAt: z.string(),
+    FinishedAt: z.string(),
     Health: z.object({ Status: z.string() }).optional(),
   }),
   HostConfig: z.object({
@@ -41,6 +44,15 @@ export function output(result: ExecResult): string {
   return `${result.stdout}${result.stderr}`.trim();
 }
 
+/** The container `id` (an id or a name), as Docker reports it; `what` names it in the error of a failed call. */
+export async function inspectContainer(stack: Pick<Stack, 'docker'>, id: string, what = id): Promise<Container> {
+  const inspected = await stack.docker(['inspect', '--format', '{{json .}}', id]);
+  if (inspected.code !== 0) {
+    throw new Error(`docker inspect ${what} failed: ${output(inspected)}`);
+  }
+  return containerSchema.parse(JSON.parse(inspected.stdout));
+}
+
 /** The container of `service`, as Docker reports it; a service without a container fails the scenario that asked. */
 export async function inspectService(stack: Compose, service: string): Promise<Container> {
   const listed = await stack.compose(['ps', '--all', '--quiet', service]);
@@ -48,11 +60,12 @@ export async function inspectService(stack: Compose, service: string): Promise<C
   if (listed.code !== 0 || id === undefined || id === '') {
     throw new Error(`service ${service} has no container: ${output(listed)}`);
   }
-  const inspected = await stack.docker(['inspect', '--format', '{{json .}}', id]);
-  if (inspected.code !== 0) {
-    throw new Error(`docker inspect ${service} failed: ${output(inspected)}`);
-  }
-  return containerSchema.parse(JSON.parse(inspected.stdout));
+  return inspectContainer(stack, id, service);
+}
+
+/** How long the container lived, from the start Docker recorded to the exit it recorded: the application's own time, without Docker's. */
+export function lifetimeMs(container: Container): number {
+  return Date.parse(container.State.FinishedAt) - Date.parse(container.State.StartedAt);
 }
 
 /** Runs `command` in the running container of `service` (no terminal, so it works in CI). */

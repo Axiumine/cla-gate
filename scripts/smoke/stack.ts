@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { messageOf } from '../ci/lib/errors.ts';
 import { bringUp } from './bring-up.ts';
-import { composer, secretIn } from './compose.ts';
+import { composer, scripter, secretIn } from './compose.ts';
 import { makeTemporaryDirectory } from './files.ts';
 import { smokeRun, stackNames } from './names.ts';
 import { prepare } from './prepare.ts';
@@ -11,7 +11,7 @@ import { removal } from './teardown.ts';
 
 // E19-S08: one operator stack for the container smoke test. It runs the real docker-compose.yml and the real
 // scripts/init-secrets.sh in a temporary directory, under a project name of its own, on a random loopback port; it is removed
-// again, volumes and image included, whatever happened in between. Later scenarios (E19-S12) start more of them.
+// again, volumes and image included, whatever happened in between. The scenarios of E19-S12 start more of them, one per scenario.
 
 /** The handle of a stack that is up, made from what {@link StackInfo} says: the test files of Vitest's workers connect this way. */
 export function connect(deps: StackDeps, info: StackInfo): Stack {
@@ -20,6 +20,7 @@ export function connect(deps: StackDeps, info: StackInfo): Stack {
     ...info,
     url: `http://127.0.0.1:${info.port}`,
     compose: composer(deps, info.names, info.directory)(info.profiles, info.environment),
+    shell: scripter(deps, info.names, info.directory)(info.profiles, info.environment),
     docker: (args) => deps.exec('docker', args),
     secret: (name) => secretIn(info.directory, name),
     saveLogs,
@@ -37,7 +38,7 @@ export async function startStack(deps: StackDeps, options: StackOptions): Promis
   const directory = makeTemporaryDirectory();
   const profiles = (options.profiles ?? []).join(',');
   try {
-    const dotenv = await prepare(deps, names, directory);
+    const dotenv = await prepare(deps, names, directory, options.overrides);
     const up = await bringUp(deps, composer(deps, names, directory), { ...options, directory, dotenv });
     return connect(deps, { names, directory, profiles, ...up });
   } catch (error) {
