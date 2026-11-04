@@ -9,6 +9,7 @@ import {
   erasureResultSchema,
 } from '../../../shared/erasure.ts';
 import { eraseSigner, erasureCounts } from '../../services/signer-erasure.ts';
+import { holdsAnythingAbout } from '../../services/signer-erasure-counts.ts';
 import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
 import { asAppError, erasureRequest, previewQuerySchema } from './erasure-request.ts';
@@ -26,8 +27,8 @@ export interface ErasureRoutesOptions {
  * personal data of a person spans documents, so a repository admin gets a `403` and a viewer with no role the uniform `404`.
  * `GET …/erasure-preview?githubUserId=` counts what an erasure would remove; `POST …/erasures` removes it through the SQL
  * function `erase_signer_pii`, which writes the audit row `signer_pii.erased` itself. A person with no signature in the
- * installation is a `404` on both, and an `expectedRows` that is no longer the number of rows is a `409 count_changed` that
- * changes nothing. The log line of an erasure holds numeric ids and counts only, never a name, a login or an email.
+ * installation and no allowlist entry there is a `404` on both, and an `expectedRows` that is no longer the number of rows
+ * is a `409 count_changed` that changes nothing. The log line of an erasure holds numeric ids and counts only, never a name, a login or an email.
  */
 export const erasureRoutes: FastifyPluginCallbackZod<ErasureRoutesOptions> = (app, options, done) => {
   app.get(
@@ -40,7 +41,7 @@ export const erasureRoutes: FastifyPluginCallbackZod<ErasureRoutesOptions> = (ap
     async (request, reply) => {
       const { githubUserId } = request.query;
       const counts = await erasureCounts(options.db, requireTenant(request), githubUserId);
-      if (counts.signatures === 0) {
+      if (!holdsAnythingAbout(counts)) {
         throw new AppError(404, 'not_found');
       }
       setNoStore(reply);

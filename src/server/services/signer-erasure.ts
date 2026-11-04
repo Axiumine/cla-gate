@@ -5,18 +5,14 @@ import type { GithubId } from '../../shared/github-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
+import { type ErasureCounts, holdsAnythingAbout } from './signer-erasure-counts.ts';
 import { ErasureCountChangedError, SignerNotFoundError } from './signer-erasure-errors.ts';
 
-// The erasure of one signer's personal data in one tenant (E16-S04). The deletion, the scrub of the display snapshot and the
+// The erasure of one signer's personal data in one tenant (E16-S04). A person the tenant lists on its allowlist and who never
+// signed is erased too (their login snapshot is cleared). The deletion, the scrub of the display snapshots and the
 // audit row `signer_pii.erased` are the work of the SQL function `erase_signer_pii` (the only code that may remove a
 // `signer_pii` row, and the only writer of that audit row); this module counts what it will remove, calls it for the tenant of
 // the scope and holds it to the number the admin confirmed.
-
-/** What the tenant holds about a person: the signatures (they stay) and the rows of personal data kept for them. */
-export interface ErasureCounts {
-  readonly signatures: number;
-  readonly signerPiiRows: number;
-}
 
 /** One erasure asked for: the person, the number of rows the admin confirmed and the admin. */
 export interface ErasureRequest {
@@ -29,8 +25,9 @@ export interface ErasureRequest {
 }
 
 /**
- * How many signatures the tenant holds for the person and how many rows of personal data are kept for them. Both are zero for
- * a person the tenant knows nothing of, and for one who signed in another tenant only: the statement names the installation.
+ * How many signatures the tenant holds for the person, how many rows of personal data are kept for them and how many
+ * allowlist entries name them. All are zero for a person the tenant knows nothing of, and for one who signed or was listed in
+ * another tenant only: the statements name the installation.
  */
 export async function erasureCounts(
   db: Kysely<Database>,
@@ -45,7 +42,13 @@ export async function erasureCounts(
     .where('u.github_id', '=', githubUserId)
     .select([sql<number>`count(*)`.as('signatures'), sql<number>`count(p.signature_id)`.as('signer_pii_rows')])
     .executeTakeFirstOrThrow();
-  return { signatures: row.signatures, signerPiiRows: row.signer_pii_rows };
+  const entries = await db
+    .selectFrom('allowlist_entries')
+    .where('installation_id', '=', scope.installationId)
+    .where('github_id', '=', githubUserId)
+    .select(sql<number>`count(*)`.as('entries'))
+    .executeTakeFirstOrThrow();
+  return { signatures: row.signatures, signerPiiRows: row.signer_pii_rows, allowlistEntries: entries.entries };
 }
 
 /**
@@ -54,12 +57,12 @@ export async function erasureCounts(
  * it is not the number the admin confirmed (someone signed, or another admin erased, since the preview) the transaction is
  * rolled back, the audit row included, and nothing has changed.
  * @returns The number of `signer_pii` rows deleted, which is `request.expectedRows`.
- * @throws SignerNotFoundError when the person has no signature in the tenant.
+ * @throws SignerNotFoundError when the tenant holds nothing about the person: no signature and no allowlist entry.
  * @throws ErasureCountChangedError when the function would delete another number of rows than `request.expectedRows`.
  */
 export function eraseSigner(db: Kysely<Database>, scope: TenantScope, request: ErasureRequest): Promise<number> {
   return withTransaction(db, async (trx) => {
-    if ((await erasureCounts(trx, scope, request.githubUserId)).signatures === 0) {
+    if (!holdsAnythingAbout(await erasureCounts(trx, scope, request.githubUserId))) {
       throw new SignerNotFoundError();
     }
     const { erased } = await trx
