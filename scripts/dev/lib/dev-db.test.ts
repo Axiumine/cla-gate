@@ -18,7 +18,7 @@ function repository(port?: number): string {
 }
 
 function compose(root: string, ...tail: string[]): string[] {
-  return ['compose', '--file', path.join(root, 'docker-compose.yml'), '--project-directory', root, ...tail];
+  return ['compose', '--file', path.join(root, 'docker-compose.dev.yml'), '--project-directory', root, ...tail];
 }
 
 function stateOf(root: string): string | undefined {

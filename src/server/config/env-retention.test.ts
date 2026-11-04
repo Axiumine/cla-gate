@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
+import { ruleOf } from './env-rules.ts';
 
 // `NETWORK_METADATA_RETENTION_DAYS` in the environment (E16-S05): a whole number of days from 1 to 90, 30 when unset, and
 // anything else is a ConfigError that names the variable and never its value.
@@ -56,5 +58,5 @@ test.each([
 ])('%s is a ConfigError naming the variable, never the value', (_label, value) => {
   const error = capture(value);
   expect(error.variables).toEqual(['NETWORK_METADATA_RETENTION_DAYS']);
-  expect(error.message).toBe('Invalid environment configuration: NETWORK_METADATA_RETENTION_DAYS');
+  expect(error.lines).toEqual([`NETWORK_METADATA_RETENTION_DAYS: ${ruleOf('NETWORK_METADATA_RETENTION_DAYS')}`]);
 });

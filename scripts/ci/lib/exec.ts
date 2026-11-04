@@ -33,14 +33,22 @@ function exitCode(code: string | number | null | undefined): number {
   return code === 'ENOENT' ? NOT_FOUND : 1;
 }
 
-export const realExec: Exec = (file, args, env = {}) =>
-  new Promise((resolve) => {
-    const options = { env: { ...process.env, ...env }, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES };
-    execFile(file, [...args], options, (error, stdout, stderr) => {
-      if (error === null) {
-        resolve({ code: 0, stdout, stderr });
-        return;
-      }
-      resolve({ code: exitCode(error.code), stdout, stderr: stderr === '' ? error.message : stderr });
+/**
+ * An {@link Exec} that stops a child after `timeoutMs`. The default one gives five minutes; the container smoke test (E19-S08)
+ * builds an image inside one `docker compose up`, which takes longer on a cold runner.
+ */
+export function execWithTimeout(timeoutMs: number): Exec {
+  return (file, args, env = {}) =>
+    new Promise((resolve) => {
+      const options = { env: { ...process.env, ...env }, timeout: timeoutMs, maxBuffer: MAX_OUTPUT_BYTES };
+      execFile(file, [...args], options, (error, stdout, stderr) => {
+        if (error === null) {
+          resolve({ code: 0, stdout, stderr });
+          return;
+        }
+        resolve({ code: exitCode(error.code), stdout, stderr: stderr === '' ? error.message : stderr });
+      });
     });
-  });
+}
+
+export const realExec: Exec = execWithTimeout(EXEC_TIMEOUT_MS);

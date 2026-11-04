@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import type { ConfigIssue } from './config-issue.ts';
 import type { Secret } from './secret.ts';
 
-// The environment of sessions and login (E10-S01). The three secrets themselves (SESSION_SECRET, GITHUB_CLIENT_ID and
-// GITHUB_CLIENT_SECRET) are declared where their kind of field lives (env-fields.ts); this file adds the two session
-// lifetimes and the rule that production needs all three.
+// The environment of sessions and login (E10-S01). The secrets themselves (SESSION_SECRET, GITHUB_CLIENT_ID and
+// GITHUB_CLIENT_SECRET) are declared where their kind of field lives (env-fields.ts, env-github.ts); this file adds the two
+// session lifetimes and the rule that production needs the session secret.
 
 /** A session that nobody touched for this long is dead: 8 hours. */
 const DEFAULT_SESSION_IDLE_SECONDS = 28_800;
@@ -28,33 +29,35 @@ export const sessionFields = {
 
 interface AuthEnv {
   readonly NODE_ENV: string;
+  /** Whether all five GitHub App variables are set (`missingAppVariables` in mode.ts finds none missing). */
+  readonly appConfigured: boolean;
   readonly SESSION_SECRET?: Secret | undefined;
-  readonly GITHUB_CLIENT_ID?: string | undefined;
-  readonly GITHUB_CLIENT_SECRET?: Secret | undefined;
   readonly SESSION_IDLE_SECONDS: number;
   readonly SESSION_ABSOLUTE_SECONDS: number;
 }
 
 /**
- * The cross-field rules of the login settings, by variable name: production needs the session secret and the App's
- * client id and secret (elsewhere the login routes are simply not registered without them), and a session cannot idle
- * for longer than it may live, so when the idle limit exceeds the absolute one both variables are named. `invalid` holds
- * the keys whose own parse already failed: such a lifetime still reaches this function as the raw text or an out-of-range
- * number, so comparing it would blame the other variable for a mistake in this one.
+ * The cross-field rules of the login settings: production with the GitHub App configured needs the session secret (elsewhere
+ * the login routes are simply not registered without it; while the App is missing or incomplete there is no login, and the
+ * first-run flow keeps its own sessions), and a session cannot idle for longer than it may live, so when the idle limit exceeds the absolute one both
+ * variables are named. The App's client id and secret are two of the five variables `resolveMode` (mode.ts) requires.
+ * `invalid` holds the keys whose own parse already failed: such a lifetime still reaches this function as the raw text or
+ * an out-of-range number, so comparing it would blame the other variable for a mistake in this one.
  */
-export function authProblems(env: AuthEnv, invalid: ReadonlySet<unknown>): readonly string[] {
-  const problems: string[] = [];
-  if (env.NODE_ENV === 'production') {
-    const required = [
-      ['SESSION_SECRET', env.SESSION_SECRET],
-      ['GITHUB_CLIENT_ID', env.GITHUB_CLIENT_ID],
-      ['GITHUB_CLIENT_SECRET', env.GITHUB_CLIENT_SECRET],
-    ] as const;
-    problems.push(...required.filter(([, value]) => value === undefined).map(([name]) => name));
+export function authProblems(env: AuthEnv, invalid: ReadonlySet<unknown>): readonly ConfigIssue[] {
+  const problems: ConfigIssue[] = [];
+  if (env.NODE_ENV === 'production' && env.appConfigured && env.SESSION_SECRET === undefined) {
+    problems.push({
+      variable: 'SESSION_SECRET',
+      rule: 'required in production once a GitHub App is configured; set it, or SESSION_SECRET_FILE',
+    });
   }
   const lifetimesParsed = !invalid.has('SESSION_IDLE_SECONDS') && !invalid.has('SESSION_ABSOLUTE_SECONDS');
   if (lifetimesParsed && env.SESSION_IDLE_SECONDS > env.SESSION_ABSOLUTE_SECONDS) {
-    problems.push('SESSION_IDLE_SECONDS', 'SESSION_ABSOLUTE_SECONDS');
+    problems.push(
+      { variable: 'SESSION_IDLE_SECONDS', rule: 'must not be above SESSION_ABSOLUTE_SECONDS' },
+      { variable: 'SESSION_ABSOLUTE_SECONDS', rule: 'must not be below SESSION_IDLE_SECONDS' },
+    );
   }
   return problems;
 }

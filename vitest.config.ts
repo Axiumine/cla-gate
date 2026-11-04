@@ -2,17 +2,19 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
 import { defineConfig } from 'vitest/config';
-import { scriptsProject, serverProject, webProject } from './vitest.projects.ts';
+import { scriptsProject, serverProject, smokeProject, webProject } from './vitest.projects.ts';
 
 // Thresholds are 100% and the exclusion list is fixed (docs/quality-gates.md, Thresholds): never add to it. The entries
 // beyond tests, declarations, e2e and the leak scenarios are test setup files: the Vitest globalSetup file, which runs in
 // the main process where V8 coverage cannot see it, and the setup file of the `web` project (E17-S01). The MSW handlers of the
 // web tests are written in helpers that are covered (src/web/test-support/render.tsx, src/web/api/test-support.ts), so no
 // entry exempts a directory of them: an entry that matches no file would exempt whatever is put there later.
-// The projects are `scripts`, `server` and `web` (vitest.projects.ts).
+// The projects are `scripts`, `server` and `web` (vitest.projects.ts), and `smoke` when SMOKE=1 (E19-S08).
 // With DATABASE_URL set, the server project runs against that Postgres instead of PGlite (see global-setup.ts). One
 // shared database per run means one test file at a time.
 const realPostgres = (process.env['DATABASE_URL'] ?? '') !== '';
+// The container smoke test needs Docker and minutes, so it is a project of `yarn smoke` (SMOKE=1) and of nothing else.
+const smoke = process.env['SMOKE'] === '1';
 
 export default defineConfig({
   test: {
@@ -21,7 +23,7 @@ export default defineConfig({
     // the default 5 s and failed whole pre-push runs without a wrong result. The limit only tells slow from hung. The `server`
     // project sets its own, and the scripts scope of the mutation gate does not read this file.
     testTimeout: 60_000,
-    projects: [scriptsProject, serverProject, webProject],
+    projects: [scriptsProject, serverProject, webProject, ...(smoke ? [smokeProject] : [])],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}', 'scripts/**/*.ts'],

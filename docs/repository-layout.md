@@ -7,7 +7,9 @@ Items marked (planned) do not exist yet.
 ```text
 .
 ├── src/server/                  Fastify app; unit tests co-located as *.test.ts
-│   ├── main.ts  migrate.ts      process entries (kept logic-free; covered by boot tests)
+│   ├── main.ts  migrate.ts  healthcheck.ts
+│   │                            process entries (kept logic-free; covered by boot tests); healthcheck.ts is the container's HEALTHCHECK over
+│   │                            adapters/http/health-probe.ts; boot-database.ts is the start-up database check (E19-S02)
 │   ├── boot.ts  app.ts          start-up and signals; the Fastify instance (buildApp); shutdown.ts and its test
 │   ├── boot-app.ts  boot-config.ts  boot-installations.ts  boot-reconcile.ts  boot-services.ts
 │   │                            the parts of start-up: logging the configuration, binding the gate once the policies
@@ -25,7 +27,9 @@ Items marked (planned) do not exist yet.
 │   │                            (the GitHub variables and their cross-field rules, webhook secrets included) and
 │   │                            github-config.ts (the settings the server reads), auth-fields.ts and auth.ts (login
 │   │                            variables, the login settings, `callbackUrl`, the start-up lines), migrate-config.ts
-│   │                            (what `yarn db:migrate` needs; apart from env.ts to keep that file under the FTA score cap)
+│   │                            (what `yarn db:migrate` needs; apart from env.ts to keep that file under the FTA score cap); E19-S02:
+│   │                            secret-files.ts (the `*_FILE` resolver and `SECRET_VARIABLES`), mode.ts and mode-log.ts (setup or normal), env-rules.ts,
+│   │                            config-error.ts and config-issue.ts (one `VARIABLE: rule` line per problem)
 │   ├── adapters/db/             Kysely over node-postgres, hand-written schema types, migration runner and CLI,
 │   │                            transaction and advisory-lock helpers, the branded installation row id,
 │   │                            PGlite dialect and test helpers (test only, outside the build; the independent
@@ -35,7 +39,9 @@ Items marked (planned) do not exist yet.
 │   │                            tenant-fixture/, tenant-registry/, tenant-registry-documents/, -drafts/ and -versions/ and tenant-scan/ are test only: the two tenants, the registry of
 │   │                            tenant queries and the source scan of the cross-tenant tests); pr-evaluation-links.ts (E09: the `check_run_id` and `comment_id` of `pr_evaluations`; pr-evaluation-links-fixture/ and tenant-links-fixture/ are test only); the session store (sessions.ts with sessions-create,
 │   │                            -delete, -model, -read, -row and -touch.ts; sessions-fixture/ is test only) and the
-│   │                            user upsert (users.ts)
+│   │                            user upsert (users.ts); global-setup.ts (the throw-away database of a real-server run) and
+│   │                            test-database-guard/ (E19-S10: what the guard refuses, in test-support.ts); provision-database*.test.ts are the
+│   │                            real-Postgres tests of scripts/provision-database.sh
 │   ├── adapters/jobs/           the pg-boss adapter of the job queue (E07): runtime.ts (start, stop, readiness), boss.ts (the slice
 │   │                            of pg-boss the code uses), queues.ts and queue-options.ts (the twelve queues and their bounds),
 │   │                            queue-policy.ts and queue-check.ts (a queue of the wrong policy is refused), serialisation.ts (the
@@ -57,6 +63,8 @@ Items marked (planned) do not exist yet.
 │   │                            public-members-guard/ (test only: the typed membership fixtures, and the guard that fails a test
 │   │                            that asks a public-members endpoint)
 │   ├── adapters/github/webhook-schemas.ts  zod schemas of the subscribed events (webhook-fixture/ holds the test payloads)
+│   ├── adapters/github/manifest-conversion.ts  the adapter of the port services/ports/manifest-conversion.ts: GitHub's one-time code
+│   │                            for the credentials of the App (E19-S11); domain/app-manifest.ts builds the App manifest (E19-S06)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (errors.ts: AppError; also for
 │   │                            failures that never reach a route), HTTP limits, health routes, trust-proxy conversion,
 │   │                            the /api route-audit guard (audit-routes.ts); the webhook route: webhook-routes.ts (the
@@ -74,7 +82,11 @@ Items marked (planned) do not exist yet.
 │   │                            (`tenantAccess`, `request.tenant`), tenant-resolvers.ts, tenant-guard.ts, upstream-failure.ts
 │   │                            (502, 503 and 429), role-cache-slot.ts, operator-guard.ts and operator-routes.ts; spa.ts (serves the
 │   │                            single-page app from WEB_ROOT: the files, the index.html fallback, the cache rules) and meta-routes.ts
-│   │                            (`GET /api/meta`); spa-fixture/ is test only;
+│   │                            (`GET /api/meta`); spa-fixture/ is test only; spa-url.ts (the address of a browser path); the first-run setup (E19-S06, S07, S11):
+│   │                            setup-routes.ts (status; registers the rest in setup mode), setup-flow-routes.ts, setup-unlock-route.ts,
+│   │                            setup-manifest-route.ts, setup-session-route.ts, setup-convert-route.ts, setup-guard.ts (Origin, cookie, CSRF),
+│   │                            setup-sessions.ts (in memory), setup-cookie.ts, setup-digest.ts, setup-throttle.ts, setup-route-config.ts;
+│   │                            setup-fixture/ and setup-convert-fixture/ are test only; health-probe.ts (the container health check);
 │   │                            the CLA documents (E12): document-routes.ts (registers them), document-collection-routes.ts,
 │   │                            document-create-route.ts, document-item-routes.ts, document-draft-routes.ts, document-version-routes.ts,
 │   │                            document-history-routes.ts, document-resolvers.ts, document-presenters.ts, cursor.ts (the opaque page
@@ -139,7 +151,8 @@ Items marked (planned) do not exist yet.
 │                                cla-version-rows.ts, cla-version-writes.ts, cla-version-sweeps.ts and cla-enforcing-queries.ts; cla-history.ts,
 │                                cla-history-queries.ts and cla-history-rows.ts; cla-content.ts (`prepareClaText`, the hash) and
 │                                cla-rule-error.ts; publish-fixture/ is test only
-├── src/shared/                  zod schemas shared by server and web (health, error body, GithubId, route constants in
+├── src/shared/                  zod schemas shared by server and web (github-app.ts: the App's permissions and events; setup.ts: the setup
+│                                routes, schemas and error codes; health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
 │                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check.ts (`CHECK_RUN_NAME`, the one place the check name is spelled), sign-link.ts (`signUrl`, `isHttpOrigin`), operator.ts (the operator list); the CLA documents (E12): cla.ts (kinds,
@@ -167,6 +180,8 @@ Items marked (planned) do not exist yet.
 │   │                            section 13 offer), use-page.ts, use-focus-on-navigation.ts
 │   ├── meta/                    meta.ts (the `GET /api/meta` query) and source-link.ts (an https link only)
 │   ├── pages/                   LandingPage, LoginFailedPage
+│   ├── setup/                   the first-run setup page (E19-S07): SetupPage (unlock, App form, credentials), SetupCallbackPage, SetupGate,
+│   │                            setup-api.ts, github-links.ts (only github.com addresses), credential-items.ts, download-file.ts
 │   ├── states/                  LoadingState, EmptyState, ErrorState, QueryBoundary, RootErrorBoundary, RouterErrorComponent, NotFoundPage,
 │   │                            CrashFallback, RetryButton, RequestId, error-message.ts (`errors.<code>` words only), error-facts.ts,
 │   │                            crash-log.ts, use-countdown.ts, use-after.ts, reload-page.ts, index.ts
@@ -181,9 +196,11 @@ Items marked (planned) do not exist yet.
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
 │                                theme.ts, tailwind.ts and vitest.setup.ts
 ├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; the numbers 006 and later go to the epics in order of merge)
-├── docker/postgres-init.sql     creates the unprivileged dev role cla_app (see docker-compose.yml)
+├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
-├── docker-compose.yml           local PostgreSQL 18, on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
+├── docker-compose.yml           the operator stack (E19-S04): postgres, a one-shot migrate and app, and caddy in the profile `tls`; `docker compose up --build`
+├── docker-compose.dev.yml       the development database: PostgreSQL 18 on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
+├── .dockerignore                what the build context leaves out (secret-bearing files, tool state, e2e, sources of other builds)
 ├── docs/ci-runners.md           CI runner policy: shared self-hosted runners, fork approval, ports, job rules
 ├── docs/development.md          status, setup and run, and the package.json scripts (exists or deferred)
 ├── docs/configuration.md        environment variables and what the server foundation guarantees
@@ -195,7 +212,9 @@ Items marked (planned) do not exist yet.
 ├── docs/security.md             auth model, role matrix, security and privacy rules
 ├── docs/privacy.md              privacy notes for operators: data inventory, retention, erasure runbook, backups, several orgs (kept true by src/server/docs)
 ├── docs/github-app.md           App permissions, events, check name, rules
-├── docs/operations.md           key rotation, backups, poison jobs, rate budget
+├── docs/operations.md           key rotation, backups, poison jobs, rate budget, secrets and provisioning; the guides below
+├── docs/operations/             the eight operator guides (E19-S09): install, reverse-proxy, upgrade, backup-restore, key-rotation, troubleshooting, uninstall, data-protection
+├── docs/development/            test-database.md: running the tests against a PostgreSQL server and the test-database guard (E19-S10)
 ├── docs/decisions.md            why this project, decisions and their reasons, open questions
 ├── docs/tooling-gotchas.md      tool facts and traps, GitNexus, open tool verifications
 ├── docs/EPICS_STORIES.md        work queue index; the stories are in docs/epics/
@@ -212,30 +231,35 @@ Items marked (planned) do not exist yet.
 ├── scripts/ci-contract.test.ts  the CI contract test; scripts/ci-contract/ holds its parts (uses, workflow, required,
 │                                package-scripts, dependabot, test-support)
 ├── src/server/docs/             tests that keep docs/privacy.md true (privacy-inventory, privacy-retention, privacy-sections; privacy-doc/ is test only)
-├── scripts/docs/                doc-size.test.ts: README.md and CLAUDE.md stay under their byte ceilings
+├── scripts/docs/                doc-size.test.ts (README.md and CLAUDE.md stay under their byte ceilings), markdown.test.ts (relative links and |---| separators), development-test-database.test.ts and one operator-*.test.ts per guide of docs/operations/
+├── scripts/init-secrets.sh      creates secrets/ and .env for the operator stack, once and never overwriting (E19-S04); scripts/compose/ runs it in scratch checkouts and tests the compose files
+├── scripts/provision-database.sh  scripts/provision-database.sql: the idempotent provisioning of the database, its roles and the pgboss schema (E19-S03); scripts/provision/ has the tests with a stub psql
+├── scripts/docker/              tests of the Dockerfile contract, the .dockerignore entries, the absence of any publication path and the read-only-root guard; the Dockerfile parser they share is test support
+├── scripts/smoke/  tests/smoke/  the container smoke test (E19-S08, S12): scripts/smoke is the harness (compose, wait, http, one-off containers, reconfigure, dummy GitHub App, proxy, operator-commands, cleanup) and tests/smoke the scenarios, run by `yarn smoke` (a Vitest project outside yarn test)
 ├── scripts/check-code-caps.ts   structure-cap ratchet, entry (runs natively on Node 26)
 ├── scripts/code-caps/           its modules (types, naming, nesting, collector, measure, files, baseline,
 │                                report, cli) and tests; a port of the Python tool; README.md describes the tool
 ├── scripts/ci/                  CI helpers, run natively: free-port, postgres (start/stop the CI database container),
-│                                check-runners (the workflow guard); logic and tests in lib/
+│                                check-runners (the workflow guard), caddy.ts (`yarn ci:caddy`, validates docker/Caddyfile in a throw-away container, E19-S05), smoke.ts (`yarn ci:smoke stop`); logic and tests in lib/ (caddy-cli, caddy-run, caddy-deps)
 ├── scripts/dev/                 db.ts: local database on a random port (up, down, url, run); dev.ts: the Fastify and Vite dev servers (`yarn dev`); install-hooks.ts: the postinstall; logic and tests in lib/
 ├── scripts/web/                 the web wiring: eslint-config.ts (the inline-text and Web Storage rules), theme-init-build.ts (bundles /theme-init.js),
 │                                test-support.ts, and the tests: vite-build.test.ts (builds the SPA and judges the output), vite-config, wiring,
 │                                serving-wiring, theme-wiring, theme-init-build, zod-jitless and biome
-├── .local/                      (git-ignored) the port that yarn db:up chose
+├── .local/                      (git-ignored) the port that yarn db:up chose, and the passwords of the test role
 ├── types/                       ambient .d.ts for tools without types (eslint-plugin-no-unsanitized)
 ├── e2e/                         Playwright specs (smoke, canary), global-setup.ts, fixtures and visual baselines in __screenshots__/
 ├── tests/leaks/                 memlab scenarios, the control fixtures and the @memlab/api wrapper (run.ts)
+├── tests/smoke/                 the scenarios of the container smoke test (boot, compose files, hardening, roles, configured mode, failure, backup, TLS)
 ├── LICENSE                      AGPL-3.0-only
 ├── rules/                       Semgrep rules cache, created by `yarn semgrep:rules` (git-ignored, never committed)
-├── .github/workflows/ci.yml     jobs static, coverage, postgres, semgrep, trivy, mutation, e2e, leaks (self-hosted runners)
+├── .github/workflows/ci.yml     jobs static, coverage, postgres, semgrep, trivy, mutation, e2e, caddy, container, leaks (self-hosted runners)
 │                                and qodana (GitHub-hosted); .github/dependabot.yml
 ├── .code-caps-baseline.json
 ├── lefthook.yml  biome.json  eslint.config.mjs  fta.json  knip.json  vitest.config.ts
 ├── stryker.config.mjs  vitest.projects.ts  vitest.stryker.config.ts  vitest.stryker-scripts.config.ts
 ├── playwright.config.ts  qodana.yaml  trivy.yaml  .semgrepignore  .trivyignore
 ├── vite.config.ts                                                             the SPA build and the dev server (src/web is its root)
-├── Dockerfile                                                                 (planned)
+├── Dockerfile                                                                 the image, built from the checkout (E19-S01)
 ├── .nvmrc  mise.toml  .yarnrc.yml  package.json  yarn.lock  .gitattributes
 ├── tsconfig.json                solution-style root (files: [])
 ├── tsconfig.base.json  tsconfig.server.json  tsconfig.server.test.json  tsconfig.web.json

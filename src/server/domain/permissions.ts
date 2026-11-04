@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { INSTALLATION_PERMISSIONS } from '../../shared/github-app.ts';
 
 // The permissions an installation must grant for the platform to work (E05-S08): the minimum of the settings table in
 // docs/github-app.md, as the keys GitHub puts in the `permissions` object of an installation. Pure: the caller passes
@@ -13,17 +14,10 @@ const LEVELS: ReadonlyMap<string, number> = new Map([
 ]);
 
 /**
- * The lowest level of each permission the platform needs, in the order the warning lists them. Metadata is implicit on
- * every App, pull requests carry the comment, checks carry the Check Run, issues the `/recheck` comment events and
- * members the org-member exemption.
+ * The lowest level of each permission the platform needs, in the order the warning lists them: the permissions of an
+ * installation that the GitHub App is created with (E19-S06), the very constant the App manifest is built from.
  */
-const MINIMUM: readonly (readonly [name: string, level: string])[] = [
-  ['metadata', 'read'],
-  ['pull_requests', 'write'],
-  ['checks', 'write'],
-  ['issues', 'read'],
-  ['members', 'read'],
-];
+const MINIMUM: readonly (readonly [name: string, level: string])[] = Object.entries(INSTALLATION_PERMISSIONS);
 
 const rank = (level: string | undefined): number => (level === undefined ? 0 : (LEVELS.get(level) ?? 0));
 

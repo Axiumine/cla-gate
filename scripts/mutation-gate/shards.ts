@@ -45,6 +45,7 @@ export const SERVER_SHARDS: readonly Shard[] = [
   { name: 'config', mutate: ['src/server/config/**/*.ts'] },
   // The HTTP adapter has 771 mutants since the webhook intake (E06) joined it, so it is cut by file name like the others:
   // 9 files, 402 mutants: audit-routes, errors, framework-errors, health, limits, logger, request-id, security, trust-proxy.
+  // The setup routes of E19 (`setup-*.ts`, the conversion of E19-S11 among them) are in this half too, and are not counted yet.
   { name: 'http-a-v', mutate: ['src/server/adapters/http/[a-v]*.ts'] },
   // 12 files, 369 mutants: the webhook intake (webhook-*), and whatever a file name beyond `v` will be.
   { name: 'http-rest', mutate: ['src/server/adapters/http/[!a-v]*.ts'] },
@@ -62,7 +63,8 @@ export const SERVER_SHARDS: readonly Shard[] = [
       'src/server/services/ports/**/*.ts',
     ],
   },
-  // 19 files, 496 mutants.
+  // 19 files, 496 mutants. The manifest conversion of the setup (E19-S11, `manifest-conversion.ts`) falls in this shard too, and
+  // its mutants are not counted yet: measure the shard before the next story joins it, and cut it by a letter range if it is over the target.
   { name: 'github-a-o', mutate: ['src/server/adapters/github/[a-o]*.ts'] },
   // 14 files, 425 mutants.
   { name: 'github-rest', mutate: ['src/server/adapters/github/[!a-o]*.ts'] },

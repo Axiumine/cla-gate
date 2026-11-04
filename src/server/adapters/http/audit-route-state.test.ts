@@ -4,6 +4,7 @@ import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
 import { AUDIT_ACTION_PATTERN } from '../../../shared/audit.ts';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
+import { TEST_SETUP_TOKEN } from '../../config/test-support.ts';
 import { testApp } from '../../test-support.ts';
 import {
   DOCUMENTED_MUTATIONS,
@@ -46,11 +47,16 @@ vi.mock('fastify', async (importOriginal) => {
 
 const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
-/** The mutating routes the application registered, one per method. */
+/**
+ * The mutating routes the application registered, one per method: those of the application with the login configured and
+ * those of the application in setup mode (E19-S06), which registers the unlock and the manifest and has no login.
+ */
 async function registeredMutations(): Promise<{ routes: RegisteredRoute[]; all: SeenRoute[] }> {
   seen.length = 0;
-  const { app } = await testApp({ env: AUTH_ENV });
-  await app.ready();
+  const configured = await testApp({ env: AUTH_ENV });
+  await configured.app.ready();
+  const setup = await testApp({ env: { SETUP_TOKEN: TEST_SETUP_TOKEN } });
+  await setup.app.ready();
   const routes = seen.flatMap((route) =>
     [route.method]
       .flat()
@@ -58,7 +64,8 @@ async function registeredMutations(): Promise<{ routes: RegisteredRoute[]; all: 
       .filter((method) => MUTATING.includes(method))
       .map((method) => ({ name: `${method} ${route.url}`, audit: route.audit, exempt: route.exempt })),
   );
-  return { routes, all: [...seen] };
+  // The probes and the webhook are routes of both applications: one entry each.
+  return { routes: [...new Map(routes.map((route) => [route.name, route])).values()], all: [...seen] };
 }
 
 test('the application registers its mutating routes with the login configured', async () => {
@@ -87,7 +94,13 @@ test('the exemption reasons are webhook, session and setup, and no registered ro
       .filter((route) => route.exempt !== undefined)
       .map((route) => `${route.name} ${route.exempt}`)
       .toSorted((a, b) => a.localeCompare(b)),
-  ).toEqual(['POST /api/auth/logout session', 'POST /webhooks/github webhook']);
+  ).toEqual([
+    'POST /api/auth/logout session',
+    'POST /api/setup/convert setup',
+    'POST /api/setup/manifest setup',
+    'POST /api/setup/unlock setup',
+    'POST /webhooks/github webhook',
+  ]);
 });
 
 test('every mutating route that a story of E11 to E16 or E19 names resolves to the audit action it documents', async () => {

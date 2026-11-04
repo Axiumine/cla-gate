@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
+import { ruleOf } from './env-rules.ts';
 
 // `OPERATOR_GITHUB_IDS` in the environment (E11-S08): optional, read as numbers, and an invalid one is a ConfigError that
 // names the variable and never its value.
@@ -48,7 +50,7 @@ test.each([
 ])('%s in OPERATOR_GITHUB_IDS is a ConfigError naming the variable, never the value', (_label, value) => {
   const error = capture({ OPERATOR_GITHUB_IDS: value });
   expect(error.variables).toEqual(['OPERATOR_GITHUB_IDS']);
-  expect(error.message).toBe('Invalid environment configuration: OPERATOR_GITHUB_IDS');
+  expect(error.lines).toEqual([`OPERATOR_GITHUB_IDS: ${ruleOf('OPERATOR_GITHUB_IDS')}`]);
 });
 
 test('a bad list is reported together with the other invalid variables', () => {

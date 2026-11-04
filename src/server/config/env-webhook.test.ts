@@ -3,7 +3,8 @@
 import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
 import { AUTH_ENV } from './auth-fixture/test-support.ts';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 import { MASK, Secret } from './secret.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
@@ -76,7 +77,9 @@ test.each([
 test('a previous secret equal to the current one is a ConfigError naming the previous variable only', () => {
   const error = capture({ GITHUB_WEBHOOK_SECRET: CURRENT, GITHUB_WEBHOOK_SECRET_PREVIOUS: CURRENT });
   expect(error.variables).toEqual(['GITHUB_WEBHOOK_SECRET_PREVIOUS']);
-  expect(error.message).toBe('Invalid environment configuration: GITHUB_WEBHOOK_SECRET_PREVIOUS');
+  expect(error.lines).toEqual([
+    'GITHUB_WEBHOOK_SECRET_PREVIOUS: must differ from GITHUB_WEBHOOK_SECRET (a rotation keeps the old secret here)',
+  ]);
   expect(error.message).not.toContain(CURRENT);
 });
 

@@ -207,5 +207,7 @@ test('a login in GITHUB_ALLOWED_ACCOUNT_IDS stops the start before anything is o
   expect(server).toBeUndefined();
   expect(signals.exitCode).toBe(1);
   expect(createDb).not.toHaveBeenCalled();
-  expect(written).toEqual(['ConfigError: Invalid environment configuration: GITHUB_ALLOWED_ACCOUNT_IDS']);
+  expect(written).toEqual([
+    'GITHUB_ALLOWED_ACCOUNT_IDS: must be a comma separated list of at most 100 positive whole numbers (GitHub account ids)',
+  ]);
 });

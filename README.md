@@ -56,7 +56,14 @@ Rules and sequence diagram: [`docs/architecture.md`](docs/architecture.md#how-a-
 
 Prerequisites: Node 26.13 ([mise](https://mise.jdx.dev) or `.nvmrc`), Corepack (`npm install -g corepack && corepack enable`; Node 26 no longer bundles it) and Docker.
 
-Operators: `docker compose up --build` will build and start the whole stack from a checkout ([E19](docs/epics/E19.md), planned: today there is no `Dockerfile` and `docker-compose.yml` is the development database only).
+Operators build and start the stack from a checkout, with no registry and nothing published ([install guide](docs/operations/install.md)):
+
+```sh
+sh scripts/init-secrets.sh   # creates secrets/ and .env; set PUBLIC_BASE_URL in .env
+SOURCE_COMMIT=$(git rev-parse HEAD) docker compose --profile tls up --build -d
+```
+
+Then open `/setup`, with the token from `secrets/setup_token`, to create the GitHub App.
 
 Developers:
 
@@ -104,6 +111,8 @@ This README and the documents below are the source of truth for scope, stack and
 | [docs/github-app.md](docs/github-app.md) | Permissions, events, check name, rules |
 | [docs/legacy-status-coexistence.md](docs/legacy-status-coexistence.md) | Moving a repository from another CLA tool |
 | [docs/operations.md](docs/operations.md) | Key rotation, backups, poison jobs |
+| [docs/operations/](docs/operations/install.md) | Operator guides: install, reverse proxy, upgrade, backup, key rotation, troubleshooting, uninstall, data protection |
+| [docs/development/test-database.md](docs/development/test-database.md) | Running the tests against a PostgreSQL server, the test-database guard |
 | [docs/quality-gates.md](docs/quality-gates.md) | Thresholds, TypeScript, testing |
 | [docs/toolchain.md](docs/toolchain.md) | Tools, hook pipeline, CI jobs |
 | [docs/tooling-gotchas.md](docs/tooling-gotchas.md) | Tool traps, open verifications |

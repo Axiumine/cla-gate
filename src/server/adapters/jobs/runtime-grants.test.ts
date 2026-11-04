@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { type Kysely, type RawBuilder, sql } from 'kysely';
+import { type Kysely, type KyselyPlugin, type RawBuilder, RawNode, sql } from 'kysely';
 import { expect, onTestFinished, test } from 'vitest';
 import { openPgliteDatabase } from '../db/pglite.ts';
 import type { Database } from '../db/schema.ts';
-import { emptyTestDatabase, ensureRuntimeRole } from '../db/test-support.ts';
+import {
+  backendPid,
+  emptyTestDatabase,
+  ensureRuntimeRole,
+  realPostgresOnly,
+  waitUntilBlocked,
+  withConnections,
+} from '../db/test-support.ts';
 import { grantRuntimeAccess } from './runtime-grants.ts';
 
 // The grants of the runtime role on a stand-in for the pgboss schema: PGlite enforces privileges like PostgreSQL does, and
@@ -101,4 +108,70 @@ test('a database without the pgboss schema fails, and no grant is left half made
   await ensureRuntimeRole(db);
   await sql`drop schema if exists pgboss cascade`.execute(db);
   await expect(grantRuntimeAccess(db)).rejects.toThrow('pgboss');
+});
+
+/** The raw statements a connection runs, as text with `?` for each parameter, and the parameters, in the order they were sent. */
+function recorder(): { readonly plugin: KyselyPlugin; readonly statements: string[]; readonly parameters: unknown[] } {
+  const statements: string[] = [];
+  const parameters: unknown[] = [];
+  const plugin: KyselyPlugin = {
+    transformQuery: ({ node }) => {
+      if (RawNode.is(node)) {
+        statements.push(node.sqlFragments.join('?'));
+        parameters.push(...node.parameters.map((parameter) => ('value' in parameter ? parameter.value : undefined)));
+      }
+      return node;
+    },
+    transformResult: ({ result }) => Promise.resolve(result),
+  };
+  return { plugin, statements, parameters };
+}
+
+test('the first statement of the grants takes the transaction-level advisory lock, before any grant (E19-S12)', async () => {
+  const { db } = await emptyTestDatabase();
+  await ensureRuntimeRole(db);
+  await standInSchema(db);
+  const { plugin, statements, parameters } = recorder();
+  await grantRuntimeAccess(db.withPlugin(plugin));
+  const lock = statements.findIndex((statement) => statement.includes('pg_advisory_xact_lock'));
+  const firstGrant = statements.findIndex((statement) => statement.includes('grant '));
+  expect(lock).toBeGreaterThanOrEqual(0);
+  expect(lock).toBeLessThan(firstGrant);
+  expect(parameters).toContain('migrate:runtime-grants');
+});
+
+// PGlite has one session, so two runs can never overlap there. A real server shows both halves: a run waits for the lock
+// that another session holds, and many runs at once all succeed.
+realPostgresOnly(
+  'a run waits while another session holds the lock of the grants, and goes on when it is released',
+  async () => {
+    const { db: setup } = await emptyTestDatabase();
+    await ensureRuntimeRole(setup);
+    await standInSchema(setup);
+    const sessions = withConnections(3);
+    const [holder, runner, observer] = [sessions.get(0), sessions.get(1), sessions.get(2)];
+    const pid = await backendPid(runner);
+    let finished = false;
+    let running: Promise<'granted' | 'skipped'> | undefined;
+    await holder.transaction().execute(async (trx) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended('migrate:runtime-grants', 0))`.execute(trx);
+      running = grantRuntimeAccess(runner).finally(() => {
+        finished = true;
+      });
+      await waitUntilBlocked(observer, pid);
+      expect(finished).toBe(false);
+    });
+    expect(await running).toBe('granted');
+    expect(finished).toBe(true);
+  },
+);
+
+realPostgresOnly('several runs at once all succeed and leave the grants in place', async () => {
+  const { db: setup } = await emptyTestDatabase();
+  await ensureRuntimeRole(setup);
+  await standInSchema(setup);
+  const sessions = withConnections(6);
+  const runs = Array.from({ length: 6 }, (_, index) => grantRuntimeAccess(sessions.get(index)));
+  expect(await Promise.all(runs)).toEqual(Array.from({ length: 6 }, () => 'granted'));
+  expect(await can(setup, sql<boolean>`has_table_privilege('cla_app', 'pgboss.job', 'UPDATE')`)).toBe(true);
 });

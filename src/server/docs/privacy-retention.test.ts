@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { ConfigError, loadConfig } from '../config/env.ts';
+import { ConfigError } from '../config/config-error.ts';
+import { loadConfig } from '../config/env.ts';
 import { envSchema } from '../config/env-schema.ts';
 import { durationSeconds, markedTable, readPrivacyDoc, unquote } from './privacy-doc/test-support.ts';
 

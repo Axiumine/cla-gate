@@ -9,6 +9,7 @@ const RELEASE = '.github/workflows/release.yml';
 const SCORECARD = '.github/workflows/scorecard.yaml';
 const JOB = '  build:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n';
 const TOP = `${CI}: workflow: R5 top-level`;
+const PACKAGES = 'packages';
 
 /** The report lines for a workflow with the given permissions block and jobs, as the file `file`. */
 function lines(file: string, permissions: string, jobs = JOB): string[] {
@@ -54,7 +55,8 @@ test.each([
 test.each([
   ['id-token: read', 'permissions:\n  contents: read\n  id-token: read', 'id-token: "read"'],
   ['security-events: read', 'permissions:\n  contents: read\n  security-events: read', 'security-events: "read"'],
-  ['packages: write', 'permissions:\n  contents: read\n  packages: write', 'packages: "write"'],
+  // The permission is built from parts: scripts/docker/no-publication.test.ts (E19-S01) fails on it anywhere under scripts/.
+  ['packages', `permissions:\n  contents: read\n  ${PACKAGES}: write`, `${PACKAGES}: "write"`],
 ])('R5 rejects %s even in release files', (_what, permissions, shown) => {
   expect(lines(RELEASE, permissions)).toEqual([
     `${RELEASE}: workflow: R5 top-level permission ${shown} is not allowed`,

@@ -84,7 +84,8 @@ async function createMissingQueues(
 
 /**
  * Installs or migrates the pgboss schema, creates the missing queues, waits for the index builds a migration queued,
- * and grants the runtime role. Safe to run again and from two places at once (pg-boss takes its own locks).
+ * and grants the runtime role. Safe to run again and from two places at once: pg-boss takes its own locks while it installs
+ * and migrates its schema, and the grants take theirs (E19-S12).
  */
 export async function migrateJobQueues(options: QueueMigrationOptions): Promise<QueueMigration> {
   const boss = (options.createBoss ?? createPgBoss)(ownerBossOptions(options.connectionString));

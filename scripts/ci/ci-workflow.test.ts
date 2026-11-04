@@ -70,7 +70,7 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, leaks and qodana, and the required ones keep their exact names', () => {
+test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, caddy, container, leaks and qodana, and the required ones keep their exact names', () => {
   expect([...jobs.keys()]).toEqual([
     'static',
     'coverage',
@@ -79,6 +79,8 @@ test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, le
     'trivy',
     'mutation',
     'e2e',
+    'caddy',
+    'container',
     'leaks',
     'qodana',
   ]);
@@ -90,6 +92,8 @@ test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, le
     ['trivy', 'trivy'],
     ['mutation', `mutation (${expression('matrix.shard')})`],
     ['e2e', 'e2e'],
+    ['caddy', 'caddy'],
+    ['container', 'container'],
     ['leaks', 'leaks'],
     ['qodana', 'qodana'],
   ]);
@@ -169,9 +173,10 @@ test('every job on the shared runners starts with the preflight and keeps tool s
   }
 });
 
-test('only the postgres and e2e jobs need, and check for, a Docker daemon', () => {
+test('only the postgres, e2e, caddy and container jobs need, and check for, a Docker daemon', () => {
+  const docker = ['postgres', 'e2e', 'caddy', 'container'];
   for (const [id, job] of [...jobs.entries()]) {
-    expect(job.steps[0]?.run?.includes('docker info')).toBe(id === 'postgres' || id === 'e2e');
+    expect(job.steps[0]?.run?.includes('docker info')).toBe(docker.includes(id));
   }
 });
 
