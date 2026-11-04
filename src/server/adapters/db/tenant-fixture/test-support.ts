@@ -93,6 +93,8 @@ export interface TenantWorld extends Tenant {
   /** The person who administers the organisation: the one the ledger of org admins holds an entry for. */
   readonly admin: StoredPerson;
   readonly signatureId: number;
+  /** The allowlist entry that covers the whole installation (GitHub id `n * 100`), the one of two the world seeds that is not a repository's (E14-S07). */
+  readonly entryId: number;
 }
 
 export interface TwoTenants {
@@ -293,6 +295,12 @@ async function seedWorld(
   const { scoped, signature } = await extendTenant(db, tenant, n, signerGithubId);
   const signer = person(signature.userId, signerGithubId);
   const stored = admin ?? signer;
+  const entry = await db
+    .selectFrom('allowlist_entries')
+    .select('id')
+    .where('installation_id', '=', tenant.installationId)
+    .where('repository_id', 'is', null)
+    .executeTakeFirstOrThrow();
   await db
     .insertInto('installation_admin_seen')
     .values({ installation_id: tenant.installationId, user_github_id: stored.githubId, seen_at: ADMIN_SEEN_AT })
@@ -307,6 +315,7 @@ async function seedWorld(
     signer,
     admin: stored,
     signatureId: signature.signatureId,
+    entryId: entry.id,
   };
 }
 

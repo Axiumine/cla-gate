@@ -120,6 +120,9 @@ test('the tables of the application hold the cases of the routes the stories add
     'POST /api/repositories/:repositoryId/disable',
     'POST /api/installations/:installationId/allowlist-entries',
     'POST /api/repositories/:repositoryId/allowlist-entries',
+    'GET /api/installations/:installationId/allowlist-entries',
+    'GET /api/repositories/:repositoryId/allowlist-entries',
+    'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);

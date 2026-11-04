@@ -61,7 +61,7 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
   registered(audited(`POST ${REPOSITORY}/disable`, 'E14-S04', 'repository.disabled')),
   registered(audited(`POST ${INSTALLATION}/allowlist-entries`, 'E14-S06', 'allowlist_entry.created')),
   registered(audited(`POST ${REPOSITORY}/allowlist-entries`, 'E14-S06', 'allowlist_entry.created')),
-  audited(`DELETE ${INSTALLATION}/allowlist-entries/:entryId`, 'E14-S07', 'allowlist_entry.deleted'),
+  registered(audited(`DELETE ${INSTALLATION}/allowlist-entries/:entryId`, 'E14-S07', 'allowlist_entry.deleted')),
   audited(`POST ${INSTALLATION}/signatures/:signatureId/revoke`, 'E15-S03', 'signature.revoked'),
   audited(`POST ${DOCUMENT}/invalidations`, 'E15-S04', 'signatures.invalidated'),
   audited(`POST ${REPOSITORY}/commit-overrides`, 'E15-S05', 'commit_override.created'),

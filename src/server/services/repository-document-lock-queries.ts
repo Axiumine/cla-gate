@@ -45,28 +45,23 @@ async function readDocumentScope(
 }
 
 /**
- * Locks the repository `repositoryId` of the tenant until the end of the caller's transaction (`select ... for update`, the
- * repository row only) and reads the document it enforces, so two changes of the CLA of one repository run one after the
- * other and the second reads what the first left. The locking read returns the newest committed version of the row it locks and
- * only that one (a row it joins is read as of the statement's start), which is why the pointer is taken from the locked row and
- * the document is read by a statement of its own after the lock. A removed repository is not found.
- * @returns the locked repository, or null when the tenant has no such repository.
- * @throws NoResultError when the repository points at a document the tenant does not have (the foreign key forbids it).
+ * The repository `repositoryId` of the tenant that is not removed, with the document it enforces, which a statement of its own reads
+ * after the row. `hold` says whether the row is locked (`select ... for update`, the repository row only) until the end of the
+ * caller's transaction.
  */
-export async function lockRepositoryForDocumentChange(
+async function readRepository(
   db: Kysely<Database>,
   scope: TenantScope,
-  repositoryId: number,
+  read: { readonly repositoryId: number; readonly hold: 'lock' | 'none' },
 ): Promise<LockedRepository | null> {
-  const row = await db
+  const select = db
     .selectFrom('repositories as r')
     .innerJoin('installations as i', 'i.id', 'r.installation_id')
     .select(['r.id', 'r.github_repo_id', 'r.enabled', 'r.cla_document_id', 'i.github_installation_id'])
     .where('r.installation_id', '=', scope.installationId)
-    .where('r.id', '=', repositoryId)
-    .where('r.removed_at', 'is', null)
-    .forUpdate('r')
-    .executeTakeFirst();
+    .where('r.id', '=', read.repositoryId)
+    .where('r.removed_at', 'is', null);
+  const row = await (read.hold === 'lock' ? select.forUpdate('r') : select).executeTakeFirst();
   if (row === undefined) {
     return null;
   }
@@ -77,4 +72,35 @@ export async function lockRepositoryForDocumentChange(
     enabled: row.enabled,
     document: row.cla_document_id === null ? null : await readDocumentScope(db, scope, row.cla_document_id),
   };
+}
+
+/**
+ * Locks the repository `repositoryId` of the tenant until the end of the caller's transaction (`select ... for update`, the
+ * repository row only) and reads the document it enforces, so two changes of the CLA of one repository run one after the
+ * other and the second reads what the first left. The locking read returns the newest committed version of the row it locks and
+ * only that one (a row it joins is read as of the statement's start), which is why the pointer is taken from the locked row and
+ * the document is read by a statement of its own after the lock. A removed repository is not found.
+ * @returns the locked repository, or null when the tenant has no such repository.
+ * @throws NoResultError when the repository points at a document the tenant does not have (the foreign key forbids it).
+ */
+export function lockRepositoryForDocumentChange(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  repositoryId: number,
+): Promise<LockedRepository | null> {
+  return readRepository(db, scope, { repositoryId, hold: 'lock' });
+}
+
+/**
+ * The repository `repositoryId` of the tenant with the document it enforces, read without a lock: for a read of the allowlist
+ * (E14-S07), which judges the role against the document the repository has now and changes nothing. A removed repository is not found.
+ * @returns the repository (not held, whatever the type is called), or null when the tenant has no such repository.
+ * @throws NoResultError when the repository points at a document the tenant does not have (the foreign key forbids it).
+ */
+export function findRepositoryWithDocument(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  repositoryId: number,
+): Promise<LockedRepository | null> {
+  return readRepository(db, scope, { repositoryId, hold: 'none' });
 }

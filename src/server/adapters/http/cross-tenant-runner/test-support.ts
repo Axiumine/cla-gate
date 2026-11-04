@@ -114,6 +114,7 @@ const UNKNOWN_TARGET: MatrixTarget = {
   repositoryId: 987_654,
   documentId: 987_654,
   githubRepoId: 987_654,
+  entryId: 987_654,
 };
 
 /** The resources of a tenant that no repo-scoped document covers: its installation, its plain repository and its installation-wide document. */
@@ -122,6 +123,7 @@ export const plainTarget = (tenant: TenantWorld): MatrixTarget => ({
   repositoryId: tenant.plain.repositoryId,
   documentId: tenant.documentId,
   githubRepoId: tenant.plain.githubRepoId,
+  entryId: tenant.entryId,
 });
 
 /** The resources of a tenant that carry a repo-scoped document: the repository `repoAdmin1` administers, and its document. */
@@ -130,6 +132,7 @@ export const scopedTarget = (tenant: TenantWorld): MatrixTarget => ({
   repositoryId: tenant.scoped.repositoryId,
   documentId: tenant.scoped.documentId,
   githubRepoId: tenant.scoped.githubRepoId,
+  entryId: tenant.entryId,
 });
 
 /** What the role matrix says for a class of endpoint, for tenant 1: the resource the allowed people reach and the one that is too high for a repo admin. */
@@ -234,6 +237,8 @@ async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCa
       `${route} as the admin of the repository`,
     ).toBe(success);
   } else {
+    // The success above may have used the resource up (the removal of an entry, E14-S07): the denial is for the resource as it was.
+    await c.prepare?.(world.db, plan.ok);
     await denialProbe(world, route)('repoAdmin1', c.request(plan.ok), 403);
   }
 }

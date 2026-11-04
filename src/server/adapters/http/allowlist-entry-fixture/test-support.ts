@@ -6,6 +6,7 @@ import {
   REPOSITORY_ALLOWLIST_PATH,
 } from '../../../../shared/allowlist.ts';
 import { parseGithubId } from '../../../../shared/github-id.ts';
+import type { AllowlistGitHub } from '../../../services/allowlist-account.ts';
 import { createJobsTable, fakeEnqueuer, type SentJob, sentJobs } from '../../../services/jobs-fixture/test-support.ts';
 import type { GitHubUserAccount } from '../../../services/ports/github.ts';
 import type { JobEnqueuer } from '../../../services/ports/jobs.ts';
@@ -41,13 +42,14 @@ export const OTHER_ORGANISATION = accountOf(31_337, 'other-org', 'Organization')
 
 /**
  * A world whose queue is `enqueuer` (the fake one unless given), with the jobs table created and `accounts` known to GitHub under
- * their logins. The plain repository of tenant 1 is off; the scoped one is on.
+ * their logins; `allowlistGitHub` replaces the GitHub the accounts are looked up on (the real adapter over a mocked GitHub, say). The plain repository of tenant 1 is off; the scoped one is on.
  */
 export async function allowlistWorld(
   accounts: readonly GitHubUserAccount[] = [ADA, DEPENDABOT, OTHER_ORGANISATION],
   enqueuer: JobEnqueuer = fakeEnqueuer(),
+  allowlistGitHub?: AllowlistGitHub,
 ) {
-  const world = await documentWorld({ enqueuer });
+  const world = await documentWorld({ enqueuer, ...(allowlistGitHub === undefined ? {} : { allowlistGitHub }) });
   await createJobsTable(world.db);
   for (const account of accounts) {
     world.fakeGitHub.scriptUserAccount(account.login, account);

@@ -45,3 +45,75 @@ export interface AllowlistDeps {
   readonly github: AllowlistGitHub;
   readonly enqueuer: JobEnqueuer;
 }
+
+// The list and the removal of entries (E14-S07).
+
+/** Which kind of account an entry exempts. */
+export type AllowlistKind = AllowlistEntryRequest['kind'];
+
+/**
+ * Where a page of a list starts: the first entry, included, as the list is ordered (`kind`, then `login_snapshot` with the entries
+ * that have none last, then `id`). The login is part of the position because the order is by it; it is null for an entry with none.
+ */
+export interface EntryPosition {
+  readonly kind: AllowlistKind;
+  readonly loginSnapshot: string | null;
+  readonly id: number;
+}
+
+/** An entry as a list shows it: the entry, and who made it by the numeric GitHub id with the login the `users` row holds now. */
+export interface ListedEntry {
+  readonly id: number;
+  readonly scope: AllowlistTarget['scope'];
+  /** `repositories.id`, or null for an entry that covers the installation. */
+  readonly repositoryId: number | null;
+  readonly kind: AllowlistKind;
+  readonly githubId: GithubId;
+  readonly loginSnapshot: string | null;
+  readonly createdBy: { readonly githubId: GithubId; readonly login: string };
+  readonly createdAt: Date;
+}
+
+/** One page of a list: the entries, and where the next page starts (null on the last page). */
+export interface EntryPage {
+  readonly entries: readonly ListedEntry[];
+  readonly next: EntryPosition | null;
+}
+
+/** How a page is asked for: at most `limit` entries, from `from` (null: the start). */
+export interface EntryPageRequest {
+  readonly limit: number;
+  readonly from: EntryPosition | null;
+}
+
+/** Which section of the list of a repository a page continues in: its own entries come first, then the installation's. */
+type EntrySection = 'own' | 'inherited';
+
+/** Where a page of the list of a repository starts: in which section, and at which entry of it (included). */
+export interface RepositoryEntryFrom {
+  readonly section: EntrySection;
+  readonly position: EntryPosition;
+}
+
+/** One page of the list of a repository: `own` and `inherited` together hold at most the limit; `next` names the section it continues in. */
+export interface RepositoryEntryPage {
+  readonly own: readonly ListedEntry[];
+  readonly inherited: readonly ListedEntry[];
+  readonly next: RepositoryEntryFrom | null;
+}
+
+/** Everything the removal of an entry needs to know of the request. */
+export interface EntryRemoval {
+  /** `allowlist_entries.id`. */
+  readonly entryId: number;
+  /** The role the guard let the person in with. */
+  readonly role: Role;
+  /** The identity the audit row names. */
+  readonly actorGithubId: GithubId;
+}
+
+/** What the removal works with: the database and the queue for the sweeps. */
+export interface AllowlistRemovalDeps {
+  readonly db: Kysely<Database>;
+  readonly enqueuer: JobEnqueuer;
+}

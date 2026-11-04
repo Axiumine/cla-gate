@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { NoResultError } from 'kysely';
-import { lockRepositoryForDocumentChange } from '../../../services/repository-document-lock-queries.ts';
+import {
+  findRepositoryWithDocument,
+  lockRepositoryForDocumentChange,
+} from '../../../services/repository-document-lock-queries.ts';
 import {
   findAttachableDocument,
   readRepositoryChangedAt,
@@ -25,6 +28,16 @@ export const LOCK_QUERIES: Readonly<Record<string, ScopedQuery>> = {
     run: async (db, scope, ids) => {
       const locked = await lockRepositoryForDocumentChange(db, scope, ids.plain.repositoryId);
       return locked === null ? [] : ownersOfRepositories(db, [locked.id]);
+    },
+  },
+  // The same read without the lock (E14-S07): a repository of another tenant is not found, nor is a removed one.
+  findRepositoryWithDocument: {
+    kind: 'scoped',
+    takesIds: true,
+    activeOnly: true,
+    run: async (db, scope, ids) => {
+      const found = await findRepositoryWithDocument(db, scope, ids.plain.repositoryId);
+      return found === null ? [] : ownersOfRepositories(db, [found.id]);
     },
   },
 };

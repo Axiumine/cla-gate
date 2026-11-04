@@ -65,7 +65,9 @@ export const TENANT_MODULES = [
   'adapters/db/pr-evaluation-links.ts',
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
+  'services/allowlist-entry-list-queries.ts',
   'services/allowlist-entry-queries.ts',
+  'services/allowlist-entry-remove-queries.ts',
   'services/allowlist-sweeps.ts',
   'services/audit-log-queries.ts',
   'services/close-pr/close-heads.ts',
@@ -101,10 +103,7 @@ export const TENANT_MODULES = [
   'services/tenant-queries.ts',
 ] as const;
 
-/**
- * The one file that writes `audit_log`: rows are appended inside the transaction of the change they record, naming the
- * installation the entry carries (E04-S09), and nothing else inserts them. Reads of the table belong to a tenant module.
- */
+/** The one file that writes `audit_log`: rows are appended in the transaction of the change they record, naming the installation the entry carries (E04-S09); nothing else inserts them, and reads of the table belong to a tenant module. */
 export const AUDIT_WRITER = 'services/audit.ts';
 
 /** The error is the one a refused call throws. */

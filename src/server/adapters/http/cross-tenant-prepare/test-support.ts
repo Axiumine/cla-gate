@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { installationRowIdSchema } from '../../db/installation-row-id.ts';
 import type { Database } from '../../db/schema.ts';
 import { sha256 } from '../../db/test-support.ts';
@@ -97,18 +97,54 @@ export async function enforcing(db: Kysely<Database>, target: MatrixTarget): Pro
 
 /**
  * Makes the add of an allowlist entry succeed whoever asks first (E14-S06): the add is `org_members`, which exists once per scope, so
- * the entries of the tenant that earlier calls left are removed; no repository of the tenant enforces the CLA, so the call sends no
+ * the `org_members` entries of the tenant that earlier calls left are removed (the entries the world seeds stay: the removal of one is
+ * a case of its own, E14-S07); no repository of the tenant enforces the CLA, so the call sends no
  * sweep (the world has no queue); and the repository of `target` enforces the document of `target` (its own for the repository the
  * admin of a repository administers), so the role the call needs is the one the case expects. The sweeps are shown by the tests of
  * the routes (allowlist-entry-jobs.test.ts).
  */
 export async function addable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
   const tenant = installationRowIdSchema.parse(target.installationId);
-  await db.deleteFrom('allowlist_entries').where('installation_id', '=', tenant).execute();
+  await db
+    .deleteFrom('allowlist_entries')
+    .where('installation_id', '=', tenant)
+    .where('kind', '=', 'org_members')
+    .execute();
   await db.updateTable('repositories').set({ enabled: false }).where('installation_id', '=', tenant).execute();
   await db
     .updateTable('repositories')
     .set({ cla_document_id: target.documentId })
     .where('id', '=', target.repositoryId)
     .execute();
+}
+
+/**
+ * Lets the list of the allowlist of the repository of `target` be read by the person the role matrix names (E14-S07): the repository
+ * enforces the document of `target` (its own for the repository the admin of a repository administers), and the role the call needs
+ * is the one that document asks for.
+ */
+export async function listable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  await db
+    .updateTable('repositories')
+    .set({ cla_document_id: target.documentId })
+    .where('id', '=', target.repositoryId)
+    .execute();
+}
+
+/**
+ * Makes the removal of the entry of `target` succeed whoever asks first (E14-S07): the entry that covers the installation is there
+ * under the id the case names (a call that removed it earlier is undone, in the same row of the same id), and no repository of the
+ * tenant enforces the CLA, so the call sends no sweep (the world has no queue). The sweeps are shown by the tests of the route
+ * (allowlist-entry-remove-jobs.test.ts).
+ */
+export async function removable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  const tenant = installationRowIdSchema.parse(target.installationId);
+  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
+  await sql`
+    insert into allowlist_entries (id, installation_id, repository_id, kind, github_id, created_by)
+    overriding system value
+    values (${target.entryId}, ${tenant}, null, 'user', ${target.entryId + 1_000_000}, ${person.id})
+    on conflict do nothing
+  `.execute(db);
+  await db.updateTable('repositories').set({ enabled: false }).where('installation_id', '=', tenant).execute();
 }

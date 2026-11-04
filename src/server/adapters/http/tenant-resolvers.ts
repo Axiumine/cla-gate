@@ -92,13 +92,13 @@ const documentParams = z.object({ installationId: idText.pipe(installationRowIdS
 const signatureParams = z.object({ installationId: idText.pipe(installationRowIdSchema), signatureId: idText });
 
 /**
- * The target of a call about a document, or about a signature of one (the role matrix of the security notes, E11-S07): a
- * document that covers the installation needs an org admin; one of a repository that is part of it needs an admin of that
- * repository (an org admin passes too); one of a repository that left the installation stays reachable for an org admin
- * only, because the permission of a person on it cannot be checked, so the call names no repository. Null when the tenant
- * has no such document or is not admitted, or when the repository it names is not readable (the guard reads it again).
+ * The target of a call about a document, about a signature of one, or about an allowlist entry (the role matrix of the security
+ * notes, E11-S07, E14-S07): a document that covers the installation needs an org admin; one of a repository that is part of it
+ * needs an admin of that repository (an org admin passes too); one of a repository that left the installation stays reachable for
+ * an org admin only, because the permission of a person on it cannot be checked, so the call names no repository. Null when the
+ * tenant has no such document or is not admitted, or when the repository it names is not readable (the guard reads it again).
  */
-async function documentTarget(
+export async function documentTarget(
   db: Kysely<Database>,
   installationId: InstallationRowId,
   placement: DocumentPlacement | null,

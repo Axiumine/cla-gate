@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
-import { INSTALLATION_ALLOWLIST_PATH, REPOSITORY_ALLOWLIST_PATH } from '../../../../shared/allowlist.ts';
+import {
+  ALLOWLIST_ENTRY_PATH,
+  INSTALLATION_ALLOWLIST_PATH,
+  REPOSITORY_ALLOWLIST_PATH,
+} from '../../../../shared/allowlist.ts';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
@@ -20,7 +24,9 @@ import {
   attachable,
   draftAtFirstRevision,
   enforcing,
+  listable,
   publishBody,
+  removable,
   versionOne,
 } from '../cross-tenant-prepare/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
@@ -62,6 +68,8 @@ export interface MatrixTarget {
   readonly documentId: number;
   /** GitHub's id of the repository, for the routes keyed by it. */
   readonly githubRepoId: number;
+  /** `allowlist_entries.id` of the entry that covers the whole installation (E14-S07). */
+  readonly entryId: number;
 }
 
 /** A request as the matrix sends it: a state-changing one carries the origin and the token of the signed-in person on its own. */
@@ -339,6 +347,38 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       method: 'POST',
       url: REPOSITORY_ALLOWLIST_PATH.replace(':repositoryId', String(target.repositoryId)),
       payload: { kind: 'org_members' },
+    }),
+  },
+  // E14-S07. The lists read the allowlist (the role matrix of the add: the installation needs an org admin, the repository the role its
+  // document asks for, which `listable` gives the repository of the case); the removal takes the entry that covers the installation
+  // (`removable` puts it back under the same id whoever asks first), so it is an installation write. The path of the list of a
+  // repository names the repository alone, so its crossed ids are those of allowlist-entry-list-tenants.test.ts.
+  [`GET ${INSTALLATION_ALLOWLIST_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: INSTALLATION_ALLOWLIST_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  [`GET ${REPOSITORY_ALLOWLIST_PATH}`]: {
+    endpointClass: 'repository_read',
+    crossable: false,
+    prepare: listable,
+    request: (target) => ({
+      method: 'GET',
+      url: REPOSITORY_ALLOWLIST_PATH.replace(':repositoryId', String(target.repositoryId)),
+    }),
+  },
+  [`DELETE ${ALLOWLIST_ENTRY_PATH}`]: {
+    endpointClass: 'installation_write',
+    success: 204,
+    prepare: removable,
+    request: (target) => ({
+      method: 'DELETE',
+      url: ALLOWLIST_ENTRY_PATH.replace(':installationId', String(target.installationId)).replace(
+        ':entryId',
+        String(target.entryId),
+      ),
     }),
   },
   [`GET ${ERASURE_PREVIEW_PATH}`]: {

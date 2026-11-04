@@ -62,6 +62,7 @@ const SCOPED_QUERY_NAMES = [
   'services/repository-enabled.ts setRepositoryEnabled',
   'services/repository-count-queries.ts countRepositories',
   'services/repository-document-lock-queries.ts lockRepositoryForDocumentChange',
+  'services/repository-document-lock-queries.ts findRepositoryWithDocument',
   'services/repository-document-queries.ts findAttachableDocument',
   'services/repository-document-queries.ts setRepositoryDocument',
   'services/repository-document-queries.ts readRepositoryChangedAt',
@@ -102,6 +103,9 @@ const SCOPED_QUERY_NAMES = [
   'adapters/db/pr-evaluation-links.ts findRowsForSha',
   'adapters/db/pr-evaluation-links.ts hasNewerHeadRow',
   'services/allowlist-entry-queries.ts insertAllowlistEntry',
+  'services/allowlist-entry-remove-queries.ts findAllowlistEntry',
+  'services/allowlist-entry-remove-queries.ts deleteAllowlistEntry',
+  'services/allowlist-entry-list-queries.ts listAllowlistEntries',
   'services/allowlist-sweeps.ts sendAllowlistSweeps',
 ];
 

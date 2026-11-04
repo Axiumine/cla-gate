@@ -15,6 +15,8 @@ import { createAllowlistEntry } from '../../services/allowlist-entry-create.ts';
 import type { AllowlistDeps, AllowlistEntry, AllowlistTarget } from '../../services/allowlist-entry-types.ts';
 import type { JobEnqueuer } from '../../services/ports/jobs.ts';
 import type { Database } from '../db/schema.ts';
+import { allowlistListRoutes } from './allowlist-entry-list-routes.ts';
+import { removeEntryRoute } from './allowlist-entry-remove-route.ts';
 import { requireAuth } from './auth-request.ts';
 import { answerRuleErrors } from './cla-rule-errors.ts';
 import { setNoStore } from './no-store.ts';
@@ -91,14 +93,15 @@ function addRoute(
 }
 
 /**
- * The routes that exempt an account (E14-S06): `POST /api/installations/:installationId/allowlist-entries` for the whole
+ * The routes of the allowlist. The adds (E14-S06) exempt an account: `POST /api/installations/:installationId/allowlist-entries` for the whole
  * installation (org admin) and `POST /api/repositories/:repositoryId/allowlist-entries` for one repository (the repository-action
  * rule of E14-S01: an org admin, or an admin of the repository when the document it enforces is its own). Both are `tenant` routes in
  * `write` mode, so a stranger gets the uniform `404`, a suspended tenant `409 installation_suspended`, and the role is asked of
  * GitHub again. The body is a union on `kind` (`user`, `bot`, `org_members`); a login is looked up on GitHub and stored by its
  * numeric id. Audited as `allowlist_entry.created`, in the transaction of the add, which also sends the sweeps. A rule the request
  * broke (`ClaRuleError`) is answered with its status by the error handler of this plugin; GitHub failing is `502 github_unavailable`
- * or `503 github_rate_limited` with `retry-after`.
+ * or `503 github_rate_limited` with `retry-after`. The same plugin registers the lists (E14-S07, allowlist-entry-list-routes.ts) and the
+ * removal of an entry (allowlist-entry-remove-route.ts), which share its error handler.
  */
 export const allowlistEntryRoutes: FastifyPluginCallbackZod<AllowlistEntryRoutesOptions> = (app, options, done) => {
   const { db, github, enqueuer } = options;
@@ -119,5 +122,7 @@ export const allowlistEntryRoutes: FastifyPluginCallbackZod<AllowlistEntryRoutes
     },
     deps,
   );
+  allowlistListRoutes(app, db);
+  removeEntryRoute(app, { db, enqueuer });
   done();
 };
