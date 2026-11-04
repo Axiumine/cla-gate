@@ -54,6 +54,36 @@ async function removeAll(exec: Exec, remove: readonly string[], ids: readonly st
   return ids.length;
 }
 
+/** How to list the resources of one kind and how to remove them: the arguments after `docker`. */
+type Kind = readonly [list: readonly string[], remove: readonly string[]];
+
+const CONTAINERS: Kind = [
+  ['ps', '--all'],
+  ['rm', '--force', '--volumes'],
+];
+const NETWORKS: Kind = [
+  ['network', 'ls'],
+  ['network', 'rm'],
+];
+const VOLUMES: Kind = [
+  ['volume', 'ls'],
+  ['volume', 'rm', '--force'],
+];
+const IMAGES: Kind = [
+  ['image', 'ls'],
+  ['image', 'rm', '--force'],
+];
+
+/** Removes the resources of `kind` that carry the labels of the run; a failure is added to `failures` and counts 0. */
+async function removeKind(exec: Exec, [list, remove]: Kind, run: string, failures: string[]): Promise<number> {
+  try {
+    return await removeAll(exec, remove, await idsOf(exec, list, run));
+  } catch (error) {
+    failures.push(messageOf(error));
+    return 0;
+  }
+}
+
 /**
  * Removes the stacks of `run`. The run name is checked by the caller (names.ts): everything here is selected by that name and
  * by the two labels, so a resource of another run or of another repository is never touched. Idempotent: nothing left is
@@ -64,37 +94,13 @@ export async function removeRun(exec: Exec, run: string): Promise<Removed> {
   for (const project of projects) {
     await exec('docker', ['compose', '--project-name', project, 'down', '--volumes', '--remove-orphans']);
   }
-  const kinds = [
-    [
-      ['ps', '--all'],
-      ['rm', '--force', '--volumes'],
-    ],
-    [
-      ['network', 'ls'],
-      ['network', 'rm'],
-    ],
-    [
-      ['volume', 'ls'],
-      ['volume', 'rm', '--force'],
-    ],
-    [
-      ['image', 'ls'],
-      ['image', 'rm', '--force'],
-    ],
-  ] as const;
-  const counts: number[] = [];
   const failures: string[] = [];
-  for (const [list, remove] of kinds) {
-    try {
-      counts.push(await removeAll(exec, remove, await idsOf(exec, list, run)));
-    } catch (error) {
-      counts.push(0);
-      failures.push(messageOf(error));
-    }
-  }
+  const containers = await removeKind(exec, CONTAINERS, run, failures);
+  const networks = await removeKind(exec, NETWORKS, run, failures);
+  const volumes = await removeKind(exec, VOLUMES, run, failures);
+  const images = await removeKind(exec, IMAGES, run, failures);
   if (failures.length > 0) {
     throw new ContainerError(failures.join('; '));
   }
-  const [containers = 0, networks = 0, volumes = 0, images = 0] = counts;
   return { projects, containers, networks, volumes, images };
 }
