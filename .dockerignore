@@ -2,7 +2,10 @@
 # Copyright (C) 2026 Giovanni Manzoni
 #
 # E19-S01. What never enters the build context: version control, installed and built output, reports, tool state, browser
-# test output, and every secret-bearing file (environment files except the example, `secrets/`, keys).
+# test output, and every secret-bearing file (environment files except the example, `secrets/`, keys, `.local/`, where the
+# development database port and the test-role passwords are kept). The build stage runs `COPY . .`, so anything left in
+# would land in a layer of the local build cache. A pattern with no directory part matches the root of the context only,
+# hence the `**/` in front of every pattern that must hold at any depth.
 # scripts/docker/dockerignore.test.ts asserts each entry.
 .git
 node_modules
@@ -14,8 +17,10 @@ reports
 e2e
 playwright-report
 test-results
-.env*
+.local/
+**/.env*
 !.env.example
-secrets/
-*.pem
+**/secrets/
+**/*.pem
+**/*.key
 *.tsbuildinfo
