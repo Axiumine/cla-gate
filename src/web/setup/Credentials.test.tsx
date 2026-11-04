@@ -186,13 +186,17 @@ test.each(PUBLIC)(
   },
 );
 
+// Each download revokes its address one second later, and a timer of an earlier test fires into the stub of a later one, so the
+// stub's calls are not only this download's: this one has an address of its own, and what counts is the calls with that address.
 test('the object URL of a download is revoked afterwards', async () => {
+  const address = 'blob:made-up-address-of-the-revoked-download';
   const downloads = stubDownloads();
+  downloads.create.mockReturnValue(address);
   const { user } = await openCredentials();
   await user.click(downloadButton('secrets/github_webhook_secret'));
   await waitFor(
     () => {
-      expect(downloads.revoke).toHaveBeenCalledExactlyOnceWith('blob:made-up-address');
+      expect(downloads.revoke.mock.calls.filter(([revoked]) => revoked === address)).toHaveLength(1);
     },
     { timeout: 3000 },
   );
