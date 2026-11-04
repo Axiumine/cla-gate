@@ -8,8 +8,9 @@
 # `semgrep` job of .github/workflows/ci.yml (`pipx install semgrep==<version>`): a test keeps the two equal.
 #
 # Trivy (E20-S02) is pinned exactly, at v0.76.1 or later, which keeps clear of the releases compromised in March 2026
-# (a test names them and fails on any mention). The `trivy` job of ci.yml installs the same version with
-# aquasecurity/setup-trivy (`version: v<version>`); a test keeps the two equal.
+# (a test names them and fails on any mention). The `trivy` job of ci.yml installs the same version from the GitHub
+# release (scripts/ci/install-trivy.ts, `INSTALL_TRIVY_VERSION` and the release's SHA-256 in the step's env); a test
+# keeps the two versions equal.
 [tools]
 node = "26.13.0"
 "pipx:semgrep" = "1.183.0"

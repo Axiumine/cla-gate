@@ -5,6 +5,7 @@ import path from 'node:path';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { expression, findOnPath, readText } from '../ci/lib/test-support.ts';
+import { SHA256_VARIABLE, VERSION_VARIABLE } from '../ci/lib/trivy-install-plan.ts';
 import { tempDir } from '../code-caps/test-support.ts';
 import {
   ciJob,
@@ -14,7 +15,6 @@ import {
   repoText,
 } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from './test-support.ts';
-import { compareVersions, parseVersion } from './versions.ts';
 
 // E20-S02: the `trivy` job of .github/workflows/ci.yml, the nightly schedule, and the step that keeps Trivy's cache in
 // the runner temp directory, run for real in bash.
@@ -99,23 +99,25 @@ test('yarn trivy runs on every event and cannot fail softly; yarn trivy:dev runs
   expect(job.steps.at(-1)?.name).toBe(NIGHTLY);
 });
 
-test('Trivy comes from setup-trivy, pinned by full commit SHA to v0.2.6 or later, and trivy-action is not used', () => {
+test('Trivy is not installed by an action: the install step is a plain run step and trivy-action is not used', () => {
+  expect(job.steps.filter((each) => /trivy/i.test(each.uses ?? ''))).toEqual([]);
   const install = step(INSTALL);
-  expect(install.uses).toMatch(/^aquasecurity\/setup-trivy@[0-9a-f]{40}$/);
-  const tag = /aquasecurity\/setup-trivy@[0-9a-f]{40} # (v\d+\.\d+\.\d+)$/m.exec(ciText)?.[1];
-  const version = parseVersion(tag ?? '');
-  expect(version).toBeDefined();
-  expect(compareVersions(version ?? [0, 0, 0], [0, 2, 6])).toBeGreaterThanOrEqual(0);
-  expect(job.steps.filter((each) => /trivy-action/i.test(each.uses ?? ''))).toEqual([]);
+  expect(install.uses).toBeUndefined();
+  expect(install.with).toBeUndefined();
+  expect(install.run).toBe('node scripts/ci/install-trivy.ts');
 });
 
-test('setup-trivy installs the exact version of mise.toml into the runner temp directory, with no cache and no token', () => {
+test('the workflow names neither the lapsed get.trivy.dev nor the setup-trivy action that downloads from it', () => {
+  expect(ciText).not.toMatch(/get\.trivy\.dev|setup-trivy/i);
+});
+
+test('the install step spells out the exact version of mise.toml and a 64-digit SHA-256 as literals, and sets nothing else', () => {
   expect(MISE_PIN).toMatch(/^\d+\.\d+\.\d+$/);
-  expect(step(INSTALL).with).toEqual({
-    version: `v${MISE_PIN}`,
-    path: `${expression('runner.temp')}/trivy`,
-    cache: false,
-  });
+  // Literals, not expressions: the pin has to be in the repository, not read from where the tarball comes from.
+  const variables = step(INSTALL).env ?? {};
+  const pinned = new Map(Object.entries(variables)).get(SHA256_VARIABLE);
+  expect(pinned).toMatch(/^[0-9a-f]{64}$/);
+  expect(variables).toEqual({ [VERSION_VARIABLE]: MISE_PIN, [SHA256_VARIABLE]: pinned });
 });
 
 test('the schedule is a nightly cron on the default branch, next to the existing pull request and push triggers', () => {

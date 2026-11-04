@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CLAUDE.md` is now a short operating contract; commands, quality gates, architecture rules, tooling notes and the contributing flow moved to `docs/` and `CONTRIBUTING.md`.
 - `README.md` is now a landing page (product, scope, quick start, documentation map); the architecture, repository layout, auth and security, data model, GitHub App, operations, toolchain, decisions and configuration sections moved to `docs/`, and `scripts/docs/doc-size.test.ts` fails when `README.md` (10240 bytes) or `CLAUDE.md` (6144 bytes) outgrows its ceiling.
 
+### Fixed
+
+- The `coverage` and `postgres` CI jobs get 45 and 60 minutes (they had 30 and 45): the shared runners differ by a factor of four in speed, and both jobs were cancelled by their timeout, tests passing, whenever the slowest runner picked them up (`docs/ci-runners.md`, Known unknowns).
+- The `trivy` CI job no longer depends on `get.trivy.dev`, the download host of `aquasecurity/setup-trivy`, which lapsed (every run failed at the install step with curl exit 6, upstream aquasecurity/trivy#11537): `scripts/ci/install-trivy.ts` downloads the pinned release from GitHub, refuses it unless its SHA-256 equals the literal in `ci.yml`, and unpacks only the `trivy` binary into the runner temp directory; tests keep the version equal to `mise.toml`'s and forbid `setup-trivy` and `get.trivy.dev`.
+
 ### Security
 
 - Fastify 5.12.7 to 5.12.8, the fix for GHSA-3qgw-9275-xf8w (CVE-2026-120216, medium): with a nonzero `handlerTimeout`, a streaming response that outlived the timeout crashed the process. CLA Gate sets no `handlerTimeout` (the default 0 is not affected), so it was not exposed; the update clears the finding Qodana reported on every branch.
