@@ -14,6 +14,7 @@ afterEach(() => {
   vi.doUnmock('./lib/postgres-cli.ts');
   vi.doUnmock('./lib/e2e-cli.ts');
   vi.doUnmock('./lib/guard-cli.ts');
+  vi.doUnmock('./lib/trivy-install.ts');
   vi.resetModules();
   vi.restoreAllMocks();
 });
@@ -23,6 +24,7 @@ const ENTRIES: ReadonlyMap<string, () => Promise<unknown>> = new Map([
   ['postgres.ts', () => import('./postgres.ts')],
   ['e2e.ts', () => import('./e2e.ts')],
   ['check-runners.ts', () => import('./check-runners.ts')],
+  ['install-trivy.ts', () => import('./install-trivy.ts')],
 ]);
 
 /** Imports an entry script fresh, as `node <entry> ...args` would run it; resolves with the streams it was given. */
@@ -99,4 +101,13 @@ test('check-runners exits 1 on a violation in the directory it is pointed at', a
   await runEntry('check-runners.ts', ['--root', root]);
   expect(process.exitCode).toBe(1);
   expect(stderr.mock.calls.join('')).toContain('R1 runs-on must be');
+});
+
+test('install-trivy hands the environment, the streams and the real dependencies to the installer', async () => {
+  const runTrivyInstall = vi.fn(() => Promise.resolve(4));
+  vi.doMock('./lib/trivy-install.ts', () => ({ runTrivyInstall }));
+  const stdIo = await runEntry('install-trivy.ts', []);
+  const { systemDeps } = await import('./lib/trivy-install-deps.ts');
+  expect(runTrivyInstall).toHaveBeenCalledExactlyOnceWith(process.env, stdIo, systemDeps);
+  expect(process.exitCode).toBe(4);
 });

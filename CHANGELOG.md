@@ -47,3 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semgrep verified on the shared runners (E20-S01 is Done after `pipx` was installed on them) and the two failures of the mutation job recorded with their causes in E20-S04 and `docs/ci-runners.md`.
 - `CLAUDE.md` is now a short operating contract; commands, quality gates, architecture rules, tooling notes and the contributing flow moved to `docs/` and `CONTRIBUTING.md`.
 - `README.md` is now a landing page (product, scope, quick start, documentation map); the architecture, repository layout, auth and security, data model, GitHub App, operations, toolchain, decisions and configuration sections moved to `docs/`, and `scripts/docs/doc-size.test.ts` fails when `README.md` (10240 bytes) or `CLAUDE.md` (6144 bytes) outgrows its ceiling.
+
+### Fixed
+
+- The `trivy` CI job no longer depends on `get.trivy.dev`, the download host of `aquasecurity/setup-trivy`, which lapsed (every run failed at the install step with curl exit 6, upstream aquasecurity/trivy#11537): `scripts/ci/install-trivy.ts` downloads the pinned release from GitHub, refuses it unless its SHA-256 equals the literal in `ci.yml`, and unpacks only the `trivy` binary into the runner temp directory; tests keep the version equal to `mise.toml`'s and forbid `setup-trivy` and `get.trivy.dev`.

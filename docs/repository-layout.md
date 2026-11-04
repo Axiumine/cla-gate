@@ -217,7 +217,7 @@ Items marked (planned) do not exist yet.
 ├── scripts/code-caps/           its modules (types, naming, nesting, collector, measure, files, baseline,
 │                                report, cli) and tests; a port of the Python tool; README.md describes the tool
 ├── scripts/ci/                  CI helpers, run natively: free-port, postgres (start/stop the CI database container),
-│                                check-runners (the workflow guard); logic and tests in lib/
+│                                check-runners (the workflow guard), install-trivy (the pinned Trivy release for the `trivy` job); logic and tests in lib/
 ├── scripts/dev/                 db.ts: local database on a random port (up, down, url, run); dev.ts: the Fastify and Vite dev servers (`yarn dev`); install-hooks.ts: the postinstall; logic and tests in lib/
 ├── scripts/web/                 the web wiring: eslint-config.ts (the inline-text and Web Storage rules), theme-init-build.ts (bundles /theme-init.js),
 │                                test-support.ts, and the tests: vite-build.test.ts (builds the SPA and judges the output), vite-config, wiring,

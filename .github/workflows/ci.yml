@@ -448,15 +448,17 @@ jobs:
         run: yarn semgrep
 
   # Vulnerability, secret and misconfiguration scan (E20-S02). Not a required check: it joins `static` and `coverage` only
-  # after it has been stable (E20-S11). Trivy comes from aquasecurity/setup-trivy at the exact version pinned in mise.toml
-  # (a test keeps the two equal and fails on a compromised release); trivy-action is not used. The binary and Trivy's cache
-  # live in the runner's temp directory (setup-trivy wants a literal path, hence the expression, which the runner resolves
-  # before the step runs), never in the shared runner user's home directory. The cache is keyed by calendar day: the
-  # vulnerability database is refreshed at most once a day and a restored older one is updated by Trivy itself.
-  # `yarn trivy` is the one source of the command (the pre-push hook runs it too). Only on the nightly schedule the job also
-  # runs `yarn trivy:dev`, so a vulnerability in a dev-only dependency fails the nightly run and not pull requests. The
-  # action's own install step checks out the Trivy repository with the workflow token (contents: read, expires with the
-  # job) and deletes that copy again. No image is built or scanned: Trivy only reads files.
+  # after it has been stable (E20-S11). Trivy is the release binary from github.com/aquasecurity/trivy at the exact version
+  # pinned in mise.toml, installed by scripts/ci/install-trivy.ts: it downloads the tarball, refuses it unless its SHA-256 is
+  # the one spelled out in this file (the pin is in the repository, not fetched from the place the tarball comes from), and
+  # unpacks only the binary. No third-party installer and no other host are involved. To bump Trivy, change the version here
+  # and in mise.toml, and the SHA-256 from the `trivy_<version>_checksums.txt` of the release (Linux-64bit.tar.gz line); a
+  # test keeps the two versions equal and fails on a compromised release; trivy-action is not used. The binary and Trivy's
+  # cache live in the runner's temp directory, never in the shared runner user's home directory. The cache is keyed by
+  # calendar day: the vulnerability database is refreshed at most once a day and a restored older one is updated by Trivy
+  # itself. `yarn trivy` is the one source of the command (the pre-push hook runs it too). Only on the nightly schedule the
+  # job also runs `yarn trivy:dev`, so a vulnerability in a dev-only dependency fails the nightly run and not pull requests.
+  # No image is built or scanned: Trivy only reads files.
   trivy:
     name: trivy
     runs-on: [self-hosted, Linux, X64]
@@ -465,8 +467,8 @@ jobs:
       TRIVY_NO_PROGRESS: "true"
       TRIVY_SKIP_VERSION_CHECK: "true"
     steps:
-      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. The Trivy install script
-      # downloads with curl, unpacks with tar and verifies the archive with sha256sum.
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. The Trivy install step
+      # downloads with curl and unpacks with tar (the SHA-256 is computed by Node).
       - name: Preflight (runner capabilities)
         shell: bash
         run: |
@@ -525,11 +527,10 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
       - name: Install Trivy (pinned, in the runner temp directory)
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: v0.76.1
-          path: ${{ runner.temp }}/trivy
-          cache: false
+        env:
+          INSTALL_TRIVY_VERSION: "0.76.1"
+          INSTALL_TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+        run: node scripts/ci/install-trivy.ts
       - name: Keep Trivy's cache in the runner temp directory
         id: day
         run: |
