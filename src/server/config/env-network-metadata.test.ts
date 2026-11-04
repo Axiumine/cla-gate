@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'vitest';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 
 // `RECORD_NETWORK_METADATA` in the environment (E13-S05): exactly `true` or `false`, `false` when unset, and anything else is a
 // ConfigError that names the variable and never its value. A typo must not switch the recording of personal data on, nor leave
@@ -53,7 +54,7 @@ test.each([
 ])('%s is a ConfigError naming the variable, never the value', (_label, value) => {
   const error = capture(value);
   expect(error.variables).toEqual(['RECORD_NETWORK_METADATA']);
-  expect(error.message).toBe('Invalid environment configuration: RECORD_NETWORK_METADATA');
+  expect(error.message).toBe('RECORD_NETWORK_METADATA: must be exactly true or false (lower case)');
 });
 
 test('.env.example lists the variable with the safe default, and its comment says what it records', () => {

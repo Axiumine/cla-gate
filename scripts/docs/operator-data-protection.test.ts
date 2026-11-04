@@ -138,9 +138,12 @@ test('the runtime role cannot delete or update signer_pii, so the function is th
   expect(page).toContain('the runtime role has no `delete` or `update` on the table');
 });
 
-test('features the page says are not built are not built: the recording switch is unknown to the server and the purge job is not scheduled', () => {
-  expect(serverSource()).not.toContain('RECORD_NETWORK_METADATA');
+test('the recording switch the page names exists and is off unless it is exactly true, and the purge job the page says is not scheduled is not', () => {
+  expect(configured().recordNetworkMetadata).toBe(false);
+  expect(configured({ RECORD_NETWORK_METADATA: 'true' }).recordNetworkMetadata).toBe(true);
+  expect(refused({ RECORD_NETWORK_METADATA: 'TRUE' })).toEqual(['RECORD_NETWORK_METADATA']);
   expect(page).toContain('`RECORD_NETWORK_METADATA`');
+  expect(page).toContain('it is `false` unless set to exactly `true`');
   expect(sourceFilesMentioning('PURGE_NETWORK_METADATA_JOB')).toEqual([
     'src/server/services/network-metadata-purge.ts',
   ]);

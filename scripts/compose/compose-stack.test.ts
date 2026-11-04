@@ -172,6 +172,7 @@ test('no variable is interpolated that the stack does not document, and no liter
       'OPERATOR_GITHUB_IDS',
       'PORT',
       'PUBLIC_BASE_URL',
+      'RECORD_NETWORK_METADATA',
       'SESSION_ABSOLUTE_SECONDS',
       'SESSION_IDLE_SECONDS',
       'SOURCE_COMMIT',
