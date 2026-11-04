@@ -49,6 +49,7 @@
     "!scripts/ci-contract/**!",
     "!scripts/dev/**!",
     "!scripts/docker/test-support.ts!",
+    "!scripts/docs/test-support.ts!",
     "!scripts/e2e/**!",
     "!scripts/leaks/**!",
     "!scripts/mutation-gate/**!",
