@@ -12,6 +12,8 @@ import vitestStrykerScriptsConfig from '../../vitest.stryker-scripts.config.ts';
 import { exists } from '../ci/lib/test-support.ts';
 import { activeLines, ROOT, repoText, SCRIPTS, workflows } from '../semgrep-rules/test-support.ts';
 import { compareVersions, parseVersion } from '../trivy-gate/versions.ts';
+import { runChild } from './mutate-run.ts';
+import { STRYKER_NODE_ARGS } from './node-args.ts';
 import { MUTATE_EXCLUSIONS, SCRIPTS_SHARD, SERVER_SHARDS, SHARD_NAMES } from './shards.ts';
 import { filesBelow, mutated } from './test-support.ts';
 
@@ -36,6 +38,8 @@ const strykerSchema = z
     tempDirName: z.string(),
     dryRunTimeoutMinutes: z.number(),
     reporters: z.array(z.string()),
+    checkerNodeArgs: z.array(z.string()),
+    testRunnerNodeArgs: z.array(z.string()),
     htmlReporter: z.object({ fileName: z.string() }).strict(),
     jsonReporter: z.object({ fileName: z.string() }).strict(),
     clearTextReporter: z.object({ logTests: z.boolean() }).strict(),
@@ -93,6 +97,17 @@ test('the Stryker config selects the Vitest runner, the TypeScript checker, the 
   expect(exists(path.join(ROOT, strykerConfig.vitest.configFile))).toBe(true);
   const tsconfig = z.object({ include: z.array(z.string()) }).parse(JSON.parse(repoText(strykerConfig.tsconfigFile)));
   expect(tsconfig.include).toEqual(['src/server/**/*.ts', 'src/shared/**/*.ts']);
+});
+
+test('the checker and the test runner processes start with the flag that keeps a long message to them from aborting Node', async () => {
+  expect(STRYKER_NODE_ARGS).toEqual(['--no-json-stringify-fast-path']);
+  for (const options of [strykerConfig, scriptsConfig, scopeOptions(undefined, 'http-a-v')]) {
+    expect(options.checkerNodeArgs).toEqual(STRYKER_NODE_ARGS);
+    expect(options.testRunnerNodeArgs).toEqual(STRYKER_NODE_ARGS);
+  }
+  // The Node of this run must accept it: a Node that drops the flag fails here and not in the nightly run.
+  const accepted = await runChild(process.execPath, [...STRYKER_NODE_ARGS, '-e', '0'], {}, undefined);
+  expect(accepted).toEqual({ code: 0, timedOut: false });
 });
 
 test('the thresholds are 95, 90 and a break at 90, which is never lowered', () => {

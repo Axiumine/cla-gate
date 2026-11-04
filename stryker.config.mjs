@@ -25,6 +25,7 @@
 // `--logLevel debug` is never used: it crashes with Vitest 5 (Stryker issue 6272).
 
 import process from 'node:process';
+import { STRYKER_NODE_ARGS } from './scripts/mutation-gate/node-args.ts';
 import {
   incrementalFileOf,
   MUTATE_EXCLUSIONS,
@@ -115,6 +116,11 @@ export function strykerOptions(scope, shard) {
     // hangs; MUTATE_BUDGET_MINUTES and the job timeout (ci.yml) are kept 50 and 60 minutes above it, for the mutants.
     dryRunTimeoutMinutes: 120,
     reporters: ['clear-text', 'html', 'json'],
+    // The Node flag of every child process (scripts/mutation-gate/node-args.ts has the reason: without it a message of more than
+    // 134 or 268 million characters between Stryker and its checker aborts the process with "Zone Allocation failed"). The main
+    // process gets it from scripts/mutation-gate/mutate-run.ts; NODE_OPTIONS cannot carry it.
+    checkerNodeArgs: [...STRYKER_NODE_ARGS],
+    testRunnerNodeArgs: [...STRYKER_NODE_ARGS],
     // The list of tests that ran per mutant is thousands of lines of log in CI; the survivors and the score are what matter.
     clearTextReporter: { logTests: false },
     ...(scope === 'scripts'

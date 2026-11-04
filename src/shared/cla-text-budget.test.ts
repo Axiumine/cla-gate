@@ -2,21 +2,22 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { CLA_TEXT_MAX_BYTES, canonicalise, validateClaText } from './cla-text.ts';
+import { MOST_LINEAR_SLOWDOWN, slowdownOf } from './test-support.ts';
 
 // A text is validated on the request that saves or publishes it, on the one thread that serves every tenant and the webhooks. The
 // Markdown parser of the rendering takes minutes for the texts below at the size limit (its time grows with the square of the number
-// of lines), so the validation must never wait for it: each text of 200 KiB is read in a fraction of a second. The budget is wall
-// time of two seconds, about a hundred times what the scan needs and a fiftieth of what the parser needs, so a loaded machine
-// does not fail it and a parser on this path always does.
+// of lines), so the validation must never wait for it: its time is linear in the size of the text. That is checked as a slowdown,
+// not as seconds: one pass over a text of 200 KiB must take about as long as sixteen passes over a text of a sixteenth of the size
+// (a ratio of 1; a quadratic scan gives 16, and the limit is 6, `slowdownOf`). A bound in seconds failed on a loaded runner (3.2 s
+// for a scan that needs 15 ms, in the dry run of the mutation gate), and a parser on this path fails the ratio, and the test
+// timeout, at any speed. Each case returns the canonical text of at most the size it is given.
 
-const BUDGET_MS = 2000;
-
-/** The canonical text made of `unit` repeated as often as fits in the size limit. */
-function filling(unit: string): string {
-  return canonicalise(unit.repeat(Math.floor(CLA_TEXT_MAX_BYTES / unit.length)));
+/** `unit` repeated as often as fits in `bytes`, as a canonical text. */
+function repeating(unit: string): (bytes: number) => string {
+  return (bytes) => canonicalise(unit.repeat(Math.floor(bytes / unit.length)));
 }
 
-test.each([
+const ACCEPTED: readonly (readonly [label: string, unit: string])[] = [
   ['one-line setext headings underlined with =', 'a\n=\n'],
   ['one-line setext headings underlined with -', 'a\n---\n'],
   ['two-line setext headings', 'a\nb\n=\n'],
@@ -27,20 +28,28 @@ test.each([
   ['bullets nested by indentation, line after line', '- a\n  - b\n    - c\n'],
   ['numbered items with a quote in each', '1. > a\n2. > b\n'],
   ['fences that are never closed', '```\n> a\n'],
-])('validateClaText accepts 200 KiB of %s and reads it in under two seconds', (_label, unit) => {
-  const text = filling(unit);
+];
+
+test.each(ACCEPTED)('validateClaText accepts 200 KiB of %s and reads it in time linear in its size', (_label, unit) => {
+  const text = repeating(unit)(CLA_TEXT_MAX_BYTES);
   expect(new TextEncoder().encode(text).byteLength).toBeGreaterThan(CLA_TEXT_MAX_BYTES - 100);
-  const started = performance.now();
   expect(validateClaText(text)).toBeNull();
-  expect(performance.now() - started).toBeLessThan(BUDGET_MS);
+  expect(slowdownOf(validateClaText, repeating(unit), CLA_TEXT_MAX_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
 });
 
-test.each([
-  ['51 nested quotes on every line', `${'> '.repeat(51)}a\n`],
-  ['a deep list after a long run of lines', `${'a\n=\n'.repeat(10_000)}${'> '.repeat(51)}a\n`],
-])('validateClaText refuses 200 KiB of %s as too deeply nested in under two seconds', (_label, unit) => {
-  const text = filling(unit);
-  const started = performance.now();
-  expect(validateClaText(text)).toEqual({ rule: 'content_too_deeply_nested' });
-  expect(performance.now() - started).toBeLessThan(BUDGET_MS);
-});
+/** A run of setext headings that fills the size, and then a line of 51 nested quotes at the very end. */
+const deepAfterRun = (bytes: number): string =>
+  canonicalise(`${'a\n=\n'.repeat(Math.floor((bytes - 104) / 4))}${'> '.repeat(51)}a\n`);
+
+const REFUSED: readonly (readonly [label: string, build: (bytes: number) => string])[] = [
+  ['51 nested quotes on every line', repeating(`${'> '.repeat(51)}a\n`)],
+  ['a deep list after a long run of lines', deepAfterRun],
+];
+
+test.each(REFUSED)(
+  'validateClaText refuses 200 KiB of %s as too deeply nested in time linear in its size',
+  (_label, build) => {
+    expect(validateClaText(build(CLA_TEXT_MAX_BYTES))).toEqual({ rule: 'content_too_deeply_nested' });
+    expect(slowdownOf(validateClaText, build, CLA_TEXT_MAX_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
+  },
+);

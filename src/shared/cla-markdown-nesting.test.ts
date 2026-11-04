@@ -4,7 +4,15 @@ import { expect, test } from 'vitest';
 import { containerDepth } from './cla-markdown-containers.ts';
 import { CLA_MAX_NESTING, isNestedTooDeeply, nestingOf, opensTooManyContainers } from './cla-markdown-nesting.ts';
 import { documentProcessor } from './cla-markdown-parse.ts';
-import { indentedBullets, nestedBullets, nestedEmphasis, nestedQuotes } from './test-support.ts';
+import {
+  indentedBullets,
+  MARKER_RUNS,
+  MOST_LINEAR_SLOWDOWN,
+  nestedBullets,
+  nestedEmphasis,
+  nestedQuotes,
+  slowdownOf,
+} from './test-support.ts';
 
 // The depth rule of the CLA text (E12-S07): how the nesting of a text is measured in a tree, the line that the rendering refuses before
 // it parses, the rule of `validateClaText` and that the line scan of it and the whole parse agree on the blocks.
@@ -116,13 +124,13 @@ test.each([
   expect(opensTooManyContainers(text)).toBe(runaway);
 });
 
-test('a text of 100 KiB of container markers is refused at once', () => {
-  const started = performance.now();
-  expect(isNestedTooDeeply('> '.repeat(51_200))).toBe(true);
-  expect(isNestedTooDeeply('+ * '.repeat(25_600))).toBe(true);
-  expect(isNestedTooDeeply('1. '.repeat(34_000))).toBe(true);
-  expect(performance.now() - started).toBeLessThan(2000);
-});
+test.each(MARKER_RUNS)(
+  'a text of 100 KiB of %s as container markers is refused in time linear in its size',
+  (_label, build) => {
+    expect(isNestedTooDeeply(build(102_400))).toBe(true);
+    expect(slowdownOf(isNestedTooDeeply, build, 102_400)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
+  },
+);
 
 test('a text of 100 KiB of [ or * is no deeper than any other text', () => {
   expect(isNestedTooDeeply('['.repeat(102_400))).toBe(false);
