@@ -8,6 +8,7 @@ import { makeRepo } from '../code-caps/test-support.ts';
 import {
   byName,
   checkout,
+  chmodRecorder,
   DERIVED,
   fingerprint,
   GENERATED,
@@ -59,6 +60,22 @@ test('a first run creates secrets/ with mode 0700 and every file once, with mode
   expect(modeOf(box.files)).toBe('700');
   expect(box.listing().toSorted(byName)).toEqual([...ALL].toSorted(byName));
   expect(ALL.map((name) => [name, modeOf(path.join(box.files, name))])).toEqual(ALL.map((name) => [name, '444']));
+});
+
+test('nothing the script writes is readable by others while it is written: the directory and each secret start at 0700 and 0600', () => {
+  const box = checkout();
+  const log = path.join(box.outside, 'chmod.log');
+  const run = box.run({ env: { PATH: chmodRecorder(log) } });
+  expect([run.status, run.stderr]).toEqual([0, '']);
+  const seen = readText(log)
+    .trim()
+    .split('\n')
+    .map((line) => line.split(' '));
+  expect(seen.map(([mode]) => mode)).toEqual(['700', ...ALL.map(() => '600')]);
+  expect(seen.map(([, file = '']) => path.basename(file).replace(/\.\d+$/, '.pid'))).toEqual([
+    'secrets',
+    ...ALL.map(() => '.new.pid'),
+  ]);
 });
 
 test('the five generated secrets are 64 hexadecimal characters each and all different', () => {
@@ -184,6 +201,13 @@ test('.env is a copy of the example and a .env that exists is kept', () => {
   const run = box.run();
   expect(run.stdout.split('\n')[0]).toBe(NOTHING);
   expect(readText(path.join(box.root, ENV_FILE))).toBe('PUBLIC_BASE_URL=https://cla.example.com\n');
+});
+
+test('the environment file is private to the operator: mode 0600, whatever the mode of the example it was copied from', () => {
+  const box = checkout();
+  setMode(path.join(box.root, ENV_EXAMPLE), 0o644);
+  box.run();
+  expect(modeOf(path.join(box.root, ENV_FILE))).toBe('600');
 });
 
 test('without the example file the run stops after the secrets, naming the missing file', () => {

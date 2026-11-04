@@ -16,7 +16,8 @@
 #   secrets/* files     mode 0444 inside the 0700 directory: a bind-mounted file secret keeps the owner and mode of the
 #                       host file, and the container user (10001) could not read a 0400 file that belongs to you. The
 #                       directory is what keeps other users of this host out.
-#   .env                a copy of .env.example when there is none: the non-secret settings (PUBLIC_BASE_URL first).
+#   .env                a copy of .env.example when there is none: the non-secret settings (PUBLIC_BASE_URL first). Mode
+#                       0600, as everything this script creates is private until it is told otherwise (umask 077 below).
 #
 # Output: the names of the files it created, never a value, and where the setup token is. Exit codes: 0 done, 1 a file or
 # a value could not be used (the message names the file and never its content).

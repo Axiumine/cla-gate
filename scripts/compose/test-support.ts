@@ -234,6 +234,23 @@ export function toolbox(openssl?: string, omit: readonly string[] = []): string 
   return bin;
 }
 
+/**
+ * A PATH like {@link toolbox}'s whose `chmod` first appends `<mode> <path>` of its last argument to `log`: the mode a file or
+ * directory has at the moment the script changes it, which is what the umask of the script decided.
+ */
+export function chmodRecorder(log: string): string {
+  const bin = toolbox(undefined, ['chmod']);
+  const lines = [
+    '#!/bin/sh',
+    'for last; do :; done',
+    `${findOnPath('stat')} -c '%a %n' -- "$last" >>'${log}'`,
+    `exec ${findOnPath('chmod')} "$@"`,
+    '',
+  ];
+  writeExecutable(path.join(bin, 'chmod'), lines.join('\n'));
+  return bin;
+}
+
 // ------------------------------------------------------------------------------------------------- environment wiring
 
 /** The names in `environment` that neither a non-secret field of the schema nor the `_FILE` of a secret explains. */
