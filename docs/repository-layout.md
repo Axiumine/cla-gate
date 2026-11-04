@@ -90,7 +90,7 @@ Items marked (planned) do not exist yet.
 │   │                            the CLA documents (E12): document-routes.ts (registers them), document-collection-routes.ts,
 │   │                            document-create-route.ts, document-item-routes.ts, document-draft-routes.ts, document-version-routes.ts,
 │   │                            document-history-routes.ts, document-resolvers.ts, document-presenters.ts, cursor.ts (the opaque page
-│   │                            cursor), request-body.ts (`parseInput`), cla-rule-errors.ts; document-fixture/ is test only;
+│   │                            cursor), request-body.ts (`parseInput`), cla-rule-errors.ts; E13: sign-context-routes.ts, sign-routes.ts, sign-rule-errors.ts, own-signatures-routes.ts and own-signature-presenters.ts, with the fixtures sign-context-fixture/, sign-fixture/, sign-network-fixture/ and own-signatures-fixture/ (test only); document-fixture/ is test only;
 │   │                            test-support.ts, webhook-table-fixture/, auth-fixture/, login-fixture/, callback-fixture/,
 │   │                            tenant-guard-fixture/, cross-tenant-fixture/, cross-tenant-runner/ and cross-tenant-canary/ are test only;
 │   │                            E16: audit-log-routes.ts (with audit-log-query.ts), signature-csv-routes.ts (with signature-csv-query.ts and
@@ -106,7 +106,7 @@ Items marked (planned) do not exist yet.
 │   │                            (`isOperator`, `createOperatorPolicy`); audit-cursor.ts (the cursor of the audit viewer), csv.ts (the
 │   │                            RFC 4180 encoder with the formula guard), signature-state.ts and network-retention.ts (the cutoff); the job envelopes (job-envelope.ts), the retry bounds (job-retry.ts),
 │   │                            recheck.ts (the `/recheck` rules and the rate limit key), sweep.ts and repository-jobs.ts (the
-│   │                            coalesce keys and reasons of the sweep and the repository-level jobs); version-number.ts (the next version number of a document);
+│   │                            coalesce keys and reasons of the sweep and the repository-level jobs); version-number.ts (the next version number of a document); signing (E13): sign-state.ts, sign-request.ts, signer-email.ts, resign-path.ts, pull-request-url.ts and signature-evaluations.ts (the keys and the one question asked of a stored failure);
 │   │                            test-support.ts is test only
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
@@ -150,12 +150,12 @@ Items marked (planned) do not exist yet.
 │                                cla-publish.ts, cla-publish-checks.ts, cla-publish-source.ts, cla-publish-types.ts, cla-version-queries.ts,
 │                                cla-version-rows.ts, cla-version-writes.ts, cla-version-sweeps.ts and cla-enforcing-queries.ts; cla-history.ts,
 │                                cla-history-queries.ts and cla-history-rows.ts; cla-content.ts (`prepareClaText`, the hash) and
-│                                cla-rule-error.ts; publish-fixture/ is test only
+│                                cla-rule-error.ts; publish-fixture/ is test only; signing (E13): sign-context.ts, sign-context-queries.ts, sign-context-view.ts, sign-target.ts, sign-record.ts, sign-record-queries.ts, sign-write.ts, sign-evaluations.ts, failing-evaluation-queries.ts, sign-rule-error.ts, signer-input.ts, network-metadata.ts, own-signatures.ts, own-signatures-queries.ts and own-signature-item.ts
 ├── src/shared/                  zod schemas shared by server and web (github-app.ts: the App's permissions and events; setup.ts: the setup
 │                                routes, schemas and error codes; health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
 │                                vocabulary in audit.ts and the metadata schema in audit-metadata.ts, the PR evaluation
-│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check.ts (`CHECK_RUN_NAME`, the one place the check name is spelled), sign-link.ts (`signUrl`, `isHttpOrigin`), operator.ts (the operator list); the CLA documents (E12): cla.ts (kinds,
+│                                codes, parts and stored-details schema `pr-evaluation-*.ts`, check.ts (`CHECK_RUN_NAME`, the one place the check name is spelled), sign-link.ts (`signUrl`, `isHttpOrigin`), operator.ts (the operator list); signing (E13): consent.ts (the registry of consent sentences), clean-name.ts and signer-input.ts (the name rules), sign-context.ts, sign.ts and own-signatures.ts (the contracts of the three routes); the CLA documents (E12): cla.ts (kinds,
 │                                rule codes and statuses, the document schemas), cla-name.ts (the name rules), cla-text.ts (the canonical text),
 │                                cla-version.ts and cla-history.ts (publish and history), cla-markdown.ts (the sanitising pipeline), cla-markdown-parse.ts,
 │                                cla-markdown-nesting.ts and the line scan cla-markdown-containers.ts, -items.ts, -leaf.ts and -lines.ts,
@@ -195,7 +195,7 @@ Items marked (planned) do not exist yet.
 │   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
 │                                theme.ts, tailwind.ts and vitest.setup.ts
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; the numbers 006 and later go to the epics in order of merge)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           the operator stack (E19-S04): postgres, a one-shot migrate and app, and caddy in the profile `tls`; `docker compose up --build`
