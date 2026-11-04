@@ -46,12 +46,13 @@ const CI_FILE = '.github/workflows/ci.yml';
 // minutes it was given on a shared runner, and the suite is planned to reach 25 000 tests, which is 120 minutes on a runner
 // three times slower, before the mutants; see the comment on the job in ci.yml, stryker.config.mjs and docs/quality-gates.md
 // (Testing, Stryker), which have the arithmetic and the measurements. `postgres` runs the whole suite (8181 tests and growing)
-// one file at a time on a real server, and the shared runners cancelled it twice at 20 minutes while its tests still passed.
-// `coverage` runs the same suite under V8 coverage (4 to 11 minutes, cancelled once at 15 on a busy runner).
+// one file at a time on a real server: 20 minutes on the fastest shared runner, and cancelled at 45 on the two slower ones
+// while its tests still passed (2026-11-04), so it gets the 60 minutes the guard allows. `coverage` runs the same suite under
+// V8 coverage: 7 minutes on the fastest runner, 18 on the next and 28 to 31 on the slowest, where it was cancelled at 30.
 const LONG_JOBS = new Map([
   ['mutation', 180],
-  ['postgres', 45],
-  ['coverage', 30],
+  ['postgres', 60],
+  ['coverage', 45],
   ['leaks', 30],
   ['qodana', 30],
 ]);
