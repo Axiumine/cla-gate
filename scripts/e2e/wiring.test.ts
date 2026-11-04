@@ -58,10 +58,10 @@ test('the e2e project is a root reference and a type-coverage project of its own
   expect(SCRIPTS.get('type-coverage')).toContain('type-coverage --strict --at-least 100 -p tsconfig.e2e.json');
 });
 
-test('the e2e project covers the specs and the leak scenarios, emits nothing and has the strict flags of the base', () => {
+test('the e2e project covers the specs, the leak scenarios and the smoke scenarios, emits nothing and has the strict flags of the base', () => {
   const project = readTsconfig('tsconfig.e2e.json');
   expect(project.extends).toBe('./tsconfig.base.json');
-  expect(project.include).toEqual(['e2e/**/*.ts', 'tests/leaks/**/*.ts']);
+  expect(project.include).toEqual(['e2e/**/*.ts', 'tests/leaks/**/*.ts', 'tests/smoke/**/*.ts']);
   expect(project.compilerOptions?.['composite']).toBeUndefined();
   expect(project.compilerOptions?.['noEmit']).not.toBe(false);
   const base = readTsconfig('tsconfig.base.json').compilerOptions;

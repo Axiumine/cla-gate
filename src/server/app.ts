@@ -32,6 +32,8 @@ import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
 import { requireRouteAccess } from './adapters/http/route-access.ts';
 import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
+import { setupRoutes } from './adapters/http/setup-routes.ts';
+import type { SetupSessions } from './adapters/http/setup-sessions.ts';
 import { signatureCsvRoutes } from './adapters/http/signature-csv-routes.ts';
 import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
@@ -44,6 +46,7 @@ import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer, JobQueue } from './services/ports/jobs.ts';
+import type { ManifestConversion } from './services/ports/manifest-conversion.ts';
 import { RoleCache } from './services/role-cache.ts';
 import { createTenantAuthorization, type TenantAuthorizationDeps } from './services/tenant-authorization.ts';
 import { createTenantAuthorizationDeps, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
@@ -59,9 +62,9 @@ export interface AppOptions {
   readonly readinessTimeoutMs?: number;
   /** Where the session lifetimes, the rate limit (E10-S02, E10-S08) and the webhook route (E06-S01) take "now" from. Defaults to the wall clock. */
   readonly clock?: Clock | undefined;
-  /** How the login reaches GitHub (E10-S05). Defaults to the global `fetch`; tests intercept it with MSW. */
+  /** How the login (E10-S05) and the setup's conversion (E19-S11) reach GitHub. Defaults to the global `fetch`; tests intercept it with MSW. */
   readonly fetch?: typeof fetch | undefined;
-  /** The ceiling of each call to GitHub during the login (E10-S05). Defaults to 10 seconds. */
+  /** The ceiling of each call to GitHub during the login (E10-S05) and of the setup's conversion (E19-S11). Defaults to 10 seconds. */
   readonly githubTimeoutMs?: number | undefined;
   /** Where the webhook route sends the job of a delivery (E06-S06). Defaults to the queue's own, and without a queue to one that fails every send. */
   readonly enqueuer?: JobEnqueuer;
@@ -92,6 +95,10 @@ export interface AppOptions {
    * not configured is none.
    */
   readonly appIdentity?: { current(): { readonly slug: string } | undefined } | undefined;
+  /** The sessions the setup token unlocks (E19-S06), in setup mode only. Defaults to an empty store on `clock`; a test passes its own to read it. */
+  readonly setupSessions?: SetupSessions | undefined;
+  /** How the setup trades GitHub's one-time code for the App's credentials (E19-S11). Defaults to the one over `fetch`; a test passes its own. */
+  readonly manifestConversion?: ManifestConversion | undefined;
 }
 
 /**
@@ -149,8 +156,9 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
  * probes, the operator's list (E11-S08), the documents (E12), the lists of what a person administers (E14-S01), the CLA a
- * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer every
- * path that no route above does, so they are registered last.
+ * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06), the public
+ * `GET /api/meta` (E17-S09), the first-run setup (E19-S06, whose unlock and manifest exist in setup mode only) and the
+ * webhook (E06). The app's files answer every path that no route above does, so they are registered last.
  */
 async function registerRoutes(
   app: FastifyInstance,
@@ -178,6 +186,14 @@ async function registerRoutes(
     enqueuer,
   });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
+  await app.register(setupRoutes, {
+    config,
+    clock,
+    sessions: options.setupSessions,
+    fetch: options.fetch,
+    githubTimeoutMs: options.githubTimeoutMs,
+    conversion: options.manifestConversion,
+  });
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });
   await app.register(webhookRoutes, {

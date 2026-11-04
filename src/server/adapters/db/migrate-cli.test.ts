@@ -93,7 +93,20 @@ test('an invalid environment fails before any connection is made', async () => {
   const { err, io } = sinks();
   const directory = await writeMigrationDirectory(A);
   expect(await runMigrateCli({ env: { DATABASE_URL: 'mysql://u:hunter2@h/db' }, directory, connect, ...io })).toBe(1);
-  expect(err).toEqual(['migration failed: Invalid environment configuration: DATABASE_URL']);
+  expect(err).toEqual([
+    'migration failed: DATABASE_URL: must be a postgres:// or postgresql:// connection string (required; set it, or DATABASE_URL_FILE)',
+  ]);
+  expect(err.join('')).not.toContain('hunter2');
+  expect(connect).not.toHaveBeenCalled();
+});
+
+test('a secret file that cannot be read fails before any connection, naming the file variable and the cause (E19-S02)', async () => {
+  const connect = vi.fn();
+  const { err, io } = sinks();
+  const directory = await writeMigrationDirectory(A);
+  const env = { NODE_ENV: 'production', MIGRATION_DATABASE_URL_FILE: '/nonexistent/owner' };
+  expect(await runMigrateCli({ env, directory, connect, ...io })).toBe(1);
+  expect(err).toEqual(['migration failed: MIGRATION_DATABASE_URL_FILE: cannot read /nonexistent/owner (ENOENT)']);
   expect(connect).not.toHaveBeenCalled();
 });
 

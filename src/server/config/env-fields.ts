@@ -82,3 +82,9 @@ export const sessionSecretField = z
   .string()
   .min(32)
   .transform((value) => new Secret(value));
+
+/** The one-time token that unlocks the first-run setup (E19-S02): at least 32 characters, a secret. */
+export const setupTokenField = z
+  .string()
+  .min(32)
+  .transform((value) => new Secret(value));

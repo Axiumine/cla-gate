@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import type { GithubId } from '../../shared/github-id.ts';
 import { parseAllowedAccountIds } from './allowed-accounts.ts';
+import type { ConfigIssue } from './config-issue.ts';
 import { secretField } from './env-fields.ts';
 import { type GitHubPrivateKey, parseGitHubPrivateKey } from './github-key.ts';
 import { parseOperatorGithubIds } from './operator-ids.ts';
@@ -59,9 +60,9 @@ const webhookSecretField = z
   .transform((value) => new Secret(value));
 
 /**
- * The GitHub App settings. The App id, the key and the webhook secret are optional here and required in production by
- * {@link githubProblems}; the previous key and the previous webhook secret are the ones kept during a rotation
- * (E05-S02, E06-S01). The client id and secret are the App's OAuth credentials for the login (E10-S05); production
+ * The GitHub App settings. Each is optional here: production needs all five of the App id, the key, the webhook secret and
+ * the client id and secret, or none of them (`resolveMode`, mode.ts). The previous key and the previous webhook secret are
+ * the ones kept during a rotation (E05-S02, E06-S01). The client id and secret are the App's OAuth credentials for the login (E10-S05); production
  * requires them through `authProblems` (auth-fields.ts), which also owns the session secret.
  */
 export const githubFields = {
@@ -89,41 +90,28 @@ function secretText(value: Secret | undefined): string | undefined {
 }
 
 export type GithubVariables = z.output<z.ZodObject<typeof githubFields>>;
-type GithubEnv = GithubVariables & { readonly NODE_ENV: string };
 
-/** The GitHub settings production cannot start without (elsewhere the adapter is not built, or a delivery is refused). */
-function productionProblems(env: GithubEnv): readonly string[] {
-  if (env.NODE_ENV !== 'production') {
-    return [];
-  }
-  const required = [
-    ['GITHUB_APP_ID', env.GITHUB_APP_ID],
-    ['GITHUB_APP_PRIVATE_KEY', env.GITHUB_APP_PRIVATE_KEY],
-    ['GITHUB_WEBHOOK_SECRET', env.GITHUB_WEBHOOK_SECRET],
-  ] as const;
-  return required.filter(([, value]) => value === undefined).map(([name]) => name);
-}
-
-/** A previous key or webhook secret that is the current one again: a rotation that rotates nothing. */
-function rotationProblems(env: GithubEnv): readonly string[] {
-  const problems: string[] = [];
+/**
+ * The cross-field rules of the GitHub settings: a previous key or webhook secret that is the current one again is a rotation
+ * that rotates nothing. Keys are compared by fingerprint, so one key in PKCS#1 and in PKCS#8, or with escaped newlines, is
+ * still the same key. Which of the settings production cannot start without is decided by `resolveMode` (mode.ts): all five
+ * App variables, or none and a setup token.
+ */
+export function githubProblems(env: GithubVariables): readonly ConfigIssue[] {
+  const problems: ConfigIssue[] = [];
   const current = env.GITHUB_APP_PRIVATE_KEY?.fingerprint;
   if (current !== undefined && current === env.GITHUB_APP_PRIVATE_KEY_PREVIOUS?.fingerprint) {
-    problems.push('GITHUB_APP_PRIVATE_KEY_PREVIOUS');
+    problems.push({
+      variable: 'GITHUB_APP_PRIVATE_KEY_PREVIOUS',
+      rule: 'must be a different key from GITHUB_APP_PRIVATE_KEY (a rotation keeps the old key here)',
+    });
   }
   const secret = secretText(env.GITHUB_WEBHOOK_SECRET);
   if (secret !== undefined && secret === secretText(env.GITHUB_WEBHOOK_SECRET_PREVIOUS)) {
-    problems.push('GITHUB_WEBHOOK_SECRET_PREVIOUS');
+    problems.push({
+      variable: 'GITHUB_WEBHOOK_SECRET_PREVIOUS',
+      rule: 'must differ from GITHUB_WEBHOOK_SECRET (a rotation keeps the old secret here)',
+    });
   }
   return problems;
-}
-
-/**
- * The cross-field rules of the GitHub settings, by variable name: production needs the App id, the signing key and the
- * webhook secret (elsewhere the GitHub adapter is simply not built without the first two, and a delivery is refused
- * without the third), and a previous key or webhook secret must differ from the current one. Keys are compared by
- * fingerprint, so one key in PKCS#1 and in PKCS#8, or with escaped newlines, is still the same key.
- */
-export function githubProblems(env: GithubEnv): readonly string[] {
-  return [...productionProblems(env), ...rotationProblems(env)];
 }

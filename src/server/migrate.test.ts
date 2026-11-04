@@ -48,5 +48,7 @@ test('the entry hands the CLI the migrations folder of the repository and the pr
 test('the entry reports an invalid environment by variable name', async () => {
   const printed = await importMigrate('');
   expect(process.exitCode).toBe(1);
-  expect(printed).toBe('migration failed: Invalid environment configuration: DATABASE_URL\n');
+  expect(printed).toBe(
+    'migration failed: DATABASE_URL: must be a postgres:// or postgresql:// connection string (required; set it, or DATABASE_URL_FILE)\n',
+  );
 });

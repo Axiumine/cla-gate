@@ -8,11 +8,14 @@ import {
   originField,
   portField,
   sessionSecretField,
+  setupTokenField,
   sweepIntervalField,
   trustProxyField,
   workerConcurrencyField,
 } from './env-fields.ts';
 import { githubFields, githubProblems } from './env-github.ts';
+import { addConfigIssue } from './env-rules.ts';
+import { missingAppVariables, resolveMode } from './mode.ts';
 import { retentionFields } from './retention-fields.ts';
 import { sourceCommitField, sourceUrlField } from './source-fields.ts';
 import { DEFAULT_WEB_ROOT, webRootField } from './web-root.ts';
@@ -33,6 +36,7 @@ export const envSchema = z
     PUBLIC_BASE_URL: originField.optional(),
     TRUST_PROXY: trustProxyField.default(false),
     SESSION_SECRET: sessionSecretField.optional(),
+    SETUP_TOKEN: setupTokenField.optional(),
     WORKER_CONCURRENCY: workerConcurrencyField.default(DEFAULT_WORKER_CONCURRENCY),
     SWEEP_INTERVAL_MINUTES: sweepIntervalField.default(DEFAULT_SWEEP_INTERVAL_MINUTES),
     WEB_ROOT: webRootField.default(DEFAULT_WEB_ROOT),
@@ -45,15 +49,17 @@ export const envSchema = z
   .superRefine((env, ctx) => {
     // Session cookies are `Secure` and `__Host-` prefixed, so a production deployment is HTTPS by definition.
     if (env.NODE_ENV === 'production' && !env.PUBLIC_BASE_URL?.startsWith('https://')) {
-      // Stryker disable next-line StringLiteral: only the variable name of an issue is ever reported, never its message
-      ctx.addIssue({ code: 'custom', path: ['PUBLIC_BASE_URL'], message: 'https origin required in production' });
+      addConfigIssue(ctx, {
+        variable: 'PUBLIC_BASE_URL',
+        rule: 'required as an https origin when NODE_ENV=production (for example https://cla.example.com)',
+      });
     }
-    for (const name of githubProblems(env)) {
-      ctx.addIssue({ code: 'custom', path: [name], message: 'invalid GitHub App setting' });
+    for (const problem of [...resolveMode(env).problems, ...githubProblems(env)]) {
+      addConfigIssue(ctx, problem);
     }
     const invalid = new Set(ctx.issues.map((issue) => issue.path?.[0]));
-    for (const name of authProblems(env, invalid)) {
-      ctx.addIssue({ code: 'custom', path: [name], message: 'invalid login setting' });
+    for (const problem of authProblems({ ...env, appConfigured: missingAppVariables(env).length === 0 }, invalid)) {
+      addConfigIssue(ctx, problem);
     }
   });
 

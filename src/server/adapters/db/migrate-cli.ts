@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
 import type { Kysely } from 'kysely';
-import { ConfigError } from '../../config/env.ts';
+import { ConfigError } from '../../config/config-error.ts';
 import { loadMigrateConfig } from '../../config/migrate-config.ts';
 import { migrateJobQueues, type QueueMigration, type QueueMigrationOptions } from '../jobs/migrate-queues.ts';
 import { loadMigrationFiles, MigrationError } from './migration-files.ts';
@@ -26,7 +26,7 @@ export interface MigrateCliOptions {
 }
 
 function describe(error: unknown): string {
-  if (error instanceof ConfigError || error instanceof MigrationError) {
+  if (error instanceof MigrationError) {
     return error.message;
   }
   if (error instanceof Error) {
@@ -35,6 +35,12 @@ function describe(error: unknown): string {
     return `${error.name}: ${error.message || code || 'no details'}`;
   }
   return 'unknown error';
+}
+
+/** What a failed run prints: one line per problem, each starting `migration failed: `; an invalid environment has one per variable (E19-S02). */
+function failureLines(error: unknown): string[] {
+  const lines = error instanceof ConfigError ? error.lines : [describe(error)];
+  return lines.map((line) => `migration failed: ${line}`);
 }
 
 function queueLines(result: QueueMigration): string[] {
@@ -79,7 +85,9 @@ export async function runMigrateCli(options: MigrateCliOptions): Promise<number>
     }
     return 0;
   } catch (error) {
-    err(`migration failed: ${describe(error)}`);
+    for (const line of failureLines(error)) {
+      err(line);
+    }
     return 1;
   }
 }

@@ -11,9 +11,8 @@ import type { InstallationWiring } from './boot-installations.ts';
 import type { CreateJobQueue } from './boot-queue.ts';
 import { reconcileInBackground } from './boot-reconcile.ts';
 import { startGitHubAndDatabase } from './boot-services.ts';
-import { logAuth } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
-import { logGithubApp } from './config/github-app.ts';
+import { logConfiguration } from './config/mode-log.ts';
 import type { Clock } from './services/ports/clock.ts';
 import { closeOnSignals, DEFAULT_SHUTDOWN_TIMEOUT_MS, type ProcessLike } from './shutdown.ts';
 
@@ -22,8 +21,10 @@ export interface BootOptions {
   readonly signals: ProcessLike;
   /** Defaults to node-postgres on `DATABASE_URL`. Tests pass PGlite. */
   readonly createDb?: (config: AppConfig, logger: Logger) => Kysely<Database> | Promise<Kysely<Database>>;
-  /** Where an invalid configuration is reported. Defaults to stderr. */
+  /** Where an invalid configuration and a database that stays away are reported, one line each. Defaults to stderr. */
   readonly err?: (line: string) => void;
+  /** Waits between the tries of the start-up database check (E19-S02). Defaults to a timer; tests pass a recording fake. */
+  readonly sleep?: (milliseconds: number) => Promise<unknown>;
   /** Where the log lines go. Defaults to stdout; tests pass a capture. */
   readonly logDestination?: DestinationStream;
   /** Milliseconds a shutdown waits for open requests before it drops their connections. Defaults to 10 s. */
@@ -65,14 +66,15 @@ export async function boot(options: BootOptions): Promise<RunningServer | undefi
     return undefined;
   }
   const logger = createLogger(config, options.logDestination);
-  logGithubApp(logger, config.github);
-  logAuth(logger, config);
+  logConfiguration(logger, config);
   const started = await startGitHubAndDatabase({
     config,
     logger,
     clock: options.clock,
     fetch: options.fetch,
     createDb: options.createDb,
+    err: options.err,
+    sleep: options.sleep,
   });
   if (started === undefined) {
     options.signals.exitCode = 1;

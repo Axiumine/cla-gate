@@ -5,15 +5,18 @@ import { createRootRouteWithContext, createRoute, createRouter, RouterProvider }
 import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
+import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
 import { AppShell } from './layout/AppShell.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
 import { type RouterContext, withAccess } from './route-access.ts';
+import { SetupCallbackPage } from './setup/SetupCallbackPage.tsx';
+import { SetupPage } from './setup/SetupPage.tsx';
 import { NotFoundPage, RouterErrorComponent } from './states/index.ts';
 
 // The route tree of the app (E17-S08), written in code: no generator, no generated file. Every route spreads
-// `withAccess(...)`, which is where it says who may see it. E18 adds the sign page and the maintainer screens here, and E19
-// the setup pages.
+// `withAccess(...)`, which is where it says who may see it. E18 adds the sign page and the maintainer screens here; the setup
+// pages (E19-S07) are below.
 
 // The root is the deepest match only when no route matched, so its title is the not-found page's.
 const rootRoute = createRootRouteWithContext<RouterContext>()({
@@ -42,8 +45,24 @@ const loginFailedRoute = createRoute({
   },
 });
 
+// The first-run setup (E19-S07): public, because there is no login while there is no App. Both pages ask the server for the
+// setup status first, and on a configured server they are the not-found page (the server answers 404 for the paths too).
+const setupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: SETUP_PATH,
+  ...withAccess('public', { title: 'setup.title' }),
+  component: SetupPage,
+});
+
+const setupCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: SETUP_CALLBACK_PATH,
+  ...withAccess('public', { title: 'setup.title' }),
+  component: SetupCallbackPage,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
-const routeTree = rootRoute.addChildren([landingRoute, loginFailedRoute]);
+const routeTree = rootRoute.addChildren([landingRoute, loginFailedRoute, setupRoute, setupCallbackRoute]);
 
 /**
  * A router for `queryClient`, on the browser history. The query client is what the routes and their guards read the session through.

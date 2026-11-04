@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { githubFields } from '../../src/server/config/env-github.ts';
+import { SECRET_VARIABLES } from '../../src/server/config/secret-files.ts';
 import { PORT_MAX, PORT_MIN } from '../ci/lib/ports.ts';
 import {
   appEnvironment,
@@ -150,4 +151,13 @@ test('the GitHub App variables are blank, so the application starts without an A
 test('every GitHub App variable and the session secret of the server configuration is set, so none is inherited', () => {
   const env = appEnvironment({ ...OPTIONS, randomHex: counting });
   expect(Object.keys(env)).toEqual(expect.arrayContaining([...Object.keys(githubFields), 'SESSION_SECRET']));
+});
+
+test('the first-run token and the _FILE variant of every secret the application reads are blank, so none is inherited (E19-S02)', () => {
+  const env = appEnvironment({ ...OPTIONS, randomHex: counting });
+  const files = SECRET_VARIABLES.filter((name) => name !== 'MIGRATION_DATABASE_URL').map((name) => `${name}_FILE`);
+  expect(files).toHaveLength(8);
+  expect(
+    Object.fromEntries(['SETUP_TOKEN', ...files].map((name) => [name, new Map(Object.entries(env)).get(name)])),
+  ).toEqual(Object.fromEntries(['SETUP_TOKEN', ...files].map((name) => [name, ''])));
 });

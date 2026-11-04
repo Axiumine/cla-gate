@@ -5,6 +5,7 @@ import type { FastifyRequest } from 'fastify';
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { type LoginFailureReason, loginFailedPath } from '../../../shared/auth.ts';
+import { LOGIN_CALLBACK_PATH } from '../../../shared/routes.ts';
 import { safeReturnTo } from '../../domain/return-to.ts';
 import type { SessionLimits } from '../../domain/session.ts';
 import { completeLogin, type LoginContext } from '../../services/login.ts';
@@ -87,7 +88,7 @@ async function complete(request: FastifyRequest, options: CallbackRoutesOptions)
  */
 export const callbackRoutes: FastifyPluginCallbackZod<CallbackRoutesOptions> = (app, options, done) => {
   app.get(
-    '/api/auth/callback',
+    LOGIN_CALLBACK_PATH,
     { config: { access: 'public', rateLimit: routeRateLimit(RATE_LIMITS.callback) }, exposeHeadRoute: false },
     async (request, reply) => {
       clearOauthCookie(reply);

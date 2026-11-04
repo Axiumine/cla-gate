@@ -32,8 +32,14 @@ test('every route of the tree names its page title, and it is a key of the catal
   expect(routeTitleProblems(routerFor().tree, messages)).toEqual([]);
 });
 
-test('the routes of this epic are the front page, the failed-login page and the not-found route, all public', () => {
-  expect(accessById(routerFor().tree)).toEqual({ __root__: 'public', '/': 'public', '/login/failed': 'public' });
+test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07) and the not-found route, all public', () => {
+  expect(accessById(routerFor().tree)).toEqual({
+    __root__: 'public',
+    '/': 'public',
+    '/login/failed': 'public',
+    '/setup': 'public',
+    '/setup/callback': 'public',
+  });
 });
 
 test('the router context is the query client it was made for', () => {

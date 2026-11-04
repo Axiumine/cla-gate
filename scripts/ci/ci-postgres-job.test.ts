@@ -61,6 +61,20 @@ test('only the postgres job sets the two variables, in its suite step', () => {
   expect(code.filter((line) => line.includes('CLA_ROLE_TESTS'))).toHaveLength(1);
 });
 
+test('no workflow sets DATABASE_URL itself and no workflow names a fixed database port: only the container of ci:postgres start has one (E19-S10)', () => {
+  const names = [...jobs.values()].flatMap((job) => [
+    ...Object.keys(job.env ?? {}),
+    ...job.steps.flatMap((step) => Object.keys(step.env ?? {})),
+  ]);
+  expect(names.filter((name) => name === 'DATABASE_URL')).toEqual([]);
+  const starters = [...jobs]
+    .filter(([, job]) => job.steps.some((step) => step.run === 'yarn ci:postgres start'))
+    .map(([id]) => id);
+  expect(starters).toEqual(['postgres', 'e2e']);
+  const code = ciText.split('\n').filter((line) => !line.trimStart().startsWith('#'));
+  expect(code.filter((line) => /\b5432\b/.test(line))).toEqual([]);
+});
+
 test('the server version is recorded after the database starts and before the tests, and the container is still removed last', () => {
   const start = STEP_NAMES.indexOf('Start PostgreSQL 18 (random free loopback port)');
   expect(start).toBeGreaterThan(0);

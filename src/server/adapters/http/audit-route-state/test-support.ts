@@ -67,9 +67,9 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
   audited(`POST ${REPOSITORY}/commit-overrides`, 'E15-S05', 'commit_override.created'),
   audited(`DELETE ${REPOSITORY}/commit-overrides/:overrideId`, 'E15-S06', 'commit_override.deleted'),
   { ...audited(`POST ${INSTALLATION}/erasures`, 'E16-S04', 'signer_pii.erased'), built: true },
-  exempt('POST /api/setup/unlock', 'E19-S06', 'setup'),
-  exempt('POST /api/setup/manifest', 'E19-S06', 'setup'),
-  exempt('POST /api/setup/convert', 'E19-S11', 'setup'),
+  exempt('POST /api/setup/unlock', 'E19-S06', 'setup', true),
+  exempt('POST /api/setup/manifest', 'E19-S06', 'setup', true),
+  exempt('POST /api/setup/convert', 'E19-S11', 'setup', true),
 ];
 
 /** A mutating route of the application as registered, with the audit declaration of its config. */

@@ -54,6 +54,18 @@ const BLANKED: readonly string[] = [
   'GITHUB_ALLOWED_ACCOUNT_IDS',
   'OPERATOR_GITHUB_IDS',
   'GITHUB_WEBHOOK_SECRET_PREVIOUS',
+  // The first-run token (E19-S02): the application under test is never in setup mode, whatever the shell holds.
+  'SETUP_TOKEN',
+  // The `_FILE` variant of every secret the application reads (E19-S02): a file named in the shell together with the value
+  // set here would be a start-up error ("set only one"), and a file alone would replace a throw-away value.
+  'GITHUB_APP_PRIVATE_KEY_FILE',
+  'GITHUB_APP_PRIVATE_KEY_PREVIOUS_FILE',
+  'GITHUB_WEBHOOK_SECRET_FILE',
+  'GITHUB_WEBHOOK_SECRET_PREVIOUS_FILE',
+  'GITHUB_CLIENT_SECRET_FILE',
+  'SESSION_SECRET_FILE',
+  'SETUP_TOKEN_FILE',
+  'DATABASE_URL_FILE',
 ];
 const SECRET_BYTES = 32;
 

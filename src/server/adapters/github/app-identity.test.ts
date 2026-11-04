@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { delay, HttpResponse } from 'msw';
 import { expect, test } from 'vitest';
-import { ConfigError } from '../../config/env.ts';
+import { ConfigError } from '../../config/config-error.ts';
 import { testGitHubKey } from '../../config/test-support.ts';
 import { GitHubRateLimitedError, GitHubResponseError } from '../../services/ports/github-errors.ts';
 import { packageVersion } from './package-version.ts';
@@ -65,7 +65,10 @@ test('an App id that differs from GITHUB_APP_ID is a ConfigError naming only the
   const failure: unknown = await check.verify().catch((error: unknown) => error);
   expect(failure).toBeInstanceOf(ConfigError);
   expect(failure).toHaveProperty('variables', ['GITHUB_APP_ID']);
-  expect(failure).toHaveProperty('message', 'Invalid environment configuration: GITHUB_APP_ID');
+  expect(failure).toHaveProperty(
+    'message',
+    'GITHUB_APP_ID: is not the id of the App that GitHub knows for GITHUB_APP_PRIVATE_KEY',
+  );
   expect(check.current()).toBeUndefined();
   expect(logs.lines()).toMatchObject([
     { level: 50, msg: 'github.app_id_mismatch', configuredAppId: '4242', githubAppId: 999 },
