@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
-import { toStoredDetails } from '../../domain/evaluation/index.ts';
+import { type Evaluation, toStoredDetails } from '../../domain/evaluation/index.ts';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
+import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import type { JobOutcome } from '../job-registry.ts';
 import type { GitHubPullRequest } from '../ports/github.ts';
 import type { ReportTarget } from '../ports/reporter.ts';
@@ -71,12 +72,34 @@ export async function evaluateOpen(run: EvaluateRun, pr: GitHubPullRequest): Pro
   if (await handOverIfOff(run)) {
     return switchedOff(logger);
   }
-  await ports.reporter.publish(target, evaluation, displayNamesOf(pr, collected.commits));
-  // A switch-off that committed after the read above can have had its `finalise-check` complete the run before the write: hand
-  // the pull request over again, so that the last write to the run is the neutral one whatever the order (E14-S04).
-  await handOverIfOff(run);
+  await publishAndHandOver(run, target, evaluation, displayNamesOf(pr, collected.commits));
   logger.info({ result: evaluation.outcome, failureCodes: evaluation.failureCodes }, 'evaluate_pr.evaluated');
   return { outcome: 'evaluated' };
+}
+
+/**
+ * Writes the report, then hands the pull request over if enforcement was turned off since the read before it: a switch-off that
+ * committed after that read can have had its `finalise-check` complete the run before the write, and the hand-over makes the
+ * last write to the run the neutral one whatever the order (E14-S04). A report that fails after the Check Run was written (its
+ * comment was refused) hands over too before the job fails, so a job that is out of retries leaves no verdict behind either; the
+ * failure of that send is logged, because the failure of the report is the one the queue sees.
+ * @throws what the report or, after a good report, the hand-over throws.
+ */
+async function publishAndHandOver(
+  run: EvaluateRun,
+  target: ReportTarget,
+  evaluation: Evaluation,
+  names: DisplayNames,
+): Promise<void> {
+  try {
+    await run.ports.reporter.publish(target, evaluation, names);
+  } catch (error) {
+    await handOverIfOff(run).catch((handOverError: unknown) => {
+      run.context.logger.warn({ err: handOverError }, 'evaluate_pr.hand_over_failed');
+    });
+    throw error;
+  }
+  await handOverIfOff(run);
 }
 
 /** Enforcement was turned off while the run was going: nothing is written, the `finalise-check` job completes the check. */

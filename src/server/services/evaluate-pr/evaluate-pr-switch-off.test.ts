@@ -60,6 +60,35 @@ test('a repository that is off when the job starts is skipped as before: nothing
   expect(await world.rows()).toEqual([]);
 });
 
+test('a retry that finds the repository off hands the pull request over: the attempt before it may have started or written the run', async () => {
+  const world = await evaluateWorld();
+  await switchOff(world);
+  expect(await world.run(undefined, { attempt: 1, jobId: 'job-4' })).toEqual({
+    outcome: 'skipped:repository_disabled',
+  });
+  expect(world.reporter.startedTargets).toEqual([]);
+  expect(world.handedOver.sent).toEqual([
+    { job: FINALISE, options: { idempotencyKey: 'finalise-check:evaluate-pr:job-4:1' } },
+  ]);
+});
+
+test('a retry that is skipped for another reason hands nothing over', async () => {
+  const world = await evaluateWorld();
+  await world.raw
+    .updateTable('repositories')
+    .set({ removed_at: new Date('2026-11-01T00:00:00Z') })
+    .execute();
+  expect(await world.run(undefined, { attempt: 2 })).toEqual({ outcome: 'skipped:repository_removed' });
+  expect(world.handedOver.sent).toEqual([]);
+});
+
+test('a retry whose hand-over cannot be sent fails the job again', async () => {
+  const world = await evaluateWorld();
+  await switchOff(world);
+  world.handedOver.failure = new Error('the queue is down');
+  await expect(world.run(undefined, { attempt: 1 })).rejects.toThrow('the queue is down');
+});
+
 test('enforcement turned off after the write: the report was made, and the pull request is handed over so that the last write is the neutral one', async () => {
   const world = await evaluateWorld();
   world.reporter.hooks.publish = () => switchOff(world);
@@ -96,4 +125,34 @@ test('a repository of another tenant that is switched off does not stop the eval
   await world.raw.updateTable('repositories').set({ enabled: false }).where('id', '=', other.repositoryId).execute();
   expect(await world.run()).toEqual({ outcome: 'evaluated' });
   expect(world.handedOver.sent).toEqual([]);
+});
+
+test('a report that fails after the Check Run was written hands the pull request over before the job fails, so the last attempt leaves no verdict behind', async () => {
+  const world = await evaluateWorld();
+  world.reporter.hooks.publish = async () => {
+    await switchOff(world);
+    throw new Error('the comment write failed');
+  };
+  await expect(world.run(undefined, { attempt: 0, jobId: 'job-6' })).rejects.toThrow('the comment write failed');
+  expect(world.handedOver.sent).toEqual([
+    { job: FINALISE, options: { idempotencyKey: 'finalise-check:evaluate-pr:job-6:0' } },
+  ]);
+});
+
+test('a report that fails while enforcement is on hands nothing over, and the job fails with the failure of the report', async () => {
+  const world = await evaluateWorld();
+  world.reporter.hooks.publish = () => Promise.reject(new Error('the comment write failed'));
+  await expect(world.run()).rejects.toThrow('the comment write failed');
+  expect(world.handedOver.sent).toEqual([]);
+});
+
+test('a hand-over that fails behind a failed report is logged, and the failure of the report is the one the job fails with', async () => {
+  const world = await evaluateWorld();
+  world.reporter.hooks.publish = async () => {
+    await switchOff(world);
+    throw new Error('the comment write failed');
+  };
+  world.handedOver.failure = new Error('the queue is down');
+  await expect(world.run()).rejects.toThrow('the comment write failed');
+  expect(world.logs.lines()).toContainEqual(expect.objectContaining({ msg: 'evaluate_pr.hand_over_failed' }));
 });

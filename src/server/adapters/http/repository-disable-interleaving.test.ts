@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import type { EnvelopeOf } from '../../domain/job-envelope.ts';
 import { evaluatePr } from '../../services/evaluate-pr/evaluate-pr.ts';
-import { disableAs } from './repository-disable-fixture/test-support.ts';
 import { setEnabled } from './repository-document-fixture/test-support.ts';
-import { COVERED, flowWorld, interleaved, UNCOVERED } from './repository-flow-fixture/test-support.ts';
+import { COVERED, evaluationOf, flowWorld, interleaved, UNCOVERED } from './repository-flow-fixture/test-support.ts';
 
 // A repository is switched off while an `evaluate-pr` job is running (E14-S04), with GitHub stubbed by MSW behind the real Octokit
 // adapter and the real reporter: the disable and the jobs it sends (the finalisation of the repository and of each pull request)
@@ -30,23 +28,13 @@ test.each(CUTS)(
     const world = await flowWorld();
     const { t1 } = world;
     await setEnabled(world, t1.plain.repositoryId, true);
-    const envelope = (prNumber: number): EnvelopeOf<'evaluate-pr'> => ({
-      type: 'evaluate-pr',
-      githubInstallationId: t1.githubInstallationId,
-      githubRepoId: t1.plain.githubRepoId,
-      prNumber,
-      trigger: 'pull_request',
-    });
-    const context = (jobId: string) => ({ attempt: 0, logger: world.logger, enqueuer: world.queue, jobId });
-    await evaluatePr(world.ports, envelope(COVERED), context('eval-covered'));
+    const covered = evaluationOf(world, COVERED);
+    const uncovered = evaluationOf(world, UNCOVERED);
+    await evaluatePr(world.ports, covered.envelope, covered.context('eval-covered'));
     expect(await world.conclusionOf(COVERED)).toBe('success');
 
-    const switchOff = async () => {
-      expect((await disableAs(world, 'admin1', t1.plain.repositoryId)).statusCode).toBe(200);
-      await world.drain();
-    };
-    const ports = { ...world.ports, reporter: interleaved(world.ports.reporter, { [cut]: switchOff }) };
-    expect(await evaluatePr(ports, envelope(UNCOVERED), context('eval-uncovered'))).toEqual({ outcome });
+    const ports = { ...world.ports, reporter: interleaved(world.ports.reporter, { [cut]: uncovered.switchOff }) };
+    expect(await evaluatePr(ports, uncovered.envelope, uncovered.context('eval-uncovered'))).toEqual({ outcome });
     // The jobs the evaluation handed over run after it, as the queue would run them.
     await world.drain();
 

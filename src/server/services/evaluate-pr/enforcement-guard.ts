@@ -13,19 +13,16 @@ import type { EvaluateRun } from './evaluate-pr-ports.ts';
 // before the first read stops the write; one that committed after it is seen by the second read, whose job runs after the
 // write, so the check ends `neutral` in every order. A job that is sent when it was not needed completes a check that is
 // `neutral` already, which the reporter does safely.
+//
+// A hand-over that fails, or a report that fails after the Check Run was written, fails the job, and the retry must not take the
+// repository being off for "nothing to do": the run the earlier attempt started or wrote may be waiting for its completion. So a
+// report that fails hands the pull request over before it rethrows, and a retry that finds the repository off hands it over too.
 
-/**
- * Reads whether the repository of the run still enforces and, when it does not, sends the `finalise-check` job of the pull request
- * in a transaction of its own, under a key that names this run and attempt (a retry of the job after a failed send sends again).
- * @returns true when the repository is switched off (or gone): the caller writes nothing, or has written what the job now covers.
- * @throws what the database or the queue throws: the job fails and the queue retries it.
- */
-export async function handOverIfOff(run: EvaluateRun): Promise<boolean> {
-  const { ports, job, resolved, context } = run;
-  const { installation, repository } = resolved.tenant;
-  if (await isRepositoryEnabled(ports.db, installation.id, repository.id)) {
-    return false;
-  }
+/** The part of a run the hand-over needs: the retry of a job that finds the repository off has no resolved repository yet. */
+type HandOver = Omit<EvaluateRun, 'resolved'>;
+
+/** Sends the `finalise-check` job of the pull request in a transaction of its own, under a key that names this run and attempt. */
+async function sendFinaliseCheck({ ports, job, context }: HandOver): Promise<void> {
   await ports.db.transaction().execute((tx) =>
     enqueueFinaliseCheck(tx, context.enqueuer, {
       githubInstallationId: job.githubInstallationId,
@@ -34,5 +31,31 @@ export async function handOverIfOff(run: EvaluateRun): Promise<boolean> {
       idempotencyKey: `finalise-check:evaluate-pr:${context.jobId}:${String(context.attempt)}`,
     }),
   );
+}
+
+/**
+ * Reads whether the repository of the run still enforces and, when it does not, sends the `finalise-check` job of the pull request
+ * in a transaction of its own, under a key that names this run and attempt (a retry of the job after a failed send sends again).
+ * @returns true when the repository is switched off (or gone): the caller writes nothing, or has written what the job now covers.
+ * @throws what the database or the queue throws: the job fails and the queue retries it.
+ */
+export async function handOverIfOff(run: EvaluateRun): Promise<boolean> {
+  const { installation, repository } = run.resolved.tenant;
+  if (await isRepositoryEnabled(run.ports.db, installation.id, repository.id)) {
+    return false;
+  }
+  await sendFinaliseCheck(run);
   return true;
+}
+
+/**
+ * A job that is run again and finds its repository switched off: an earlier attempt may have started the run of the pull request
+ * or written its verdict, and failed before the hand-over (or after a switch-off finalised the run, and before it wrote), so the
+ * check is handed over now. The first attempt has started nothing, and the finalisation of the switch-off covers what was there.
+ * @throws what the database or the queue throws: the job fails and the queue retries it.
+ */
+export async function handOverRetry(run: HandOver): Promise<void> {
+  if (run.context.attempt > 0) {
+    await sendFinaliseCheck(run);
+  }
 }

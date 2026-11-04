@@ -5,6 +5,7 @@ import type { Logger } from 'pino';
 import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import { testGitHubKey } from '../../../config/test-support.ts';
 import { evaluatePullRequest } from '../../../domain/evaluation/index.ts';
+import type { EnvelopeOf } from '../../../domain/job-envelope.ts';
 import { evaluatePr } from '../../../services/evaluate-pr/evaluate-pr.ts';
 import type { EvaluatePrPorts } from '../../../services/evaluate-pr/evaluate-pr-ports.ts';
 import {
@@ -37,6 +38,7 @@ import { captureLogs } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import { type HttpWorld, httpWorld } from '../../github/http-world/test-support.ts';
 import { createLogger } from '../logger.ts';
+import { disableAs } from '../repository-disable-fixture/test-support.ts';
 import { enableWorld } from '../repository-enable-fixture/test-support.ts';
 
 // The flow of a repository's enforcement from the click to the Check Runs (E14-S03, E14-S04), with GitHub stubbed by MSW behind the
@@ -235,4 +237,34 @@ export function interleaved(
     cancelled: (target) => inner.cancelled(target),
     enforcementDisabled: (target) => inner.enforcementDisabled(target),
   };
+}
+
+/**
+ * The `evaluate-pr` job of pull request `prNumber` of tenant 1's plain repository, how one of its attempts is run (the queue it
+ * hands over to is the world's unless given), and the switch-off a test runs at a cut: the disable route as the org admin, and
+ * the jobs it sends run to the end.
+ */
+export function evaluationOf(world: Awaited<ReturnType<typeof flowWorld>>, prNumber: number) {
+  const { t1 } = world;
+  const envelope: EnvelopeOf<'evaluate-pr'> = {
+    type: 'evaluate-pr',
+    githubInstallationId: t1.githubInstallationId,
+    githubRepoId: t1.plain.githubRepoId,
+    prNumber,
+    trigger: 'pull_request',
+  };
+  const context = (jobId: string, attempt = 0, enqueuer: JobEnqueuer = world.queue) => ({
+    attempt,
+    logger: world.logger,
+    enqueuer,
+    jobId,
+  });
+  const switchOff = async (): Promise<void> => {
+    const response = await disableAs(world, 'admin1', t1.plain.repositoryId);
+    if (response.statusCode !== 200) {
+      throw new Error(`the switch-off answered ${String(response.statusCode)}`);
+    }
+    await world.drain();
+  };
+  return { envelope, context, switchOff };
 }
