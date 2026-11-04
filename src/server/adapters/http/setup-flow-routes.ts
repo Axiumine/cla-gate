@@ -29,7 +29,7 @@ export const flowRoutes: FastifyPluginAsyncZod<FlowOptions> = async (app, option
   await app.register(fastifyCookie);
   const { token, publicBaseUrl, sessions, conversion } = options;
   const origin = new URL(publicBaseUrl).origin;
-  unlockRoute(app, { token, sessions, throttle: createUnlockThrottle(options.clock) });
+  unlockRoute(app, { token, sessions, origin, throttle: createUnlockThrottle(options.clock) });
   manifestRoute(app, { publicBaseUrl, sessions, origin });
   sessionRoute(app, { sessions });
   convertRoute(app, { sessions, origin, conversion });

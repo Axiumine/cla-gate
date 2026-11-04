@@ -33,11 +33,17 @@ export interface Unlocked {
   readonly csrfToken: string;
 }
 
-/** `POST /api/setup/unlock` with `token` (anything, to try a hostile body), from `address` when one is given. */
-export function postUnlock(app: FastifyInstance, token: unknown, address?: string) {
+/** `POST /api/setup/unlock` with `token` (anything, to try a hostile body), from `address` when one is given, with `headers`. */
+export function postUnlock(
+  app: FastifyInstance,
+  token: unknown,
+  address?: string,
+  headers: Record<string, string> = {},
+) {
   return app.inject({
     method: 'POST',
     url: '/api/setup/unlock',
+    headers,
     payload: { token },
     ...(address === undefined ? {} : { remoteAddress: address }),
   });

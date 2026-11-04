@@ -27,6 +27,8 @@ export interface UnlockRouteOptions {
   readonly token: Secret;
   readonly sessions: SetupSessions;
   readonly throttle: UnlockThrottle;
+  /** The origin of `PUBLIC_BASE_URL`: the one origin a browser may send this `POST` from. */
+  readonly origin: string;
 }
 
 /** The `429` of a client held back: `Retry-After` is the whole seconds until its oldest counted failure has left the window. */
@@ -37,12 +39,15 @@ function heldBack(reply: FastifyReply, seconds: number): AppError {
 }
 
 /**
- * `POST /api/setup/unlock` (E19-S06): compares the SHA-256 digests of the token it was given and the configured one in
- * constant time, answers a wrong one with `401 invalid_setup_token` and counts it; past the limit of the throttle it answers
- * `429` before it reads the token, the right one included. A right token opens a session: the cookie and the CSRF token, in
- * the body (a `204` has no body to carry it). It logs and stores nothing of the token, the session or the CSRF token (the events
- * `setup.unlock.ok` and `setup.unlock.failed` of E19-S11 carry the request id and nothing else), and a body that is not
- * `{token}` is a `400` that no counter sees.
+ * `POST /api/setup/unlock` (E19-S06). An `Origin` that is sent and is not ours is `403 origin_mismatch` before anything else:
+ * a browser sends one on every cross-site `POST`, so a page of another site cannot make visitors' browsers submit guesses that
+ * the limit per address would count against each of them. A request with none (a script) is let through, the unlock being
+ * what opens the session, with no cookie or CSRF token to ask for. It compares the SHA-256 digests of the token it was given
+ * and the configured one in constant time, answers a wrong one with `401 invalid_setup_token` and counts it; past the limit of
+ * the throttle it answers `429` before it reads the token, the right one included. A right token opens a session: the cookie
+ * and the CSRF token, in the body (a `204` has no body to carry it). It logs and stores nothing of the token, the session or
+ * the CSRF token (the events `setup.unlock.ok` and `setup.unlock.failed` of E19-S11 carry the request id and nothing else),
+ * and a body that is not `{token}` is a `400` that no counter sees.
  */
 export function unlockRoute(app: Routes, options: UnlockRouteOptions): void {
   app.post(
@@ -50,6 +55,10 @@ export function unlockRoute(app: Routes, options: UnlockRouteOptions): void {
     // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
     { bodyLimit: SETUP_BODY_LIMIT, schema: { response: setupUnlockRoute.responses }, config: SETUP_POST },
     (request, reply): z.infer<typeof unlockResponseSchema> => {
+      const { origin } = request.headers;
+      if (origin !== undefined && origin !== options.origin) {
+        throw new AppError(403, SETUP_ERROR_CODES.originMismatch);
+      }
       const wait = options.throttle.retryAfter(request.ip);
       if (wait !== undefined) {
         throw heldBack(reply, wait);
