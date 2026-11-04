@@ -14,6 +14,8 @@ import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 export interface SignRepository {
   /** `installations.id` of the tenant that holds the repository: the scope of every later read. */
   readonly installationId: InstallationRowId;
+  /** GitHub's id of that installation: the id a job names (`installations.github_installation_id`). */
+  readonly githubInstallationId: number;
   /** `repositories.id`: the key a signature names as its source (`signatures.source_repository_id`). */
   readonly repositoryId: number;
   readonly githubRepoId: number;
@@ -40,6 +42,7 @@ export async function findSignRepository(db: Kysely<Database>, githubRepoId: num
     .innerJoin('installations as i', 'i.id', 'r.installation_id')
     .select([
       'r.installation_id as installationId',
+      'i.github_installation_id as githubInstallationId',
       'r.id as repositoryId',
       'r.github_repo_id as githubRepoId',
       'r.full_name as fullName',

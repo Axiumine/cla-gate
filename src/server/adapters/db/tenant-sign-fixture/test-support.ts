@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, NoResultError } from 'kysely';
+import { failureDetails } from '../../../domain/failure-details-fixture/test-support.ts';
+import { findFailingEvaluations } from '../../../services/failing-evaluation-queries.ts';
 import { NO_NETWORK_METADATA } from '../../../services/network-metadata.ts';
 import { ownSignatureRows } from '../../../services/own-signatures-queries.ts';
 import { findSignDocument, findSignRepository, listViewerSignatures } from '../../../services/sign-context-queries.ts';
+import { attachDocument, storeFailure } from '../../../services/sign-evaluations-fixture/test-support.ts';
 import { findLiveSignature, insertSignature, insertSignerPii } from '../../../services/sign-record-queries.ts';
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
-import { ownersOfDocuments, ownersOfSignatures } from '../tenant-owners/test-support.ts';
+import { ownersOfDocuments, ownersOfGithubIds, ownersOfSignatures } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery, TenantQuery } from '../tenant-registry/test-support.ts';
 
 // The registry entries (E11-S06) of the statements the sign page context runs over the tenant tables (E13-S02), of the ones that
@@ -45,6 +48,25 @@ async function arrangeUnsignedPublisher(db: Kysely<Database>, tenants: readonly 
         signer_type: 'individual',
       })
       .execute();
+  }
+}
+
+/**
+ * Makes the plain repository of each tenant enforce the tenant's document and gives it a pull request that fails for the tenant's
+ * signer, so the lookup of the signer's failing pull requests (E13-S07) has a row of its own tenant to find and one of the other to stray into.
+ */
+async function arrangeFailingPullRequest(db: Kysely<Database>, tenants: readonly TenantWorld[]): Promise<void> {
+  for (const tenant of tenants) {
+    await attachDocument(db, tenant, ['plain']);
+    await storeFailure(
+      db,
+      { installationId: tenant.installationId, repositoryId: tenant.plain.repositoryId },
+      {
+        prNumber: 61,
+        details: failureDetails({ uncovered: [tenant.signer.githubId], documentId: tenant.documentId }),
+        updatedAt: new Date('2026-06-01T00:00:00Z'),
+      },
+    );
   }
 }
 
@@ -97,6 +119,28 @@ export const SIGN_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string
       run: async (db, _scope, ids) =>
         (await ownSignatureRows(db, ids.signer.userId, { limit: 10, from: null })).map((row) => row.id),
       answers: (own, other) => ({ own: [own.signatureId], foreign: [other.signatureId] }),
+    },
+  },
+  // The signer's failing pull requests (E13-S07): the evaluations of the repositories attached to the document that list the
+  // signer as uncovered. The world gives each tenant one, and a call for the other tenant's document or signer finds none.
+  'services/failing-evaluation-queries.ts': {
+    findFailingEvaluations: {
+      kind: 'scoped',
+      takesIds: true,
+      activeOnly: true,
+      arrange: arrangeFailingPullRequest,
+      run: async (db, scope, ids) => {
+        const rows = await findFailingEvaluations(db, scope, {
+          documentId: ids.documentId,
+          githubId: ids.signer.githubId,
+          origin: null,
+          limit: 10,
+        });
+        return ownersOfGithubIds(
+          db,
+          rows.map((row) => row.githubRepoId),
+        );
+      },
     },
   },
   'services/sign-record-queries.ts': {

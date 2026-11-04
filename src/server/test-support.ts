@@ -80,7 +80,7 @@ export interface TestAppOptions {
   readonly fetch?: typeof fetch;
   /** The ceiling of each call to GitHub during the login (E10-S05); defaults to 10 seconds. */
   readonly githubTimeoutMs?: number;
-  /** Where the webhook route sends a job (E06-S06). Defaults to the app's own, which fails every send. */
+  /** Where the webhook route sends a job (E06-S06) and the sign route the jobs of a new signature (E13-S07). Defaults to the app's own, which fails every send. */
   readonly enqueuer?: JobEnqueuer;
   /** Where the webhook route answers `503` `webhook_timeout` (E06-S07). Defaults to the app's own, 8 seconds. */
   readonly webhookDeadlineMs?: number;

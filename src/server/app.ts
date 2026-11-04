@@ -61,7 +61,7 @@ export interface AppOptions {
   readonly fetch?: typeof fetch | undefined;
   /** The ceiling of each call to GitHub during the login (E10-S05) and of the setup's conversion (E19-S11). Defaults to 10 seconds. */
   readonly githubTimeoutMs?: number | undefined;
-  /** Where the webhook route sends the job of a delivery (E06-S06). Defaults to the queue's own, and without a queue to one that fails every send. */
+  /** Where the webhook route sends the job of a delivery (E06-S06) and the sign route the evaluations of a new signature (E13-S07). Defaults to the queue's own, and without a queue to one that fails every send. */
   readonly enqueuer?: JobEnqueuer;
   /** The running job queue (E07-S01): `/readyz` follows it and closing the app stops it, before the database is destroyed. */
   readonly jobQueue?: JobQueue;
@@ -172,7 +172,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });
   await app.register(signContextRoutes, { db });
-  await app.register(signRoutes, { db, recordNetworkMetadata: config.recordNetworkMetadata });
+  await app.register(signRoutes, { db, enqueuer, recordNetworkMetadata: config.recordNetworkMetadata });
   await app.register(ownSignaturesRoutes, { db });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },

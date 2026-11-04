@@ -80,6 +80,7 @@ export const TENANT_MODULES = [
   'services/export/own-data-queries.ts',
   'services/export/own-signatures-query.ts',
   'services/export/signature-queries.ts',
+  'services/failing-evaluation-queries.ts',
   'services/installation-operator.ts',
   'services/own-signatures-queries.ts',
   'services/repo-admin-candidates.ts',

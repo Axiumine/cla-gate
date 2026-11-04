@@ -5,6 +5,8 @@ import type { SignRequest } from '../../shared/sign.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { appendAudit } from './audit.ts';
 import type { NetworkMetadata } from './network-metadata.ts';
+import type { JobEnqueuer } from './ports/jobs.ts';
+import { enqueueSignatureEvaluations } from './sign-evaluations.ts';
 import {
   findLiveSignature,
   insertSignature,
@@ -14,8 +16,9 @@ import {
 import type { SignTarget, SignViewer } from './sign-target.ts';
 import type { SignerIdentity } from './signer-input.ts';
 
-// The inserts of the sign request (E13-S04), in the transaction the caller opened: the signature, the personal data of its signer
-// and the audit row, or none of them when the signature exists already. The checks that come before are in sign-record.ts.
+// The inserts of the sign request (E13-S04), in the transaction the caller opened: the signature, the personal data of its signer,
+// the audit row and the jobs that evaluate the person's pull requests again (E13-S07), or none of them when the signature exists
+// already. The checks that come before are in sign-record.ts.
 
 /**
  * A sign request, the person who makes it and the network metadata to store with their personal data (E13-S05; nothing, unless
@@ -36,6 +39,8 @@ export interface SignedOutcome {
 
 /** What the transaction needs: the facts the checks found out and the identity that passed them. */
 export interface Recording {
+  /** Where the jobs of E13-S07 are sent, on the connection of the transaction. */
+  readonly enqueuer: JobEnqueuer;
   readonly attempt: SignAttempt;
   readonly target: Extract<SignTarget, { readonly kind: 'found' }>;
   readonly identity: SignerIdentity;
@@ -60,10 +65,29 @@ async function auditSignature(trx: Transaction<Database>, recording: Recording, 
   });
 }
 
+/** The jobs of a new signature (E13-S07), in the transaction that wrote it: the pull request it came from and the person's other failing ones. */
+function sendEvaluations(trx: Transaction<Database>, recording: Recording, signatureId: number): Promise<void> {
+  const { attempt, target } = recording;
+  const { repository } = target;
+  return enqueueSignatureEvaluations(trx, recording.enqueuer, {
+    scope: target.scope,
+    githubInstallationId: repository.githubInstallationId,
+    signatureId,
+    documentId: target.document.id,
+    signer: attempt.viewer.githubId,
+    source: {
+      repositoryId: repository.repositoryId,
+      githubRepoId: repository.githubRepoId,
+      prNumber: attempt.request.prNumber ?? null,
+    },
+  });
+}
+
 /**
- * The inserts and the audit row of one signature, in the caller's transaction. When a signature that is not revoked exists for the
- * person, the document and the major version, nothing is written, not even the personal data, and the existing signature is the
- * answer: the stored name and address are never overwritten by a repeat.
+ * The inserts, the audit row and the jobs of one signature, in the caller's transaction. When a signature that is not revoked
+ * exists for the person, the document and the major version, nothing is written, not even the personal data, and no job is sent:
+ * the existing signature is the answer, and the stored name and address are never overwritten by a repeat. A send that fails
+ * fails the transaction, so the signature is not kept without its evaluations (E13-S07).
  */
 export async function writeSignature(trx: Transaction<Database>, recording: Recording): Promise<SignedOutcome> {
   const { attempt, target, identity } = recording;
@@ -95,6 +119,7 @@ export async function writeSignature(trx: Transaction<Database>, recording: Reco
     network: attempt.network,
   });
   await auditSignature(trx, recording, inserted.id);
+  await sendEvaluations(trx, recording, inserted.id);
   return {
     kind: 'signed',
     created: true,

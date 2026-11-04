@@ -5,6 +5,10 @@ import type { Kysely } from 'kysely';
 import { expect } from 'vitest';
 import { SIGN_PATH, type SignResponse, signResponseSchema } from '../../../../shared/sign.ts';
 import type { VerifiedEmail } from '../../../../shared/verified-email.ts';
+import { failureDetails } from '../../../domain/failure-details-fixture/test-support.ts';
+import { createJobsTable, fakeEnqueuer } from '../../../services/jobs-fixture/test-support.ts';
+import type { JobEnqueuer } from '../../../services/ports/jobs.ts';
+import { storeFailure } from '../../../services/sign-evaluations-fixture/test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import { publishVersion, sha256, type Tenant } from '../../db/test-support.ts';
 import type { AuthWorld } from '../auth-fixture/test-support.ts';
@@ -77,11 +81,70 @@ export function postSign(
   });
 }
 
-/** The world of the sign request: the sign context world and Ada (GitHub id 1234) logged in with {@link ADA_EMAIL}. */
-export async function signingWorld(env: Readonly<Record<string, string>> = {}) {
-  const world = await signWorld(env);
+/** `body` without its `prNumber`: a signing from the dashboard, which names no pull request (E13-S07). */
+export function withoutPrNumber(body: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'prNumber'));
+}
+
+/**
+ * Stores a failed evaluation of pull request `prNumber` of tenant `tenant`'s repository that lists Ada (GitHub id 1234) as uncovered,
+ * last touched on `day` of June 2026: a pull request that the signing of E13-S07 turns green.
+ */
+export function failingForAda(world: SignWorld, tenant: 1 | 2, prNumber: number, day: number): Promise<number> {
+  const { installationId, repositoryId } = tenant === 1 ? world.t1 : world.t2;
+  return storeFailure(
+    world.db,
+    { installationId, repositoryId },
+    { prNumber, details: failureDetails({ uncovered: [1234] }), updatedAt: new Date(Date.UTC(2026, 5, day)) },
+  );
+}
+
+/** Stands in for the revoke route of E15: a direct update by the owner role revokes the signature `id`. */
+export async function revokeSignature(world: SignWorld, id: number): Promise<void> {
+  await world.db
+    .updateTable('signatures')
+    .set({
+      revoked_at: new Date(Date.now() + 1000),
+      revoked_by: world.t1.publisherId,
+      revoke_reason: 'maintainer_decision',
+    })
+    .where('id', '=', id)
+    .execute();
+}
+
+/**
+ * A queue that refuses the `nth` send (counting from 1, once) after writing it, as one that loses its connection does, and sends
+ * every other through `inner`. The send it refused was written on the transaction it was given, which the failure rolls back.
+ */
+export function refusingSend(inner: JobEnqueuer, nth: number): JobEnqueuer {
+  let calls = 0;
+  return {
+    async enqueue(tx, job, options) {
+      calls += 1;
+      const outcome = await inner.enqueue(tx, job, options);
+      if (calls === nth) {
+        throw new Error('zzzz the queue went away');
+      }
+      return outcome;
+    },
+  };
+}
+
+/**
+ * The world of the sign request: the sign context world and Ada (GitHub id 1234) logged in with {@link ADA_EMAIL}. A new signature
+ * sends its evaluation jobs (E13-S07) through `queue`, which by default is the fake queue of the webhook tests: it writes into
+ * the table `fake_jobs` of the world's database, on the transaction it is given, so `sentJobs(world.db)` lists what committed.
+ */
+export async function signingWorld(env: Readonly<Record<string, string>> = {}, queue: JobEnqueuer = fakeEnqueuer()) {
+  const world = await signWorld(env, { enqueuer: queue });
+  await createJobsTable(world.db);
   const ada = await signerWith(world, 1234);
-  return { world, ada, body: (overrides?: Readonly<Record<string, unknown>>) => bodyFor(world.t1, 1, overrides) };
+  return {
+    world,
+    ada,
+    queue,
+    body: (overrides?: Readonly<Record<string, unknown>>) => bodyFor(world.t1, 1, overrides),
+  };
 }
 
 /** The body of a `201` or `200` answer, parsed with the shared schema so that a body of another shape fails here. */

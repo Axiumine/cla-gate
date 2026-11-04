@@ -95,6 +95,7 @@ const SCOPED_QUERY_NAMES = [
   'adapters/db/pr-evaluation-links.ts hasNewerHeadRow',
   'services/sign-context-queries.ts findSignDocument',
   'services/sign-context-queries.ts listViewerSignatures',
+  'services/failing-evaluation-queries.ts findFailingEvaluations',
   'services/sign-record-queries.ts insertSignature',
   'services/sign-record-queries.ts insertSignerPii',
   'services/sign-record-queries.ts findLiveSignature',

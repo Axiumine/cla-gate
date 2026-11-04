@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { Kysely } from 'kysely';
 import { expect, inject, test } from 'vitest';
 import { SIGN_PATH } from '../../../shared/sign.ts';
 import { AUTH_ENV, TEST_SESSION_SECRET } from '../../config/auth-fixture/test-support.ts';
+import { createJobsTable, fakeEnqueuer, jobCount } from '../../services/jobs-fixture/test-support.ts';
+import type { JobEnqueuer } from '../../services/ports/jobs.ts';
 import { FakeClock } from '../../services/test-support.ts';
 import { testApp, testConfig } from '../../test-support.ts';
+import type { Database } from '../db/schema.ts';
 import { createSessionStore } from '../db/sessions.ts';
 import { migratedTestDatabase, openTestDatabase, realPostgresOnly, seedTenant } from '../db/test-support.ts';
 import { COOKIE_NAME, expectedToken } from './auth-fixture/test-support.ts';
@@ -21,7 +25,7 @@ const T0 = '2026-11-02T10:00:00.000Z';
 const SIMULTANEOUS = 10;
 
 /** The app on its own pool of the throw-away database, one tenant and one logged-in person with a verified address. */
-async function raceWorld() {
+async function raceWorld(queueOf: (outside: Kysely<Database>) => JobEnqueuer = () => fakeEnqueuer()) {
   const { db } = await migratedTestDatabase();
   const t1 = await seedTenant(db, 1);
   await serveTenant(db, t1);
@@ -29,7 +33,8 @@ async function raceWorld() {
   const url = inject('testDatabaseUrl');
   // On PGlite there is one database and the app uses it; on Postgres the app has a pool of its own, so requests overlap.
   const appDb = url === undefined ? db : (await openTestDatabase(url)).db;
-  const { app } = await testApp({ env: AUTH_ENV, db: appDb, clock });
+  const { app } = await testApp({ env: AUTH_ENV, db: appDb, clock, enqueuer: queueOf(db) });
+  await createJobsTable(db);
   const config = testConfig(AUTH_ENV);
   const store = createSessionStore(db, config.session);
   const user = await db
@@ -59,6 +64,7 @@ test('on whatever engine runs the suite, the same request twice over the app of 
   expect(
     await db.selectFrom('audit_log').select('id').where('action', '=', 'signature.created').execute(),
   ).toHaveLength(1);
+  expect(await jobCount(db)).toBe(1);
 });
 
 realPostgresOnly(
@@ -75,6 +81,7 @@ realPostgresOnly(
     expect(
       await db.selectFrom('audit_log').select('id').where('action', '=', 'signature.created').execute(),
     ).toHaveLength(1);
+    expect(await jobCount(db)).toBe(1);
   },
 );
 
@@ -97,5 +104,29 @@ realPostgresOnly(
     ).toHaveLength(1);
     const created = answers.map((answer) => answer.json<{ created: boolean }>().created);
     expect(created.filter(Boolean)).toHaveLength(1);
+    expect(await jobCount(db)).toBe(1);
+  },
+);
+
+realPostgresOnly(
+  'the job of a new signature is invisible to every other connection until the signature is committed, and visible with it',
+  async () => {
+    const seenBeforeCommit: { signatures: number; jobs: number }[] = [];
+    const watching = (outside: Kysely<Database>): JobEnqueuer => {
+      const inner = fakeEnqueuer();
+      return {
+        async enqueue(tx, job, options) {
+          const outcome = await inner.enqueue(tx, job, options);
+          const signatures = await outside.selectFrom('signatures').select('id').execute();
+          seenBeforeCommit.push({ signatures: signatures.length, jobs: await jobCount(outside) });
+          return outcome;
+        },
+      };
+    };
+    const { db, send } = await raceWorld(watching);
+    expect((await send({})).statusCode).toBe(201);
+    expect(seenBeforeCommit).toEqual([{ signatures: 0, jobs: 0 }]);
+    expect(await db.selectFrom('signatures').select('id').execute()).toHaveLength(1);
+    expect(await jobCount(db)).toBe(1);
   },
 );

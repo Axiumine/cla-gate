@@ -26,7 +26,11 @@ export const TEST_AGENT = 'zzzz-network-agent/1.0 (X11; test)';
 export type SigningWorld = Awaited<ReturnType<typeof signingWorld>>;
 
 /** Ada signs the version of tenant 1 from `from`, with the fields of `overrides` replaced; the answer is the raw response. */
-export function signFrom(state: SigningWorld, from: RequestOrigin, overrides?: Readonly<Record<string, unknown>>) {
+export function signFrom(
+  state: Pick<SigningWorld, 'world' | 'ada' | 'body'>,
+  from: RequestOrigin,
+  overrides?: Readonly<Record<string, unknown>>,
+) {
   return postSign(state.world, state.ada, state.body(overrides), from);
 }
 
@@ -94,7 +98,7 @@ export async function tripwireApp(state: SigningWorld, record: boolean, wire: Tr
     armTripwire(request, wire);
     done();
   });
-  await app.register(signRoutes, { db: state.world.db, recordNetworkMetadata: record });
+  await app.register(signRoutes, { db: state.world.db, enqueuer: state.queue, recordNetworkMetadata: record });
   onTestFinished(async () => {
     await app.close();
   });

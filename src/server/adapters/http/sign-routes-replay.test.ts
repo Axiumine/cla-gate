@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { fakeEnqueuer } from '../../services/jobs-fixture/test-support.ts';
+import { createJobsTable, fakeEnqueuer, jobCount } from '../../services/jobs-fixture/test-support.ts';
 import { contextOf, repoIdOf, signWorld } from './sign-context-fixture/test-support.ts';
 import {
   ADA_EMAIL,
   bodyFor,
   postSign,
   publishNext,
+  revokeSignature,
   signedOf,
   signerWith,
   signingWorld,
@@ -31,9 +32,12 @@ test('a double submit is a 200 with created false and the existing signature, an
 test('a repeat neither overwrites the stored name and address nor adds a job', async () => {
   const enqueuer = fakeEnqueuer();
   const world = await signWorld({}, { enqueuer });
+  await createJobsTable(world.db);
   const ada = await signerWith(world, 1234, [ADA_EMAIL, { email: 'ada@example.net', primary: false }]);
   const before = bodyFor(world.t1, 1);
   signedOf(await postSign(world, ada, before), 201);
+  const sent = { calls: enqueuer.calls.length, jobs: await jobCount(world.db) };
+  expect(sent).toEqual({ calls: 1, jobs: 1 });
   const stored = await world.db.selectFrom('signer_pii').selectAll().executeTakeFirstOrThrow();
   const repeat = bodyFor(world.t1, 1, { name: 'Someone Else', email: 'ada@example.net', prNumber: 99 });
   signedOf(await postSign(world, ada, repeat), 200);
@@ -41,7 +45,7 @@ test('a repeat neither overwrites the stored name and address nor adds a job', a
   expect(stored).toMatchObject({ name: 'Ada Lovelace', email: 'ada@example.org' });
   const row = await world.db.selectFrom('signatures').select('source_pr_number').executeTakeFirstOrThrow();
   expect(row.source_pr_number).toBe(45);
-  expect(enqueuer.calls).toEqual([]);
+  expect({ calls: enqueuer.calls.length, jobs: await jobCount(world.db) }).toEqual(sent);
 });
 
 test('signing a minor version of a major the person already signed returns the old signature, made under the old version', async () => {
@@ -78,15 +82,7 @@ test('a person whose earlier signature was revoked signs again: 201, a new row, 
   const { world, ada, body } = await signingWorld();
   const first = signedOf(await postSign(world, ada, body()), 201);
   // The revoke route is E15; a direct update by the owner role stands in for it.
-  await world.db
-    .updateTable('signatures')
-    .set({
-      revoked_at: new Date(Date.now() + 1000),
-      revoked_by: world.t1.publisherId,
-      revoke_reason: 'maintainer_decision',
-    })
-    .where('id', '=', first.signature.id)
-    .execute();
+  await revokeSignature(world, first.signature.id);
   const revoked = await world.db
     .selectFrom('signatures')
     .selectAll()

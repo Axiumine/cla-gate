@@ -23,6 +23,7 @@ test('findSignRepository finds the active repository by its GitHub id, whichever
   const { db, t1, t2 } = await world();
   expect(await findSignRepository(db, t1.plain.githubRepoId)).toEqual({
     installationId: t1.installationId,
+    githubInstallationId: t1.githubInstallationId,
     repositoryId: t1.plain.repositoryId,
     githubRepoId: t1.plain.githubRepoId,
     fullName: 'org-1/repo',

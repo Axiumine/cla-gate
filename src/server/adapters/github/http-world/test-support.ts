@@ -81,6 +81,8 @@ interface State {
 export interface HttpWorld extends GitHubWorld {
   /** `METHOD /path?query` of every request that reached GitHub since the App started, in order. */
   readonly requests: string[];
+  /** The Check Runs the mocked GitHub holds and every write it accepted, oldest first: what a run was last told and how it got there. */
+  readonly checkRuns: CheckRunStore;
 }
 
 /** One page of `items` and the `Link` header that leads to the next, like GitHub's. */
@@ -466,7 +468,7 @@ async function startWorld(
 export async function httpWorld(signer: TestGitHubKey): Promise<HttpWorld> {
   const gate = new FakeGate();
   const { client, state } = await startWorld(signer, gate);
-  return { client, requests: state.requests, ...scripting(state, gate) };
+  return { client, requests: state.requests, checkRuns: state.checkRuns, ...scripting(state, gate) };
 }
 
 /** The world behind a gate of the test's own, for example the stored gate of E05-S07: the installations are scripted, the gate is not. */
