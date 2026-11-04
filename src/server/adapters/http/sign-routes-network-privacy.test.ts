@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { OWN_SIGNATURES_PATH } from '../../../shared/own-signatures.ts';
+import { pageOf } from './own-signatures-fixture/test-support.ts';
 import { signedOf, signingWorld, writtenRows } from './sign-fixture/test-support.ts';
 import { RECORDING, signFrom, storedNetwork, TEST_AGENT, TEST_IP } from './sign-network-fixture/test-support.ts';
 
@@ -63,4 +65,19 @@ test('the audit row, the signature row and the log hold neither value, and the l
   });
   const requests = logs.lines().flatMap((line) => (line['req'] === undefined ? [] : [line['req']]));
   expect(requests).toEqual([{ method: 'POST', url: '/api/sign' }]);
+});
+
+test("the list of the signer's own signatures holds neither value, though the signature it lists has them", async () => {
+  const state = await signingWorld(RECORDING);
+  signedOf(await signFrom(state, { remoteAddress: TEST_IP, headers: { 'user-agent': TEST_AGENT } }), 201);
+  expect(await storedNetwork(state.world.db)).toEqual([{ ip: TEST_IP, userAgent: TEST_AGENT }]);
+  const response = await state.world.app.inject({
+    method: 'GET',
+    url: OWN_SIGNATURES_PATH,
+    headers: { cookie: state.ada.cookie },
+  });
+  expect(pageOf(response).items).toHaveLength(1);
+  expect(response.body).not.toContain(TEST_IP);
+  expect(response.body).not.toContain(TEST_AGENT);
+  expect(JSON.stringify(response.headers)).not.toContain(TEST_AGENT);
 });
