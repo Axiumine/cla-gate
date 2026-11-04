@@ -22,7 +22,7 @@ export const ALLOWLIST_ENTRY_PATH = '/api/installations/:installationId/allowlis
  * suffix `[bot]`. It is checked on the login a person types before any request is made, on the login GitHub answers with, and
  * by the database on the snapshot it stores (migration 012), so no markup travels from a response to a screen.
  */
-export const ALLOWLIST_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?$/;
+export const ALLOWLIST_LOGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}(?:\[bot])?$/;
 
 const loginSchema = z.string().regex(ALLOWLIST_LOGIN_PATTERN);
 
