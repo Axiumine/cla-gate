@@ -18,7 +18,12 @@ import type {
   GitHubRepository,
   GitHubRepositoryPermission,
 } from '../ports/github.ts';
-import { GitHubNotFoundError } from '../ports/github-errors.ts';
+import {
+  GitHubNotFoundError,
+  GitHubRateLimitedError,
+  GitHubResponseError,
+  GitHubUnavailableError,
+} from '../ports/github-errors.ts';
 
 // What `FakeGitHub` (../test-support.ts) is built from, kept apart so that neither file outgrows the caps: waiting for a
 // signal, taking a scripted entry, paging a listing as GitHub does, and the keys of the world's maps.
@@ -156,6 +161,40 @@ export const membershipKey = (githubInstallationId: GithubId, org: string, login
 export const permissionKey = (githubInstallationId: GithubId, fullName: string, login: string): string =>
   `${githubInstallationId}/${fullName.toLowerCase()}/${login.toLowerCase()}`;
 
+/**
+ * What GitHub can answer to the members probe (E14-S05), as a test scripts it: the permission is granted (200) or missing
+ * (a 403), GitHub is limiting the installation, is down (a 5xx), or answers with something that is not a list.
+ */
+export type MembersProbeAnswer = 'granted' | 'missing' | 'rate_limited' | 'unavailable' | 'malformed';
+
+/** The route the probe names in its errors. */
+const MEMBERS_ROUTE = 'GET /orgs/{org}/members';
+
+/**
+ * What the probe of the installation `entry` stands for does with the answer scripted for it (granted when none is): true or
+ * false, or the error the adapter throws for that answer. The members of anything but an organisation cannot be listed, so a
+ * user's installation is a 404 (nothing is asked).
+ * @throws GitHubNotFoundError, GitHubRateLimitedError, GitHubUnavailableError, GitHubResponseError.
+ */
+export function membersProbeOf(state: Pick<FakeState, 'membersProbes'>, entry: FakeInstallation): boolean {
+  const { installation } = entry;
+  if (installation.account.type !== 'Organization') {
+    throw new GitHubNotFoundError(MEMBERS_ROUTE);
+  }
+  switch (state.membersProbes.get(installation.id) ?? 'granted') {
+    case 'granted':
+      return true;
+    case 'missing':
+      return false;
+    case 'rate_limited':
+      throw new GitHubRateLimitedError(120, 'primary');
+    case 'unavailable':
+      throw new GitHubUnavailableError(`GitHub answered 500 to ${MEMBERS_ROUTE}`);
+    case 'malformed':
+      throw new GitHubResponseError(MEMBERS_ROUTE, []);
+  }
+}
+
 /** The methods of the GitHub client port, as the recorder of {@link FakeGitHub} names them. */
 export type GitHubMethod =
   | 'getApp'
@@ -165,6 +204,7 @@ export type GitHubMethod =
   | 'getRepositoryById'
   | 'getOrgMembership'
   | 'getRepositoryPermission'
+  | 'probeMembersPermission'
   | 'getPullRequest'
   | 'listPullRequestCommits'
   | 'listRepositoryCommits'
@@ -198,6 +238,8 @@ export interface FakeState {
   readonly installations: Map<GithubId, FakeInstallation>;
   readonly memberships: Map<string, GitHubOrgMembership>;
   readonly permissions: Map<string, GitHubRepositoryPermission>;
+  /** What the members probe answers per installation (E14-S05); an installation absent here is granted. */
+  readonly membersProbes: Map<GithubId, MembersProbeAnswer>;
   readonly pullRequests: Map<string, GitHubPullRequest>;
   readonly pullCommits: Map<string, readonly GitHubCommit[]>;
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
@@ -220,6 +262,7 @@ function freshState(): FakeState {
     installations: new Map(),
     memberships: new Map(),
     permissions: new Map(),
+    membersProbes: new Map(),
     pullRequests: new Map(),
     pullCommits: new Map(),
     repositoryCommits: new Map(),
@@ -279,6 +322,11 @@ export class FakeWorld {
     permission: GitHubRepositoryPermission,
   ): void {
     this.state.permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
+  }
+
+  /** Scripts what the members probe (E14-S05) answers for an installation, from now on; without a script it is granted. */
+  setMembersProbe(githubInstallationId: GithubId, answer: MembersProbeAnswer): void {
+    this.state.membersProbes.set(githubInstallationId, answer);
   }
 
   /** Adds, or replaces, a pull request of a repository (`owner/name`) of an installation. */

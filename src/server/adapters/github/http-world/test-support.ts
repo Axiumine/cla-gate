@@ -8,6 +8,7 @@ import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import type { TestGitHubKey } from '../../../config/test-support.ts';
 import { CheckRunStore, type CheckRunWriteRecord } from '../../../services/fake-check-runs/test-support.ts';
 import { CommentIds, commentsOfIssue, postedComment } from '../../../services/fake-comments/test-support.ts';
+import type { MembersProbeAnswer } from '../../../services/fake-github/test-support.ts';
 import type { GitHubWorld } from '../../../services/github-contract/test-support.ts';
 import type {
   GitHubClient,
@@ -34,6 +35,7 @@ import {
   pullRequestBody,
   repositoryBody,
 } from '../http-bodies/test-support.ts';
+import { membersProbeRoute } from '../members-probe-fixture/test-support.ts';
 import { guardPublicMembers } from '../public-members-guard/test-support.ts';
 import { startGitHubApp } from '../start.ts';
 import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-support.ts';
@@ -64,6 +66,7 @@ interface State {
   readonly entries: Map<GithubId, Entry>;
   readonly memberships: Map<string, GitHubOrgMembership>;
   readonly permissions: Map<string, GitHubRepositoryPermission>;
+  readonly membersProbes: Map<GithubId, MembersProbeAnswer>;
   readonly pullRequests: Map<string, GitHubPullRequest>;
   readonly pullCommits: Map<string, readonly GitHubCommit[]>;
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
@@ -346,6 +349,10 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
     ...appRoutes(state),
     tokenRoute(state, signer, clock),
     ...installationRoutes(state),
+    membersProbeRoute({
+      answers: state.membersProbes,
+      reached: (request) => installationOf(state, request)?.installation,
+    }),
     ...pullRoutes(state),
     ...commentRoutes(state),
     ...conversationRoutes(state),
@@ -379,6 +386,9 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
     },
     addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
       state.permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
+    },
+    scriptMembersProbe: (githubInstallationId, answer) => {
+      state.membersProbes.set(githubInstallationId, answer);
     },
     addPullRequest: (githubInstallationId, fullName, pullRequest) => {
       state.pullRequests.set(`${keyOf(githubInstallationId, fullName)}#${pullRequest.number}`, pullRequest);
@@ -436,6 +446,7 @@ async function startWorld(
     entries: new Map(),
     memberships: new Map(),
     permissions: new Map(),
+    membersProbes: new Map(),
     pullRequests: new Map(),
     pullCommits: new Map(),
     repositoryCommits: new Map(),

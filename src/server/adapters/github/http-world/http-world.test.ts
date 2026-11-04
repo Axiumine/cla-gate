@@ -33,6 +33,31 @@ test.each([
   expect(response.status).toBe(401);
 });
 
+test.each([
+  ['no token', undefined],
+  ['a token of an installation nobody has', 'Bearer ghs_made-up-999-1'],
+])('the members route refuses %s with a 401', async (_name, authorization) => {
+  const world = await httpWorld(signer);
+  world.addInstallation(installation(11, 'acme'));
+  const response = await fetch(`${GITHUB_API_ORIGIN}/orgs/acme/members?per_page=1`, {
+    headers: authorization === undefined ? {} : { authorization },
+  });
+  expect(response.status).toBe(401);
+});
+
+test.each([
+  ['its own organisation, whatever the case of the name', 'ACME', 200],
+  ["another installation's organisation", 'globex', 404],
+])('the members route shows an installation token %s: %i', async (_name, org, status) => {
+  const world = await httpWorld(signer);
+  world.addInstallation(installation(11, 'acme'));
+  world.addInstallation(installation(12, 'globex'));
+  const response = await fetch(`${GITHUB_API_ORIGIN}/orgs/${org}/members?per_page=1`, {
+    headers: { authorization: 'Bearer ghs_made-up-11-1' },
+  });
+  expect(response.status).toBe(status);
+});
+
 test('suspending an installation the world never had is a mistake in the test, and says so', async () => {
   const world = await httpWorld(signer);
   expect(() => {

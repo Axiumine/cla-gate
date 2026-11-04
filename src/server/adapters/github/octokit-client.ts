@@ -10,15 +10,18 @@ import type {
   GitHubRepository,
   GitHubRepositoryPermission,
 } from '../../services/ports/github.ts';
+import { GitHubNotFoundError } from '../../services/ports/github-errors.ts';
 import { fetchApp, fetchInstallation, fetchInstallations } from './octokit-app-calls.ts';
 import type { Tokens, WithJwt } from './octokit-auth.ts';
 import { OctokitCheckRuns } from './octokit-check-runs.ts';
 import { Dispatch } from './octokit-dispatch.ts';
 import {
   fetchMembership,
+  fetchMembersPermission,
   fetchRepositories,
   fetchRepository,
   fetchRepositoryPermission,
+  MEMBERS_ROUTE,
 } from './octokit-installation-calls.ts';
 import type { RateLimiter } from './rate-limiter.ts';
 
@@ -87,6 +90,29 @@ export class OctokitGitHubClient extends OctokitCheckRuns implements GitHubClien
     return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       NAME.test(org) && NAME.test(login) ? fetchMembership(channel, headers, org, login) : Promise.resolve(null),
     );
+  }
+
+  probeMembersPermission(githubInstallationId: GithubId): Promise<boolean> {
+    // The installation is checked first, so a refused installation is refused before any request, the App's own included.
+    return this.dispatch.asInstallation(githubInstallationId, async (channel, headers) =>
+      fetchMembersPermission(channel, headers, await this.#organisationOf(githubInstallationId)),
+    );
+  }
+
+  /**
+   * The login of the organisation the installation belongs to, as GitHub names it now (the stored login is a display
+   * snapshot and may be older than a rename).
+   * @throws GitHubNotFoundError for an installation GitHub no longer has, one of a user or another account, and a login
+   * GitHub cannot hold: there is no organisation to ask about.
+   */
+  async #organisationOf(githubInstallationId: GithubId): Promise<string> {
+    const installation = await this.dispatch.asApp((channel, headers) =>
+      fetchInstallation(channel, headers, githubInstallationId),
+    );
+    if (installation?.account.type !== 'Organization' || !NAME.test(installation.account.login)) {
+      throw new GitHubNotFoundError(MEMBERS_ROUTE);
+    }
+    return installation.account.login;
   }
 
   getRepositoryPermission(

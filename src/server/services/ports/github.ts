@@ -241,6 +241,16 @@ export interface GitHubClient {
   getOrgMembership(githubInstallationId: GithubId, org: string, login: string): Promise<GitHubOrgMembership | null>;
 
   /**
+   * `GET /orgs/{org}/members?per_page=1` with the installation's token (Members: read; E14-S05): whether the App may list the
+   * members of the installation's own organisation, which an `org_members` allowlist entry needs. The organisation is the
+   * installation's account, read from `GET /app/installations/{id}` after the installation has been checked, so the answer
+   * is always about the installation that asks. Resolves true on 200 and false on a 403 that is not a rate limit (the
+   * permission is missing). The answer is never cached, and the public-members endpoints are never used.
+   * @throws GitHubNotFoundError when the installation's account is not an organisation (nothing is asked about members).
+   */
+  probeMembersPermission(githubInstallationId: GithubId): Promise<boolean>;
+
+  /**
    * `GET /repos/{owner}/{repo}/collaborators/{username}/permission` with the installation's token (Metadata: read).
    * Resolves null when GitHub has no such repository for this installation or no such person (404) and for a name
    * GitHub cannot hold (no request is sent for it; the installation is checked first all the same). The repository

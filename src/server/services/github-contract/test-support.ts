@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
+import type { MembersProbeAnswer } from '../fake-github/test-support.ts';
 import type {
   GitHubCheckRun,
   GitHubClient,
@@ -45,6 +46,8 @@ export interface GitHubWorld {
     login: string,
     permission: GitHubRepositoryPermission,
   ) => void;
+  /** What the members probe (E14-S05) answers for an installation from now on; granted until a test says otherwise. */
+  readonly scriptMembersProbe: (githubInstallationId: GithubId, answer: MembersProbeAnswer) => void;
   /** A pull request of a repository (`owner/name`) of an installation. */
   readonly addPullRequest: (githubInstallationId: GithubId, fullName: string, pullRequest: GitHubPullRequest) => void;
   /** What `listPullRequestCommits` lists for a pull request, in order. */
@@ -134,6 +137,7 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
     addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
       fake.addRepositoryPermission(githubInstallationId, fullName, login, permission);
     },
+    scriptMembersProbe: fake.setMembersProbe.bind(fake),
     addPullRequest: (githubInstallationId, fullName, pullRequest) => {
       fake.addPullRequest(githubInstallationId, fullName, pullRequest);
     },

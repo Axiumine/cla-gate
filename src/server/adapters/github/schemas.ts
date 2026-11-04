@@ -98,6 +98,13 @@ export const orgMembershipSchema = z
   .transform(({ state, role, user }) => ({ state, role, userId: user.id }));
 
 /**
+ * `GET /orgs/{org}/members?per_page=1` (E14-S05): the first member of the organisation. The probe asks only whether the App
+ * may list the members, so the answer must be a list of accounts and nothing in it is kept (no login, no id reaches the
+ * caller); an organisation may well answer with an empty list.
+ */
+export const membersProbeSchema = z.array(z.object({ id: githubIdSchema }));
+
+/**
  * `GET /repos/{owner}/{repo}/collaborators/{username}/permission` (E11-S03): the base `permission` of a person on a
  * repository and their numeric id. `role_name` is dropped on purpose: a custom role maps onto the base `permission`, and the
  * name of a role is a label a maintainer can choose.

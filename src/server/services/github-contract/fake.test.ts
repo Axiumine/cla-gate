@@ -3,13 +3,18 @@
 import { test } from 'vitest';
 import { CHECK_CASES } from '../github-check-contract/test-support.ts';
 import { COMMENT_CASES } from '../github-comment-contract/test-support.ts';
+import { MEMBERS_PROBE_CASES } from '../github-members-probe-contract/test-support.ts';
 import { OPEN_PULL_CASES } from '../github-open-pulls-contract/test-support.ts';
 import { PULL_CASES } from '../github-pull-contract/test-support.ts';
 import { CONTRACT_CASES, fakeWorld } from './test-support.ts';
 
-test.each([...CONTRACT_CASES, ...PULL_CASES, ...COMMENT_CASES, ...OPEN_PULL_CASES, ...CHECK_CASES])(
-  'FakeGitHub: %s',
-  async (_name, run) => {
-    await run(fakeWorld());
-  },
-);
+test.each([
+  ...CONTRACT_CASES,
+  ...PULL_CASES,
+  ...COMMENT_CASES,
+  ...OPEN_PULL_CASES,
+  ...CHECK_CASES,
+  ...MEMBERS_PROBE_CASES,
+])('FakeGitHub: %s', async (_name, run) => {
+  await run(fakeWorld());
+});

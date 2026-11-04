@@ -14,6 +14,7 @@ import {
   FakeWorld,
   type GitHubMethod,
   membershipKey,
+  membersProbeOf,
   mergeBaseOf,
   openPullsPage,
   pageOf,
@@ -203,15 +204,15 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     );
   }
 
-  getPullRequest(
-    githubInstallationId: GithubId,
-    fullName: string,
-    prNumber: number,
-  ): Promise<GitHubPullRequest | null> {
+  probeMembersPermission(id: GithubId): Promise<boolean> {
+    return this.#serveInstallation('probeMembersPermission', id, (entry) => membersProbeOf(this.state, entry));
+  }
+
+  getPullRequest(id: GithubId, fullName: string, prNumber: number): Promise<GitHubPullRequest | null> {
     return this.#serveInstallation(
       'getPullRequest',
-      githubInstallationId,
-      () => this.state.pullRequests.get(pullKey(githubInstallationId, fullName, prNumber)) ?? null,
+      id,
+      () => this.state.pullRequests.get(pullKey(id, fullName, prNumber)) ?? null,
     );
   }
 
