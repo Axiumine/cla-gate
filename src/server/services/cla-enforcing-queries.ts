@@ -9,8 +9,10 @@ import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 // the installation in its WHERE clause, so a document id of another tenant finds nothing. The other reads of publishing are in
 // cla-version-queries.ts.
 
-/** A repository that enforces a document, by the ids a job names: GitHub's, never the surrogate keys of our tables. */
+/** A repository that enforces a document, by the ids a job names (GitHub's) and by the key of its row. */
 interface EnforcingRepository {
+  /** `repositories.id`, which the reads of the evaluations of a repository (E15-S03) are keyed by; no job names it. */
+  readonly repositoryId: number;
   readonly githubInstallationId: GithubId;
   readonly githubRepoId: GithubId;
 }
@@ -27,7 +29,7 @@ export async function listEnforcingRepositories(
   const rows = await db
     .selectFrom('repositories as r')
     .innerJoin('installations as i', 'i.id', 'r.installation_id')
-    .select(['i.github_installation_id', 'r.github_repo_id'])
+    .select(['r.id', 'i.github_installation_id', 'r.github_repo_id'])
     .where('r.installation_id', '=', scope.installationId)
     .where('r.cla_document_id', '=', documentId)
     .where('r.enabled', '=', true)
@@ -35,6 +37,7 @@ export async function listEnforcingRepositories(
     .orderBy('r.id')
     .execute();
   return rows.map((row) => ({
+    repositoryId: row.id,
     githubInstallationId: parseGithubId(row.github_installation_id),
     githubRepoId: parseGithubId(row.github_repo_id),
   }));

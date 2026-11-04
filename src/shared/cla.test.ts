@@ -84,6 +84,7 @@ test('the limits and the status of each rule are the ones the story names', () =
     no_organization: 422,
     members_permission_missing: 422,
     allowlist_entry_exists: 409,
+    already_revoked: 409,
   });
 });
 

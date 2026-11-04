@@ -123,6 +123,18 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { document_id: 12, version_id: 22, major: 2, source_repository_id: 9, source_pr_number: null },
     },
   ],
+  'services/signature-revoke-audit.ts#signature.revoked': [
+    {
+      action: 'signature.revoked',
+      subject: { type: 'signature', id: 31 },
+      metadata: { document_id: 12, version_id: 21, major: 1, user_github_id: 4711, reason_code: 'signer_request' },
+    },
+    {
+      action: 'signature.revoked',
+      subject: { type: 'signature', id: 32 },
+      metadata: { document_id: 12, version_id: 22, major: 2, user_github_id: 4712, reason_code: 'maintainer_decision' },
+    },
+  ],
   'services/dead-letter/dead-letter-sync.ts#installation.sync_failed': [
     {
       action: 'installation.sync_failed',

@@ -53,19 +53,18 @@ import {
   VERSION_READS,
   VERSION_WRITES,
 } from '../tenant-registry-versions/test-support.ts';
+import { E15_TENANT_QUERIES } from '../tenant-revocation-fixture/test-support.ts';
 import type { TenantScope } from '../tenant-scope.ts';
-import { SEARCH_TENANT_QUERIES } from '../tenant-search-fixture/test-support.ts';
 import { SIGN_TENANT_QUERIES } from '../tenant-sign-fixture/test-support.ts';
 
-// The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant table;
-// `TENANT_QUERIES` has an entry for every function they export. The generated test calls each entry for tenant 1 with tenant 1's
-// ids and with tenant 2's; a file or function missing here fails the build (tenant-modules.test.ts), so no query ships unchecked.
+// The registry of the tenant data access (E11-S06): the files that run a statement over a tenant table and an entry for each function they export, which the matrix calls for two tenants.
 
 /** The files that run a statement over a tenant table, relative to `src/server`. */
 export const TENANT_MODULES = [
   'adapters/db/pr-evaluation-links.ts',
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
+  'services/affected-prs-queries.ts',
   'services/allowlist-entry-list-queries.ts',
   'services/allowlist-entry-queries.ts',
   'services/allowlist-entry-remove-queries.ts',
@@ -104,6 +103,7 @@ export const TENANT_MODULES = [
   'services/repository-transfer.ts',
   'services/sign-context-queries.ts',
   'services/sign-record-queries.ts',
+  'services/signature-revoke-queries.ts',
   'services/signature-search-queries.ts',
   'services/signature-search-scope-queries.ts',
   'services/signer-erasure.ts',
@@ -473,7 +473,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   // The statements of the sign page context (E13-S02).
   ...SIGN_TENANT_QUERIES,
   ...ALLOWLIST_TENANT_QUERIES,
-  ...SEARCH_TENANT_QUERIES,
+  ...E15_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

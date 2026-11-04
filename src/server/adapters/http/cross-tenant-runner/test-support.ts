@@ -115,6 +115,7 @@ const UNKNOWN_TARGET: MatrixTarget = {
   documentId: 987_654,
   githubRepoId: 987_654,
   entryId: 987_654,
+  signatureId: 987_654,
 };
 
 /** The resources of a tenant that no repo-scoped document covers: its installation, its plain repository and its installation-wide document. */
@@ -124,6 +125,7 @@ export const plainTarget = (tenant: TenantWorld): MatrixTarget => ({
   documentId: tenant.documentId,
   githubRepoId: tenant.plain.githubRepoId,
   entryId: tenant.entryId,
+  signatureId: tenant.signatureId,
 });
 
 /** The resources of a tenant that carry a repo-scoped document: the repository `repoAdmin1` administers, and its document. */
@@ -133,6 +135,7 @@ export const scopedTarget = (tenant: TenantWorld): MatrixTarget => ({
   documentId: tenant.scoped.documentId,
   githubRepoId: tenant.scoped.githubRepoId,
   entryId: tenant.entryId,
+  signatureId: tenant.signatureId,
 });
 
 /** What the role matrix says for a class of endpoint, for tenant 1: the resource the allowed people reach and the one that is too high for a repo admin. */

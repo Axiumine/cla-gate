@@ -120,6 +120,10 @@ const SCOPED_QUERY_NAMES = [
   'services/signature-search-scope-queries.ts findRepositoryOfDocument',
   'services/signature-search-scope-queries.ts repositoriesWithSignedDocuments',
   'services/signature-search-scope-queries.ts documentsOfRepositories',
+  'services/affected-prs-queries.ts findAffectedPrs',
+  'services/affected-prs-queries.ts findAffectedRepositories',
+  'services/signature-revoke-queries.ts findSignatureToRevoke',
+  'services/signature-revoke-queries.ts markSignatureRevoked',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

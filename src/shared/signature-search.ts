@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { githubIdSchema } from './github-id.ts';
 import { prNumberSchema } from './sign-context.ts';
+import { revokeReasonSchema } from './signature-revoke.ts';
 
 // The search for signatures a maintainer acts on (E15-S02): the path, the states a search may ask for and the shape of a page. The
 // route, its tests and the screen that revokes a signature (E18) share them. The query string is read by the route
@@ -22,9 +23,6 @@ const id = z.int().positive();
 /** An instant as ISO 8601 in UTC with milliseconds, which is what `Date.prototype.toISOString` writes. */
 const instant = z.iso.datetime({ offset: false });
 
-/** The reasons a revocation may carry: the database check on `signatures.revoke_reason`. */
-const revokeReason = z.enum(['signer_request', 'maintainer_decision', 'legal_request', 'other']);
-
 /**
  * One signature as a maintainer sees it. `signer` is the personal data the signer gave (`signer_pii`), verbatim and not escaped
  * here: it is `null` once that data was erased (E16-S04), and then `piiErased` is `true`; `githubUserId` is the identity key and is
@@ -43,7 +41,7 @@ const signatureSearchItemSchema = z
     state: z.enum(['active', 'outdated', 'revoked']),
     revokedAt: instant.nullable(),
     revokedByGithubId: githubIdSchema.nullable(),
-    revokeReasonCode: revokeReason.nullable(),
+    revokeReasonCode: revokeReasonSchema.nullable(),
     signer: z.strictObject({ login: z.string(), name: z.string(), email: z.string() }).nullable(),
     piiErased: z.boolean(),
   })

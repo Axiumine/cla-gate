@@ -72,6 +72,8 @@ export interface MatrixTarget {
   readonly githubRepoId: number;
   /** `allowlist_entries.id` of the entry that covers the whole installation (E14-S07). */
   readonly entryId: number;
+  /** `signatures.id` of the tenant's signature on its installation-wide document (E15-S03). */
+  readonly signatureId: number;
 }
 
 /** A request as the matrix sends it: a state-changing one carries the origin and the token of the signed-in person on its own. */
