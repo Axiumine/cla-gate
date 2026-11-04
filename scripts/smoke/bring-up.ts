@@ -6,6 +6,7 @@ import type { composer } from './compose.ts';
 import { tail } from './compose.ts';
 import { withSettings } from './dotenv.ts';
 import { writeText } from './files.ts';
+import { NETWORK_SUBNETS } from './override.ts';
 import type { Run, StackDeps, StackInfo, StackOptions } from './stack-types.ts';
 
 // E19-S08: `docker compose up --build --wait` for a smoke stack, with the random port and subnet that it needs.
@@ -21,9 +22,22 @@ const DRAWS = 20;
 /** A port or a subnet that another process took between the choice and the bind: the next draw may fit. */
 const CONFLICT = /port is already allocated|address already in use|ports are not available|pool overlaps/i;
 
-/** A /24 in 172.16.0.0/12, drawn at random: two stacks on one daemon must not claim the same one. */
-export function randomSubnet(randomInt: StackDeps['randomInt']): string {
-  return `172.${randomInt(SECOND_OCTET_MIN, SECOND_OCTET_MAX)}.${randomInt(0, OCTET_MAX)}.0/24`;
+/**
+ * A /24 in 172.16.0.0/12, drawn at random: two stacks on one daemon must not claim the same one. The network of each setting in
+ * {@link NETWORK_SUBNETS} gets the /24 that follows it in the same /16 (the one after the last is the first), so that the
+ * networks of one stack never overlap and a /16 that another network holds takes them all at once, as it takes one.
+ */
+export function drawSubnets(randomInt: StackDeps['randomInt']): {
+  readonly edge: string;
+  readonly named: [string, string][];
+} {
+  const second = randomInt(SECOND_OCTET_MIN, SECOND_OCTET_MAX);
+  const third = randomInt(0, OCTET_MAX);
+  const at = (step: number) => `172.${second}.${(third + step) % (OCTET_MAX + 1)}.0/24`;
+  return {
+    edge: at(0),
+    named: Object.values(NETWORK_SUBNETS).map((setting, index): [string, string] => [setting, at(index + 1)]),
+  };
 }
 
 /** A random free port that is none of `used`: two settings of one stack must not share a port. */
@@ -50,15 +64,16 @@ async function settingsFor(deps: StackDeps, options: Options): Promise<Up> {
     used.push(next);
     named.push([name, String(next)]);
   }
-  const subnet = randomSubnet(deps.randomInt);
+  const subnets = drawSubnets(deps.randomInt);
   return {
     port,
     environment: {
       PUBLIC_BASE_URL: 'https://localhost',
       BIND_ADDRESS: '127.0.0.1',
       PORT: String(port),
-      EDGE_SUBNET: subnet,
-      TRUST_PROXY: subnet,
+      EDGE_SUBNET: subnets.edge,
+      TRUST_PROXY: subnets.edge,
+      ...Object.fromEntries(subnets.named),
       ...Object.fromEntries(named),
       ...options.settings,
     },

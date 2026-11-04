@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The `coverage` and `postgres` CI jobs get 45 and 60 minutes (they had 30 and 45): the shared runners differ by a factor of four in speed, and both jobs were cancelled by their timeout, tests passing, whenever the slowest runner picked them up (`docs/ci-runners.md`, Known unknowns).
 - The `trivy` CI job no longer depends on `get.trivy.dev`, the download host of `aquasecurity/setup-trivy`, which lapsed (every run failed at the install step with curl exit 6, upstream aquasecurity/trivy#11537): `scripts/ci/install-trivy.ts` downloads the pinned release from GitHub, refuses it unless its SHA-256 equals the literal in `ci.yml`, and unpacks only the `trivy` binary into the runner temp directory; tests keep the version equal to `mise.toml`'s and forbid `setup-trivy` and `get.trivy.dev`.
+- The backup scenario of the `container` CI job (E19-S12) no longer fails at random with "Pool overlaps with other one on this address space" (nightly of 2026-11-04): after `docker compose down -v` it starts only the database, Docker gave the `backend` network the first free /16, and that /16 could hold the random /24 of the stack's `default` network, which did not exist yet. A smoke stack now draws a subnet for `backend` as well (the /24 after the `default` one, setting `SMOKE_BACKEND_SUBNET`, given in the smoke override), so Docker never picks a pool for it; `scripts/smoke/override.test.ts` fails when `docker-compose.yml` gains a network without a subnet.
 
 ### Security
 

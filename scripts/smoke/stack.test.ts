@@ -5,8 +5,9 @@ import { expect, test } from 'vitest';
 import { parse } from 'yaml';
 import { z } from 'zod';
 import { exists, fail, ok, readText } from '../ci/lib/test-support.ts';
-import { randomSubnet } from './bring-up.ts';
+import { drawSubnets } from './bring-up.ts';
 import { listNames } from './files.ts';
+import { NETWORK_SUBNETS } from './override.ts';
 import { COPIED } from './prepare.ts';
 import { connect, startStack } from './stack.ts';
 import type { StackDeps } from './stack-types.ts';
@@ -17,10 +18,12 @@ import {
   LAST_SUBNET,
   lifecycle,
   ROOT,
+  SECOND_SUBNET,
   scripted,
   settingsOf,
   track,
   verbOf,
+  WRAPPED_SUBNET,
 } from './test-support.ts';
 
 // E19-S08: the lifecycle of a smoke stack, with docker scripted and the real checkout, the real scripts/init-secrets.sh and
@@ -45,9 +48,32 @@ test('the files a stack copies cover every bind mount of the compose file, the d
   }
 });
 
-test('a subnet is a /24 of 172.16.0.0/12 drawn from the random source', () => {
-  expect(randomSubnet((min) => min)).toBe(FIRST_SUBNET);
-  expect(randomSubnet((_min, max) => max)).toBe(LAST_SUBNET);
+test('the subnets are /24s of 172.16.0.0/12 drawn from the random source: the default network first, then one for each network of its own', () => {
+  expect(drawSubnets((min) => min)).toEqual({ edge: FIRST_SUBNET, named: [['SMOKE_BACKEND_SUBNET', SECOND_SUBNET]] });
+});
+
+test('the /24 after the last one of a /16 is the first one of it', () => {
+  expect(drawSubnets((_min, max) => max)).toEqual({
+    edge: LAST_SUBNET,
+    named: [['SMOKE_BACKEND_SUBNET', WRAPPED_SUBNET]],
+  });
+});
+
+test('every network of the stack gets a subnet of its own, none of them the same, in the dotenv file and in the settings compose is run with', async () => {
+  const { deps, calls } = scripted();
+  const stack = track(await startStack(deps, { scenario: 'backup' }));
+  const settings = settingsOf(stack.directory);
+  const subnets = [settings.get('EDGE_SUBNET'), ...Object.values(NETWORK_SUBNETS).map((name) => settings.get(name))];
+  expect(subnets).toEqual([FIRST_SUBNET, SECOND_SUBNET]);
+  expect(new Set(subnets).size).toBe(subnets.length);
+  expect(stack.environment['SMOKE_BACKEND_SUBNET']).toBe(SECOND_SUBNET);
+  expect(callsOf(calls, 'up')[0]?.env?.['SMOKE_BACKEND_SUBNET']).toBe(SECOND_SUBNET);
+  const later = await stack.compose(['up', '--detach']);
+  expect(later.code).toBe(0);
+  expect(callsOf(calls, 'up').at(-1)?.env).toMatchObject({
+    EDGE_SUBNET: FIRST_SUBNET,
+    SMOKE_BACKEND_SUBNET: SECOND_SUBNET,
+  });
 });
 
 test('a stack is made in a temporary directory: the copied files, the override, the secrets and the random port', async () => {
