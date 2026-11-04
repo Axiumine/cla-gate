@@ -16,7 +16,12 @@ Authorization is derived from GitHub with the **installation token** and numeric
 | Read the audit log of an installation | org admin of the installation only (a repo admin gets `403`) |
 | Preview and run the erasure of a signer's personal data in an installation | org admin of the installation only (a repo admin gets `403`) |
 | Same, repo-scoped CLA | repo admin (an org admin also passes) |
-| Publish CLA version, edit allowlist, record override | same as above |
+| Publish CLA version, record override | same as above |
+| List the installations one administers (`GET /api/installations`) | any signed-in person; the answer holds only the installations where they hold a role, and a suspended one is listed for its org admins only |
+| List the repositories of an installation (`GET .../installations/:installationId/repositories`) | any role in the installation (requirement `any_role`): an org admin sees every repository, a repo admin only the ones GitHub confirms, everyone else the uniform `404` |
+| Attach, replace or detach a repository's CLA document (`PUT /api/repositories/:repositoryId/cla-document`) | the repository-action rule: org admin when the document is installation-wide or none is attached, admin on that repository when it is repo-scoped; the scope of the document attached after the change counts, and of the one it replaces too, so a repo admin cannot swap out the organisation's document, and detaching with nothing attached is org admin only |
+| Enable or disable a repository (`POST /api/repositories/:repositoryId/enable`, `.../disable`) | the repository-action rule, judged on the document read under the row lock |
+| List, add or remove allowlist entries (`.../installations/:installationId/allowlist-entries`, `.../repositories/:repositoryId/allowlist-entries`) | org admin for an installation entry (or one of a repository that left the installation); the repository-action rule for a repository entry; a repo admin sees the installation's entries read-only |
 | Sign a CLA, view own signatures | any authenticated GitHub user |
 | Download everything the instance holds about oneself (`GET /api/me/export`) | any signed-in person, own data only, across all orgs, 5 an hour |
 
@@ -28,6 +33,7 @@ The pure decision `decide(requirement, facts)` (`src/server/domain/authz.ts`), w
 |---|---|---|---|
 | `org_admin` | org admin | repo admin, or a role in the installation | `not_found` |
 | `repo_admin` | org admin or repo admin | a role in the installation | `not_found` |
+| `any_role` | org admin, repo admin, or a role in the installation | never | `not_found` |
 | anything else | never | never | `not_found` |
 
 Answers follow one convention (the table is in [`architecture.md`](architecture.md#authorization-and-tenant-isolation)): an unknown id, a removed repository, a rejected tenant and a viewer with no role in the installation all get the same `404` byte for byte, `403` only for a viewer who has a role there, and no error body names a role. GitHub failing is `502`, `503` or `429`, never an allow. The role cache is in memory, per process, holds numeric ids and booleans only, lives 60 s, and a restart clears it; every write asks GitHub again, logout and a revoked authorization forget the person, and a person is limited to 30 uncached lookups a minute (`429`).
