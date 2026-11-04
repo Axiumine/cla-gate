@@ -48,6 +48,9 @@ function urlFor(
         return String(ids.githubRepoId);
       case 'versionId':
         return String(ids.versionId);
+      case 'login':
+        // The public signature check (E22-S02) takes the login of a person, who is no resource of a tenant: any login does.
+        return 'octocat';
       default:
         throw new Error(
           `the sweep for draft text cannot fill :${name} of ${route}: teach urlFor which resource it names`,

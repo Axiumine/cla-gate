@@ -73,6 +73,48 @@ test('the request serializer keeps method and path, and drops client address, he
   }
 });
 
+test.each([
+  [
+    'a call that matched its route',
+    '/api/public/repos/9000/signers/octocat',
+    ':login',
+    '/api/public/repos/:githubRepoId/signers/:login',
+  ],
+  [
+    'the same call with a query string',
+    '/api/public/repos/9000/signers/octocat?zzzz=1',
+    ':login',
+    '/api/public/repos/:githubRepoId/signers/:login',
+  ],
+  [
+    'a path of the public API that matched no route',
+    '/api/public/repos/9000/signers/octo%zzcat',
+    undefined,
+    '/api/public/*',
+  ],
+  ['the public prefix itself, matched by nothing', '/api/public/', undefined, '/api/public/*'],
+])(
+  'the request serializer logs the template of a public API route and never the login: %s',
+  (_case, url, matched, logged) => {
+    const { log, logs } = logger();
+    const routeOptions = { url: matched === undefined ? undefined : '/api/public/repos/:githubRepoId/signers/:login' };
+    log.info({ req: { method: 'GET', url, routeOptions } }, 'incoming request');
+    expect(logs.lines()[0]?.['req']).toEqual({ method: 'GET', url: logged });
+    expect(logs.text()).not.toContain('octocat');
+    expect(logs.text()).not.toContain('zzzz');
+  },
+);
+
+test.each([
+  ['/api/public', '/api/public'],
+  ['/api/publicity/x', '/api/publicity/x'],
+  ['/api/installations/5/documents', '/api/installations/5/documents'],
+])('a path outside the public API is logged as it is, whatever route it matched: %s', (url, logged) => {
+  const { log, logs } = logger();
+  log.info({ req: { method: 'GET', url, routeOptions: { url: '/api/installations/:installationId/documents' } } }, 'x');
+  expect(logs.lines()[0]?.['req']).toEqual({ method: 'GET', url: logged });
+});
+
 test('the response serializer logs the status code only', () => {
   const { log, logs } = logger();
   log.info({ res: { statusCode: 404, headers: { 'set-cookie': 'sid=sekrit' }, body: 'private' } }, 'request completed');

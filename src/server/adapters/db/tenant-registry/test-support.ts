@@ -46,6 +46,7 @@ import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/te
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
 import { ENABLED_WRITES } from '../tenant-registry-enabled/test-support.ts';
 import { COUNT_READS, LISTING_READS } from '../tenant-registry-listing/test-support.ts';
+import { PUBLIC_TENANT_QUERIES } from '../tenant-registry-public/test-support.ts';
 import { SCOPE_QUERIES } from '../tenant-registry-scope/test-support.ts';
 import {
   ENFORCING_READS,
@@ -93,12 +94,14 @@ export const TENANT_MODULES = [
   'services/finalise/finalise-rows.ts',
   'services/installation-operator.ts',
   'services/own-signatures-queries.ts',
+  'services/public-verification-queries.ts',
   'services/repo-admin-candidates.ts',
   'services/repository-count-queries.ts',
   'services/repository-document-lock-queries.ts',
   'services/repository-document-queries.ts',
   'services/repository-enabled.ts',
   'services/repository-list-queries.ts',
+  'services/repository-public-verification.ts',
   'services/repository-queries.ts',
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
@@ -463,13 +466,13 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   },
   // The statements of the job queue (E07): the evaluation rows, the policy facts and the sweep's reads.
   ...JOB_TENANT_QUERIES,
-  // The statements of the exports (E16-S03, E16-S06): the signatures of a document, and a person's own data.
+  // The statements of the exports (E16-S03, E16-S06), of the reporter over the evaluation rows (E09-S04) and of the sign page context (E13-S02).
   ...EXPORT_TENANT_QUERIES,
-  // The statements of the reporter over the evaluation rows (E09-S04).
   ...LINK_TENANT_QUERIES,
-  // The statements of the sign page context (E13-S02).
   ...SIGN_TENANT_QUERIES,
   ...ALLOWLIST_TENANT_QUERIES,
+  // The statements of the public signature check (E22-S02).
+  ...PUBLIC_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

@@ -5,7 +5,8 @@ import helmetPlugin from '@fastify/helmet';
 import Fastify, { type FastifyBaseLogger, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { AppConfig } from '../../config/env.ts';
 import { isAuthUrl } from './auth-no-store.ts';
-import { errorBody, rejectRequest } from './errors.ts';
+import { AppError, errorBody, rejectRequest } from './errors.ts';
+import { isPublicUrl, PUBLIC_REFUSAL_HEADERS } from './public-headers.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './request-id.ts';
 import { securityHeaders } from './security.ts';
 
@@ -80,6 +81,13 @@ export async function frameworkErrorHandlers(config: Pick<AppConfig, 'publicBase
       reply.headers({ ...headers, [REQUEST_ID_HEADER]: request.id });
       if (isAuthUrl(request.url)) {
         reply.header('cache-control', 'no-store');
+      }
+      if (isPublicUrl(request.url)) {
+        // A path of the public API that never reached its route (a bad percent-escape, a parameter over the router's length)
+        // is the same invalid input as a login the route refuses (E22-S02), answered as any other refusal of the public API.
+        reply.headers(PUBLIC_REFUSAL_HEADERS);
+        rejectRequest(new AppError(400, 'invalid_input'), request, reply);
+        return;
       }
       rejectRequest(error, request, reply);
     },

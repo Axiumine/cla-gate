@@ -33,6 +33,7 @@ import {
   removable,
   versionOne,
 } from '../cross-tenant-prepare/test-support.ts';
+import { PUBLIC_VERIFICATION_CASES } from '../cross-tenant-public-fixture/test-support.ts';
 import { SIGN_CASE, SIGN_CONTEXT_CASE } from '../cross-tenant-sign-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
@@ -312,9 +313,8 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       payload: { documentId: target.documentId },
     }),
   },
-  // E14-S03. The same role matrix as the attach: the policy of a repository is the scope of the document it enforces, which the repository
-  // of the case carries itself, so the admin of the repository passes. The path names the repository alone, so the denials with crossed ids
-  // are those of the dedicated tests (repository-enable-tenants.test.ts).
+  // E14-S03. The same role matrix as the attach: the policy of a repository is the scope of the document it enforces, which the repository of the
+  // case carries itself, so the admin of the repository passes. The path names the repository alone: the crossed ids are in repository-enable-tenants.test.ts.
   [`POST ${REPOSITORY_ENABLE_PATH}`]: {
     endpointClass: 'repository_write',
     crossable: false,
@@ -334,10 +334,9 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       url: REPOSITORY_DISABLE_PATH.replace(':repositoryId', String(target.repositoryId)),
     }),
   },
-  // E14-S06. The add exempts the members of the organisation, the one entry the world's GitHub can answer for without a login, and
-  // `addable` clears the entries the call before it left. The role matrix is that of the other writes: the installation needs an org
-  // admin, the repository the role its document asks for, which the repository of the case carries itself. The path of the
-  // second names the repository alone, so its crossed ids are those of allowlist-entry-tenants.test.ts.
+  // E14-S06. The add exempts the members of the organisation, the one entry the world's GitHub can answer for without a login, and `addable` clears
+  // the entries the call before it left. The role matrix is that of the other writes: the installation needs an org admin, the repository the role its
+  // document asks for, which the repository of the case carries itself. The second path names the repository alone: allowlist-entry-tenants.test.ts.
   [`POST ${INSTALLATION_ALLOWLIST_PATH}`]: {
     endpointClass: 'installation_write',
     success: 201,
@@ -359,10 +358,9 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       payload: { kind: 'org_members' },
     }),
   },
-  // E14-S07. The lists read the allowlist (the role matrix of the add: the installation needs an org admin, the repository the role its
-  // document asks for, which `listable` gives the repository of the case); the removal takes the entry that covers the installation
-  // (`removable` puts it back under the same id whoever asks first), so it is an installation write. The path of the list of a
-  // repository names the repository alone, so its crossed ids are those of allowlist-entry-list-tenants.test.ts.
+  // E14-S07. The lists read the allowlist (the role matrix of the add: the installation needs an org admin, the repository the role its document asks
+  // for, which `listable` gives the repository of the case); the removal takes the entry that covers the installation (`removable` puts it back under the
+  // same id whoever asks first), so it is an installation write. The list of a repository names it alone: allowlist-entry-list-tenants.test.ts.
   [`GET ${INSTALLATION_ALLOWLIST_PATH}`]: {
     endpointClass: 'installation_read',
     request: (target) => ({
@@ -391,6 +389,8 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       ),
     }),
   },
+  // E22-S02: the opt-in of a repository to the public signature check; its path names the installation too, so the ids are crossed here.
+  ...PUBLIC_VERIFICATION_CASES,
   [`GET ${ERASURE_PREVIEW_PATH}`]: {
     endpointClass: 'installation_read',
     request: (target) => ({

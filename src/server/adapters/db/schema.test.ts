@@ -43,6 +43,7 @@ const COLUMNS = {
     enabled: true,
     cla_document_id: true,
     removed_at: true,
+    public_verification: true,
     created_at: true,
     updated_at: true,
   },

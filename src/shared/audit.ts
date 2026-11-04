@@ -57,6 +57,8 @@ export const AUDIT_ACTIONS = [
   'repository.cla_document_attached',
   'repository.cla_document_detached',
   'signer_pii.erased',
+  // Added by E22-S02: a repository turned the public signature check on or off (metadata the repository id and the new flag).
+  'repository.public_verification_changed',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

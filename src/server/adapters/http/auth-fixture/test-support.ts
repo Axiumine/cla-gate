@@ -131,7 +131,7 @@ export async function authWorld(
   env: Readonly<Record<string, string>> = {},
   github: Pick<
     TestAppOptions,
-    'githubTimeoutMs' | 'fetch' | 'roleCache' | 'github' | 'allowlistGitHub' | 'operators' | 'enqueuer'
+    'githubTimeoutMs' | 'fetch' | 'roleCache' | 'github' | 'allowlistGitHub' | 'publicGitHub' | 'operators' | 'enqueuer'
   > = {},
 ): Promise<AuthWorld> {
   const base = await openPgliteDatabase();

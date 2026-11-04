@@ -80,7 +80,7 @@ export async function matrixWorld(
 ) {
   const roles = new StubRoleLookup();
   const fakeGitHub = new FakeGitHub();
-  const world = await authWorld(env, { github: roles, allowlistGitHub: fakeGitHub, ...app });
+  const world = await authWorld(env, { github: roles, allowlistGitHub: fakeGitHub, publicGitHub: fakeGitHub, ...app });
   const seeded = await twoTenants(world.db, roles);
   // The GitHub of the allowlist (E14-S06) knows both organisations, so an `org_members` entry can be added to either tenant.
   for (const { githubInstallationId, accountId, accountLogin } of [seeded.t1, seeded.t2]) {

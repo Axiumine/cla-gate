@@ -113,6 +113,8 @@ const SCOPED_QUERY_NAMES = [
   'services/allowlist-entry-remove-queries.ts deleteAllowlistEntry',
   'services/allowlist-entry-list-queries.ts listAllowlistEntries',
   'services/allowlist-sweeps.ts sendAllowlistSweeps',
+  'services/public-verification-queries.ts hasCountingSignature',
+  'services/repository-public-verification.ts setPublicVerification',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

@@ -152,6 +152,18 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },
     { action: 'repository.disabled', subject: REPOSITORY, metadata: { repository_id: 12 } },
   ],
+  'services/repository-public-verification.ts#repository.public_verification_changed': [
+    {
+      action: 'repository.public_verification_changed',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, enabled: true },
+    },
+    {
+      action: 'repository.public_verification_changed',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, enabled: false },
+    },
+  ],
   'services/allowlist-entry-create.ts#allowlist_entry.created': allowlistFixtures('allowlist_entry.created'),
   'services/allowlist-entry-remove.ts#allowlist_entry.deleted': allowlistFixtures('allowlist_entry.deleted'),
   'services/repository-audit.ts#repository.added|repository.removed|repository.renamed': [

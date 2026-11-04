@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type DestinationStream, type Logger, pino } from 'pino';
+import { PUBLIC_API_PREFIX } from '../../../shared/public-verification.ts';
 import type { AppConfig } from '../../config/env.ts';
 
 /** Header names that are credentials, wherever they turn up as a key (a header map under another name, say). */
@@ -27,15 +28,21 @@ export const REDACT_PATHS = [
 interface LoggedRequest {
   readonly method?: string;
   readonly url?: string;
+  /** What Fastify's request knows of the route that matched: its template, in `url`; a plain object has none. */
+  readonly routeOptions?: { readonly url?: string | undefined };
 }
 
 /**
  * Method and path only. No headers, no body, no query string (OAuth `code` and `state` live there), and no client
  * address: network metadata is not recorded unless a configuration flag asks for it (docs/architecture.md), and a log
- * is a record.
+ * is a record. A request of the public API (E22-S02) is logged by the template of the route that matched
+ * (`/api/public/repos/:githubRepoId/signers/:login`) and not by its path, which names a person's login; one that matched no
+ * route (a malformed or over-long path) is logged as `/api/public/*`.
  */
 function serializeRequest(request: LoggedRequest): Record<string, unknown> {
-  return { method: request.method, url: request.url?.split('?', 1)[0] };
+  const path = request.url?.split('?', 1)[0];
+  const isPublic = path?.startsWith(PUBLIC_API_PREFIX) === true;
+  return { method: request.method, url: isPublic ? (request.routeOptions?.url ?? `${PUBLIC_API_PREFIX}*`) : path };
 }
 
 function serializeResponse(reply: { readonly statusCode?: number }): Record<string, unknown> {

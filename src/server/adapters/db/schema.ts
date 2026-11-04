@@ -64,6 +64,8 @@ interface RepositoriesTable {
   github_repo_id: number;
   full_name: string;
   enabled: Generated<boolean>;
+  /** Whether the maintainers opted in to the public signature check (migration 019, E22-S02); off until an admin turns it on. */
+  public_verification: Generated<boolean>;
   cla_document_id: number | null;
   /** Set when GitHub no longer lists the repository for the installation; the row itself stays (E05-S06). */
   removed_at: Date | null;

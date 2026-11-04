@@ -14,6 +14,7 @@ import {
   InstallationSuspendedError,
 } from '../../services/ports/github-errors.ts';
 import { ProbeBudgetExhaustedError } from '../../services/probe-budget.ts';
+import { PublicVerificationUnavailableError } from '../../services/public-verification.ts';
 import { RoleLookupThrottledError } from '../../services/role-lookup-budget.ts';
 import { AppError } from './errors.ts';
 import { upstreamFailure } from './upstream-failure.ts';
@@ -59,6 +60,17 @@ test('the person over their 30 lookups a minute is 429 too_many_requests with th
     retryAfterSeconds: 42,
   });
 });
+
+test.each([[1], [30], [300]])(
+  'a public signature check that GitHub could not serve is 503 upstream_unavailable with the wait it carries, %s s',
+  (wait) => {
+    expect(upstreamFailure(new PublicVerificationUnavailableError(wait))).toStrictEqual({
+      status: 503,
+      code: 'upstream_unavailable',
+      retryAfterSeconds: wait,
+    });
+  },
+);
 
 test.each([
   ['a plain error', new Error('boom')],
