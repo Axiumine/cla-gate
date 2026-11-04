@@ -31,7 +31,6 @@ const NOT_PERSONAL: Readonly<Record<string, string>> = {
 const PLANNED_COLUMNS: Readonly<Record<string, string>> = {
   'signer_pii.ip_address': 'E13-S05 adds it',
   'signer_pii.user_agent': 'E13-S05 adds it',
-  'allowlist_entries.login_snapshot': 'E14-S06 adds it',
 };
 
 /** The columns the story names; the document may list more, never fewer. */

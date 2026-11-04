@@ -138,6 +138,27 @@ export function listEnabledRepositories(
 }
 
 /**
+ * Whether the installation's active repository `repositoryId` (`repositories.id`) enforces the CLA right now (E14-S04): the
+ * repository half of `evaluationEligibility`, read again by the code that is about to write a Check Run, so a switch-off that
+ * committed in the meantime is seen. A repository that is removed, or that the installation does not have (another tenant's id),
+ * does not enforce.
+ */
+export async function isRepositoryEnabled(
+  db: Kysely<Database>,
+  installationId: InstallationRowId,
+  repositoryId: number,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom('repositories')
+    .select('enabled')
+    .where('installation_id', '=', installationId)
+    .where('id', '=', repositoryId)
+    .where('removed_at', 'is', null)
+    .executeTakeFirst();
+  return row?.enabled === true;
+}
+
+/**
  * Whether the repository GitHub knows by `githubRepoId` is stored as active under an installation other than
  * `installationId` (a transfer whose state has not caught up, E06-S05). The statement excludes the caller's own tenant and
  * returns existence only, never a row: the one place two tenants meet is the partial unique index, and nothing of the

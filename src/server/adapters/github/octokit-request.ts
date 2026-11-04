@@ -107,3 +107,24 @@ export async function readOrNullWhenForbidden<T>(
   const found = await nullWhen(() => channel.send(route, request), absent);
   return found === null ? null : parseOne(route, schema, found.data);
 }
+
+/**
+ * Whether `request` was answered: true for an answer that `schema` reads (nothing of it is kept), false for a 403 that is
+ * a refusal (E14-S05, the permission is missing). A rate limit is not a refusal (see `failureOf`) and still throws, as does
+ * every other failure and an answer the schema refuses.
+ */
+export async function answeredUnlessForbidden(
+  channel: Channel,
+  route: string,
+  request: RawRequest,
+  schema: z.ZodType,
+): Promise<boolean> {
+  const found = await nullWhen(
+    () => channel.send(route, request),
+    (error) => error instanceof GitHubForbiddenError,
+  );
+  if (found !== null) {
+    parseOne(route, schema, found.data);
+  }
+  return found !== null;
+}

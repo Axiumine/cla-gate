@@ -44,14 +44,18 @@ export function paramsOf<T extends z.ZodType>(schema: T, request: FastifyRequest
 
 /**
  * The resolver of a route under `/…/:installationId/…` that acts on the installation itself: the requirement is
- * `org_admin`. An unknown installation, and one the admission policy rejected, resolve to null.
+ * `org_admin`, or `any_role` for the one call that every person with a role in the installation may make (the list of its
+ * repositories, E14-S01). An unknown installation, and one the admission policy rejected, resolve to null.
  * @throws AppError 400 when `:installationId` is not a positive integer in plain digits.
  */
-export function byInstallationParam(db: Kysely<Database>): TenantResolver {
+export function byInstallationParam(
+  db: Kysely<Database>,
+  requirement: 'org_admin' | 'any_role' = 'org_admin',
+): TenantResolver {
   return async (request) => {
     const { installationId } = paramsOf(installationParams, request);
     const rows = await findAdmittedTenantRows(db, { installationId }, null);
-    return rows === null ? null : { installationId, repositoryId: null, requirement: 'org_admin' };
+    return rows === null ? null : { installationId, repositoryId: null, requirement };
   };
 }
 
@@ -88,13 +92,13 @@ const documentParams = z.object({ installationId: idText.pipe(installationRowIdS
 const signatureParams = z.object({ installationId: idText.pipe(installationRowIdSchema), signatureId: idText });
 
 /**
- * The target of a call about a document, or about a signature of one (the role matrix of the security notes, E11-S07): a
- * document that covers the installation needs an org admin; one of a repository that is part of it needs an admin of that
- * repository (an org admin passes too); one of a repository that left the installation stays reachable for an org admin
- * only, because the permission of a person on it cannot be checked, so the call names no repository. Null when the tenant
- * has no such document or is not admitted, or when the repository it names is not readable (the guard reads it again).
+ * The target of a call about a document, about a signature of one, or about an allowlist entry (the role matrix of the security
+ * notes, E11-S07, E14-S07): a document that covers the installation needs an org admin; one of a repository that is part of it
+ * needs an admin of that repository (an org admin passes too); one of a repository that left the installation stays reachable for
+ * an org admin only, because the permission of a person on it cannot be checked, so the call names no repository. Null when the
+ * tenant has no such document or is not admitted, or when the repository it names is not readable (the guard reads it again).
  */
-async function documentTarget(
+export async function documentTarget(
   db: Kysely<Database>,
   installationId: InstallationRowId,
   placement: DocumentPlacement | null,

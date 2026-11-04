@@ -6,8 +6,10 @@ import { onTestFinished } from 'vitest';
 import { z } from 'zod';
 import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import type { TestGitHubKey } from '../../../config/test-support.ts';
-import { CheckRunStore } from '../../../services/fake-check-runs/test-support.ts';
+import { CheckRunStore, type CheckRunWriteRecord } from '../../../services/fake-check-runs/test-support.ts';
 import { CommentIds, commentsOfIssue, postedComment } from '../../../services/fake-comments/test-support.ts';
+import type { MembersProbeAnswer } from '../../../services/fake-github/test-support.ts';
+import { scriptInto, type UserAccounts } from '../../../services/fake-user-accounts/test-support.ts';
 import type { GitHubWorld } from '../../../services/github-contract/test-support.ts';
 import type {
   GitHubClient,
@@ -34,9 +36,11 @@ import {
   pullRequestBody,
   repositoryBody,
 } from '../http-bodies/test-support.ts';
+import { membersProbeRoute } from '../members-probe-fixture/test-support.ts';
 import { guardPublicMembers } from '../public-members-guard/test-support.ts';
 import { startGitHubApp } from '../start.ts';
 import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-support.ts';
+import { userAccountRoute } from '../user-account-fixture/test-support.ts';
 
 // A GitHub at the HTTP boundary that behaves like the real one for the routes of the client port (E05-S04): MSW answers
 // what the Octokit adapter sends, from state a test scripts through the same GitHubWorld the fake implements. Installation
@@ -64,6 +68,8 @@ interface State {
   readonly entries: Map<GithubId, Entry>;
   readonly memberships: Map<string, GitHubOrgMembership>;
   readonly permissions: Map<string, GitHubRepositoryPermission>;
+  readonly membersProbes: Map<GithubId, MembersProbeAnswer>;
+  readonly userAccounts: UserAccounts;
   readonly pullRequests: Map<string, GitHubPullRequest>;
   readonly pullCommits: Map<string, readonly GitHubCommit[]>;
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
@@ -81,6 +87,8 @@ interface State {
 export interface HttpWorld extends GitHubWorld {
   /** `METHOD /path?query` of every request that reached GitHub since the App started, in order. */
   readonly requests: string[];
+  /** Every Check Run write the mocked GitHub accepted (E14-S03), oldest first: what each run was sent, conclusion included. */
+  readonly checkRunWrites: readonly CheckRunWriteRecord[];
 }
 
 /** One page of `items` and the `Link` header that leads to the next, like GitHub's. */
@@ -344,6 +352,11 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
     ...appRoutes(state),
     tokenRoute(state, signer, clock),
     ...installationRoutes(state),
+    membersProbeRoute({
+      answers: state.membersProbes,
+      reached: (request) => installationOf(state, request)?.installation,
+    }),
+    userAccountRoute({ accounts: state.userAccounts, known: (req) => installationOf(state, req) !== undefined }),
     ...pullRoutes(state),
     ...commentRoutes(state),
     ...conversationRoutes(state),
@@ -378,6 +391,10 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
     addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
       state.permissions.set(permissionKey(githubInstallationId, fullName, login), permission);
     },
+    scriptMembersProbe: (githubInstallationId, answer) => {
+      state.membersProbes.set(githubInstallationId, answer);
+    },
+    scriptUserAccount: scriptInto(state.userAccounts),
     addPullRequest: (githubInstallationId, fullName, pullRequest) => {
       state.pullRequests.set(`${keyOf(githubInstallationId, fullName)}#${pullRequest.number}`, pullRequest);
     },
@@ -434,6 +451,8 @@ async function startWorld(
     entries: new Map(),
     memberships: new Map(),
     permissions: new Map(),
+    membersProbes: new Map(),
+    userAccounts: new Map(),
     pullRequests: new Map(),
     pullCommits: new Map(),
     repositoryCommits: new Map(),
@@ -466,7 +485,7 @@ async function startWorld(
 export async function httpWorld(signer: TestGitHubKey): Promise<HttpWorld> {
   const gate = new FakeGate();
   const { client, state } = await startWorld(signer, gate);
-  return { client, requests: state.requests, ...scripting(state, gate) };
+  return { client, requests: state.requests, checkRunWrites: state.checkRuns.writes, ...scripting(state, gate) };
 }
 
 /** The world behind a gate of the test's own, for example the stored gate of E05-S07: the installations are scripted, the gate is not. */

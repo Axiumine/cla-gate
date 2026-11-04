@@ -24,6 +24,28 @@ export const siteId = (site: Pick<AuditCallSite, 'file' | 'actions'>): string =>
 
 const ORGANISATION = { account_id: 4242, account_type: 'organization' } as const;
 const REPOSITORY = { type: 'repository', id: 9000 } as const;
+const ALLOWLIST_ENTRY = { type: 'allowlist_entry', id: 31 } as const;
+
+/** The three entries an allowlist call site writes a row for (E14-S06, E14-S07): one that covers the installation, one of a repository, and `org_members`. */
+function allowlistFixtures(action: 'allowlist_entry.created' | 'allowlist_entry.deleted'): readonly AuditFixture[] {
+  return [
+    {
+      action,
+      subject: ALLOWLIST_ENTRY,
+      metadata: { scope: 'installation', repository_id: null, kind: 'user', github_id: 4711 },
+    },
+    {
+      action,
+      subject: ALLOWLIST_ENTRY,
+      metadata: { scope: 'repository', repository_id: 12, kind: 'bot', github_id: 49699333 },
+    },
+    {
+      action,
+      subject: ALLOWLIST_ENTRY,
+      metadata: { scope: 'installation', repository_id: null, kind: 'org_members', github_id: 4242 },
+    },
+  ];
+}
 
 /** The fixtures of every call site, by {@link siteId}. A call site added to the server needs an entry or the catalogue test fails. */
 export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = {
@@ -96,11 +118,30 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { reason_code: 'retries_exhausted' },
     },
   ],
+  'services/repository-document-record.ts#repository.cla_document_attached|repository.cla_document_detached': [
+    {
+      action: 'repository.cla_document_attached',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: 3, previous_document_id: null },
+    },
+    {
+      action: 'repository.cla_document_attached',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: 4, previous_document_id: 3 },
+    },
+    {
+      action: 'repository.cla_document_detached',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: null, previous_document_id: 4 },
+    },
+  ],
   'services/repository-enabled.ts#repository.disabled|repository.enabled': [
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: 3 } },
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },
     { action: 'repository.disabled', subject: REPOSITORY, metadata: { repository_id: 12 } },
   ],
+  'services/allowlist-entry-create.ts#allowlist_entry.created': allowlistFixtures('allowlist_entry.created'),
+  'services/allowlist-entry-remove.ts#allowlist_entry.deleted': allowlistFixtures('allowlist_entry.deleted'),
   'services/repository-audit.ts#repository.added|repository.removed|repository.renamed': [
     { action: 'repository.added', subject: REPOSITORY },
     { action: 'repository.renamed', subject: REPOSITORY },

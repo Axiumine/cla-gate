@@ -16,8 +16,9 @@ import { matrixWorld } from '../cross-tenant-runner/test-support.ts';
 
 export type DocumentWorld = Awaited<ReturnType<typeof matrixWorld>>;
 
-/** The world of the tests: the matrix world, with the documents routes already part of the app. `app` sets the queue of the app (E12-S04). */
-export const documentWorld = (app?: Pick<TestAppOptions, 'enqueuer'>): Promise<DocumentWorld> => matrixWorld({}, app);
+/** The world of the tests: the matrix world, with the documents routes already part of the app. `app` sets the queue of the app (E12-S04) and the GitHub of the allowlist (E14-S06). */
+export const documentWorld = (app?: Pick<TestAppOptions, 'enqueuer' | 'allowlistGitHub'>): Promise<DocumentWorld> =>
+  matrixWorld({}, app);
 
 /** The path of the documents of the installation `installationId` (`installations.id`). */
 export const documentsPath = (installationId: number): string => `/api/installations/${installationId}/documents`;

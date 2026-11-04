@@ -86,12 +86,14 @@ export const SERVER_SHARDS: readonly Shard[] = [
   // The evaluate-pr job (E07-S04): the pull request and commit reads, the policy facts and the evaluation protocol. The Check Run
   // reporter it calls (E09-S05, services/reporting) joins it: it is the other half of that job's protocol.
   { name: 'evaluate-pr', mutate: ['src/server/services/evaluate-pr/**/*.ts', 'src/server/services/reporting/**/*.ts'] },
-  // The job handlers of E07-S05 to S07: the dead-letter handler, the close-pr job, and /recheck and Re-run.
+  // The job handlers of E07-S05 to S07 and E14-S04: the dead-letter handler, the close-pr job, the finalise jobs that follow turning
+  // enforcement off, and /recheck and Re-run.
   {
     name: 'job-handlers',
     mutate: [
       'src/server/services/close-pr/**/*.ts',
       'src/server/services/dead-letter/**/*.ts',
+      'src/server/services/finalise/**/*.ts',
       'src/server/services/recheck/**/*.ts',
     ],
   },

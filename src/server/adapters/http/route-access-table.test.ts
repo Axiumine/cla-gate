@@ -144,18 +144,19 @@ test('the route declared webhook is exactly POST /webhooks/github', async () => 
   expect(declared).toEqual(['POST /webhooks/github']);
 });
 
-test('the authenticated routes are the session read, the logout and the export of the own data, and none has a tenant parameter', async () => {
+test('the authenticated routes are the session read, the logout, the export of the own data and the list of the installations the person administers, and none has a tenant parameter', async () => {
   const { table } = await tableOfTheApp();
   const authenticated = table.filter((entry) => entry.access === 'authenticated');
   expect(sorted(authenticated.map(nameOf))).toEqual([
     'GET /api/auth/session',
+    'GET /api/installations',
     'GET /api/me/export',
     'POST /api/auth/logout',
   ]);
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, and the four of the audit log, the signature export and the erasure', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the choice of the CLA of a repository, the two switches of its enforcement, and the adds, the two lists and the removal of an allowlist entry', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
   expect(sorted(table.filter((entry) => typeof entry.access === 'object').map(nameOf))).toEqual(
@@ -175,6 +176,15 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
       'GET /api/installations/:installationId/erasure-preview',
       'POST /api/installations/:installationId/erasures',
+      'GET /api/installations/:installationId/repositories',
+      'PUT /api/repositories/:repositoryId/cla-document',
+      'POST /api/repositories/:repositoryId/enable',
+      'POST /api/repositories/:repositoryId/disable',
+      'POST /api/installations/:installationId/allowlist-entries',
+      'POST /api/repositories/:repositoryId/allowlist-entries',
+      'GET /api/installations/:installationId/allowlist-entries',
+      'GET /api/repositories/:repositoryId/allowlist-entries',
+      'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
     ]),
   );
 });

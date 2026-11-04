@@ -68,9 +68,11 @@ The thresholds every change must meet, the TypeScript setup behind them and the 
 | `services-other` | `src/server/services/[!i]*.ts`, `src/server/services/export` | 516 | 9 min 50 s | 100.00 |
 | `jobs-adapter` | `src/server/adapters/jobs` | 448 | not measured | not measured |
 | `evaluate-pr` | `src/server/services/evaluate-pr`, `src/server/services/reporting` | 496 | not measured | not measured |
-| `job-handlers` | `src/server/services/close-pr`, `dead-letter`, `recheck` | 390 | not measured | not measured |
+| `job-handlers` | `src/server/services/close-pr`, `dead-letter`, `finalise`, `recheck` | 390 | not measured | not measured |
 | `sweep` | `src/server/services/sweep` | 289 | not measured | not measured |
 | `scripts` | the caps tool (`STRYKER_SCOPE=scripts`) | 587 | 4 min 1 s | 100.00 |
+
+Epic E14 added files to `services-other` (the allowlist, repository and installation-list services that do not start with `i`), `services-installation` (`installation-list.ts`, `installation-roles.ts`), `http-a-v` and `http-rest` (the routes), `evaluate-pr` (the enforcement guard) and `job-handlers` (`finalise`); the mutant counts and scores above were measured before it and are not re-measured here.
 
 Shard membership since E19 (the mutant counts above were not measured again): `config` gained `secret-files`, `mode`, `mode-log`, `env-rules`, `config-error` and `config-issue`; `root-domain-ports` gained `boot-database.ts`, `healthcheck.ts`, `domain/app-manifest.ts` and `services/ports/manifest-conversion.ts`; `http-a-v` gained `health-probe.ts`, the `setup-*` files and `spa-url.ts`; `shared` gained `github-app.ts` and `setup.ts`; `github-a-o` gained `manifest-conversion.ts` (the shard was 496 mutants, close to the 500 at which it is split by letter range: measure it at the next run).
 

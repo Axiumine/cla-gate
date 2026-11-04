@@ -7,11 +7,11 @@ import { auditLogRows, listAuditLog } from '../../../services/audit-log-queries.
 import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
 import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
-import { RepositoryNotFoundError, setRepositoryEnabled } from '../../../services/repository-enabled.ts';
 import {
   findActiveRepositoryByGithubId,
   findRepositoryByGithubId,
   isActiveRepositoryOfAnotherInstallation,
+  isRepositoryEnabled,
   listActiveRepositoryIds,
   listEnabledRepositories,
   markRepositoriesRemoved,
@@ -40,8 +40,12 @@ import {
   ownersOfSignatures,
   removedRepositories,
 } from '../tenant-owners/test-support.ts';
+import { ALLOWLIST_TENANT_QUERIES } from '../tenant-registry-allowlist/test-support.ts';
+import { ATTACH_QUERIES, LOCK_QUERIES } from '../tenant-registry-attach/test-support.ts';
 import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/test-support.ts';
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
+import { ENABLED_WRITES } from '../tenant-registry-enabled/test-support.ts';
+import { COUNT_READS, LISTING_READS } from '../tenant-registry-listing/test-support.ts';
 import {
   ENFORCING_READS,
   HISTORY_READS,
@@ -61,6 +65,10 @@ export const TENANT_MODULES = [
   'adapters/db/pr-evaluation-links.ts',
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
+  'services/allowlist-entry-list-queries.ts',
+  'services/allowlist-entry-queries.ts',
+  'services/allowlist-entry-remove-queries.ts',
+  'services/allowlist-sweeps.ts',
   'services/audit-log-queries.ts',
   'services/close-pr/close-heads.ts',
   'services/close-pr/close-rows.ts',
@@ -79,9 +87,14 @@ export const TENANT_MODULES = [
   'services/export/own-data-queries.ts',
   'services/export/own-signatures-query.ts',
   'services/export/signature-queries.ts',
+  'services/finalise/finalise-rows.ts',
   'services/installation-operator.ts',
   'services/repo-admin-candidates.ts',
+  'services/repository-count-queries.ts',
+  'services/repository-document-lock-queries.ts',
+  'services/repository-document-queries.ts',
   'services/repository-enabled.ts',
+  'services/repository-list-queries.ts',
   'services/repository-queries.ts',
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
@@ -90,10 +103,7 @@ export const TENANT_MODULES = [
   'services/tenant-queries.ts',
 ] as const;
 
-/**
- * The one file that writes `audit_log`: rows are appended inside the transaction of the change they record, naming the
- * installation the entry carries (E04-S09), and nothing else inserts them. Reads of the table belong to a tenant module.
- */
+/** The one file that writes `audit_log`: rows are appended in the transaction of the change they record, naming the installation the entry carries (E04-S09); nothing else inserts them, and reads of the table belong to a tenant module. */
 export const AUDIT_WRITER = 'services/audit.ts';
 
 /** The error is the one a refused call throws. */
@@ -293,22 +303,11 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       },
     }),
   },
-  'services/repository-enabled.ts': {
-    setRepositoryEnabled: scoped({
-      takesIds: true,
-      activeOnly: true,
-      refusal: (error) => error instanceof RepositoryNotFoundError,
-      run: async (db, scope, ids) => {
-        const { changed } = await setRepositoryEnabled(db, {
-          installationId: scope.installationId,
-          githubRepoId: ids.plain.githubRepoId,
-          enabled: true,
-          actorGithubId: parseGithubId(1),
-        });
-        return changed ? ownersOfGithubIds(db, [ids.plain.githubRepoId]) : [];
-      },
-    }),
-  },
+  'services/repository-enabled.ts': ENABLED_WRITES,
+  'services/repository-count-queries.ts': COUNT_READS,
+  'services/repository-document-lock-queries.ts': LOCK_QUERIES,
+  'services/repository-document-queries.ts': ATTACH_QUERIES,
+  'services/repository-list-queries.ts': LISTING_READS,
   'services/repository-queries.ts': {
     markRepositoriesRemoved: scoped({
       takesIds: true,
@@ -344,6 +343,15 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       takesIds: false,
       activeOnly: true,
       run: async (db, scope) => ownersOfGithubIds(db, await listActiveRepositoryIds(db, scope.installationId)),
+    }),
+    isRepositoryEnabled: scoped({
+      takesIds: true,
+      activeOnly: true,
+      // The fixture enables the scoped repository of each tenant, so a statement that strayed would find the other tenant's row on.
+      run: async (db, scope, ids) =>
+        (await isRepositoryEnabled(db, scope.installationId, ids.scoped.repositoryId))
+          ? ownersOfRepositories(db, [ids.scoped.repositoryId])
+          : [],
     }),
     listEnabledRepositories: scoped({
       takesIds: false,
@@ -463,6 +471,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   ...EXPORT_TENANT_QUERIES,
   // The statements of the reporter over the evaluation rows (E09-S04).
   ...LINK_TENANT_QUERIES,
+  ...ALLOWLIST_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

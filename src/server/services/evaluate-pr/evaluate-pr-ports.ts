@@ -4,10 +4,13 @@ import type { Kysely } from 'kysely';
 import type { Logger } from 'pino';
 import type { Database } from '../../adapters/db/schema.ts';
 import type { Evaluation, EvaluationInput } from '../../domain/evaluation/index.ts';
+import type { EnvelopeOf } from '../../domain/job-envelope.ts';
 import type { OrgMembership } from '../org-membership.ts';
 import type { Clock } from '../ports/clock.ts';
 import type { GitHubClient } from '../ports/github.ts';
+import type { JobEnqueuer } from '../ports/jobs.ts';
 import type { EvaluationReporter } from '../ports/reporter.ts';
+import type { Resolved } from './evaluation-tenant.ts';
 
 // What the `evaluate-pr` job is given (E07-S04): the ports of a run, and what the queue tells the run about itself.
 
@@ -28,4 +31,16 @@ export interface EvaluatePrContext {
   readonly attempt: number;
   /** A logger that already carries the job id, type and numeric ids. */
   readonly logger: Logger;
+  /** Where the job sends the `finalise-check` job when it finds the repository switched off (E14-S04), on the connection of a transaction it opens. */
+  readonly enqueuer: JobEnqueuer;
+  /** The id of the running job, which names its sends. */
+  readonly jobId: string;
+}
+
+/** What every step of one run of the job shares (E07-S04): its ports, the job, the repository as settled by step 1, and the run's context. */
+export interface EvaluateRun {
+  readonly ports: EvaluatePrPorts;
+  readonly job: EnvelopeOf<'evaluate-pr'>;
+  readonly resolved: Resolved;
+  readonly context: EvaluatePrContext;
 }

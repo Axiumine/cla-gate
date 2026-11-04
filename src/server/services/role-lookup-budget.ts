@@ -13,6 +13,14 @@ import type { Clock } from './ports/clock.ts';
 const ROLE_LOOKUP_LIMITS = { maxLookups: 30, windowMs: 60_000, maxViewers: 10_000 } as const;
 
 /**
+ * The uncached lookups a person's list of installations may make in a sliding minute (E14-S01). The list asks every
+ * installation of the instance once per cache lifetime, so a budget of 30 would refuse it for good on an instance that
+ * serves 31 organisations: the answers it paid for expire at the very moment the minute lets it pay again. This budget is
+ * its own, so the list neither spends the 30 of the guard nor is refused by them.
+ */
+export const INSTALLATION_LIST_LOOKUPS = 300;
+
+/**
  * The person has used their uncached lookups of the minute. `retryAfterSeconds`, at least 1, is how long until the
  * oldest of them leaves the window. The message is fixed text: nothing of the person reaches it.
  */
@@ -34,13 +42,19 @@ export interface ViewerLookupBudget {
   spend(viewer: GithubId): void;
 }
 
-/** The budget of every person, in memory, per process: the key is the numeric id and nothing else is kept. */
-export function createViewerLookupBudget(clock: Clock): ViewerLookupBudget {
+/**
+ * The budget of every person, in memory, per process: the key is the numeric id and nothing else is kept. `maxLookups`
+ * (30 unless the caller says otherwise) is how many uncached lookups a person may make in a sliding minute.
+ */
+export function createViewerLookupBudget(
+  clock: Clock,
+  maxLookups: number = ROLE_LOOKUP_LIMITS.maxLookups,
+): ViewerLookupBudget {
   // A failure throttle holds a key back once it has recorded more than `maxFailures` events inside the window. Here the
   // events are lookups, and the 31st must be refused: it is refused when 30 are recorded, which is "more than 29".
   const throttle = createFailureThrottle({
     clock,
-    maxFailures: ROLE_LOOKUP_LIMITS.maxLookups - 1,
+    maxFailures: maxLookups - 1,
     windowMs: ROLE_LOOKUP_LIMITS.windowMs,
     maxKeys: ROLE_LOOKUP_LIMITS.maxViewers,
   });

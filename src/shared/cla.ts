@@ -59,6 +59,16 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * that another admin saved over meanwhile (E12-S03). The rest are the rules of publishing a version (E12-S04): the rationale,
  * the numbering, the guard against publishing over a version the admin has not seen, and the confirmation that signers will have
  * to sign again. `rollback_requires_major` is the copy of a version of an earlier major published as a minor one (E12-S06).
+ * The last four are the rules of attaching a document to a repository (E14-S02): `document_not_attachable` is the one answer for
+ * every document the repository may not enforce (unknown, another tenant's, another repository's, corporate), `document_unpublished`
+ * a document with no active version, `repository_enabled` a detach while enforcement is on, and `forbidden` a role that passed the
+ * guard of the repository but is too low for the document the change involves (the answer of the guard itself, from the service).
+ * `no_active_cla` (E14-S03) is turning enforcement on for a repository that has no document attached, or whose document has no
+ * published version yet: there is nothing to enforce.
+ * The last five are the rules of adding an allowlist entry (E14-S06): `github_account_not_found` is a login GitHub has no account
+ * for, `kind_mismatch` an account of another type than the kind asked for (an organisation is told to use `org_members`),
+ * `no_organization` an `org_members` entry on the installation of a user account, `members_permission_missing` an App that may not
+ * list the members of the organisation yet, and `allowlist_entry_exists` the same account, kind and scope listed already.
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -78,6 +88,16 @@ export const CLA_RULE_STATUS = {
   version_conflict: 409,
   rollback_requires_major: 422,
   not_found: 404,
+  document_not_attachable: 422,
+  document_unpublished: 409,
+  repository_enabled: 409,
+  forbidden: 403,
+  no_active_cla: 409,
+  github_account_not_found: 422,
+  kind_mismatch: 422,
+  no_organization: 422,
+  members_permission_missing: 422,
+  allowlist_entry_exists: 409,
 } as const;
 
 export type ClaRule = keyof typeof CLA_RULE_STATUS;

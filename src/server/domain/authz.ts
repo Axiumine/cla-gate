@@ -5,12 +5,17 @@
 // and this module only turns the requirement of the call and those facts into one of three answers. Nothing is read from
 // GitHub, the database or the clock here, so the whole table is testable with no setup.
 
+/** What a person is in an installation, by what GitHub says: an admin of the organisation, or an admin of one repository of it. */
+export type Role = 'org_admin' | 'repo_admin';
+
 /**
  * The role a call needs in the installation (the role matrix of the security notes): `org_admin` for the actions on a
  * resource of the installation itself, `repo_admin` for the actions on a resource of one repository (an org admin passes
  * those too). Signing and viewing one's own signatures need no role and no requirement: they are `authenticated` routes.
+ * `any_role` (E14-S01) is for the one call that names the installation and no repository and that every person who has a
+ * role in it may make: the list of its repositories, in which each person sees what their own role reaches.
  */
-export type Requirement = 'org_admin' | 'repo_admin';
+export type Requirement = Role | 'any_role';
 
 /** What GitHub says about the viewer in this installation, by numeric id. */
 export interface RoleFacts {
@@ -47,6 +52,11 @@ function forRepoAdmin(facts: RoleFacts): Decision {
   return facts.hasRoleInInstallation ? 'forbidden' : 'not_found';
 }
 
+/** `any_role`: an org admin, or a viewer the discovery found to be an admin of a repository here; anyone else is as good as unknown. */
+function forAnyRole(facts: RoleFacts): Decision {
+  return facts.orgAdmin || facts.repoAdmin || facts.hasRoleInInstallation ? 'allow' : 'not_found';
+}
+
 /**
  * The decision table. Anything that is not a known requirement is `not_found`: deny by default, and the answer that
  * reveals nothing.
@@ -57,6 +67,8 @@ export function decide(requirement: Requirement, facts: RoleFacts): Decision {
       return forOrgAdmin(facts);
     case 'repo_admin':
       return forRepoAdmin(facts);
+    case 'any_role':
+      return forAnyRole(facts);
     default:
       return 'not_found';
   }

@@ -49,10 +49,6 @@ const RESERVED_ACTIONS: Readonly<Partial<Record<AuditAction, string>>> = {
   'signatures.invalidated': 'written by the invalidation of a document major (E15-S04)',
   'commit_override.created': 'written by the commit override endpoint (E15-S05)',
   'commit_override.deleted': 'written by the override removal endpoint (E15-S06)',
-  'allowlist_entry.created': 'written by the allowlist endpoints (E14-S06)',
-  'allowlist_entry.deleted': 'written by the allowlist removal endpoint (E14-S07)',
-  'repository.cla_document_attached': 'written by the attach endpoint (E14-S02)',
-  'repository.cla_document_detached': 'written by the detach endpoint (E14-S02)',
   'signer_pii.erased': 'written by the SQL function erase_signer_pii, not by a call of appendAudit (E16-S04)',
   'network_metadata.purged':
     'written by the SQL function purge_signer_network_metadata, not by a call of appendAudit (E16-S05)',

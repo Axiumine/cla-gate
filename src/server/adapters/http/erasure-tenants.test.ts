@@ -52,11 +52,13 @@ test('erasing through tenant 1 deletes what tenant 1 holds and leaves tenant 2 i
     githubUserId: MEMBER1,
     signatures: 1,
     signerPiiRows: 1,
+    allowlistEntries: 0,
   });
   expect((await preview('admin1', t1.installationId, `?githubUserId=${MEMBER1}`)).json()).toEqual({
     githubUserId: MEMBER1,
     signatures: 1,
     signerPiiRows: 0,
+    allowlistEntries: 0,
   });
   const user = await db
     .selectFrom('users')

@@ -2,20 +2,23 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { GithubId } from '../../shared/github-id.ts';
 import type { JobType } from '../domain/job-envelope.ts';
-import { closePr } from './close-pr/close-pr.ts';
-import { evaluatePr } from './evaluate-pr/evaluate-pr.ts';
 import type { EvaluatePrPorts } from './evaluate-pr/evaluate-pr-ports.ts';
+import {
+  closePrHandler,
+  evaluateHeadShaHandler,
+  evaluatePrHandler,
+  recheckCommentHandler,
+} from './evaluation-handlers.ts';
+import { finaliseCheckHandler, finaliseRepositoryHandler } from './finalise/finalise-handlers.ts';
 import type { SyncOutcome } from './installation-sync-model.ts';
 import type { HandlerRegistry, JobHandler } from './job-registry.ts';
-import { recheckComment } from './recheck/recheck-comment.ts';
-import { rerunHeadSha } from './recheck/rerun-head-sha.ts';
 import type { SweepDeps } from './sweep/sweep.ts';
 import { sweepHandler, sweepInstallationHandler, sweepRepositoryHandler } from './sweep/sweep-handlers.ts';
 
 // The handlers the job queue binds (E07-S03). `registerHandlers` is the one list of what runs which job: a story that
 // builds a handler replaces its line here. `revoke-user-sessions` is not in it, its consumer comes with E10-S07, which
-// registers it through the registry from its own code; until then its queue keeps the jobs. Nor are `finalise-repository` and
-// `finalise-check` (E07-S09): E14-S04 registers them the same way.
+// registers it through the registry from its own code; until then its queue keeps the jobs. The two jobs that follow turning
+// enforcement off (`finalise-repository`, `finalise-check`, E07-S09) are bound here since E14-S04.
 
 /**
  * Thrown by the handler of a job type whose consumer is not available: the job fails (it is retried, then dead-lettered)
@@ -44,8 +47,8 @@ export interface HandlerDeps {
   /**
    * What the `evaluate-pr` job runs on, for one job (E07-S04), and the `close-pr` job (E07-S06), the two jobs of the manual
    * re-evaluation, `recheck-comment` and `evaluate-head-sha` (E07-S07), and the `sweep-repository` job (E07-S09) as well
-   * (they use the part of it that is not the engine): its GitHub client is bound to the `signal` of the job, so a job that
-   * is being shut down does not hold the process on a request. Undefined when the application has no GitHub App or no reporter (the reporter
+   * (they use the part of it that is not the engine), and the two `finalise-*` jobs (E14-S04): its GitHub client is bound to the
+   * `signal` of the job, so a job that is being shut down does not hold the process on a request. Undefined when the application has no GitHub App or no reporter (the reporter
    * is E09): the handlers then fail every job and keep its delivery for a redelivery.
    */
   readonly evaluatePr: ((signal: AbortSignal) => EvaluatePrPorts) | undefined;
@@ -71,30 +74,24 @@ function syncInstallation(sync: NonNullable<HandlerDeps['syncInstallation']>): J
   return async (job, { signal }) => ({ outcome: (await sync(job.githubInstallationId, signal)).status });
 }
 
-/** `evaluate-pr`: the numbers of the payload are keys only, the pull request and the policy are read now (E07-S04). */
-function evaluatePrHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): JobHandler<'evaluate-pr'> {
-  return (job, { signal, attempt, logger }) => evaluatePr(ports(signal), job, { attempt, logger });
-}
+/** Why a job that runs on the ports of the evaluation fails without them. */
+const NO_EVALUATION = 'no GitHub App or no evaluation reporter (E09) is configured';
 
-/** `close-pr`: the numbers of the payload are keys only, the state of the pull request is read now (E07-S06). */
-function closePrHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): JobHandler<'close-pr'> {
-  return (job, { signal, logger, pending }) => closePr(ports(signal), job, { logger, pending });
-}
-
-/** `recheck-comment`: the comment is fetched, the text of the payload is none (E07-S07). */
-function recheckCommentHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): JobHandler<'recheck-comment'> {
-  return (job, { signal, logger, enqueuer, jobId }) => recheckComment(ports(signal), job, { logger, enqueuer, jobId });
-}
-
-/** `evaluate-head-sha`: the open pull requests of the head SHA are asked of GitHub, and each is evaluated again (E07-S07). */
-function evaluateHeadShaHandler(ports: NonNullable<HandlerDeps['evaluatePr']>): JobHandler<'evaluate-head-sha'> {
-  return (job, { signal, logger, enqueuer, jobId }) => rerunHeadSha(ports(signal), job, { logger, enqueuer, jobId });
+/** Binds `type` to the handler `bind` makes of the ports of the evaluation, or to one that fails its jobs when there are none. */
+function onEvaluationPorts<T extends JobType>(
+  registry: HandlerRegistry,
+  deps: HandlerDeps,
+  type: T,
+  bind: (ports: NonNullable<HandlerDeps['evaluatePr']>) => JobHandler<T>,
+): void {
+  registry.register(type, deps.evaluatePr === undefined ? unavailable(type, NO_EVALUATION) : bind(deps.evaluatePr));
 }
 
 /**
  * Binds the handlers of the delivery-driven jobs (`evaluate-pr`, `evaluate-head-sha`, `close-pr`, `recheck-comment`,
  * `sync-installation`), of the two the scheduler starts (`sweep`, `sweep-installation`, E07-S08) and of the one a change of
- * policy starts (`sweep-repository`, E07-S09). The ones whose consumer is not available fail their jobs (see
+ * policy starts (`sweep-repository`, E07-S09), and of the two that turning enforcement off starts (`finalise-repository` and
+ * `finalise-check`, E14-S04). The ones whose consumer is not available fail their jobs (see
  * {@link HandlerUnavailableError}) instead of completing them.
  * @throws HandlerRegisteredError when a type already has a handler.
  */
@@ -105,44 +102,16 @@ export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): 
       ? unavailable('sync-installation', 'no GitHub App is configured')
       : syncInstallation(deps.syncInstallation),
   );
-  registry.register(
-    'evaluate-pr',
-    deps.evaluatePr === undefined
-      ? unavailable('evaluate-pr', 'no GitHub App or no evaluation reporter (E09) is configured')
-      : evaluatePrHandler(deps.evaluatePr),
-  );
-  registry.register(
-    'evaluate-head-sha',
-    deps.evaluatePr === undefined
-      ? unavailable('evaluate-head-sha', 'no GitHub App or no evaluation reporter (E09) is configured')
-      : evaluateHeadShaHandler(deps.evaluatePr),
-  );
-  registry.register(
-    'close-pr',
-    deps.evaluatePr === undefined
-      ? unavailable('close-pr', 'no GitHub App or no evaluation reporter (E09) is configured')
-      : closePrHandler(deps.evaluatePr),
-  );
-  registry.register(
-    'recheck-comment',
-    deps.evaluatePr === undefined
-      ? unavailable('recheck-comment', 'no GitHub App or no evaluation reporter (E09) is configured')
-      : recheckCommentHandler(deps.evaluatePr),
-  );
+  onEvaluationPorts(registry, deps, 'evaluate-pr', evaluatePrHandler);
+  onEvaluationPorts(registry, deps, 'evaluate-head-sha', evaluateHeadShaHandler);
+  onEvaluationPorts(registry, deps, 'close-pr', closePrHandler);
+  onEvaluationPorts(registry, deps, 'recheck-comment', recheckCommentHandler);
   registry.register(
     'sweep',
     deps.sweep === undefined ? unavailable('sweep', 'no GitHub App is configured') : sweepHandler(deps.sweep),
   );
-  registry.register(
-    'sweep-installation',
-    deps.evaluatePr === undefined
-      ? unavailable('sweep-installation', 'no GitHub App or no evaluation reporter (E09) is configured')
-      : sweepInstallationHandler(deps.evaluatePr),
-  );
-  registry.register(
-    'sweep-repository',
-    deps.evaluatePr === undefined
-      ? unavailable('sweep-repository', 'no GitHub App or no evaluation reporter (E09) is configured')
-      : sweepRepositoryHandler(deps.evaluatePr),
-  );
+  onEvaluationPorts(registry, deps, 'sweep-installation', sweepInstallationHandler);
+  onEvaluationPorts(registry, deps, 'sweep-repository', sweepRepositoryHandler);
+  onEvaluationPorts(registry, deps, 'finalise-repository', finaliseRepositoryHandler);
+  onEvaluationPorts(registry, deps, 'finalise-check', finaliseCheckHandler);
 }

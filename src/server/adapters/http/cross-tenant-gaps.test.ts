@@ -114,10 +114,19 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+    'GET /api/installations/:installationId/repositories',
+    'PUT /api/repositories/:repositoryId/cla-document',
+    'POST /api/repositories/:repositoryId/enable',
+    'POST /api/repositories/:repositoryId/disable',
+    'POST /api/installations/:installationId/allowlist-entries',
+    'POST /api/repositories/:repositoryId/allowlist-entries',
+    'GET /api/installations/:installationId/allowlist-entries',
+    'GET /api/repositories/:repositoryId/allowlist-entries',
+    'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);
-  expect(Object.keys(ISOLATION_CASES)).toEqual(['GET /api/me/export']);
+  expect(Object.keys(ISOLATION_CASES)).toEqual(['GET /api/installations', 'GET /api/me/export']);
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
 });

@@ -13,6 +13,7 @@ import {
 } from '../../../services/evaluate-pr/evaluation-rows.ts';
 import { readAllowlist, readOverrides, readPolicy } from '../../../services/evaluate-pr/policy-facts.ts';
 import { readSignatures } from '../../../services/evaluate-pr/signature-facts.ts';
+import { unfinishedPullRequests } from '../../../services/finalise/finalise-rows.ts';
 import { evaluationStates, staleEvaluations } from '../../../services/sweep/sweep-rows.ts';
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
@@ -226,6 +227,15 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
           'signatures',
           facts.map((fact) => fact.id),
         );
+      },
+    }),
+  },
+  'services/finalise/finalise-rows.ts': {
+    unfinishedPullRequests: scoped({
+      run: async (db, scope, ids) => {
+        // The fixture stores a pull request still running (8) for each tenant, which the walk finds under the tenant's own ids.
+        const found = await unfinishedPullRequests(db, repositoryOf(scope, ids), { after: 0, limit: 50 });
+        return found.length === 0 ? [] : ownersOfEvaluations(db, await evaluationsOfRepository(db, ids, found));
       },
     }),
   },

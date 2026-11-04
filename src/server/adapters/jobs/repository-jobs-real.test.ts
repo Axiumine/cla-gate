@@ -376,13 +376,12 @@ function policyRegistry(db: Kysely<Database>, reporter: FakeReporter): HandlerRe
 }
 
 realPostgresRolesOnly(
-  'a job type with no handler keeps its jobs while sweep-repository is worked: the two finalise queues wait for E14-S04',
+  'the handlers of the application work all three repository queues: the finalise jobs of a repository that enforces end as skipped, not left waiting (E14-S04)',
   async () => {
     const world = await scene();
     const reporter = new FakeReporter();
     const registry = policyRegistry(world.db, reporter);
-    expect(registry.types()).not.toContain('finalise-repository');
-    expect(registry.types()).not.toContain('finalise-check');
+    expect(registry.types()).toEqual(expect.arrayContaining(['finalise-repository', 'finalise-check']));
     const queue = await world.start(registry);
     await enqueueAll(world, queue);
     await eventually(async () => {
@@ -391,8 +390,13 @@ realPostgresRolesOnly(
     await eventually(async () => {
       expect(await statesOf(world.owner, 'evaluate-pr')).toEqual(['completed']);
     });
-    expect(await statesOf(world.owner, 'finalise-repository')).toEqual(['created']);
-    expect(await statesOf(world.owner, 'finalise-check')).toEqual(['created']);
+    await eventually(async () => {
+      expect(await statesOf(world.owner, 'finalise-repository')).toEqual(['completed']);
+    });
+    await eventually(async () => {
+      expect(await statesOf(world.owner, 'finalise-check')).toEqual(['completed']);
+    });
+    expect(reporter.disabled).toEqual([]);
   },
 );
 
