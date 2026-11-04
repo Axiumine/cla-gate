@@ -78,17 +78,13 @@ test('an item names no person: no name, address or login of the signer, no reaso
     },
   ]);
   const response = await world.list(ada);
-  expect(pageOf(response).items).toHaveLength(1);
-  for (const marker of [
-    'zzzz',
-    'Zzzz',
-    'legal_request',
-    '4321',
-    'revokeReason',
-    'revoke_reason',
-    'revokedBy',
-    'revoked_by',
-  ]) {
+  const [item, ...others] = pageOf(response).items;
+  expect(others).toHaveLength(0);
+  // The keys are the whole of what an item says; the revoker's id (a number, which a substring search cannot tell from any other) has no key.
+  expect(new Set(Object.keys(item ?? {}))).toEqual(
+    new Set(['document', 'id', 'installation', 'resignPath', 'revokedAt', 'signedAt', 'source', 'state', 'version']),
+  );
+  for (const marker of ['zzzz', 'Zzzz', 'legal_request', 'revokeReason', 'revoke_reason', 'revokedBy', 'revoked_by']) {
     expect(response.body, marker).not.toContain(marker);
   }
 });
