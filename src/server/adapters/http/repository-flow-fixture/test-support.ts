@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
 import type { Logger } from 'pino';
+import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import { testGitHubKey } from '../../../config/test-support.ts';
 import { evaluatePullRequest } from '../../../domain/evaluation/index.ts';
@@ -260,10 +261,7 @@ export function evaluationOf(world: Awaited<ReturnType<typeof flowWorld>>, prNum
     jobId,
   });
   const switchOff = async (): Promise<void> => {
-    const response = await disableAs(world, 'admin1', t1.plain.repositoryId);
-    if (response.statusCode !== 200) {
-      throw new Error(`the switch-off answered ${String(response.statusCode)}`);
-    }
+    expect((await disableAs(world, 'admin1', t1.plain.repositoryId)).statusCode).toBe(200);
     await world.drain();
   };
   return { envelope, context, switchOff };
