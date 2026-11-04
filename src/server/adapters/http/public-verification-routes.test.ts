@@ -6,25 +6,17 @@ import { errorCodeOf, withoutRequestId } from './document-fixture/test-support.t
 import {
   LOGINS,
   lookups,
-  type PublicWorld,
+  NOT_ASKABLE,
   publicWorld,
   revokeSignature,
   signedOf,
+  stableHeaders,
 } from './public-verification-fixture/test-support.ts';
 
 // GET /api/public/repos/:githubRepoId/signers/:login (E22-S02): what a good call answers and with which headers, the four answers that are
 // one, the refusals that are one, and the verbs it does not answer. The hostile inputs are in public-verification-routes-input.test.ts,
 // the budgets in public-verification-routes-limits.test.ts, GitHub and the cache in public-verification-routes-upstream.test.ts,
 // the other tenant, the suspended one and the log in public-verification-routes-tenants.test.ts.
-
-/** The headers a client sees that do not change from one call to the next: the others are the request id, the date and the budget left. */
-const stable = (response: { headers: Record<string, unknown> }) => ({
-  cacheControl: response.headers['cache-control'],
-  origin: response.headers['access-control-allow-origin'],
-  type: response.headers['content-type'],
-  length: response.headers['content-length'],
-  cookie: response.headers['set-cookie'],
-});
 
 test('the signer of the repository is signed: 200 {"signed":true} for anyone, with no session and no cookie', async () => {
   const world = await publicWorld();
@@ -75,8 +67,8 @@ test('the four false cases answer the same bytes with the same headers: never si
   const answers = [never, revoked, outdated, unknown];
   expect(answers.map((answer) => answer.statusCode)).toEqual([200, 200, 200, 200]);
   expect(answers.map((answer) => answer.body)).toEqual(Array.from({ length: 4 }, () => '{"signed":false}'));
-  expect(answers.map(stable)).toEqual(Array.from({ length: 4 }, () => stable(never)));
-  expect(stable(never).cacheControl).toBe('public, max-age=300');
+  expect(answers.map(stableHeaders)).toEqual(Array.from({ length: 4 }, () => stableHeaders(never)));
+  expect(stableHeaders(never).cacheControl).toBe('public, max-age=300');
 });
 
 test('a repository with no document to enforce answers signed false and never asks GitHub who the login is', async () => {
@@ -101,59 +93,6 @@ test('the answer follows the signatures at once: a revocation turns a cached log
   expect(lookups(world)).toBe(1);
 });
 
-/** The states in which a repository may not be asked about, each as a change to the world. */
-const NOT_ASKABLE: readonly (readonly [string, (world: PublicWorld) => Promise<unknown>])[] = [
-  [
-    'enforcement is off',
-    (w) => w.db.updateTable('repositories').set({ enabled: false }).where('id', '=', w.t1.plain.repositoryId).execute(),
-  ],
-  [
-    'the maintainers did not opt in',
-    (w) =>
-      w.db
-        .updateTable('repositories')
-        .set({ public_verification: false })
-        .where('id', '=', w.t1.plain.repositoryId)
-        .execute(),
-  ],
-  [
-    'the repository was removed',
-    (w) =>
-      w.db
-        .updateTable('repositories')
-        .set({ removed_at: w.clock.now() })
-        .where('id', '=', w.t1.plain.repositoryId)
-        .execute(),
-  ],
-  [
-    'the installation is suspended',
-    (w) =>
-      w.db
-        .updateTable('installations')
-        .set({ suspended_at: w.clock.now() })
-        .where('id', '=', w.t1.installationId)
-        .execute(),
-  ],
-  [
-    'the installation was uninstalled',
-    (w) =>
-      w.db
-        .updateTable('installations')
-        .set({ deleted_at: w.clock.now() })
-        .where('id', '=', w.t1.installationId)
-        .execute(),
-  ],
-  [
-    'the installation is rejected',
-    (w) =>
-      w.db
-        .updateTable('installations')
-        .set({ admission_status: 'rejected', admission_reason: 'policy_changed' })
-        .where('id', '=', w.t1.installationId)
-        .execute(),
-  ],
-];
-
 test.each(NOT_ASKABLE)(
   'a repository for which %s is 404 not_found, byte for byte the answer for a repository that does not exist',
   async (_name, change) => {
@@ -164,7 +103,7 @@ test.each(NOT_ASKABLE)(
     const response = await world.verify(t1.plain.githubRepoId, LOGINS.signer1);
     expect([response.statusCode, errorCodeOf(response)]).toEqual([404, 'not_found']);
     expect(withoutRequestId(response)).toBe(withoutRequestId(unknown));
-    expect(stable(response)).toEqual(stable(unknown));
+    expect(stableHeaders(response)).toEqual(stableHeaders(unknown));
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['access-control-allow-origin']).toBe('*');
     expect(lookups(world)).toBe(0);

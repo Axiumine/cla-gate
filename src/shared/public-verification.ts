@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { defineRoute } from './contract.ts';
 import { githubIdSchema } from './github-id.ts';
 
-// The contract of the public signature check (E22-S02): the opt-in call of a maintainer, and the public question "does this login
-// have a valid signature for this repository". The routes, their tests and the badge routes of E22-S03 share them. The public
-// call names the repository by GitHub's numeric id (`githubRepoId`, the id of the repository on GitHub), the one thing a project
-// knows about itself from outside; the opt-in names it by `repositories.id`, like the other settings of a repository.
+// The contract of the public signature check (E22-S02) and of its badges (E22-S03): the opt-in call of a maintainer, the public
+// question "does this login have a valid signature for this repository", the two badges drawn from the same answer, and the
+// snippet a maintainer pastes into a README. The routes, their tests and the settings screen share them. The public calls name
+// the repository by GitHub's numeric id (`githubRepoId`, the id of the repository on GitHub), the one thing a project knows about
+// itself from outside; the opt-in and the snippet name it by `repositories.id`, like the other settings of a repository.
 
 /**
  * `PUT`: turn the public signature check on or off for a repository (E22-S02). `:installationId` and `:repositoryId` are
@@ -20,6 +22,24 @@ export const PUBLIC_VERIFICATION_PATH =
  * access log records this very template and never the concrete login.
  */
 export const PUBLIC_SIGNER_PATH = '/api/public/repos/:githubRepoId/signers/:login';
+
+/**
+ * `GET`: the badge of a project that opted in, "CLA | required" (E22-S03). Public: no session, no cookie. It is the same `404
+ * not_found` as {@link PUBLIC_SIGNER_PATH} for a repository that may not be asked about.
+ */
+export const PUBLIC_BADGE_PATH = '/api/public/repos/:githubRepoId/badge.svg';
+
+/**
+ * `GET`: the badge of one signer, "CLA | signed" or "CLA | not signed" (E22-S03), from the same decision as
+ * {@link PUBLIC_SIGNER_PATH}. Public: no session, no cookie. The access log records this very template and never the login.
+ */
+export const PUBLIC_SIGNER_BADGE_PATH = '/api/public/repos/:githubRepoId/signers/:login/badge.svg';
+
+/**
+ * `GET`: the Markdown and the HTML a maintainer pastes into a README to show the project badge (E22-S03). Same role as the opt-in;
+ * `409 public_verification_disabled` while the opt-in is off. `:installationId` and `:repositoryId` are row ids, as for the opt-in.
+ */
+export const BADGE_SNIPPET_PATH = '/api/installations/:installationId/repositories/:repositoryId/badge-snippet';
 
 /** Where the public API lives. The access log writes the route template, not the path, for every route below it. */
 export const PUBLIC_API_PREFIX = '/api/public/';
@@ -61,3 +81,33 @@ export const publicSignerParamsSchema = z.object({
  * all give `{ "signed": false }`.
  */
 export const publicSignerResponseSchema = z.strictObject({ signed: z.boolean() });
+
+/** The path parameter of the calls that name a repository alone (the project badge): `githubRepoId`, read as in {@link publicSignerParamsSchema}. */
+export const publicRepositoryParamsSchema = publicSignerParamsSchema.pick({ githubRepoId: true });
+
+/**
+ * What a maintainer pastes into a README (E22-S03): the project badge as a Markdown image inside a link, and the same as HTML.
+ * Both link to the sign page of the repository. Built by the server from `PUBLIC_BASE_URL` and the repository's GitHub id, so
+ * they hold no name, no login and nothing a person typed.
+ */
+export const badgeSnippetResponseSchema = z.strictObject({ markdown: z.string(), html: z.string() });
+
+/** The ids the maintainer's calls name: both are row ids, positive integers (the web app reads them from the address of the screen). */
+const settingsParamsSchema = z.object({ installationId: z.int().positive(), repositoryId: z.int().positive() });
+
+/** `PUT` {@link PUBLIC_VERIFICATION_PATH}: the descriptor the settings screen calls the opt-in with (E22-S03). */
+export const publicVerificationRoute = defineRoute({
+  method: 'PUT',
+  path: PUBLIC_VERIFICATION_PATH,
+  params: settingsParamsSchema,
+  body: publicVerificationRequestSchema,
+  responses: { 200: publicVerificationResponseSchema },
+});
+
+/** `GET` {@link BADGE_SNIPPET_PATH}: the descriptor the settings screen reads the snippet with (E22-S03). */
+export const badgeSnippetRoute = defineRoute({
+  method: 'GET',
+  path: BADGE_SNIPPET_PATH,
+  params: settingsParamsSchema,
+  responses: { 200: badgeSnippetResponseSchema },
+});

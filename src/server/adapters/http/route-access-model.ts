@@ -55,7 +55,7 @@ export interface RouteAccessEntry {
  * The routes that may be `public` (`METHOD path`): nobody is asked who they are. A closed list: a new public route is a
  * reviewed edit of this constant, and the route-table test pins it. `GET /api/meta` and the file routes of the single-page
  * app (E17: `GET /*` and `HEAD /*`, one route that answers both) are in it, and so is the public signature check of a repository
- * that opted in (E22-S02: no session, no cookie, one yes-or-no answer), and so are the setup routes (E19-S06): the status
+ * that opted in (E22-S02: no session, no cookie, one yes-or-no answer) and its two badges (E22-S03), and so are the setup routes (E19-S06): the status
  * is registered always, the unlock, the manifest, the read of the session's CSRF token (E19-S07) and the conversion (E19-S11)
  * in setup mode only.
  * @internal Exported for the route-table test (Knip ignores `@internal` exports in production mode).
@@ -67,6 +67,8 @@ export const PUBLIC_ROUTES: readonly string[] = [
   'GET /api/auth/callback',
   'GET /api/meta',
   'GET /api/public/repos/:githubRepoId/signers/:login',
+  'GET /api/public/repos/:githubRepoId/badge.svg',
+  'GET /api/public/repos/:githubRepoId/signers/:login/badge.svg',
   'GET /api/setup/status',
   'POST /api/setup/unlock',
   'POST /api/setup/manifest',

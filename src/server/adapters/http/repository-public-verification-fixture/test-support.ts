@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { PUBLIC_VERIFICATION_PATH, publicVerificationResponseSchema } from '../../../../shared/public-verification.ts';
+import {
+  BADGE_SNIPPET_PATH,
+  badgeSnippetResponseSchema,
+  PUBLIC_VERIFICATION_PATH,
+  publicVerificationResponseSchema,
+} from '../../../../shared/public-verification.ts';
 import type { PersonName } from '../../db/tenant-fixture/test-support.ts';
 import { auditRows, type DocumentWorld, documentWorld, parsed } from '../document-fixture/test-support.ts';
 import { pointAt, publish } from '../repository-document-fixture/test-support.ts';
@@ -60,4 +65,30 @@ export async function ownDocumentOnScoped(world: DocumentWorld): Promise<void> {
   const { scoped } = world.t1;
   await publish(world, scoped.documentId);
   await pointAt(world, scoped.repositoryId, scoped.documentId);
+}
+
+/** The path of the badge snippet of the repository `repositoryId` of the installation `installationId` (E22-S03). */
+const snippetPath = (installationId: number | string, repositoryId: number | string): string =>
+  BADGE_SNIPPET_PATH.replace(':installationId', String(installationId)).replace(':repositoryId', String(repositoryId));
+
+/** Asks for the badge snippet as `who`, naming the installation and the repository of `target` in the path (E22-S03). */
+export function snippetAt(world: DocumentWorld, who: PersonName | null, target: OptInTarget) {
+  return world.ask(who, { method: 'GET', url: snippetPath(target.installationId, target.repositoryId) });
+}
+
+/** Asks for the badge snippet as `who`, for the repository `repositoryId` of tenant 1 under tenant 1's installation (E22-S03). */
+export function snippetAs(world: DocumentWorld, who: PersonName | null, repositoryId: number | string) {
+  return snippetAt(world, who, { installationId: world.t1.installationId, repositoryId });
+}
+
+/** The answer of a snippet call that succeeded, read with the shared schema (E22-S03). */
+export const snippetOf = (response: { json: () => unknown }) => parsed(response, badgeSnippetResponseSchema);
+
+/** Turns the public check on for a repository past the routes, as the opt-in would leave it. */
+export async function optedIn(world: DocumentWorld, repositoryId: number, enabled = true): Promise<void> {
+  await world.db
+    .updateTable('repositories')
+    .set({ public_verification: enabled })
+    .where('id', '=', repositoryId)
+    .execute();
 }

@@ -4,53 +4,18 @@ import { expect, test } from 'vitest';
 import { errorResponseSchema } from '../../../shared/errors.ts';
 import { HOSTILE_NAMES } from '../../../shared/hostile-names.ts';
 import { parsed } from './document-fixture/test-support.ts';
-import { LOGINS, lookups, publicWorld, signedOf } from './public-verification-fixture/test-support.ts';
+import {
+  BAD_LOGINS,
+  BAD_REPOSITORY_IDS,
+  LOGINS,
+  lookups,
+  publicWorld,
+  signedOf,
+} from './public-verification-fixture/test-support.ts';
 
 // The input of GET /api/public/repos/:githubRepoId/signers/:login (E22-S02): both path parameters are checked before anything is read, so
 // an input that is not a repository id or a GitHub login is `400 invalid_input`, answered the same way for every kind of wrong, with
 // GitHub never asked and nothing of the input in the log.
-
-/** Repository ids that are not positive safe integers in plain digits, as a client may spell them in a path. */
-const BAD_REPOSITORY_IDS: readonly (readonly [string, string])[] = [
-  ['zero', '0'],
-  ['negative', '-1'],
-  ['letters', 'abc'],
-  ['decimal', '1.5'],
-  ['leading zero', '09000'],
-  ['plus sign', '%2B9000'],
-  ['exponent', '9e3'],
-  ['hex', '0x2328'],
-  ['one past the largest safe integer', '9007199254740992'],
-  ['seventeen digits', '10000000000000000'],
-  ['a space', '9000%20'],
-  ['a trailing dot', '9000.'],
-  ['an emoji', '%F0%9F%98%80'],
-];
-
-/** Logins that GitHub's pattern refuses: 1 to 39 characters, letters, digits and single hyphens, none at either end. */
-const BAD_LOGINS: readonly (readonly [string, string])[] = [
-  ['a leading hyphen', '-octocat'],
-  ['a trailing hyphen', 'octocat-'],
-  ['a double hyphen', 'octo--cat'],
-  ['only a hyphen', '-'],
-  ['forty characters', 'a'.repeat(40)],
-  ['a hundred characters', 'a'.repeat(100)],
-  ['an underscore', 'octo_cat'],
-  ['a dot', 'octo.cat'],
-  ['an empty login', ''],
-  ['a single dot', '.'],
-  ['a space', 'octo%20cat'],
-  ['a plus', 'octo+cat'],
-  ['an at sign', '@octocat'],
-  ['a percent-encoded slash', 'octo%2Fcat'],
-  ['a percent-encoded NUL', 'octo%00cat'],
-  ['a newline', 'octo%0Acat'],
-  ['a letter with an accent', 'octoc%C3%A0t'],
-  ['an emoji', '%F0%9F%98%80'],
-  ['an RTL override', 'octo%E2%80%AEcat'],
-  ['a zero-width space', 'octo%E2%80%8Bcat'],
-  ['a fullwidth letter', '%EF%BD%8Fctocat'],
-];
 
 /** Asks and checks the answer is the one `400 invalid_input` of this route, readable by any site, kept by no cache; `label` names the case in a failure. */
 async function expectInvalid(

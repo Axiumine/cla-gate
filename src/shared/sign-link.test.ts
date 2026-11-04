@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { InvalidSignLinkError, MAX_PR_NUMBER, signPath, signUrl } from './sign-link.ts';
+import { InvalidSignLinkError, MAX_PR_NUMBER, repositorySignUrl, signPath, signUrl } from './sign-link.ts';
 
 // E09-S03: the sign link of a pull request. Two numbers and an origin make it, each checked before anything is formatted, so
 // the link can hold nothing else.
@@ -80,4 +80,35 @@ test.each([
 test('the numbers are checked first, so a bad number is reported whatever the base URL is', () => {
   expect(() => signUrl('not a url', 0, 3)).toThrow(new InvalidSignLinkError('repository id'));
   expect(() => signUrl('not a url', 9, 0)).toThrow(new InvalidSignLinkError('pull request number'));
+});
+
+test.each([
+  ['an https origin', 'https://cla.example.org', 'https://cla.example.org/sign/9'],
+  ['an http origin with a port', http('localhost:3000'), http('localhost:3000/sign/9')],
+  ['an IPv6 literal', http('[::1]:8080'), http('[::1]:8080/sign/9')],
+])(
+  'the sign page of a repository after %s is the origin followed by /sign/ and the repository id, with no pull request (E22-S03)',
+  (_what, origin, address) => {
+    expect(repositorySignUrl(origin, 9)).toBe(address);
+  },
+);
+
+test.each([
+  ['zero', 0],
+  ['a negative number', -3],
+  ['a fraction', 1.5],
+  ['more than a safe integer', 2 ** 53],
+  ['not a number', Number.NaN],
+])('the sign page of a repository is refused for a repository id of %s', (_what, id) => {
+  expect(() => repositorySignUrl('https://cla.example.org', id)).toThrow(new InvalidSignLinkError('repository id'));
+});
+
+test.each([
+  ['a trailing slash', 'https://cla.example.org/'],
+  ['a path', 'https://cla.example.org/app'],
+  ['a closing bracket that would end the link', 'https://cla.example.org)'],
+  ['no scheme', 'cla.example.org'],
+])('the sign page of a repository is refused for a base URL with %s, and the id is checked first', (_what, origin) => {
+  expect(() => repositorySignUrl(origin, 9)).toThrow(new InvalidSignLinkError('base URL'));
+  expect(() => repositorySignUrl(origin, 0)).toThrow(new InvalidSignLinkError('repository id'));
 });

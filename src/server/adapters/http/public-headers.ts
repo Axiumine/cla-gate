@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { PUBLIC_API_PREFIX } from '../../../shared/public-verification.ts';
+import { type BadgeKind, badgeSvg } from '../../domain/badge-svg.ts';
 
 // The headers of the public routes (E22-S02, and the badges of E22-S03 after it): what any site may read, and what a cache may keep.
 
@@ -24,6 +25,30 @@ const PUBLIC_CACHE_CONTROL = 'public, max-age=300';
  */
 export function setPublicCache(reply: FastifyReply): void {
   void reply.header('cache-control', PUBLIC_CACHE_CONTROL);
+}
+
+/**
+ * What makes an image safe to embed anywhere and to open on its own (E22-S03). The type says it is an image and nothing else, and
+ * `nosniff` keeps a browser from reading it as anything else. `Cross-Origin-Resource-Policy: cross-origin` replaces helmet's
+ * `same-origin`, which would stop any other site (a README is rendered on github.com, through its image proxy) from showing the
+ * image. The policy allows no script, no network and no framing, whatever a browser does with an SVG opened as a page.
+ */
+const BADGE_HEADERS = {
+  'content-type': 'image/svg+xml; charset=utf-8',
+  'x-content-type-options': 'nosniff',
+  'cross-origin-resource-policy': 'cross-origin',
+  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+} as const;
+
+/**
+ * The image of a badge for a good call (E22-S03): its headers (see {@link BADGE_HEADERS}) and the five minutes a shared cache may keep
+ * it, and the bytes to send. It is called after the verdict, never before, so a refusal never carries the headers of an image. As
+ * for {@link setPublicCache}, the results of the reply's `headers` and `header` are dropped on purpose.
+ */
+export function sendBadge(reply: FastifyReply, kind: BadgeKind): string {
+  void reply.headers(BADGE_HEADERS);
+  setPublicCache(reply);
+  return badgeSvg(kind);
 }
 
 /**

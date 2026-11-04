@@ -9,6 +9,7 @@ import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
 import { AppShell } from './layout/AppShell.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
+import { RepositorySettingsPage } from './repository-settings/RepositorySettingsPage.tsx';
 import { type RouterContext, withAccess } from './route-access.ts';
 import { SetupCallbackPage } from './setup/SetupCallbackPage.tsx';
 import { SetupPage } from './setup/SetupPage.tsx';
@@ -61,8 +62,39 @@ const setupCallbackRoute = createRoute({
   component: SetupCallbackPage,
 });
 
+/** A row id in an address: digits, no sign, no leading zero, at most 15 of them so that the number is always safe. */
+const rowIdParam = z
+  .string()
+  .regex(/^[1-9]\d{0,14}$/)
+  .transform(Number);
+
+const repositorySettingsParams = z.object({ installationId: rowIdParam, repositoryId: rowIdParam });
+
+// The settings screen of a repository (E22-S03), for a signed-in person; the server decides who may see and change what is on it.
+// An address whose ids are not row ids matches no route, so it is the not-found page and never a call with a made-up id.
+const repositorySettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/installations/$installationId/repositories/$repositoryId/settings',
+  ...withAccess('authenticated', { title: 'repository.settings.title' }),
+  params: {
+    parse: (raw) => {
+      const parsed = repositorySettingsParams.safeParse(raw);
+      return parsed.success ? parsed.data : false;
+    },
+  },
+  component: function RepositorySettingsRoute() {
+    return <RepositorySettingsPage {...repositorySettingsRoute.useParams()} />;
+  },
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
-const routeTree = rootRoute.addChildren([landingRoute, loginFailedRoute, setupRoute, setupCallbackRoute]);
+const routeTree = rootRoute.addChildren([
+  landingRoute,
+  loginFailedRoute,
+  setupRoute,
+  setupCallbackRoute,
+  repositorySettingsRoute,
+]);
 
 /**
  * A router for `queryClient`, on the browser history. The query client is what the routes and their guards read the session through.

@@ -83,6 +83,23 @@ export const messages = {
   'pager.next': 'Next',
   'pager.page': 'Page {page}',
   'pager.previous': 'Previous',
+  'repository.badge.copied': 'The {name} snippet was copied.',
+  'repository.badge.copy': 'Copy',
+  'repository.badge.copyNamed': 'Copy the {name} snippet',
+  'repository.badge.copyUnavailable':
+    'This browser cannot copy to the clipboard. Select the text and copy it yourself.',
+  'repository.badge.enforcement': 'The badge is shown while the CLA is enforced for this repository.',
+  'repository.badge.html': 'HTML',
+  'repository.badge.intro':
+    'A badge in your README tells contributors that this project asks them to sign the CLA, and links them to the signing page. Turning it on also opens a public check of whether one GitHub login has signed: it answers yes or no and shows no name, e-mail address or date.',
+  'repository.badge.markdown': 'Markdown',
+  'repository.badge.offHint': 'Turn the public badge on to get the snippet for your README.',
+  'repository.badge.pasteTitle': 'Paste this in your README',
+  'repository.badge.title': 'Public badge',
+  'repository.badge.toggle': 'Show the public badge and allow the public signature check',
+  'repository.badge.turnedOff': 'The public badge is off.',
+  'repository.badge.turnedOn': 'The public badge is on.',
+  'repository.settings.title': 'Repository settings',
   'setup.app.httpWarning':
     'This server is not reached over https, so GitHub cannot deliver webhooks to it and the webhook of the App will be inactive. Use an https address (PUBLIC_BASE_URL) or a tunnel before you rely on it.',
   'setup.app.intro': 'This server runs one GitHub App. Nothing is created until you confirm on GitHub.',

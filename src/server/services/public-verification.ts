@@ -10,7 +10,8 @@ import type { LoginAnswer, LoginCache } from './public-login-cache.ts';
 import { findPublicRepository, hasCountingSignature, type PublicRepository } from './public-verification-queries.ts';
 
 // The question of the public signature check (E22-S02): does this GitHub login have a valid signature for this repository? One
-// function answers it for every public route that asks (the badge of E22-S03 included), so the routes cannot disagree. The
+// function answers it for every public route that asks (the signer badge of E22-S03 included), so the routes cannot disagree; the
+// project badge asks the question before it, whether the repository may be asked about at all. The
 // answer is a verdict and never a reason: a repository that may not be asked about is `not_found` whatever the cause, and a login
 // that has no counting signature is `signed: false` whether it never signed, signed an older major, was revoked or does not exist.
 // Nothing here writes, and nothing is keyed on a stored login: the login is turned into GitHub's numeric id by GitHub, with the
@@ -102,6 +103,22 @@ async function resolveLogin(
   return answer;
 }
 
+/** The repository under this GitHub id when it may be asked about, else `null`: the one reading of "unknown, not enforcing, not opted in, not served" that every public route shares. */
+async function findAskable(db: Kysely<Database>, githubRepoId: GithubId): Promise<PublicRepository | null> {
+  const repository = await findPublicRepository(db, githubRepoId);
+  return repository !== null && askable(repository) ? repository : null;
+}
+
+/**
+ * Whether the repository with GitHub id `githubRepoId` may be spoken of in public (E22-S03, the project badge): it is known, not
+ * removed, enforcing, opted in, and its installation is served. `false` for every other case, and the caller cannot tell which: the
+ * answer is the same 404 for an unknown repository, so a project badge is no way to find out which repositories exist. Nothing is
+ * asked of GitHub.
+ */
+export async function isPublicRepository(db: Kysely<Database>, githubRepoId: GithubId): Promise<boolean> {
+  return (await findAskable(db, githubRepoId)) !== null;
+}
+
 /**
  * Whether `login` has a valid signature for the repository with GitHub id `githubRepoId`. `not_found` for a repository that is
  * unknown, removed, not enforcing, not opted in, or whose installation is rejected, uninstalled or suspended: the caller cannot
@@ -114,8 +131,8 @@ export async function verifySigner(
   deps: PublicVerificationDeps,
   request: { readonly githubRepoId: GithubId; readonly login: string },
 ): Promise<PublicVerdict> {
-  const repository = await findPublicRepository(deps.db, request.githubRepoId);
-  if (repository === null || !askable(repository)) {
+  const repository = await findAskable(deps.db, request.githubRepoId);
+  if (repository === null) {
     return NOT_FOUND;
   }
   if (repository.claDocumentId === null) {

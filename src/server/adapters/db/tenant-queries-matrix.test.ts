@@ -114,6 +114,7 @@ const SCOPED_QUERY_NAMES = [
   'services/allowlist-entry-list-queries.ts listAllowlistEntries',
   'services/allowlist-sweeps.ts sendAllowlistSweeps',
   'services/public-verification-queries.ts hasCountingSignature',
+  'services/public-verification-queries.ts isPublicVerificationOn',
   'services/repository-public-verification.ts setPublicVerification',
 ];
 

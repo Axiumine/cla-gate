@@ -69,6 +69,8 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * for, `kind_mismatch` an account of another type than the kind asked for (an organisation is told to use `org_members`),
  * `no_organization` an `org_members` entry on the installation of a user account, `members_permission_missing` an App that may not
  * list the members of the organisation yet, and `allowlist_entry_exists` the same account, kind and scope listed already.
+ * `public_verification_disabled` (E22-S03) is asking for the README snippet of a repository whose maintainers have not opted in to the
+ * public signature check: there is no badge to show until they do.
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -98,6 +100,7 @@ export const CLA_RULE_STATUS = {
   no_organization: 422,
   members_permission_missing: 422,
   allowlist_entry_exists: 409,
+  public_verification_disabled: 409,
 } as const;
 
 export type ClaRule = keyof typeof CLA_RULE_STATUS;

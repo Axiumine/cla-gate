@@ -117,7 +117,9 @@ test('the routes declared public are exactly PUBLIC_ROUTES, so a new public rout
     'GET /api/auth/callback',
     'GET /api/auth/login',
     'GET /api/meta',
+    'GET /api/public/repos/:githubRepoId/badge.svg',
     'GET /api/public/repos/:githubRepoId/signers/:login',
+    'GET /api/public/repos/:githubRepoId/signers/:login/badge.svg',
     'GET /api/setup/status',
     'GET /healthz',
     'GET /readyz',
@@ -190,6 +192,7 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'GET /api/repositories/:repositoryId/allowlist-entries',
       'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
       'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
+      'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
     ]),
   );
 });

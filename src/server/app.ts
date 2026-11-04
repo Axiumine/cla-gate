@@ -208,7 +208,7 @@ async function registerRoutes(
     githubTimeoutMs: options.githubTimeoutMs,
     conversion: options.manifestConversion,
   });
-  await registerTenantRoutes(app, db, clock);
+  await registerTenantRoutes(app, { db, clock, publicBaseUrl: config.publicBaseUrl });
   await app.register(dataExportRoutes, { db, clock });
   await app.register(signContextRoutes, { db });
   await app.register(signRoutes, { db, enqueuer, recordNetworkMetadata: config.recordNetworkMetadata });
@@ -226,12 +226,20 @@ async function registerRoutes(
 
 /**
  * The routes of a tenant that need no wiring beyond the database: the opt-in of a repository to the public signature check
- * (E22-S02), and the audit log, the signature export and the erasure of a signer (E16). They are registered in this order,
- * which the route tables of the tests spell out: the erasure comes last,
- * because the cross-tenant matrix erases the signer of tenant 1 and so ends that person's session (E16-S04).
+ * (E22-S02) and the snippet of its README badge (E22-S03, which also needs the public address), and the audit log, the
+ * signature export and the erasure of a signer (E16). They are registered in this order, which the route tables of the tests
+ * spell out: the erasure comes last, because the cross-tenant matrix erases the signer of tenant 1 and so ends that person's
+ * session (E16-S04).
  */
-async function registerTenantRoutes(app: FastifyInstance, db: Kysely<Database>, clock: Clock): Promise<void> {
-  await app.register(repositoryPublicVerificationRoutes, { db });
+async function registerTenantRoutes(
+  app: FastifyInstance,
+  {
+    db,
+    clock,
+    publicBaseUrl,
+  }: { readonly db: Kysely<Database>; readonly clock: Clock; readonly publicBaseUrl: string },
+): Promise<void> {
+  await app.register(repositoryPublicVerificationRoutes, { db, publicBaseUrl });
   await app.register(auditLogRoutes, { db });
   await app.register(signatureCsvRoutes, { db, clock });
   await app.register(erasureRoutes, { db });

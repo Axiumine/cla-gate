@@ -41,14 +41,15 @@ function tooManyRequests(reply: FastifyReply, retryAfterSeconds: number): never 
   throw new AppError(429, 'rate_limited');
 }
 
+/** The hook {@link publicRateLimit} makes: `onRequest`, async, so a refusal is the error it throws. */
+export type PublicRateLimit = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
 /**
  * The `onRequest` hook of a public route: the budget of the client address first, then the one of the repository, so a client that
  * is over its own budget does not draw on the repository's. A request over either is `429 rate_limited` with `Retry-After`. Make it
  * once, after the rate-limit plugin is registered, and give the one hook to every public route.
  */
-export function publicRateLimit(
-  app: Pick<FastifyInstance, 'createRateLimit'>,
-): (request: FastifyRequest, reply: FastifyReply) => Promise<void> {
+export function publicRateLimit(app: Pick<FastifyInstance, 'createRateLimit'>): PublicRateLimit {
   const byClient = app.createRateLimit(routeRateLimit(PUBLIC_RATE_LIMITS.perClient));
   const byRepository = app.createRateLimit({
     ...routeRateLimit(PUBLIC_RATE_LIMITS.perRepository),

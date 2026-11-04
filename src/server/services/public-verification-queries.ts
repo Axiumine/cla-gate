@@ -9,7 +9,8 @@ import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 // What the public signature check reads (E22-S02). The only statement that starts from a repository alone is
 // `findPublicRepository`: the public call names the repository by GitHub's id and nothing else, so the tenant is found from it.
 // The statement after it takes the installation id of that row and puts it in its WHERE clause, so a signature or a document of
-// another tenant is never read, whatever ids are asked for. Neither of them writes.
+// another tenant is never read, whatever ids are asked for. Neither of them writes. `isPublicVerificationOn` is the read of the
+// snippet of E22-S03: it names the installation of the maintainer's tenant, like the signature read.
 
 /** The repository a public call names, with the installation it belongs to and what decides whether it may be asked about. */
 export interface PublicRepository {
@@ -89,4 +90,24 @@ export async function hasCountingSignature(
     .limit(1)
     .executeTakeFirst();
   return row !== undefined;
+}
+
+/**
+ * Whether the maintainers of the repository `repositoryId` of the tenant have opted in to the public signature check (E22-S03, the
+ * snippet of the README badge). It names the installation in its WHERE clause, so a repository of another tenant, an unknown one and
+ * a removed one answer false.
+ */
+export async function isPublicVerificationOn(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  repositoryId: number,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom('repositories')
+    .select('public_verification')
+    .where('installation_id', '=', scope.installationId)
+    .where('id', '=', repositoryId)
+    .where('removed_at', 'is', null)
+    .executeTakeFirst();
+  return row?.public_verification === true;
 }

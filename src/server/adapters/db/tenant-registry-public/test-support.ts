@@ -2,13 +2,17 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { parseGithubId } from '../../../../shared/github-id.ts';
 import { ClaRuleError } from '../../../services/cla-rule-error.ts';
-import { findPublicRepository, hasCountingSignature } from '../../../services/public-verification-queries.ts';
+import {
+  findPublicRepository,
+  hasCountingSignature,
+  isPublicVerificationOn,
+} from '../../../services/public-verification-queries.ts';
 import { setPublicVerification } from '../../../services/repository-public-verification.ts';
 import { ownersOfRepositories, ownersOfSignatures } from '../tenant-owners/test-support.ts';
 import type { TenantQuery } from '../tenant-registry/test-support.ts';
 
 // The registry entries (E11-S06) of the statements of the public signature check (E22-S02): the read that finds the repository a
-// public call names, the read of the signature that counts, and the change of the opt-in flag. They sit in a file of their own so that
+// public call names, the read of the signature that counts, the change of the opt-in flag, and the read of the flag for the badge snippet (E22-S03). They sit in a file of their own so that
 // the registry stays under the size cap. The seed gives each tenant one signer with one signature on the tenant's document at major 1.
 
 /** Every function of the public signature check statements, by module and name. */
@@ -29,6 +33,28 @@ export const PUBLIC_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<stri
       run: async (db, scope, ids) =>
         (await hasCountingSignature(db, scope, { documentId: ids.documentId, githubId: ids.signer.githubId }))
           ? ownersOfSignatures(db, [ids.signatureId])
+          : [],
+    },
+    isPublicVerificationOn: {
+      kind: 'scoped',
+      takesIds: true,
+      activeOnly: true,
+      // The seed leaves the opt-in off everywhere: the opt-in is on for the plain repository of both tenants, so that a read that
+      // crossed into another tenant would find a flag that is true, and the matrix would see the owner of the row.
+      arrange: async (db, tenants) => {
+        await db
+          .updateTable('repositories')
+          .set({ public_verification: true })
+          .where(
+            'id',
+            'in',
+            tenants.map((tenant) => tenant.plain.repositoryId),
+          )
+          .execute();
+      },
+      run: async (db, scope, ids) =>
+        (await isPublicVerificationOn(db, scope, ids.plain.repositoryId))
+          ? ownersOfRepositories(db, [ids.plain.repositoryId])
           : [],
     },
   },

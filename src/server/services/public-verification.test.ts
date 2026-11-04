@@ -7,6 +7,7 @@ import { migratedTestDatabase, publishVersion } from '../adapters/db/test-suppor
 import { GitHubRateLimitedError, GitHubUnavailableError } from './ports/github-errors.ts';
 import { LoginCache } from './public-login-cache.ts';
 import {
+  isPublicRepository,
   type PublicVerdict,
   PublicVerificationUnavailableError,
   publicGitHubNotWired,
@@ -221,4 +222,43 @@ test('a server with no GitHub App fails every lookup as an outage, and still ans
   expect(error).toMatchObject({ name: 'PublicVerificationUnavailableError', retryAfterSeconds: 30 });
   await db.updateTable('repositories').set({ enabled: false }).where('id', '=', t1.plain.repositoryId).execute();
   expect(await verifySigner(unwired, { githubRepoId: t1.plain.githubRepoId, login: 'octocat' })).toEqual(NOT_FOUND);
+});
+
+test('the project badge may speak of a repository that is known, enforcing and opted in, and of that one only, with GitHub never asked', async () => {
+  const { db, deps, t1, t2, github } = await world();
+  expect(await isPublicRepository(db, t1.plain.githubRepoId)).toBe(true);
+  // The other tenant's plain repository did not opt in, and its scoped one enforces but did not opt in either.
+  expect(await isPublicRepository(db, t2.plain.githubRepoId)).toBe(false);
+  expect(await isPublicRepository(db, t2.scoped.githubRepoId)).toBe(false);
+  expect(await isPublicRepository(deps.db, parseGithubId(987_654))).toBe(false);
+  expect(github.calls).toEqual([]);
+});
+
+test.each([
+  ['not enforcing', 'repositories', { enabled: false }],
+  ['not opted in by the maintainers', 'repositories', { public_verification: false }],
+  ['removed from its installation', 'repositories', { removed_at: new Date('2026-10-01T00:00:00Z') }],
+  ['in a suspended installation', 'installations', { suspended_at: new Date('2026-10-01T00:00:00Z') }],
+  ['in an uninstalled installation', 'installations', { deleted_at: new Date('2026-10-01T00:00:00Z') }],
+  [
+    'in a rejected installation',
+    'installations',
+    { admission_status: 'rejected' as const, admission_reason: 'policy_changed' as const },
+  ],
+] as const)('the project badge may not speak of a repository that is %s', async (_name, table, change) => {
+  const { db, t1 } = await world();
+  const id = table === 'repositories' ? t1.plain.repositoryId : t1.installationId;
+  await db.updateTable(table).set(change).where('id', '=', id).execute();
+  expect(await isPublicRepository(db, t1.plain.githubRepoId)).toBe(false);
+});
+
+test('the project badge and the signer check agree on every repository: one is not found exactly when the other may not speak', async () => {
+  const { db, ask, t1, t2 } = await world();
+  for (const tenant of [t1, t2]) {
+    expect((await ask('octocat', tenant)).kind === 'not_found').toBe(
+      !(await isPublicRepository(db, tenant.plain.githubRepoId)),
+    );
+  }
+  await db.updateTable('repositories').set({ enabled: false }).where('id', '=', t1.plain.repositoryId).execute();
+  expect((await ask('octocat')).kind === 'not_found').toBe(!(await isPublicRepository(db, t1.plain.githubRepoId)));
 });

@@ -32,13 +32,14 @@ test('every route of the tree names its page title, and it is a key of the catal
   expect(routeTitleProblems(routerFor().tree, messages)).toEqual([]);
 });
 
-test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07) and the not-found route, all public', () => {
+test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07) and the not-found route, all public, and the settings screen of a repository (E22-S03), which needs a login', () => {
   expect(accessById(routerFor().tree)).toEqual({
     __root__: 'public',
     '/': 'public',
     '/login/failed': 'public',
     '/setup': 'public',
     '/setup/callback': 'public',
+    '/installations/$installationId/repositories/$repositoryId/settings': 'authenticated',
   });
 });
 

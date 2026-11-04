@@ -10,6 +10,7 @@ import {
 import { setPublicVerification } from '../../services/repository-public-verification.ts';
 import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
+import { badgeSnippetRoute } from './badge-snippet-route.ts';
 import { answerRuleErrors } from './cla-rule-errors.ts';
 import { setNoStore } from './no-store.ts';
 import { parseInput } from './request-body.ts';
@@ -18,6 +19,8 @@ import { byRepositoryParam, repositoryIdOf } from './tenant-resolvers.ts';
 
 export interface RepositoryPublicVerificationRoutesOptions {
   readonly db: Kysely<Database>;
+  /** `PUBLIC_BASE_URL`: the origin the badge snippet of E22-S03 is built on. */
+  readonly publicBaseUrl: string;
 }
 
 /**
@@ -29,7 +32,8 @@ export interface RepositoryPublicVerificationRoutesOptions {
  * included), a suspended tenant the `409`; which of the two the change itself needs depends on the document the repository enforces,
  * which the service reads under the lock of the repository, and a role that is too low there is `403`. A call that asks for what
  * already is answers `changed: false` and writes nothing. Audited as `repository.public_verification_changed`, in the transaction
- * of the change. The route makes no call to GitHub and sends no job.
+ * of the change. The route makes no call to GitHub and sends no job. The snippet of the README badge (E22-S03, `GET .../badge-snippet`)
+ * is registered in the same scope, so it is answered with the same rule errors.
  */
 export const repositoryPublicVerificationRoutes: FastifyPluginCallbackZod<RepositoryPublicVerificationRoutesOptions> = (
   app,
@@ -61,5 +65,6 @@ export const repositoryPublicVerificationRoutes: FastifyPluginCallbackZod<Reposi
       return changed;
     },
   );
+  badgeSnippetRoute(app, options);
   done();
 };

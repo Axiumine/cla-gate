@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
 import { twoTenants } from '../adapters/db/tenant-fixture/test-support.ts';
 import { migratedTestDatabase, publishVersion, seedSignature } from '../adapters/db/test-support.ts';
-import { findPublicRepository, hasCountingSignature } from './public-verification-queries.ts';
+import { findPublicRepository, hasCountingSignature, isPublicVerificationOn } from './public-verification-queries.ts';
 
 // The statements of the public signature check (E22-S02). `findPublicRepository` is the one that meets every tenant by design: the
 // public call names a repository by GitHub's id and nothing else, so it is pinned here (the registry of E11-S06 names this file).
@@ -204,4 +204,51 @@ test("hasCountingSignature never reads another tenant's rows: the same person an
   expect(await hasCountingSignature(db, { installationId: t2.installationId }, subject(t2.documentId, 6_000_001))).toBe(
     true,
   );
+});
+
+test('isPublicVerificationOn is false until the maintainers opt in, true after, and false again once they turn it off', async () => {
+  const { db, t1 } = await world();
+  const scope = { installationId: t1.installationId };
+  expect(await isPublicVerificationOn(db, scope, t1.plain.repositoryId)).toBe(false);
+  await db
+    .updateTable('repositories')
+    .set({ public_verification: true })
+    .where('id', '=', t1.plain.repositoryId)
+    .execute();
+  expect(await isPublicVerificationOn(db, scope, t1.plain.repositoryId)).toBe(true);
+  expect(await isPublicVerificationOn(db, scope, t1.scoped.repositoryId)).toBe(false);
+  await db
+    .updateTable('repositories')
+    .set({ public_verification: false })
+    .where('id', '=', t1.plain.repositoryId)
+    .execute();
+  expect(await isPublicVerificationOn(db, scope, t1.plain.repositoryId)).toBe(false);
+});
+
+test('isPublicVerificationOn is false for a repository that is unknown or removed, whatever its flag is', async () => {
+  const { db, t1 } = await world();
+  const scope = { installationId: t1.installationId };
+  await db
+    .updateTable('repositories')
+    .set({ public_verification: true })
+    .where('id', '=', t1.plain.repositoryId)
+    .execute();
+  expect(await isPublicVerificationOn(db, scope, 987_654)).toBe(false);
+  await db
+    .updateTable('repositories')
+    .set({ removed_at: new Date('2026-10-01T00:00:00Z') })
+    .where('id', '=', t1.plain.repositoryId)
+    .execute();
+  expect(await isPublicVerificationOn(db, scope, t1.plain.repositoryId)).toBe(false);
+});
+
+test("isPublicVerificationOn never reads another tenant's repository: its flag is true there and false for this scope", async () => {
+  const { db, t1, t2 } = await world();
+  await db
+    .updateTable('repositories')
+    .set({ public_verification: true })
+    .where('id', '=', t2.plain.repositoryId)
+    .execute();
+  expect(await isPublicVerificationOn(db, { installationId: t2.installationId }, t2.plain.repositoryId)).toBe(true);
+  expect(await isPublicVerificationOn(db, { installationId: t1.installationId }, t2.plain.repositoryId)).toBe(false);
 });

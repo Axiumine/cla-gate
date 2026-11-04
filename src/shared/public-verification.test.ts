@@ -2,14 +2,21 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import {
+  BADGE_SNIPPET_PATH,
+  badgeSnippetResponseSchema,
+  badgeSnippetRoute,
   PUBLIC_API_PREFIX,
+  PUBLIC_BADGE_PATH,
   PUBLIC_LOGIN_PATTERN,
+  PUBLIC_SIGNER_BADGE_PATH,
   PUBLIC_SIGNER_PATH,
   PUBLIC_VERIFICATION_PATH,
+  publicRepositoryParamsSchema,
   publicSignerParamsSchema,
   publicSignerResponseSchema,
   publicVerificationRequestSchema,
   publicVerificationResponseSchema,
+  publicVerificationRoute,
 } from './public-verification.ts';
 
 test('the opt-in names the installation and the repository by their row ids, and the public call the repository by its GitHub id and the login', () => {
@@ -124,4 +131,43 @@ test('the public answer is exactly { signed }: it carries nothing else and takes
   expect(publicSignerResponseSchema.safeParse({ signed: true, name: 'Ada' }).success).toBe(false);
   expect(publicSignerResponseSchema.safeParse({}).success).toBe(false);
   expect(publicSignerResponseSchema.safeParse({ signed: 'yes' }).success).toBe(false);
+});
+
+test('the badges are two more files under the public prefix, and the snippet is a maintainer call named by row ids', () => {
+  expect(PUBLIC_BADGE_PATH).toBe('/api/public/repos/:githubRepoId/badge.svg');
+  expect(PUBLIC_SIGNER_BADGE_PATH).toBe('/api/public/repos/:githubRepoId/signers/:login/badge.svg');
+  expect(PUBLIC_BADGE_PATH.startsWith(PUBLIC_API_PREFIX)).toBe(true);
+  expect(PUBLIC_SIGNER_BADGE_PATH.startsWith(PUBLIC_API_PREFIX)).toBe(true);
+  expect(BADGE_SNIPPET_PATH).toBe('/api/installations/:installationId/repositories/:repositoryId/badge-snippet');
+});
+
+test('the project badge reads the repository id as the signer call does, and takes nothing else from the path', () => {
+  expect(publicRepositoryParamsSchema.parse({ githubRepoId: '9000', login: 'ignored' })).toEqual({
+    githubRepoId: 9000,
+  });
+  for (const githubRepoId of ['0', '-1', '01', '1.5', '1e3', 'a', '', '9007199254740992']) {
+    expect(publicRepositoryParamsSchema.safeParse({ githubRepoId }).success).toBe(false);
+  }
+  expect(publicRepositoryParamsSchema.safeParse({}).success).toBe(false);
+});
+
+test('the snippet is exactly { markdown, html }: nothing else comes with it and nothing is left out', () => {
+  expect(badgeSnippetResponseSchema.parse({ markdown: 'm', html: 'h' })).toEqual({ markdown: 'm', html: 'h' });
+  expect(badgeSnippetResponseSchema.safeParse({ markdown: 'm', html: 'h', login: 'octocat' }).success).toBe(false);
+  expect(badgeSnippetResponseSchema.safeParse({ markdown: 'm' }).success).toBe(false);
+  expect(badgeSnippetResponseSchema.safeParse({ markdown: 1, html: 'h' }).success).toBe(false);
+});
+
+test('the descriptors of the settings screen name the paths, the methods and the answers of the two maintainer calls', () => {
+  expect([publicVerificationRoute.name, badgeSnippetRoute.name]).toEqual([
+    `PUT ${PUBLIC_VERIFICATION_PATH}`,
+    `GET ${BADGE_SNIPPET_PATH}`,
+  ]);
+  expect(publicVerificationRoute.body).toBe(publicVerificationRequestSchema);
+  expect(publicVerificationRoute.responses[200]).toBe(publicVerificationResponseSchema);
+  expect(badgeSnippetRoute.responses[200]).toBe(badgeSnippetResponseSchema);
+  const ids = { installationId: 2, repositoryId: 3 };
+  expect(publicVerificationRoute.params.parse(ids)).toEqual(ids);
+  expect(badgeSnippetRoute.params.safeParse({ installationId: 0, repositoryId: 3 }).success).toBe(false);
+  expect(badgeSnippetRoute.params.safeParse({ installationId: 2, repositoryId: 1.5 }).success).toBe(false);
 });
