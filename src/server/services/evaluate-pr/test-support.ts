@@ -24,6 +24,7 @@ import { account, commit, pullRequest } from '../github-pull-contract/test-suppo
 import type { JobOutcome } from '../job-registry.ts';
 import { createOrgMembership } from '../org-membership.ts';
 import { createOrgMembershipCache } from '../org-membership-cache.ts';
+import type { EnqueueOptions, EnqueueOutcome, JobEnqueuer, QueuedJob } from '../ports/jobs.ts';
 import type { EvaluationReporter, ReportOutcome, ReportTarget } from '../ports/reporter.ts';
 import { FakeClock, FakeGate, FakeGitHub } from '../test-support.ts';
 import { evaluatePr } from './evaluate-pr.ts';
@@ -161,6 +162,20 @@ export class FakeReporter implements EvaluationReporter {
   }
 }
 
+/** The queue in memory: every job the run sent, with the options of the send, in order. Nothing is written to a table (E14-S04). */
+class RecordingEnqueuer implements JobEnqueuer {
+  readonly sent: { readonly job: QueuedJob; readonly options: EnqueueOptions }[] = [];
+  /** What the next sends answer, `queued` unless a test says otherwise. */
+  outcome: EnqueueOutcome = 'queued';
+  /** When set, a send rejects with it instead of answering. */
+  failure: Error | undefined;
+
+  enqueue(_tx: unknown, job: QueuedJob, options: EnqueueOptions): Promise<EnqueueOutcome> {
+    this.sent.push({ job, options });
+    return this.failure === undefined ? Promise.resolve(this.outcome) : Promise.reject(this.failure);
+  }
+}
+
 /** A verdict of success for the policy, as a stub engine returns it. */
 export function passing(policy: Evaluation['policy'] = { documentId: 1, activeMajor: 1 }): Evaluation {
   return {
@@ -188,6 +203,8 @@ export interface EvaluateWorld {
   readonly reporter: FakeReporter;
   readonly evaluate: Mock<(input: EvaluationInput) => Evaluation>;
   readonly ports: EvaluatePrPorts;
+  /** The queue the job sends its `finalise-check` jobs to (E14-S04). */
+  readonly handedOver: RecordingEnqueuer;
   readonly logs: LogCapture;
   /** `gh:<method>`, `db:<verb> <table>`, `reporter.<method>` and `evaluate`, in the order they happened. */
   readonly timeline: string[];
@@ -279,6 +296,7 @@ export async function evaluateWorld(options: WorldOptions = {}): Promise<Evaluat
       : passing({ documentId: tenant.documentId, activeMajor: 1 });
   });
   const clock = new FakeClock('2026-11-02T10:00:00Z');
+  const handedOver = new RecordingEnqueuer();
   const ports: EvaluatePrPorts = {
     db,
     github: fake,
@@ -296,9 +314,11 @@ export async function evaluateWorld(options: WorldOptions = {}): Promise<Evaluat
     reporter,
     evaluate,
     ports,
+    handedOver,
     logs,
     timeline,
-    run: (job = JOB, context = {}) => evaluatePr(ports, job, { attempt: 0, logger, ...context }),
+    run: (job = JOB, context = {}) =>
+      evaluatePr(ports, job, { attempt: 0, logger, enqueuer: handedOver, jobId: 'job-1', ...context }),
     rows: async () =>
       raw
         .selectFrom('pr_evaluations')

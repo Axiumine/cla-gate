@@ -117,6 +117,7 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/repositories',
     'PUT /api/repositories/:repositoryId/cla-document',
     'POST /api/repositories/:repositoryId/enable',
+    'POST /api/repositories/:repositoryId/disable',
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);

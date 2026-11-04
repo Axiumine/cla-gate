@@ -10,9 +10,12 @@ import { z } from 'zod';
 /** `POST`: turn enforcement on for a repository (E14-S03). */
 export const REPOSITORY_ENABLE_PATH = '/api/repositories/:repositoryId/enable';
 
+/** `POST`: turn enforcement off for a repository (E14-S04); the same body and the same answer as the enable call. */
+export const REPOSITORY_DISABLE_PATH = '/api/repositories/:repositoryId/disable';
+
 /**
- * The body of the call: none. A client that sends one anyway may send `null` or an empty object; a key nobody defined (an
- * `installationId`, say) is a `400` and never quietly ignored.
+ * The body of the enable call and of the disable call (E14-S04): none. A client that sends one anyway may send `null` or an empty
+ * object; a key nobody defined (an `installationId`, say) is a `400` and never quietly ignored.
  */
 export const repositoryEnableRequestSchema = z.strictObject({}).nullish();
 

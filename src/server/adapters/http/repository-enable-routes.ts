@@ -2,20 +2,14 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
-import {
-  REPOSITORY_ENABLE_PATH,
-  repositoryEnabledResponseSchema,
-  repositoryEnableRequestSchema,
-} from '../../../shared/repository-enabled.ts';
+import { REPOSITORY_ENABLE_PATH, repositoryEnabledResponseSchema } from '../../../shared/repository-enabled.ts';
 import type { JobEnqueuer } from '../../services/ports/jobs.ts';
 import { enableRepository } from '../../services/repository-enablement.ts';
 import type { Database } from '../db/schema.ts';
-import { requireAuth } from './auth-request.ts';
 import { answerRuleErrors } from './cla-rule-errors.ts';
-import { setNoStore } from './no-store.ts';
-import { parseInput } from './request-body.ts';
-import { requireTenant, tenantAccess } from './tenant-access.ts';
-import { byRepositoryParam, repositoryIdOf } from './tenant-resolvers.ts';
+import { answerSwitch } from './repository-switch-route.ts';
+import { tenantAccess } from './tenant-access.ts';
+import { byRepositoryParam } from './tenant-resolvers.ts';
 
 export interface RepositoryEnableRoutesOptions {
   readonly db: Kysely<Database>;
@@ -46,17 +40,8 @@ export const repositoryEnableRoutes: FastifyPluginCallbackZod<RepositoryEnableRo
         audit: 'repository.enabled',
       },
     },
-    async (request, reply) => {
-      const tenant = requireTenant(request);
-      parseInput(repositoryEnableRequestSchema, request.body);
-      const enabled = await enableRepository(db, tenant, enqueuer, {
-        repositoryId: repositoryIdOf(request),
-        role: tenant.role,
-        actorGithubId: requireAuth(request).user.githubId,
-      });
-      setNoStore(reply);
-      return enabled;
-    },
+    (request, reply) =>
+      answerSwitch(request, reply, (tenant, switching) => enableRepository(db, tenant, enqueuer, switching)),
   );
   done();
 };

@@ -63,7 +63,7 @@ async function run(ports: EvaluatePrPorts, job: Job, context: EvaluatePrContext)
     logger.info('evaluate_pr.unchanged');
     return { outcome: 'unchanged' };
   }
-  return evaluateOpen({ ports, job, resolved, logger }, pr);
+  return evaluateOpen({ ports, job, resolved, context }, pr);
 }
 
 /**

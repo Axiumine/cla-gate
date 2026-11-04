@@ -57,7 +57,7 @@ test('the steps run in the order of the protocol: repository, pull request, row 
   ]);
 });
 
-test('the signatures are the last facts read: nothing but the engine, the second look at the pull request and the write follow them', async () => {
+test('the signatures are the last facts read: nothing but the engine, the second look at the pull request, the stored verdict, the re-check that enforcement is still on and the write follow them, and the re-check is made once more after the write (E14-S04)', async () => {
   const world = await organisationWorld();
   await world.run();
   const lastSignatures = world.timeline.lastIndexOf('db:select signatures');
@@ -65,7 +65,9 @@ test('the signatures are the last facts read: nothing but the engine, the second
     'evaluate',
     'gh:getPullRequest',
     'db:update pr_evaluations',
+    'db:select repositories',
     'reporter.publish',
+    'db:select repositories',
   ]);
 });
 

@@ -10,7 +10,7 @@ import {
   installationListSchema,
 } from '../../../../shared/installations.ts';
 import { REPOSITORY_CLA_DOCUMENT_PATH } from '../../../../shared/repository-document.ts';
-import { REPOSITORY_ENABLE_PATH } from '../../../../shared/repository-enabled.ts';
+import { REPOSITORY_DISABLE_PATH, REPOSITORY_ENABLE_PATH } from '../../../../shared/repository-enabled.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
 import type { PersonName, RowTable } from '../../db/tenant-fixture/test-support.ts';
@@ -219,8 +219,8 @@ async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Prom
 }
 
 /**
- * Makes the call of the attach case succeed whoever asks first: the repository of `target` does not enforce yet (an attach to an
- * enforcing one sends a sweep, and the world has no queue), and the document is published (an unpublished one is a `409`).
+ * Makes the call of the attach case (and of the disable case, E14-S04) succeed whoever asks first: the repository of `target` is off (an
+ * attach to an enforcing one sends a sweep, a disable of one a job, and the world has no queue) and the document is published (else `409`).
  */
 async function attachable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
   await versionOne(db, target);
@@ -381,6 +381,16 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
     request: (target) => ({
       method: 'POST',
       url: REPOSITORY_ENABLE_PATH.replace(':repositoryId', String(target.repositoryId)),
+    }),
+  },
+  // E14-S04. The role matrix of the enable; the path names the repository alone, so the crossed ids are in repository-disable-tenants.test.ts.
+  [`POST ${REPOSITORY_DISABLE_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    prepare: attachable,
+    request: (target) => ({
+      method: 'POST',
+      url: REPOSITORY_DISABLE_PATH.replace(':repositoryId', String(target.repositoryId)),
     }),
   },
   [`GET ${ERASURE_PREVIEW_PATH}`]: {

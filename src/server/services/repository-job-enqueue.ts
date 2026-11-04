@@ -8,7 +8,7 @@ import type { EnqueueOutcome, JobEnqueuer } from './ports/jobs.ts';
 
 // How a change of policy asks for work on a repository (E07-S09). The callers (E12, E14, E15) send these jobs in the transaction
 // that records the change, so the change and the job commit or roll back together; they pick no key and no window of their own.
-// The handlers of `finalise-repository` and `finalise-check` are E14-S04's, and until they are registered the queues keep the jobs.
+// The handlers of `finalise-repository` and `finalise-check` are bound since E14-S04 (`registerFinaliseHandlers`); a queue whose type has no handler keeps its jobs.
 
 /** The repository a job is for, and the key that names the send. */
 export interface RepositoryJobTarget {
