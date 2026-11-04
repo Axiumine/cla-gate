@@ -27,14 +27,24 @@ export const SIGNER_RULE_STATUS = {
 export type SignerRule = keyof typeof SIGNER_RULE_STATUS;
 
 /**
+ * A character a person can see in a name. The characters that are not visible: controls, white space and separators, format
+ * and default-ignorable characters (zero-width space and joiners, marks of direction, the word joiner, the soft hyphen,
+ * variation selectors, tags), combining marks (they need a character under them), the Braille blank and the four Hangul fillers
+ * (letters in Unicode, but blank on a screen). A name made only of these reads as empty although it is not.
+ */
+const HAS_VISIBLE_CHARACTER =
+  /[^\p{Cc}\p{Cf}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}\u{2800}\u{115F}\u{1160}\u{3164}\u{FFA0}]/u;
+
+/**
  * The typed name: NFC, trimmed, every run of white space one space, then 1 to {@link SIGNER_NAME_MAX_CODE_POINTS} code points
  * (`cleanName`). A name that holds a control character, a line or paragraph separator, a bidirectional override, embedding or
  * isolate, or a lone surrogate is a failure with the issue code `invalid_name` (zod calls every custom issue `custom`, so the
- * code is in `params.code`). Nothing else is refused: a formula, markup or a mention is a name, and is kept as typed.
+ * code is in `params.code`), and so is a name in which nothing can be seen ({@link HAS_VISIBLE_CHARACTER}): the typed name is the
+ * visible evidence of the signature. Nothing else is refused: a formula, markup or a mention is a name, and is kept as typed.
  */
 const signerNameSchema = z.string().transform((raw, ctx) => {
   const name = cleanName(raw, SIGNER_NAME_MAX_CODE_POINTS);
-  if (name === null) {
+  if (name === null || !HAS_VISIBLE_CHARACTER.test(name)) {
     ctx.issues.push({ code: 'custom', message: 'invalid_name', input: raw, params: { code: 'invalid_name' } });
     return z.NEVER;
   }

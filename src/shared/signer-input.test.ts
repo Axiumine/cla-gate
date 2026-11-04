@@ -126,6 +126,40 @@ test.each([
 });
 
 test.each([
+  ['a zero width space', [0x200b]],
+  ['zero width space, joiners and marks', [0x200b, 0x200c, 0x200d, 0x200e, 0x200f]],
+  ['a Braille blank', [0x2800]],
+  ['a Hangul filler', [0x3164]],
+  ['the choseong and jungseong fillers', [0x115f, 0x1160]],
+  ['the halfwidth Hangul filler', [0xffa0]],
+  ['a combining grapheme joiner', [0x34f]],
+  ['a word joiner', [0x2060]],
+  ['a soft hyphen', [0xad]],
+  ['a variation selector', [0xfe0f]],
+  ['tag characters', [0xe0041, 0xe0042]],
+  ['an Arabic letter mark', [0x61c]],
+  ['an Arabic number sign, a format character', [0x600]],
+  ['the Mongolian vowel separator', [0x180e]],
+  ['a combining acute accent with nothing under it', [0x301, 0x302]],
+  ['every invisible character at once', [0x2800, 0x3164, 0x200b, 0x34f, 0x2060, 0xad, 0x301, 0x20, 0xa0]],
+])('a name of only invisible characters (%s) is refused with the issue code invalid_name', (_label, codePoints) => {
+  for (const raw of [at(...codePoints), `${at(...codePoints)} ${at(...codePoints)}`, ` ${at(...codePoints)} `]) {
+    expect(issuesOf(raw)).toStrictEqual(INVALID_NAME);
+  }
+});
+
+test.each([
+  ['a letter between invisible characters', `${at(0x200b, 0x2800)}A${at(0x3164, 0x34f)}`],
+  ['a digit after a Braille blank', `${at(0x2800)}7`],
+  ['a punctuation mark', '?'],
+  ['an emoji, which is a symbol a person can see', at(0x1f600)],
+  ['a single CJK character with a filler', at(0x3164, 0x4e2d)],
+  ['a letter with a combining mark on it', `e${at(0x301)}`],
+])('a name with one visible character (%s) is kept', (_label, raw) => {
+  expect(issuesOf(raw)).toStrictEqual([]);
+});
+
+test.each([
   ['a zero width space', 0x200b],
   ['a zero width joiner', 0x200d],
   ['a zero width non-joiner', 0x200c],

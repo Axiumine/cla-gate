@@ -131,6 +131,11 @@ test.each([
   ['a control character in the name', { name: 'Ada\u0007' }, 'invalid_name'],
   ['a bidirectional override in the name', { name: `exe.${RLO}live` }, 'invalid_name'],
   ['a name that is only white space', { name: ' \t ' }, 'invalid_name'],
+  [
+    'a name of only invisible characters',
+    { name: String.fromCodePoint(0x200b, 0x2800, 0x3164, 0x34f) },
+    'invalid_name',
+  ],
   ['a name of 201 code points', { name: '\u{1F600}'.repeat(201) }, 'invalid_name'],
   ['an address that is not verified', { email: 'eve@example.org' }, 'email_not_verified'],
   ['an address that only looks like the verified one', { email: 'ada@examp1e.org' }, 'email_not_verified'],
