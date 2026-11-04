@@ -15,31 +15,40 @@ import { createRepoAdminLookup } from './repo-admin.ts';
 import { createRepoAdminDiscovery } from './repo-admin-discovery.ts';
 import { RoleCache } from './role-cache.ts';
 import { VIEWER, VIEWER_ID } from './role-fixture/test-support.ts';
+import { createViewerLookupBudget, type ViewerLookupBudget } from './role-lookup-budget.ts';
 import { createRoleLookups } from './role-lookups.ts';
 import { worldOfTwoTenants } from './store-fixture/test-support.ts';
 import type { TenantAuthorizationDeps } from './tenant-authorization.ts';
 import { FakeClock } from './test-support.ts';
 
 // The roles a person holds across the installations of the instance (E14-S01), with the lookups over a real database and an
-// in-memory GitHub. The person's own budget of 30 uncached lookups a minute is taken out of the picture here (the HTTP tests
-// have it in), so that what is tested is the budget of the search itself.
+// in-memory GitHub. The guard's budget of 30 uncached lookups a minute is not in the picture here, and the budget of the
+// list's lookups is out of it unless a test gives one, so that what is tested is the budget of the search itself.
+
+/** A budget that lets every lookup through. */
+const UNLIMITED: ViewerLookupBudget = { spend: () => undefined };
 
 const NOW = '2026-11-02T10:00:00.000Z';
 
-async function setup() {
+async function setup(listBudget: ViewerLookupBudget = UNLIMITED) {
   const world = await worldOfTwoTenants();
   const fake = githubOfTwoTenants();
   const clock = new FakeClock(NOW);
   const log = createLogger({ logLevel: 'info' }, captureLogs().destination);
-  const lookups = createRoleLookups({
-    cache: new RoleCache({ clock }),
-    budget: { spend: () => undefined },
-    orgAdmin: createOrgAdminLookup({ github: fake, log }),
-    repoAdmin: createRepoAdminLookup({ github: fake, log }),
-  });
+  const cache = new RoleCache({ clock });
+  const lookupsOver = (budget: ViewerLookupBudget) =>
+    createRoleLookups({
+      cache,
+      budget,
+      orgAdmin: createOrgAdminLookup({ github: fake, log }),
+      repoAdmin: createRepoAdminLookup({ github: fake, log }),
+    });
+  const lookups = lookupsOver(UNLIMITED);
+  const listed = lookupsOver(listBudget).read;
   const deps: TenantAuthorizationDeps = {
-    lookups,
+    lookups: { ...lookups, list: listed },
     discover: createRepoAdminDiscovery({ db: world.db, lookup: lookups.read.repoAdmin }),
+    discoverForList: createRepoAdminDiscovery({ db: world.db, lookup: listed.repoAdmin }),
     ledger: createAdminLedger({ db: world.db, clock }),
   };
   const find = async (budget = new ProbeBudget(100)) =>
@@ -62,7 +71,8 @@ async function setup() {
       Array.from({ length: count }, (_unused, index) => `org-${n}/repo-${index + 1}`),
     );
   };
-  return { ...world, fake, find, permissionLookups, crowd };
+  const membershipLookups = () => fake.calls.filter((call) => call.method === 'getOrgMembership').length;
+  return { ...world, fake, find, permissionLookups, membershipLookups, crowd, clock };
 }
 
 test('a person GitHub knows nowhere holds no role, and the search says it was not cut short', async () => {
@@ -147,4 +157,31 @@ test('a suspended installation is not searched for repository admins', async () 
     .execute();
   expect(await find()).toEqual({ held: [], truncated: false });
   expect(permissionLookups(100)).toBe(0);
+});
+
+test('a person over the lookups the list may make is given what was found, cut short, and no installation past that is asked about', async () => {
+  const { find, fake, a, membershipLookups } = await setup(createViewerLookupBudget(new FakeClock(NOW), 1));
+  fake.addMembership(id(100), 'org-1', 'alice', { state: 'active', role: 'admin', userId: VIEWER_ID });
+  fake.addMembership(id(200), 'org-2', 'alice', { state: 'active', role: 'admin', userId: VIEWER_ID });
+  const found = await find();
+  expect(found.held.map(({ installation, role }) => [installation.id, role])).toEqual([
+    [a.installation.id, 'org_admin'],
+  ]);
+  expect(found.truncated).toBe(true);
+  expect(membershipLookups()).toBe(1);
+});
+
+test('the lookups the list may make also end the search of repository admins, which is cut short and not a failure', async () => {
+  const { find, crowd, permissionLookups, membershipLookups } = await setup(
+    createViewerLookupBudget(new FakeClock(NOW), 2),
+  );
+  await crowd(1, 5);
+  expect(await find()).toEqual({ held: [], truncated: true });
+  expect([membershipLookups(), permissionLookups(100)]).toEqual([2, 0]);
+});
+
+test('a search no budget cuts short says so with truncated false', async () => {
+  const { find, membershipLookups } = await setup(createViewerLookupBudget(new FakeClock(NOW), 2));
+  expect(await find()).toEqual({ held: [], truncated: false });
+  expect(membershipLookups()).toBe(2);
 });

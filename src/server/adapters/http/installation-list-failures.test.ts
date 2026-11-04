@@ -10,7 +10,7 @@ import {
   InstallationNotAdmittedError,
   InstallationSuspendedError,
 } from '../../services/ports/github-errors.ts';
-import { bodyOf, failureOf, storeRepositories } from './installation-list-fixture/test-support.ts';
+import { bodyOf, failureOf, listMinutesApart, storeRepositories } from './installation-list-fixture/test-support.ts';
 import { guardWorld } from './tenant-guard-fixture/test-support.ts';
 
 // What GET /api/installations answers when a role cannot be had (E14-S01): never an empty list, which would read as "you
@@ -54,12 +54,16 @@ test('the same for an installation the gate refuses while a repository admin is 
   expect([response.statusCode, bodyOf(response, installationListSchema)]).toEqual([200, []]);
 });
 
-test('a person who needs more than their 30 uncached lookups a minute is 429 with the wait, not a short list', async () => {
+test('a person whose list needs more than the 30 uncached lookups a minute of the guard still gets the list, which is the same a minute later', async () => {
   const world = await guardWorld();
   const names = Array.from({ length: 35 }, (_unused, index) => `org-2/many-${String(index).padStart(2, '0')}`);
   await storeRepositories(world, { n: 2, installationId: world.tenants.t2 }, names);
   await scopeDocuments(world.db, world.tenants.t2, names);
-  const response = await world.ask('GET', INSTALLATIONS_PATH, 'outsider');
-  expect(failureOf(response)).toEqual([429, 'too_many_requests']);
-  expect(Number(response.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+  const answers = await listMinutesApart(world, 'outsider', 2);
+  expect(answers).toEqual([
+    [200, []],
+    [200, []],
+  ]);
+  const probes = world.fake.calls.filter((call) => call.method === 'getRepositoryPermission');
+  expect(probes.filter((call) => call.installationId === id(200))).toHaveLength(70);
 });

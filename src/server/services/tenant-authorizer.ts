@@ -10,7 +10,7 @@ import { GitHubUnavailableError } from './ports/github-errors.ts';
 import { createRepoAdminLookup } from './repo-admin.ts';
 import { createRepoAdminDiscovery } from './repo-admin-discovery.ts';
 import type { RoleCache } from './role-cache.ts';
-import { createViewerLookupBudget } from './role-lookup-budget.ts';
+import { createViewerLookupBudget, INSTALLATION_LIST_LOOKUPS, type ViewerLookupBudget } from './role-lookup-budget.ts';
 import { createRoleLookups } from './role-lookups.ts';
 import {
   type AuthorizeTenant,
@@ -60,13 +60,22 @@ export const roleGitHubNotWired: RoleGitHub = {
 export function createTenantAuthorizationDeps(options: TenantAuthorizerOptions): TenantAuthorizationDeps {
   const { db, github, log } = options;
   const ledger = createAdminLedger({ db, clock: options.clock });
-  const lookups = createRoleLookups({
-    cache: options.cache,
-    budget: createViewerLookupBudget(options.clock),
-    orgAdmin: recordingAdmins(createOrgAdminLookup({ github, log }), ledger),
-    repoAdmin: createRepoAdminLookup({ github, log }),
-  });
-  return { lookups, discover: createRepoAdminDiscovery({ db, lookup: lookups.read.repoAdmin }), ledger };
+  const lookupsOver = (budget: ViewerLookupBudget) =>
+    createRoleLookups({
+      cache: options.cache,
+      budget,
+      orgAdmin: recordingAdmins(createOrgAdminLookup({ github, log }), ledger),
+      repoAdmin: createRepoAdminLookup({ github, log }),
+    });
+  const lookups = lookupsOver(createViewerLookupBudget(options.clock));
+  // The list of installations asks every installation once per cache lifetime: it spends a budget of its own, over the same cache.
+  const listed = lookupsOver(createViewerLookupBudget(options.clock, INSTALLATION_LIST_LOOKUPS)).read;
+  return {
+    lookups: { ...lookups, list: listed },
+    discover: createRepoAdminDiscovery({ db, lookup: lookups.read.repoAdmin }),
+    discoverForList: createRepoAdminDiscovery({ db, lookup: listed.repoAdmin }),
+    ledger,
+  };
 }
 
 /**

@@ -18,6 +18,9 @@ import type { LookupContext } from './role-lookup-context.ts';
 /** What a guarded route does: `read` may use the cached role, `write` always asks GitHub again (E11-S01, E11-S05). */
 export type RoleLookupMode = 'read' | 'write';
 
+/** What a lookup is made for: a guarded route ({@link RoleLookupMode}), or the list of the installations a person administers (E14-S01), which has a budget of its own. */
+export type LookupPurpose = RoleLookupMode | 'list';
+
 /** The installation as the cache needs it: `id` is `installations.id`, the tenant key the answers are kept under. */
 interface TenantKey {
   readonly id: InstallationRowId;

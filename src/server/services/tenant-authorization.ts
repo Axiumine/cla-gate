@@ -8,7 +8,7 @@ import { PROBE_BUDGETS, ProbeBudget } from './probe-budget.ts';
 import { repoAdminFact } from './repo-admin.ts';
 import type { DiscoverRepoAdminRole } from './repo-admin-discovery.ts';
 import type { RepositoryRow } from './repository-rows.ts';
-import type { RoleLookupMode, RoleLookups } from './role-lookups.ts';
+import type { LookupPurpose, RoleLookups } from './role-lookups.ts';
 
 // What a person may do in one tenant (E11-S05): the role facts of E11-S02 to E11-S04, resolved for one call and handed to
 // the pure `decide` of src/server/domain/authz.ts. No HTTP in here: the guard of the HTTP edge turns the answer into a
@@ -16,17 +16,19 @@ import type { RoleLookupMode, RoleLookups } from './role-lookups.ts';
 // an answer, so no failure becomes an allow, a `none` role or a denial the person could mistake for "you may not".
 
 export interface TenantAuthorizationDeps {
-  /** The role lookups behind the cache of E11-S04, by what the route does: a `write` asks GitHub again. */
-  readonly lookups: Readonly<Record<RoleLookupMode, RoleLookups>>;
+  /** The role lookups behind the cache of E11-S04, by what they are for: a `write` asks GitHub again, the `list` of E14-S01 has a budget of its own. */
+  readonly lookups: Readonly<Record<LookupPurpose, RoleLookups>>;
   /** The role-in-installation rule (E11-S03), through the cached lookups; only the denial path runs it. */
   readonly discover: DiscoverRepoAdminRole;
+  /** The same rule for the list of installations (E14-S01), through the lookups of `lookups.list`, so the list spends its own budget and not the person's 30. */
+  readonly discoverForList: DiscoverRepoAdminRole;
   /** The org admins a live lookup last saw (E11-S07): read for a suspended or deleted organisation, whose roles cannot be asked of GitHub. */
   readonly ledger: Pick<AdminLedger, 'isAdmin'>;
 }
 
 /** One call to decide: who asks, what for, and the stored rows of the tenant. */
 export interface TenantQuestion {
-  readonly mode: RoleLookupMode;
+  readonly mode: LookupPurpose;
   readonly requirement: Requirement;
   readonly installation: InstallationRow;
   /** The repository the call is about (never a removed one), or null for a call about the installation. */

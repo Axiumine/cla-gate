@@ -37,8 +37,9 @@ export interface AdministeredInstallation {
 /**
  * The installations `viewer` administers, by account login and id. The search for repository admins spends at most 100
  * lookups of GitHub across all installations (`PROBE_BUDGETS.installationList`; an answer of the role cache is free); when
- * it ran into that limit `truncated` is true on every row. The counts are those of the repositories that are not removed.
- * @throws what the role lookups throw: `GitHubUnavailableError`, `GitHubRateLimitedError`, `RoleLookupThrottledError`.
+ * it ran into that limit, or the person used the lookups the list may make a minute, `truncated` is true on every row. The
+ * counts are those of the repositories that are not removed.
+ * @throws what the role lookups throw: `GitHubUnavailableError`, `GitHubRateLimitedError`.
  */
 export async function listAdministeredInstallations(
   deps: InstallationListDeps,

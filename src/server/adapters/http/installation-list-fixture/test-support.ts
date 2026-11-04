@@ -2,7 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { z } from 'zod';
 import { errorResponseSchema } from '../../../../shared/errors.ts';
-import { INSTALLATION_REPOSITORIES_PATH, repositoryPageSchema } from '../../../../shared/installations.ts';
+import {
+  INSTALLATION_REPOSITORIES_PATH,
+  INSTALLATIONS_PATH,
+  installationListSchema,
+  repositoryPageSchema,
+} from '../../../../shared/installations.ts';
 import { createInstallationStore } from '../../../services/installation-store.ts';
 import { listed } from '../../../services/store-fixture/test-support.ts';
 import type { InstallationRowId } from '../../db/installation-row-id.ts';
@@ -26,6 +31,23 @@ export function bodyOf<T>(response: { json: () => unknown }, schema: z.ZodType<T
 /** `[status, code]` of an error response, the code read with the shared schema so a different shape fails here. */
 export function failureOf(response: { statusCode: number; json: () => unknown }): [number, string] {
   return [response.statusCode, bodyOf(response, errorResponseSchema).error.code];
+}
+
+/**
+ * What `GET /api/installations` answers `person`, asked `times` times with 61 seconds between one answer and the next ask: the role
+ * cache holds an answer for 60, so each ask is made with nothing cached. The status and the rows (the account and `truncated`) of each.
+ */
+export async function listMinutesApart(world: GuardWorld, person: Person, times: number) {
+  const answers = [];
+  for (let ask = 0; ask < times; ask += 1) {
+    const response = await world.ask('GET', INSTALLATIONS_PATH, person);
+    answers.push([
+      response.statusCode,
+      bodyOf(response, installationListSchema).map((row) => [row.accountLogin, row.truncated]),
+    ]);
+    world.advance(61);
+  }
+  return answers;
 }
 
 /** The full names of a page of the repository list, in order. */
