@@ -37,13 +37,17 @@ export function failureOf(response: { statusCode: number; json: () => unknown })
  * What `GET /api/installations` answers `person`, asked `times` times with 61 seconds between one answer and the next ask: the role
  * cache holds an answer for 60, so each ask is made with nothing cached. The status and the rows (the account and `truncated`) of each.
  */
-export async function listMinutesApart(world: GuardWorld, person: Person, times: number) {
-  const answers = [];
+export async function listMinutesApart(
+  world: GuardWorld,
+  person: Person,
+  times: number,
+): Promise<[number, [string, boolean][]][]> {
+  const answers: [number, [string, boolean][]][] = [];
   for (let ask = 0; ask < times; ask += 1) {
     const response = await world.ask('GET', INSTALLATIONS_PATH, person);
     answers.push([
       response.statusCode,
-      bodyOf(response, installationListSchema).map((row) => [row.accountLogin, row.truncated]),
+      bodyOf(response, installationListSchema).map((row): [string, boolean] => [row.accountLogin, row.truncated]),
     ]);
     world.advance(61);
   }

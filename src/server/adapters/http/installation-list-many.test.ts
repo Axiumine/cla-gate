@@ -47,7 +47,7 @@ test('the list spends the budget of its own: the 30 uncached lookups a minute of
   const world = await guardWorld();
   await admitOrganisations(world, 39);
   expect((await world.ask('GET', INSTALLATIONS_PATH, 'admin1')).statusCode).toBe(200);
-  const writes = [];
+  const writes: number[] = [];
   for (let attempt = 0; attempt < 30; attempt += 1) {
     writes.push((await world.ask('POST', `/t/installations/${world.tenants.t1}`, 'admin1')).statusCode);
   }
