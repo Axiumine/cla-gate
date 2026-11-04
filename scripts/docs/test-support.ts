@@ -179,6 +179,33 @@ export function tablesOf(markdown: string): Table[] {
   return tables.map((lines) => ({ separator: lines.slice(1, 2).join(''), rows: lines.slice(2).map(cellsOf) }));
 }
 
+/** Inline code spans: a run of backticks, then the text up to the next run of the same length (so double backticks can hold single ones). A `[text](target)` inside one is an example, not a link. */
+const INLINE_CODE = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g;
+const EXTERNAL = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * The files that the relative links of a document point at, as written but without the `#anchor`. Not counted: links inside
+ * fenced blocks and inline code, web addresses and other schemes (`https:`, `mailto:`), and links to an anchor of the same page.
+ */
+export function relativeLinksOf(markdown: string): string[] {
+  return linksOf(proseOf(markdown).replaceAll(INLINE_CODE, ''))
+    .filter((target) => !EXTERNAL.test(target))
+    .map((target) => target.split('#', 1).join(''))
+    .filter((file) => file !== '');
+}
+
+/** The Markdown files of the project that the documentation checks cover: `README.md`, then every `.md` file under `docs/` in alphabetical order, as paths from the root of the repository. */
+export function projectMarkdown(): string[] {
+  const documents = fs.readdirSync(path.join(ROOT, 'docs'), { recursive: true, encoding: 'utf8' });
+  return [
+    'README.md',
+    ...documents
+      .filter((name) => name.endsWith('.md'))
+      .map((name) => path.join('docs', name))
+      .sort((a, b) => a.localeCompare(b)),
+  ];
+}
+
 /** The source text of a template placeholder, `${inner}`, for tests that look for one in a file (a plain string with one is a lint warning). */
 export function placeholder(inner: string): string {
   return ['$', '{', inner, '}'].join('');

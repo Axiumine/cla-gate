@@ -14,9 +14,11 @@ import {
   inOrder,
   linksOf,
   placeholder,
+  projectMarkdown,
   proseOf,
   ROOT,
   readHeldAcross,
+  relativeLinksOf,
   sectionsOf,
   serverSource,
   slugOf,
@@ -25,7 +27,7 @@ import {
   writeScratch,
 } from './test-support.ts';
 
-// The helpers that read the operator guides as data (E19-S09). Every guide test depends on them, so a helper that quietly
+// The helpers that read the operator guides and the other Markdown files as data (E19-S09, E19-S10). Every guide test depends on them, so a helper that quietly
 // finds nothing would make a guide test pass for the wrong reason; each one is pinned here on a small document.
 
 const DOCUMENT = [
@@ -109,6 +111,32 @@ test('links are the targets of inline links in the prose, and a bracket without 
   expect(linksOf(DOCUMENT)).toEqual(['other.md#part', 'https://example.test/page']);
   expect(linksOf('Nothing here, only [brackets] and (parentheses).')).toEqual([]);
   expect(linksOf('A broken [link](never closed')).toEqual([]);
+});
+
+test('the relative links are the files that links point at: no anchor, no web address, no example inside code', () => {
+  const document = [
+    'See [the guide](guide.md#part), [the same page](#top), [a folder](../docs/), [the web](https://example.test/a#b)',
+    'and [mail](mailto:someone@example.test).',
+    'An example `[text](example.md)` and ``[text](double.md)`` and ``a `[x](nested.md)` b`` is code, and so is this block:',
+    '',
+    '```md',
+    '[text](fenced.md)',
+    '```',
+    '',
+    'A link after code: `x` [last](last.md).',
+  ].join('\n');
+  expect(relativeLinksOf(document)).toEqual(['guide.md', '../docs/', 'last.md']);
+  expect(relativeLinksOf('Nothing to follow.')).toEqual([]);
+});
+
+test('the Markdown of the project is the README and then every .md file under docs/, in order', () => {
+  const files = projectMarkdown();
+  expect(files[0]).toBe('README.md');
+  expect(files).toContain(path.join('docs', 'operations', 'install.md'));
+  expect(files).toContain(path.join('docs', 'epics', 'E19.md'));
+  expect(files.slice(1)).toEqual(files.slice(1).sort((a, b) => a.localeCompare(b)));
+  expect(files.filter((file) => !file.endsWith('.md'))).toEqual([]);
+  expect(files.filter((file) => !exists(path.join(ROOT, file)))).toEqual([]);
 });
 
 test('a table has its separator as written and its rows as trimmed cells, and a document can hold several', () => {
