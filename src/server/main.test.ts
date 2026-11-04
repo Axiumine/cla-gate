@@ -6,7 +6,8 @@ import { freePort, UNREACHABLE_DATABASE_URL } from './test-support.ts';
 
 // main.ts runs on import: these tests are its boot test. It is imported fresh each time, from the environment. Its job
 // queue is pg-boss on DATABASE_URL, which needs a real PostgreSQL: the module that starts it is replaced by a fake queue
-// (the default is tested in boot-queue.test.ts).
+// (the default is tested in boot-queue.test.ts). The database is node-postgres on DATABASE_URL, and the start-up check
+// (E19-S02) would wait for it: it is replaced by PGlite (the check and its failure are tested in boot-database.test.ts).
 
 async function importMain(env: Record<string, string>) {
   for (const [name, value] of Object.entries(env)) {
@@ -17,7 +18,12 @@ async function importMain(env: Record<string, string>) {
     const { fakeJobQueue } = await import('./test-support.ts');
     return { startJobQueue: () => Promise.resolve(fakeJobQueue()) };
   });
+  vi.doMock('./adapters/db/pg.ts', async (importOriginal) => {
+    const { openPgliteDatabase } = await import('./adapters/db/pglite.ts');
+    return { ...(await importOriginal<typeof import('./adapters/db/pg.ts')>()), createPgDatabase: openPgliteDatabase };
+  });
   onTestFinished(() => {
+    vi.doUnmock('./adapters/db/pg.ts');
     vi.doUnmock('./adapters/jobs/runtime.ts');
     vi.unstubAllEnvs();
     process.exitCode = undefined;
@@ -49,7 +55,5 @@ test('main reports an invalid environment and exits with code 1', async () => {
   const { server } = await importMain({ DATABASE_URL: '', PORT: '99999' });
   expect(server).toBeUndefined();
   expect(process.exitCode).toBe(1);
-  expect(stderr).toHaveBeenCalledExactlyOnceWith(
-    'ConfigError: Invalid environment configuration: DATABASE_URL, PORT\n',
-  );
+  expect(stderr.mock.calls.map(([chunk]) => String(chunk).split(':')[0])).toEqual(['DATABASE_URL', 'PORT']);
 });

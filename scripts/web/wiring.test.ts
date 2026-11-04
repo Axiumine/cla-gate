@@ -60,8 +60,10 @@ test('the web project is a root reference, and the Node projects leave src/web t
   expect(readTsconfig('tsconfig.server.json').include).not.toContain('src/web/**/*.ts');
 });
 
-test('yarn build compiles every project and then builds the app; yarn typecheck is the compile alone', () => {
-  expect(SCRIPTS.get('build')).toBe('tsc -b && vite build');
+// E19-S01: the image build context leaves out e2e/, which scripts/e2e/ refer to, so `yarn build` compiles only the two projects
+// that ship (the server emits dist/server, the web project is type-checked) and `yarn typecheck` stays the whole solution.
+test('yarn build compiles the server and the web project and then builds the app; yarn typecheck is the compile of every project', () => {
+  expect(SCRIPTS.get('build')).toBe('tsc -b tsconfig.server.json tsconfig.web.json && vite build');
   expect(SCRIPTS.get('typecheck')).toBe('tsc -b');
 });
 

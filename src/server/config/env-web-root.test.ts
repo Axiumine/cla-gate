@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import path from 'node:path';
 import { expect, test } from 'vitest';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 import { DEFAULT_WEB_ROOT } from './web-root.ts';
 
 // E17-S03: WEB_ROOT, the directory of the single-page app that the server serves.

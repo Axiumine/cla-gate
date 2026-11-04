@@ -3,20 +3,11 @@
 import { useState } from 'react';
 import { useT } from '../i18n/index.ts';
 import { Button } from '../ui/Button.tsx';
+import { copyToClipboard } from '../ui/clipboard.ts';
 import { StatusMessage } from '../ui/StatusMessage.tsx';
 
 /** What the person is told after pressing the button: the catalog key of the result, or nothing before the first press. */
 type Outcome = 'states.copied' | 'states.copyFailed' | null;
-
-/** Puts `text` on the clipboard. A browser without the Clipboard API (an insecure page) or a refusal is `false`, not a crash. */
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export interface RequestIdProps {
   /** The id to show; the caller checked that it looks like one of the server's (`visibleRequestId`). */

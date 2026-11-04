@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
 import { expect, test } from 'vitest';
-import { realExec } from './exec.ts';
+import { execWithTimeout, realExec } from './exec.ts';
 
 /** Runs a one-line Node program, which exists on every machine that runs this test. */
 function node(program: string, env?: Readonly<Record<string, string>>) {
@@ -42,4 +42,10 @@ test('the extra environment reaches the child without being a command-line argum
 test('without extra environment the ambient one is still passed', async () => {
   const result = await node('process.stdout.write(typeof process.env.PATH)');
   expect(result.stdout).toBe('string');
+});
+
+test('a command that runs past the timeout is stopped and reported as a failure', async () => {
+  const result = await execWithTimeout(200)(process.execPath, ['-e', 'setTimeout(() => undefined, 20000)']);
+  expect(result.code).toBe(1);
+  expect(result.stdout).toBe('');
 });

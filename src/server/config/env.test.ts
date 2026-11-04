@@ -4,7 +4,8 @@ import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
 import { signUrl } from '../../shared/sign-link.ts';
 import { AUTH_ENV } from './auth-fixture/test-support.ts';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 import { loadMigrateConfig } from './migrate-config.ts';
 import { MASK, Secret } from './secret.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
@@ -181,14 +182,31 @@ test('the error lists every invalid name, sorted, and never a value', () => {
     SESSION_SECRET: 'tiny',
   });
   expect(error.variables).toEqual(['DATABASE_URL', 'LOG_LEVEL', 'PORT', 'SESSION_SECRET', 'TRUST_PROXY']);
-  expect(error.message).toBe(
-    'Invalid environment configuration: DATABASE_URL, LOG_LEVEL, PORT, SESSION_SECRET, TRUST_PROXY',
-  );
+  expect(error.lines.map((line) => line.split(':')[0])).toEqual([
+    'DATABASE_URL',
+    'LOG_LEVEL',
+    'PORT',
+    'SESSION_SECRET',
+    'TRUST_PROXY',
+  ]);
+  expect(error.message).toBe(error.lines.join('\n'));
   expect(error.name).toBe('ConfigError');
   for (const value of ['hunter2', 'mysql', '99999', 'shouting', 'maybe', 'tiny']) {
     expect(error.message).not.toContain(value);
   }
 });
+
+function captureMigrate(env: Record<string, string | undefined>): ConfigError {
+  try {
+    loadMigrateConfig(env);
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error('expected loadMigrateConfig to throw');
+}
 
 test('migrate config prefers MIGRATION_DATABASE_URL and falls back to DATABASE_URL', () => {
   const owner = 'postgres://owner:pw@h/db';
@@ -202,7 +220,9 @@ test.each([
   ['empty', { MIGRATION_DATABASE_URL: '' }],
 ])('in production the owner connection is required: MIGRATION_DATABASE_URL %s is an error', (_label, extra) => {
   const env = { NODE_ENV: 'production', DATABASE_URL: DB, ...extra };
-  expect(() => loadMigrateConfig(env)).toThrow(new ConfigError(['MIGRATION_DATABASE_URL']));
+  expect(() => loadMigrateConfig(env)).toThrow(
+    'MIGRATION_DATABASE_URL: required in production; set it, or MIGRATION_DATABASE_URL_FILE',
+  );
   const owner = 'postgres://owner:pw@h/db';
   expect(loadMigrateConfig({ ...env, MIGRATION_DATABASE_URL: owner }).databaseUrl.reveal()).toBe(owner);
 });
@@ -211,6 +231,9 @@ test.each([
   ['nothing is set', {}, 'DATABASE_URL'],
   ['DATABASE_URL is invalid', { DATABASE_URL: 'nope' }, 'DATABASE_URL'],
   ['MIGRATION_DATABASE_URL is invalid', { MIGRATION_DATABASE_URL: 'nope', DATABASE_URL: DB }, 'MIGRATION_DATABASE_URL'],
-])('migrate config names the offending variable when %s', (_label, env, name) => {
-  expect(() => loadMigrateConfig(env)).toThrow(new ConfigError([name]));
+])('migrate config names the offending variable when %s, and never a value', (_label, env, name) => {
+  const error = captureMigrate(env);
+  expect(error.variables).toEqual([name]);
+  expect(error.message.startsWith(`${name}: must be a postgres:// or postgresql:// connection string`)).toBe(true);
+  expect(error.message).not.toContain('nope');
 });

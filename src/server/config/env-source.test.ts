@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { DEFAULT_SOURCE_URL } from '../../shared/meta.ts';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
 
 // E17-S09: SOURCE_URL and SOURCE_COMMIT, where the corresponding source of the running version is (AGPL section 13).
 

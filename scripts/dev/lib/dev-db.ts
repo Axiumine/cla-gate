@@ -5,13 +5,16 @@ import type { Exec } from '../../ci/lib/exec.ts';
 import { LOOPBACK, withFreePort } from '../../ci/lib/ports.ts';
 import { forgetPort, readPort, writePort } from './dev-db-state.ts';
 
-// The development database (docker-compose.yml): a PostgreSQL 18 container whose host port is chosen at random,
+// The development database (docker-compose.dev.yml, E19-S04): a PostgreSQL 18 container whose host port is chosen at random,
 // remembered in the git-ignored .local/ directory, and published on 127.0.0.1 only. The passwords are the well-known
-// development defaults of docker-compose.yml and docker/postgres-init.sql (dev-db.test.ts keeps them in step).
+// development defaults that docker-compose.dev.yml hands to scripts/provision-database.sh (compose.test.ts keeps them in step).
 
 export type Role = 'app' | 'owner';
 
 export const DATABASE_NAME = 'cla';
+
+/** The development stack; docker-compose.yml is the operator stack and has no host port to choose. */
+const COMPOSE_FILE = 'docker-compose.dev.yml';
 
 /** The environment variable each role's URL is for: the runtime role is DATABASE_URL, the owner runs the migrations. */
 export function roleVariable(role: Role): string {
@@ -66,7 +69,7 @@ export function requireUrl(root: string, role: Role): string {
 
 /** Compose reads POSTGRES_PORT for every subcommand (the file requires it), so each call passes it. */
 function compose(deps: DevDeps, root: string, port: number, args: readonly string[]) {
-  const base = ['compose', '--file', path.join(root, 'docker-compose.yml'), '--project-directory', root];
+  const base = ['compose', '--file', path.join(root, COMPOSE_FILE), '--project-directory', root];
   return deps.exec('docker', [...base, ...args], { POSTGRES_PORT: String(port) });
 }
 

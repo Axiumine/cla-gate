@@ -34,3 +34,9 @@ export const WEBHOOK_BODY_LIMIT = 10_485_760;
  * limit is below {@link HTTP_LIMITS.bodyLimit}, which every other route keeps.
  */
 export const CLA_BODY_LIMIT = 524_288;
+
+/**
+ * Bytes. The body limit of the setup routes (E19-S06): 4 KiB, far more than a token or the four answers of the manifest form
+ * need, so a larger body is refused with `413` before it is parsed.
+ */
+export const SETUP_BODY_LIMIT = 4096;

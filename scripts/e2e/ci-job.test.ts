@@ -48,7 +48,7 @@ test('the job has no container, no services, no permissions of its own and no co
     'steps',
     'timeout-minutes',
   ]);
-  expect(ciText).not.toMatch(/^ +container:/m);
+  expect(ciText).not.toMatch(/^ {4,}container:/m);
   expect(job.steps.filter((each) => each['continue-on-error'] !== undefined)).toEqual([]);
 });
 

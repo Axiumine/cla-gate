@@ -5,7 +5,7 @@ import { configDefaults, type TestProjectInlineConfiguration } from 'vitest/conf
 // The Vitest projects, defined once for the two configs that use them: vitest.config.ts (every project, with coverage)
 // and vitest.stryker.config.ts (the server project only, for the mutation gate of E20-S04). Adding a project here puts it
 // in both unless the second one is told otherwise (the web project is in the first only: it needs jsdom, which Stryker
-// cannot drive).
+// cannot drive; the smoke project is in the first only, and only with SMOKE=1).
 
 /** The tooling tests under scripts/. */
 export const scriptsProject: TestProjectInlineConfiguration = {
@@ -46,5 +46,25 @@ export const webProject: TestProjectInlineConfiguration = {
     // Vitest turns every .css import into an empty module. The stylesheets are read as text (`?raw`) by the tests of the design
     // tokens (E17-S05), which parse them, so that form alone is let through.
     css: { include: [/\.css\?raw$/] },
+  },
+};
+
+/**
+ * The container smoke test (E19-S08, `yarn smoke`): it builds the image and starts the operator stack with Docker, so it is
+ * part of no other run. vitest.config.ts adds it when SMOKE=1, which `yarn smoke` sets. One stack serves every file of it
+ * (the global setup starts it, the files connect to it), so the files run one after the other, and the timeouts are those of
+ * a real build and a real database, not of a unit test.
+ */
+export const smokeProject: TestProjectInlineConfiguration = {
+  extends: true,
+  test: {
+    name: 'smoke',
+    environment: 'node',
+    include: ['tests/smoke/**/*.test.ts'],
+    globalSetup: ['tests/smoke/global-setup.ts'],
+    fileParallelism: false,
+    testTimeout: 120_000,
+    // A cold image build happens in the global setup, which this limit may cover; the job's own timeout is the real bound.
+    hookTimeout: 600_000,
   },
 };

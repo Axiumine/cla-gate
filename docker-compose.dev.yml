@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# Local development database (E04, E19-S04). The operator stack that runs the whole platform is docker-compose.yml.
+# `yarn db:up` picks a random free port above 32768, remembers it in the git-ignored .local/ directory and runs this file
+# with POSTGRES_PORT set; then `yarn db:migrate` and `yarn dev`; `yarn db:url` prints the connection strings and
+# `yarn db:down` stops it. There is deliberately no default port: running `docker compose -f docker-compose.dev.yml` by
+# hand without POSTGRES_PORT fails with the message below instead of publishing 5432.
+#
+# The roles come from scripts/provision-database.sh, the one place that defines them for the operator stack, an operator's
+# own server and this file: the image runs it on the first start of an empty volume (the init directory of the official
+# image), and the well-known development passwords below go in through its input variables. They are not secrets: they
+# protect a database that listens on 127.0.0.1 only, and they must never be reused anywhere else. Production gets its
+# credentials from secret files (scripts/init-secrets.sh, docs/configuration.md).
+#
+# Two roles on purpose: `cla_owner` owns the schema and runs the migrations (`MIGRATION_DATABASE_URL`), `cla_app` is the
+# unprivileged runtime role (`DATABASE_URL`) that migration 001 grants minimal privileges to. The application never
+# owns its tables, which is what keeps the immutability triggers meaningful. The bootstrap superuser `postgres` is not
+# for the application.
+name: cla-gate-dev
+
+services:
+  postgres:
+    # Same major version as the CI database container (scripts/ci/postgres.ts) and as PGlite (PostgreSQL 18).
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgres_dev_only
+      CLA_OWNER_PASSWORD: cla_owner_dev_only
+      CLA_APP_PASSWORD: cla_app_dev_only
+      # The image runs every .sql file of its init directory by itself, so the SQL file of the script is mounted elsewhere.
+      CLA_PROVISION_SQL: /opt/cla/provision-database.sql
+    ports:
+      # Loopback only, on a port scripts/dev/db.ts chose. 5432 is the container's own port, not a host port.
+      - "127.0.0.1:${POSTGRES_PORT:?run yarn db:up, which picks a free port above 32768}:5432"
+    volumes:
+      # PostgreSQL 18 images keep the cluster in a versioned subdirectory, so the volume mounts one level up.
+      - cla-postgres-data:/var/lib/postgresql
+      - ./scripts/provision-database.sh:/docker-entrypoint-initdb.d/10-provision-database.sh:ro
+      - ./scripts/provision-database.sql:/opt/cla/provision-database.sql:ro
+    healthcheck:
+      # Over TCP: while the init scripts run, the temporary server listens on its socket only, so a socket check would
+      # report a database that is not provisioned yet.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cla_owner -d cla"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  cla-postgres-data:

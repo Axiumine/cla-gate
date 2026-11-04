@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
-import { ConfigError } from '../../config/env.ts';
+import { ConfigError } from '../../config/config-error.ts';
 import type { Clock } from '../../services/ports/clock.ts';
 import { APP_ROUTE, fetchApp } from './app-api.ts';
 import type { AppAuth } from './app-auth.ts';
@@ -63,7 +63,9 @@ export class AppIdentityCheck {
     // Compared as numbers: the id is digits only (E05-S01), and a GitHub id is a safe integer.
     if (app.id !== Number(appId)) {
       logger.error({ configuredAppId: appId, githubAppId: app.id }, 'github.app_id_mismatch');
-      throw new ConfigError(['GITHUB_APP_ID']);
+      throw new ConfigError([
+        { variable: 'GITHUB_APP_ID', rule: 'is not the id of the App that GitHub knows for GITHUB_APP_PRIVATE_KEY' },
+      ]);
     }
     const identity = toAppIdentity(app);
     this.#verified = identity;

@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { AUTH_ENV } from './auth-fixture/test-support.ts';
-import { ConfigError, loadConfig } from './env.ts';
+import { ConfigError } from './config-error.ts';
+import { loadConfig } from './env.ts';
+import { ruleOf } from './env-rules.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
@@ -41,7 +43,7 @@ test.each([
 ])('%s in GITHUB_ALLOWED_ACCOUNT_IDS is a ConfigError naming the variable, never the value', (_label, value) => {
   const error = capture({ GITHUB_ALLOWED_ACCOUNT_IDS: value });
   expect(error.variables).toEqual(['GITHUB_ALLOWED_ACCOUNT_IDS']);
-  expect(error.message).toBe('Invalid environment configuration: GITHUB_ALLOWED_ACCOUNT_IDS');
+  expect(error.lines).toEqual([`GITHUB_ALLOWED_ACCOUNT_IDS: ${ruleOf('GITHUB_ALLOWED_ACCOUNT_IDS')}`]);
 });
 
 test('a bad list is reported together with the other invalid variables', () => {

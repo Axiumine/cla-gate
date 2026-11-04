@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# The reverse proxy of the `tls` profile (E19-S05): TLS in front of the application, certificates obtained and renewed by
+# Caddy itself. The compose file passes PUBLIC_BASE_URL and ACME_EMAIL and mounts this file read-only. Operators with their
+# own proxy do not use this profile.
+#
+# What it does not do, on purpose:
+#  - It never sets Strict-Transport-Security: the application sends it (https origins only), and a second header from the
+#    proxy would make two.
+#  - It never limits the size of a request body or changes one: the HMAC of a webhook delivery covers the raw body, and GitHub
+#    sends up to 25 MiB. `encode` below compresses responses only.
+#  - It never trusts an upstream proxy (no `trusted_proxies`), so Caddy replaces any X-Forwarded-For, X-Forwarded-Proto and
+#    X-Forwarded-Host that a client sent with the ones it derives itself, and the application's TRUST_PROXY decides what it
+#    believes of them.
+#  - It keeps no access log: the application logs its own requests, and a log of this proxy would hold addresses and paths.
+{
+	# The contact address for Let's Encrypt expiry notices. Empty means none: an empty quoted string is an empty argument,
+	# whereas a bare placeholder that expands to nothing would be a missing one and Caddy would refuse the file.
+	email "{$ACME_EMAIL}"
+	# The internal CA's root certificate (`https://localhost` only) is kept in the data volume, where a test or an operator can
+	# copy it from. Installing it into this container's own trust store would fail on the read-only file system and log an
+	# error, and nothing in the container would use it.
+	skip_install_trust
+}
+
+# An https:// origin, no path (PUBLIC_BASE_URL). A public name gets a certificate over ACME and plain HTTP is redirected to
+# HTTPS automatically; `https://localhost` gets one from Caddy's internal CA, which needs no public DNS. `header -Server`
+# removes the Server header of every response this site sends, the application's included; the redirect from plain HTTP is
+# answered by Caddy before any site and keeps Caddy's own.
+{$PUBLIC_BASE_URL} {
+	encode zstd gzip
+	header -Server
+	reverse_proxy app:3000
+}

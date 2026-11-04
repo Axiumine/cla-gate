@@ -895,6 +895,201 @@ jobs:
         if: ${{ always() && env.CLA_PG_CONTAINER != '' }}
         run: yarn ci:postgres stop
 
+  # The reverse proxy's configuration (E19-S05). Not a required check: it joins the `container` job of E19-S08 when that job exists
+  # and is stable. `yarn ci:caddy validate` runs `caddy validate` on docker/Caddyfile in a throw-away container of the pinned Caddy
+  # image (the one docker-compose.yml runs, a test keeps them equal), once for https://localhost and once for
+  # https://cla.example.com: no network, no published port, no certificate requested, the runner user's own uid, a per-run
+  # container name and the label cla-gate.ci=caddy. `docker run --rm` removes the container when it stops; the last step removes
+  # it when the job is cancelled in between. The image is pulled from Docker Hub by the first run; nothing is pushed.
+  caddy:
+    name: caddy
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. The container needs a Docker
+      # daemon the runner user can reach.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+          if ! docker info >/dev/null 2>&1; then
+            echo "::error title=Runner preflight::the Docker daemon is not reachable by $(id -un): install Docker or add the runner user to the docker group (docs/ci-runners.md)"
+            exit 1
+          fi
+          echo "docker server $(docker version --format '{{.Server.Version}}')"
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # The helper needs Node only; skipping the build scripts also skips the root postinstall, which CI never wants.
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      - name: Validate docker/Caddyfile with the pinned Caddy image
+        run: yarn ci:caddy validate
+      # The name comes from the validate step, never from the event; a job that never got that far skips the step.
+      - name: Remove the Caddy container
+        if: ${{ always() && env.CLA_CADDY_CONTAINER != '' }}
+        run: yarn ci:caddy stop
+
+  # The container smoke test (E19-S08). Not a required check: it becomes one only once it has been stable (CONTRIBUTING.md,
+  # Repository protection). It builds the image from the checkout and starts the operator stack of docker-compose.yml on the
+  # runner's Docker daemon, with the real scripts/init-secrets.sh, and reads it from outside: setup-mode boot, hardening and
+  # role separation on the stack of the global setup, then the scenarios of E19-S12, each on a stack of its own under its own
+  # compose project name and volumes (configured mode, failure injection, backup and restore, the `tls` profile) (`yarn smoke`,
+  # tests/smoke/). Before that it checks the compose file for the default and the `tls` profile. The `tls` scenario publishes
+  # Caddy on random loopback ports above 32768 and never on 80 or 443.
+  # Docker is shared with other repositories (docs/ci-runners.md, Containers and cleanup), so the run has a name of its own,
+  # CLA_SMOKE_RUN, built from the run id and attempt and set before docker runs; every container, network, volume and image of
+  # the test carries the labels cla-gate.ci=container and cla-gate.run=<that name>. The test removes its stack in its own
+  # teardown (`docker compose down -v`); the last step does it again for whatever a cancelled or killed run left, selecting by
+  # that name and those labels only. The app is published on a random loopback port above 32768, PostgreSQL on none, and
+  # nothing binds 80 or 443. Nothing is pushed anywhere: the image is built here and removed again. The compose logs of the
+  # stacks are written to reports/smoke by the test and uploaded when a step fails.
+  container:
+    name: container
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs: a Docker daemon the runner user
+      # can reach, and Compose v2 (`docker compose`).
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+          if ! docker info >/dev/null 2>&1; then
+            echo "::error title=Runner preflight::the Docker daemon is not reachable by $(id -un): install Docker or add the runner user to the docker group (docs/ci-runners.md)"
+            exit 1
+          fi
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "::error title=Runner preflight::Docker Compose v2 (docker compose) is not available to $(id -un): install the compose plugin (docs/ci-runners.md)"
+            exit 1
+          fi
+          echo "docker server $(docker version --format '{{.Server.Version}}'), $(docker compose version)"
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, the stacks' temporary directories) all live in the
+      # runner's temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      # The smoke test is a Vitest project; skipping the build scripts also skips the root postinstall, which CI never wants.
+      - name: Install dependencies
+        run: yarn install --immutable --mode=skip-build
+      # The compose file as the operator's docker compose reads it. It needs no secret file to be parsed.
+      - name: Validate the compose file (default profile)
+        run: docker compose config --quiet
+      - name: Validate the compose file (tls profile)
+        run: docker compose --profile tls config --quiet
+      # The name goes to the next steps before docker runs, so that the last step can remove a cancelled run's stacks. The ids
+      # are numbers set by the runner, never a field of the event.
+      - name: Name the smoke stacks of this run
+        run: echo "CLA_SMOKE_RUN=cla-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+      - name: Run the container smoke test
+        run: yarn smoke
+      - name: Upload the compose logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-compose-logs
+          path: reports/smoke/
+          retention-days: 7
+          if-no-files-found: ignore
+      # The name comes from the step above, never from the event; a job that never got that far skips the step.
+      - name: Remove the smoke stacks of this run
+        if: ${{ always() && env.CLA_SMOKE_RUN != '' }}
+        run: yarn ci:smoke stop
+
   # Memory leak scenarios (E20-S07), `yarn leaks:control` and then `yarn leaks`. Never a required check and never promoted: it
   # runs only on the nightly schedule, on a manual run and on a v* tag (a release candidate), so a pull request does not wait
   # for it. It waits for `coverage`, so a build that fails the unit tests is not measured. memlab has no exit code for a leak,
