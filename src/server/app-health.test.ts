@@ -55,10 +55,10 @@ test('GET /readyz answers 503 when the database accepts connections but never an
   const silent = await silentPostgres();
   const db = createPgDatabase({ connectionString: silent.url, onError: vi.fn() });
   const { app } = await testApp({ db, readinessTimeoutMs: 50 });
-  const started = Date.now();
+  // The database never answers, so the 503 comes only from the readiness timeout of 50 ms; without it the request would stay until
+  // the test timeout. No bound in seconds is asserted: one would flake on a loaded runner.
   const response = await app.inject('/readyz');
   expect(response.statusCode).toBe(503);
-  expect(Date.now() - started).toBeLessThan(2000);
   await silent.close();
 });
 

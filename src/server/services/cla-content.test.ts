@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { CLA_TEXT_MAX_BYTES } from '../../shared/cla-text.ts';
-import { indentedBullets, nestedQuotes } from '../../shared/test-support.ts';
+import { indentedBullets, MOST_LINEAR_SLOWDOWN, nestedQuotes, slowdownOf } from '../../shared/test-support.ts';
 import { prepareClaText, sha256Hex } from './cla-content.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 
@@ -105,11 +105,11 @@ test('a refusal never holds the text: not in its message, not in its details', (
   ]);
 });
 
-test('a text of 204 799 bytes made of setext headings is prepared in under two seconds: no parse waits on the request thread', () => {
-  const raw = 'a\n=\n'.repeat(51_199);
-  const started = performance.now();
-  const prepared = prepareClaText(raw);
-  expect(performance.now() - started).toBeLessThan(2000);
+const setextHeadings = (bytes: number): string => 'a\n=\n'.repeat(Math.floor(bytes / 4));
+
+test('a text of 204 796 bytes made of setext headings is prepared in time linear in its size: no parse waits on the request thread', () => {
+  const prepared = prepareClaText(setextHeadings(204_796));
   expect(prepared.contentSha256).toBe(sha256Hex(prepared.contentMd));
   expect(prepared.contentMd.length).toBeGreaterThan(204_000);
+  expect(slowdownOf(prepareClaText, setextHeadings, 204_796)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
 });

@@ -68,9 +68,9 @@ test.each([
 
 test('a server that does not answer within the timeout is unhealthy', async () => {
   const port = await serve(() => undefined);
-  const started = Date.now();
+  // The answer is `false` only because the timeout fired: the server never answers and fetch itself waits for minutes. A probe
+  // without its timeout would stay until the test timeout, so no bound in seconds is asserted (one would flake on a loaded runner).
   expect(await probe(port, 100)).toBe(false);
-  expect(Date.now() - started).toBeLessThan(2000);
 });
 
 test('a server that sends the headers and then stalls on the body is unhealthy', async () => {

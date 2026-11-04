@@ -5,9 +5,11 @@ import path from 'node:path';
 import process from 'node:process';
 import type { Env } from '../ci/lib/env.ts';
 import type { MutateDeps, Outcome } from './mutate-cli.ts';
+import { STRYKER_NODE_ARGS } from './node-args.ts';
 
 // The one place that starts a process for the mutation gate: Stryker's own entry point under the Node that runs this script
-// (no shell, no `yarn` in between, so a signal reaches Stryker itself and not a wrapper that would die before it saved).
+// (no shell, no `yarn` in between, so a signal reaches Stryker itself and not a wrapper that would die before it saved), with the
+// Node flags of node-args.ts.
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const STRYKER = path.join(ROOT, 'node_modules/@stryker-mutator/core/bin/stryker.js');
@@ -46,5 +48,5 @@ export function runChild(
 }
 
 export const systemDeps: MutateDeps = {
-  run: (args, env, budgetMs) => runChild(process.execPath, [STRYKER, ...args], env, budgetMs),
+  run: (args, env, budgetMs) => runChild(process.execPath, [...STRYKER_NODE_ARGS, STRYKER, ...args], env, budgetMs),
 };

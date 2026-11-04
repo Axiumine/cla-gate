@@ -207,3 +207,78 @@ export function generatedMarkdown(seed: number, count: number): string[] {
     return `${lines.join('\n')}\n`;
   });
 }
+
+/** Runs of container markers on one line (a quote, two bullets, a number with a dot), each as long as the number of bytes it is given. */
+export const MARKER_RUNS: readonly (readonly [label: string, build: (bytes: number) => string])[] = [
+  ['quotes', (bytes) => '> '.repeat(Math.floor(bytes / 2))],
+  ['bullets', (bytes) => '+ * '.repeat(Math.floor(bytes / 4))],
+  ['numbers', (bytes) => '1. '.repeat(Math.floor(bytes / 3))],
+];
+
+/** A clock in milliseconds from any starting point: `performance.now` in a test of the code, a counter in the test of `slowdownOf`. */
+export type Clock = () => number;
+
+/** How many times larger the large text of `slowdownOf` is than each of the small ones, which are as many as that. */
+export const SIZE_RATIO = 16;
+
+/**
+ * The slowdown that still counts as linear time. `slowdownOf` is 1 for a scan that reads each byte a fixed number of times and
+ * `SIZE_RATIO` (16) for one that reads every line again for every line. Measured for the scan of the CLA text on a machine at a
+ * load average of 140 on 32 cores, at its worst for this test: 0.5 to 2.2 for linear scans. The limit, 6, is nearly three times
+ * that and nearly three times under a quadratic scan. A fixed factor of slowness, the same on both sides, does not show here;
+ * the tests of the same texts check what the code returns.
+ */
+export const MOST_LINEAR_SLOWDOWN = 6;
+
+/** Timed runs of each side: the fastest of them is kept, so a pause of the process (the garbage collector, other work on the machine) in one run costs nothing. */
+const TIMED_RUNS = 7;
+
+/** The least time, in milliseconds, that is taken as measured: a run below it (a scan that stops on the first line) is within the noise of the clock and would make the ratio of two noises. */
+const CLOCK_FLOOR_MS = 0.05;
+
+/** The milliseconds `task` takes. */
+function timeOf(task: () => void, now: Clock): number {
+  const started = now();
+  task();
+  return now() - started;
+}
+
+/**
+ * How many times longer one pass of `work` over a text of `bytes` bytes takes than `SIZE_RATIO` passes over a text of
+ * `bytes / SIZE_RATIO` bytes, both made by `build`: the same amount of text on both sides. 1 is linear time, `SIZE_RATIO`
+ * quadratic; compare it with `MOST_LINEAR_SLOWDOWN`. A test that asserts a bound in seconds fails on a slow or busy machine and
+ * proves nothing on a fast one, and the ratio of two single runs of different lengths is biased by the load: the scheduler cuts a
+ * long run more often than a short one, and the fastest of several short runs is nearly free of it (a run of the large text over
+ * the run of one small text read 80 where linear is 16, at a load average of 140). Two sides that last about as long are cut
+ * alike, so the ratio holds on a busy machine. Each side is timed `TIMED_RUNS` times, one after the other, and the fastest of each
+ * is compared.
+ * @param work The code under test.
+ * @param build The text of the given size in bytes.
+ * @param bytes The size of the large text.
+ * @param now The clock; the test of this function passes a counter.
+ * @returns The time of the large text divided by the time of the small texts.
+ */
+export function slowdownOf(
+  work: (text: string) => unknown,
+  build: (bytes: number) => string,
+  bytes: number,
+  now: Clock = () => performance.now(),
+): number {
+  const small = build(Math.floor(bytes / SIZE_RATIO));
+  const large = build(bytes);
+  let fastestSmall = Number.POSITIVE_INFINITY;
+  let fastestLarge = Number.POSITIVE_INFINITY;
+  for (let run = 0; run < TIMED_RUNS; run += 1) {
+    const smalls = timeOf(() => {
+      for (let copy = 0; copy < SIZE_RATIO; copy += 1) {
+        work(small);
+      }
+    }, now);
+    fastestSmall = Math.min(fastestSmall, smalls);
+    fastestLarge = Math.min(
+      fastestLarge,
+      timeOf(() => work(large), now),
+    );
+  }
+  return fastestLarge / Math.max(fastestSmall, CLOCK_FLOOR_MS);
+}
