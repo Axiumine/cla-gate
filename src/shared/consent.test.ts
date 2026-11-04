@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { CONSENT_TEXTS, CURRENT_CONSENT_ID, getConsentText } from './consent.ts';
+import { CONSENT_TEXTS, CURRENT_CONSENT_ID, currentIndividualConsent, getConsentText } from './consent.ts';
 
 // E13-S01: the registry of consent sentences. What a signature proves is the id it stores, so these tests pin what each id
 // means: a published sentence is never edited, and a new sentence is a new id.
@@ -114,4 +114,13 @@ test.each([
   ['prototype', 'prototype'],
 ])('getConsentText returns undefined for %s without throwing', (_what, id) => {
   expect(getConsentText(id)).toBeUndefined();
+});
+
+test('the consent offered to an individual is the id of CURRENT_CONSENT_ID with the sentence of that very entry (E13-S02)', () => {
+  expect(currentIndividualConsent()).toEqual({
+    id: 'individual-v1',
+    text: CONSENT_TEXTS['individual-v1'].text,
+  });
+  expect(currentIndividualConsent().id).toBe(CURRENT_CONSENT_ID.individual);
+  expect(getConsentText(currentIndividualConsent().id)?.text).toBe(currentIndividualConsent().text);
 });

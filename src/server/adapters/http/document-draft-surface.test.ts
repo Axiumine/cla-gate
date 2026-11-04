@@ -9,10 +9,10 @@ import { auditRows, documentsPath, documentWorld, saveDraftAs } from './document
 
 // Where a draft can be seen (E12-S03). A draft is the work in progress of the admins of a scope, and it is not part of any
 // document a contributor can reach: the document carries the flag `hasDraft` and nothing else, and only the draft routes
-// read the text. Contributor-facing routes (the sign context and the list of one's own signatures, E13) do not exist yet,
-// so the guard is twofold: every route that answers today is swept for the text of a draft, and the files that may read
-// the table are listed, so the route that is added next cannot read a draft without this list changing in the open.
-// E13 adds its own case for the sign context of a repository that has a draft.
+// read the text. The guard is twofold: every route that answers is swept for the text of a draft, and the files that may read
+// the table are listed, so the route that is added next cannot read a draft without this list changing in the open. The sign
+// context (E13-S02), the one contributor-facing route that serves a document, is swept here too and has its own case next to
+// the route (sign-context-drafts.test.ts).
 
 const MARKER = 'DRAFT-ONLY-WORDING-7f3a91';
 
@@ -32,6 +32,7 @@ function urlFor(
     readonly installationId: number;
     readonly documentId: number;
     readonly repositoryId: number;
+    readonly githubRepoId: number;
     readonly versionId: number;
   },
 ): string {
@@ -43,6 +44,8 @@ function urlFor(
         return String(ids.documentId);
       case 'repositoryId':
         return String(ids.repositoryId);
+      case 'githubRepoId':
+        return String(ids.githubRepoId);
       case 'versionId':
         return String(ids.versionId);
       default:
@@ -51,6 +54,45 @@ function urlFor(
         );
     }
   });
+}
+
+/**
+ * The sign context (E13-S02) serves the document a repository enforces: the scoped repository of tenant 1 is made to enforce the
+ * document that has the drafts, whose active version is `versionId`.
+ */
+async function enforceScopedDocument(
+  world: Awaited<ReturnType<typeof documentWorld>>,
+  versionId: number,
+): Promise<void> {
+  const documentId = world.t1.scoped.documentId;
+  await world.db
+    .updateTable('cla_documents')
+    .set({ active_version_id: versionId })
+    .where('id', '=', documentId)
+    .execute();
+  await world.db
+    .updateTable('repositories')
+    .set({ cla_document_id: documentId })
+    .where('id', '=', world.t1.scoped.repositoryId)
+    .execute();
+}
+
+/** Creates a document and renames the one with the drafts: the other mutations of a document, with the answers they gave. */
+async function createAndRename(
+  world: Awaited<ReturnType<typeof documentWorld>>,
+  documentId: number,
+): Promise<{ statuses: number[]; body: string }> {
+  const created = await world.ask('admin1', {
+    method: 'POST',
+    url: documentsPath(world.t1.installationId),
+    payload: { name: 'Another', kind: 'individual' },
+  });
+  const renamed = await world.ask('admin1', {
+    method: 'PATCH',
+    url: `${documentsPath(world.t1.installationId)}/${documentId}`,
+    payload: { name: 'Renamed' },
+  });
+  return { statuses: [created.statusCode, renamed.statusCode], body: created.body + renamed.body };
 }
 
 test('the text of a draft is in the answer of no route that answers today but the read of the draft: every GET is swept, and the other mutations of a document', async () => {
@@ -65,11 +107,13 @@ test('the text of a draft is in the answer of no route that answers today but th
     minor: 0,
     text: 'Published wording\n',
   });
+  await enforceScopedDocument(world, published.id);
   await world.app.ready();
   const ids = {
     ...wide,
     documentId: scoped.documentId,
     repositoryId: world.t1.scoped.repositoryId,
+    githubRepoId: world.t1.scoped.githubRepoId,
     versionId: published.id,
   };
   const reads = world.app.routeAccess.filter(
@@ -83,18 +127,11 @@ test('the text of a draft is in the answer of no route that answers today but th
     })),
   );
   expect(answers.filter((answer) => answer.body.includes(MARKER)).map((answer) => answer.route)).toEqual([]);
-  const created = await world.ask('admin1', {
-    method: 'POST',
-    url: documentsPath(world.t1.installationId),
-    payload: { name: 'Another', kind: 'individual' },
-  });
-  const renamed = await world.ask('admin1', {
-    method: 'PATCH',
-    url: `${documentsPath(world.t1.installationId)}/${scoped.documentId}`,
-    payload: { name: 'Renamed' },
-  });
-  expect([created.statusCode, renamed.statusCode]).toEqual([201, 200]);
-  expect(created.body + renamed.body).not.toContain(MARKER);
+  // The sign context answered with the published version of the document that has the draft: the sweep covered a real answer.
+  expect(answers.find((answer) => answer.route === '/api/sign/:githubRepoId')?.body).toContain('Published wording');
+  const mutated = await createAndRename(world, scoped.documentId);
+  expect(mutated.statuses).toEqual([201, 200]);
+  expect(mutated.body).not.toContain(MARKER);
   const read = await world.ask('admin1', {
     method: 'GET',
     url: `${documentsPath(world.t1.installationId)}/${scoped.documentId}/draft`,

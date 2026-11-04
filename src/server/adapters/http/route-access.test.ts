@@ -241,6 +241,7 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
     'GET /api/me/export',
+    'GET /api/sign/:githubRepoId',
     'POST /webhooks/github',
   ]);
 });

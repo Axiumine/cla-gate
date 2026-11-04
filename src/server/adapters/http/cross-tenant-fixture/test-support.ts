@@ -4,9 +4,10 @@ import type { Kysely } from 'kysely';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
+import { signContextResponseSchema, signContextRoute } from '../../../../shared/sign-context.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
-import type { RowTable } from '../../db/tenant-fixture/test-support.ts';
+import type { RowTable, TenantWorld } from '../../db/tenant-fixture/test-support.ts';
 import { sha256 } from '../../db/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
@@ -94,6 +95,11 @@ interface IsolationViewer {
 }
 
 export interface IsolationCase {
+  /**
+   * Puts the world of the matrix in the state the request needs, for both tenants, before the first call (a repository that
+   * enforces a document that has a version). Without it a case has the rows `twoTenants` stores.
+   */
+  readonly arrange?: (db: Kysely<Database>, tenants: readonly TenantWorld[]) => Promise<void>;
   /** The request of the viewer for their own resource; `injected` names resources of the other tenant, to try in a path, a query or a body. */
   readonly request: (own: MatrixTarget, injected: MatrixTarget | null) => RequestSpec;
   /** The tenant rows the body of the answer names. */
@@ -322,9 +328,44 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
 };
 
 /**
- * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `GET /api/me/signatures`; E16:
- * `GET /api/me/export`). The export of a person's own data names the signatures of the person in every tenant, and the
- * personal data kept for each; the route takes no parameter at all (a query parameter is a `400`, shown in
+ * The sign context (E13-S02) is open to any signed-in person and answers with the document, version and signatures of the tenant
+ * that holds the repository the path names. The path is the only input, so there is no id of another tenant to inject: the
+ * request is the same with or without it, and the answer must be the same. The matrix makes the scoped repository of each
+ * tenant enforce the tenant's document (version 1.0, signed by the tenant's signer), so tenant 1's signer is shown tenant 1's
+ * document, version and own signature and nothing of tenant 2.
+ */
+const SIGN_CONTEXT_CASE: IsolationCase = {
+  arrange: async (db, tenants) => {
+    await Promise.all(
+      tenants.map((tenant) =>
+        db
+          .updateTable('repositories')
+          .set({ cla_document_id: tenant.documentId })
+          .where('id', '=', tenant.scoped.repositoryId)
+          .execute(),
+      ),
+    );
+  },
+  request: (own) => ({
+    method: 'GET',
+    url: signContextRoute.path.replace(':githubRepoId', String(own.githubRepoId)),
+  }),
+  rows: (body) => {
+    const context = signContextResponseSchema.parse(body);
+    return [
+      { table: 'cla_documents' as const, id: context.document.id },
+      { table: 'cla_versions' as const, id: context.version.id },
+      ...(context.signature === null ? [] : [{ table: 'signatures' as const, id: context.signature.id }]),
+    ];
+  },
+  mayShow: (owner, viewer) =>
+    owner.installationId === viewer.own.installationId && (owner.userId === null || owner.userId === viewer.userId),
+};
+
+/**
+ * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, E13-S06 adds
+ * `GET /api/me/signatures`; E16: `GET /api/me/export`). The export of a person's own data names the signatures of the person in
+ * every tenant, and the personal data kept for each; the route takes no parameter at all (a query parameter is a `400`, shown in
  * data-export-routes.test.ts), so there is nothing of another tenant to inject and the request is the same with or without it.
  */
 export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
@@ -341,6 +382,7 @@ export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
     // Every export appends an audit row that the next one lists, so the second answer holds one entry more than the first.
     stable: (body) => ({ ...dataExportSchema.parse(body), auditEntries: [] }),
   },
+  [`GET ${signContextRoute.path}`]: SIGN_CONTEXT_CASE,
 };
 
 /** The `authenticated` routes that return no tenant data, each with the reason, so a new one is a decision somebody reads. */

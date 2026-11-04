@@ -13,10 +13,18 @@
 // to, so a test pins the SHA-256 of each text and an edit fails it. New wording is a new id (`individual-v2`), added next to the
 // old one: old ids stay resolvable forever because old signatures reference them.
 
-/** The kinds of signer a consent sentence is written for. Corporate signing (E21) adds its own kind and its own sentence. */
+/**
+ * The kinds of signer a consent sentence is written for. Corporate signing (E21) adds its own kind and its own sentence.
+ *
+ * @internal
+ */
 export type ConsentKind = 'individual';
 
-/** One consent sentence: who it is for and the plain text shown beside the checkbox (never Markdown, never HTML). */
+/**
+ * One consent sentence: who it is for and the plain text shown beside the checkbox (never Markdown, never HTML).
+ *
+ * @internal
+ */
 export interface ConsentText {
   readonly kind: ConsentKind;
   readonly text: string;
@@ -25,6 +33,8 @@ export interface ConsentText {
 /**
  * Every consent sentence ever offered, by id. An id matches `^[a-z0-9-]+-v[0-9]+$` and is 1 to 64 characters long, so it
  * always fits `signatures.consent_text_id` (non-empty text). Entries are only ever added: never edit, reorder or remove one.
+ *
+ * @internal
  */
 export const CONSENT_TEXTS = Object.freeze({
   'individual-v1': Object.freeze<ConsentText>({
@@ -38,7 +48,11 @@ export const CONSENT_TEXTS = Object.freeze({
 /** An id of {@link CONSENT_TEXTS}. */
 export type ConsentTextId = keyof typeof CONSENT_TEXTS;
 
-/** The id offered today for each kind of signer. A new sentence becomes current here, in the same change that adds it above. */
+/**
+ * The id offered today for each kind of signer. A new sentence becomes current here, in the same change that adds it above.
+ *
+ * @internal
+ */
 export const CURRENT_CONSENT_ID: Readonly<Record<ConsentKind, ConsentTextId>> = Object.freeze({
   individual: 'individual-v1',
 });
@@ -49,7 +63,14 @@ const BY_ID: ReadonlyMap<string, ConsentText> = new Map(Object.entries(CONSENT_T
 /**
  * The consent sentence with this id, or `undefined` for an id that was never issued. Never throws, whatever the input.
  * @param id the `consent_text_id` of a signature or of a sign request
+ *
+ * @internal
  */
 export function getConsentText(id: string): ConsentText | undefined {
   return BY_ID.get(id);
+}
+
+/** The consent sentence offered to an individual today with its id: what the sign page shows and the sign request sends back (E13-S02). */
+export function currentIndividualConsent(): { readonly id: ConsentTextId; readonly text: string } {
+  return { id: CURRENT_CONSENT_ID.individual, text: CONSENT_TEXTS[CURRENT_CONSENT_ID.individual].text };
 }

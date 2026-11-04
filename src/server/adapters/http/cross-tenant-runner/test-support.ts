@@ -439,6 +439,7 @@ async function rowsNotShown(world: MatrixWorld, c: IsolationCase, viewer: Viewer
  * tenant injected (in a path, a query or a body) is the answer without them.
  */
 export async function assertIsolationCase(world: MatrixWorld, route: string, c: IsolationCase): Promise<void> {
+  await c.arrange?.(world.db, [world.t1, world.t2]);
   for (const viewer of viewersOf(world)) {
     expect((await world.ask(null, c.request(viewer.own, null))).statusCode, `${route} with no session`).toBe(401);
     const clean = await world.ask(viewer.person, c.request(viewer.own, null));

@@ -28,6 +28,7 @@ import { guardRouteAccess } from './adapters/http/route-access-guard.ts';
 import { securityHeaders } from './adapters/http/security.ts';
 import { setupRoutes } from './adapters/http/setup-routes.ts';
 import type { SetupSessions } from './adapters/http/setup-sessions.ts';
+import { signContextRoutes } from './adapters/http/sign-context-routes.ts';
 import { signatureCsvRoutes } from './adapters/http/signature-csv-routes.ts';
 import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
@@ -168,6 +169,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   });
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });
+  await app.register(signContextRoutes, { db });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

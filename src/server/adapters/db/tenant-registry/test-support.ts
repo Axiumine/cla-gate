@@ -49,6 +49,7 @@ import {
   VERSION_WRITES,
 } from '../tenant-registry-versions/test-support.ts';
 import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from '../tenant-scope.ts';
+import { SIGN_TENANT_QUERIES } from '../tenant-sign-fixture/test-support.ts';
 
 // The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
 // table; `TENANT_QUERIES` has an entry for every function they export, with the factory of its fixture arguments: how to
@@ -85,6 +86,7 @@ export const TENANT_MODULES = [
   'services/repository-queries.ts',
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
+  'services/sign-context-queries.ts',
   'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
   'services/tenant-queries.ts',
@@ -463,6 +465,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   ...EXPORT_TENANT_QUERIES,
   // The statements of the reporter over the evaluation rows (E09-S04).
   ...LINK_TENANT_QUERIES,
+  // The statements of the sign page context (E13-S02).
+  ...SIGN_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */
