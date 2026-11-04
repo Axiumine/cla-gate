@@ -23,7 +23,7 @@ export const HOUR_MS = 3_600_000;
  * The budget of each client address per minute: the global one, and the overrides of the login routes (E10-S08). A route
  * takes its override through {@link routeRateLimit}. `signatureExport` is the budget of each signed-in person for the
  * signature CSV (E16-S03) per minute, and `dataExport` the budget for their own data (E16-S06) per hour, both taken through
- * {@link userRateLimit}.
+ * {@link userRateLimit}; `sign` is the budget of each signed-in person for the sign request (E13-S04) per minute, taken the same way.
  */
 export const RATE_LIMITS = {
   global: 600,
@@ -33,6 +33,7 @@ export const RATE_LIMITS = {
   session: 120,
   signatureExport: 6,
   dataExport: 5,
+  sign: 10,
 } as const;
 
 /**

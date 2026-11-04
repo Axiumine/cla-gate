@@ -23,6 +23,7 @@ test('findSignRepository finds the active repository by its GitHub id, whichever
   const { db, t1, t2 } = await world();
   expect(await findSignRepository(db, t1.plain.githubRepoId)).toEqual({
     installationId: t1.installationId,
+    repositoryId: t1.plain.repositoryId,
     githubRepoId: t1.plain.githubRepoId,
     fullName: 'org-1/repo',
     claDocumentId: null,
@@ -80,6 +81,7 @@ test('findSignDocument reads the document of the tenant with the exact text and 
   expect(document).toEqual({
     id: t1.documentId,
     name: 'Individual CLA',
+    kind: 'individual',
     version: {
       id: t1.versionId,
       major: 1,

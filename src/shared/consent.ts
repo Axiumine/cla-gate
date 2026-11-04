@@ -15,8 +15,6 @@
 
 /**
  * The kinds of signer a consent sentence is written for. Corporate signing (E21) adds its own kind and its own sentence.
- *
- * @internal
  */
 export type ConsentKind = 'individual';
 
@@ -50,8 +48,6 @@ export type ConsentTextId = keyof typeof CONSENT_TEXTS;
 
 /**
  * The id offered today for each kind of signer. A new sentence becomes current here, in the same change that adds it above.
- *
- * @internal
  */
 export const CURRENT_CONSENT_ID: Readonly<Record<ConsentKind, ConsentTextId>> = Object.freeze({
   individual: 'individual-v1',

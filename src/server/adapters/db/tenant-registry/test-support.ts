@@ -87,6 +87,7 @@ export const TENANT_MODULES = [
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
   'services/sign-context-queries.ts',
+  'services/sign-record-queries.ts',
   'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
   'services/tenant-queries.ts',

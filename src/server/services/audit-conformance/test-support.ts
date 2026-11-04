@@ -89,6 +89,18 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       },
     },
   ],
+  'services/sign-write.ts#signature.created': [
+    {
+      action: 'signature.created',
+      subject: { type: 'signature', id: 31 },
+      metadata: { document_id: 12, version_id: 21, major: 1, source_repository_id: 9, source_pr_number: 45 },
+    },
+    {
+      action: 'signature.created',
+      subject: { type: 'signature', id: 32 },
+      metadata: { document_id: 12, version_id: 22, major: 2, source_repository_id: 9, source_pr_number: null },
+    },
+  ],
   'services/dead-letter/dead-letter-sync.ts#installation.sync_failed': [
     {
       action: 'installation.sync_failed',

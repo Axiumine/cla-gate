@@ -144,7 +144,7 @@ test('the route declared webhook is exactly POST /webhooks/github', async () => 
   expect(declared).toEqual(['POST /webhooks/github']);
 });
 
-test('the authenticated routes are the session read, the logout, the export of the own data and the sign context, and none has a tenant parameter', async () => {
+test('the authenticated routes are the session read, the logout, the export of the own data, the sign context and the sign request, and none has a tenant parameter', async () => {
   const { table } = await tableOfTheApp();
   const authenticated = table.filter((entry) => entry.access === 'authenticated');
   expect(sorted(authenticated.map(nameOf))).toEqual([
@@ -152,6 +152,7 @@ test('the authenticated routes are the session read, the logout, the export of t
     'GET /api/me/export',
     'GET /api/sign/:githubRepoId',
     'POST /api/auth/logout',
+    'POST /api/sign',
   ]);
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });

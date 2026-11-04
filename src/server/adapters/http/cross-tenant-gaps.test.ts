@@ -117,7 +117,7 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);
-  expect(Object.keys(ISOLATION_CASES)).toEqual(['GET /api/me/export', 'GET /api/sign/:githubRepoId']);
+  expect(Object.keys(ISOLATION_CASES)).toEqual(['GET /api/me/export', 'GET /api/sign/:githubRepoId', 'POST /api/sign']);
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
 });
@@ -214,6 +214,27 @@ test('the isolation case of the sign context names the document, the version and
   expect(isolation?.mayShow({ installationId: 1, userId: 10 }, viewer)).toBe(true);
   expect(isolation?.mayShow({ installationId: 1, userId: 11 }, viewer)).toBe(false);
   expect(isolation?.mayShow({ installationId: 2, userId: null }, viewer)).toBe(false);
+});
+
+test('the isolation case of the sign request names the signature of an answer, asks as the viewer for their own repository, and shows a person only their own signature of their own tenant', () => {
+  const isolation = ISOLATION_CASES['POST /api/sign'];
+  const answer = {
+    signature: { id: 5, versionId: 4, major: 1, minor: 0, signedAt: '2026-11-02T10:00:00.000Z' },
+    created: false,
+  };
+  expect(isolation?.rows(answer)).toEqual([{ table: 'signatures', id: 5 }]);
+  const target = { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 9001 };
+  const sent = isolation?.request(target, null);
+  expect(sent).toMatchObject({
+    method: 'POST',
+    url: '/api/sign',
+    payload: { githubRepoId: 9001, consentTextId: 'individual-v1' },
+  });
+  expect(sent).toEqual(isolation?.request(target, { ...target, githubRepoId: 18_001 }));
+  const viewer = { userId: 10, own: target };
+  expect(isolation?.mayShow({ installationId: 1, userId: 10 }, viewer)).toBe(true);
+  expect(isolation?.mayShow({ installationId: 1, userId: 11 }, viewer)).toBe(false);
+  expect(isolation?.mayShow({ installationId: 2, userId: 10 }, viewer)).toBe(false);
 });
 
 type Db = Awaited<ReturnType<typeof migratedTestDatabase>>['db'];

@@ -14,6 +14,8 @@ import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 export interface SignRepository {
   /** `installations.id` of the tenant that holds the repository: the scope of every later read. */
   readonly installationId: InstallationRowId;
+  /** `repositories.id`: the key a signature names as its source (`signatures.source_repository_id`). */
+  readonly repositoryId: number;
   readonly githubRepoId: number;
   /** The `owner/name` GitHub showed at the last sync: a display snapshot. */
   readonly fullName: string;
@@ -38,6 +40,7 @@ export async function findSignRepository(db: Kysely<Database>, githubRepoId: num
     .innerJoin('installations as i', 'i.id', 'r.installation_id')
     .select([
       'r.installation_id as installationId',
+      'r.id as repositoryId',
       'r.github_repo_id as githubRepoId',
       'r.full_name as fullName',
       'r.cla_document_id as claDocumentId',
@@ -67,6 +70,8 @@ interface ActiveVersion {
 export interface SignDocument {
   readonly id: number;
   readonly name: string;
+  /** Who the document is for: only an `individual` document is signed through the sign page (corporate signing is E21). */
+  readonly kind: 'individual' | 'corporate';
   readonly version: ActiveVersion;
 }
 
@@ -87,6 +92,7 @@ export async function findSignDocument(
     .select([
       'd.id as documentId',
       'd.name as documentName',
+      'd.kind as documentKind',
       'v.id as versionId',
       'v.major',
       'v.minor',
@@ -104,6 +110,7 @@ export async function findSignDocument(
   return {
     id: row.documentId,
     name: row.documentName,
+    kind: row.documentKind,
     version: {
       id: row.versionId,
       major: row.major,

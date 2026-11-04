@@ -44,7 +44,7 @@ export type SignState = (typeof SIGN_STATES)[number];
 export const SIGN_BLOCKED_REASONS = ['no_verified_email'] as const;
 
 /** A signature that covers or once covered the viewer. Who revoked a signature and why is never part of it. */
-const signatureViewSchema = z.strictObject({
+export const signatureViewSchema = z.strictObject({
   id,
   major: z.int().nonnegative(),
   minor: z.int().nonnegative(),

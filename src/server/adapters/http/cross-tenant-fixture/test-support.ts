@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
+import { signResponseSchema, signRoute } from '../../../../shared/sign.ts';
 import { signContextResponseSchema, signContextRoute } from '../../../../shared/sign-context.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
@@ -362,8 +363,55 @@ const SIGN_CONTEXT_CASE: IsolationCase = {
     owner.installationId === viewer.own.installationId && (owner.userId === null || owner.userId === viewer.userId),
 };
 
+/** The version in force and its hash for the repository of each tenant, by GitHub's id of the repository, as `SIGN_CASE` arranged them. */
+const SIGN_TARGETS = new Map<number, { readonly versionId: number; readonly contentSha256: string }>();
+
 /**
- * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, E13-S06 adds
+ * The sign request (E13-S04) is open to any signed-in person and writes to the tenant that holds the repository its body names.
+ * The body is the only input, and it is strict, so there is no id of another tenant to inject: the request is the same with or
+ * without it, and the answer must be the same (the cases that put a version of one tenant into the request of another are in
+ * sign-routes-tenants.test.ts). The matrix makes the scoped repository of each tenant enforce the tenant's document, gives every
+ * session a verified address, and asks as the two signers of the world, who signed version 1.0 of their own tenant's document
+ * already: the answer is the repeat (`200`, `created: false`) with the signature each of them has, so that the call can be made
+ * more than once and writes nothing, and what it names is that signature and no other.
+ */
+const SIGN_CASE: IsolationCase = {
+  arrange: async (db, tenants) => {
+    await Promise.all(
+      tenants.map(async (tenant) => {
+        SIGN_TARGETS.set(tenant.scoped.githubRepoId, {
+          versionId: tenant.versionId,
+          contentSha256: tenant.contentSha256,
+        });
+        await db
+          .updateTable('repositories')
+          .set({ cla_document_id: tenant.documentId })
+          .where('id', '=', tenant.scoped.repositoryId)
+          .execute();
+      }),
+    );
+    await db
+      .updateTable('sessions')
+      .set({ verified_emails: JSON.stringify([{ email: 'ada@example.org', primary: true }]) })
+      .execute();
+  },
+  request: (own) => ({
+    method: 'POST',
+    url: signRoute.path,
+    payload: {
+      githubRepoId: own.githubRepoId,
+      ...SIGN_TARGETS.get(own.githubRepoId),
+      consentTextId: 'individual-v1',
+      name: 'Ada Lovelace',
+      email: 'ada@example.org',
+    },
+  }),
+  rows: (body) => [{ table: 'signatures' as const, id: signResponseSchema.parse(body).signature.id }],
+  mayShow: (owner, viewer) => owner.installationId === viewer.own.installationId && owner.userId === viewer.userId,
+};
+
+/**
+ * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId` and `POST /api/sign`, E13-S06 adds
  * `GET /api/me/signatures`; E16: `GET /api/me/export`). The export of a person's own data names the signatures of the person in
  * every tenant, and the personal data kept for each; the route takes no parameter at all (a query parameter is a `400`, shown in
  * data-export-routes.test.ts), so there is nothing of another tenant to inject and the request is the same with or without it.
@@ -383,6 +431,7 @@ export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
     stable: (body) => ({ ...dataExportSchema.parse(body), auditEntries: [] }),
   },
   [`GET ${signContextRoute.path}`]: SIGN_CONTEXT_CASE,
+  [`POST ${signRoute.path}`]: SIGN_CASE,
 };
 
 /** The `authenticated` routes that return no tenant data, each with the reason, so a new one is a decision somebody reads. */

@@ -95,6 +95,9 @@ const SCOPED_QUERY_NAMES = [
   'adapters/db/pr-evaluation-links.ts hasNewerHeadRow',
   'services/sign-context-queries.ts findSignDocument',
   'services/sign-context-queries.ts listViewerSignatures',
+  'services/sign-record-queries.ts insertSignature',
+  'services/sign-record-queries.ts insertSignerPii',
+  'services/sign-record-queries.ts findLiveSignature',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {
