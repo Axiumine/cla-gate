@@ -27,6 +27,8 @@ test.each([
   'https://github.com.evil.example/settings/apps/new',
   'https://evil.example/https://github.com/',
   'https://user:pass@github.com/apps/x',
+  'https://user@github.com/apps/x',
+  'https://:pass@github.com/apps/x',
   'https://github.com@evil.example/apps/x',
   'https://GITHUB.com/apps/x',
   'https://github.com:8443/apps/x',
