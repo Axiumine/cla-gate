@@ -116,3 +116,23 @@ test('the credentials were issued for no one until they are, then for every sess
   expect(sessions.credentialsIssued).toBe(true);
   expect(store().sessions.credentialsIssued).toBe(false);
 });
+
+test('a state that was consumed can be given back to its session, and to that session alone (E19-S11)', () => {
+  const { sessions } = store();
+  const [mine, other] = [sessions.open(), sessions.open()];
+  const state = sessions.issueState(mine);
+  sessions.consumeState(mine);
+  sessions.restoreState(mine, state);
+  expect(mine.state).toBe(state);
+  expect(other.state).toBeUndefined();
+});
+
+test('a state is not given back over a newer one: the manifest issued meanwhile is the one that can be completed (E19-S11)', () => {
+  const { sessions } = store();
+  const session = sessions.open();
+  const old = sessions.issueState(session);
+  sessions.consumeState(session);
+  const newer = sessions.issueState(session);
+  sessions.restoreState(session, old);
+  expect(session.state).toBe(newer);
+});

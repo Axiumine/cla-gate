@@ -25,6 +25,12 @@ import { createSetupSessions } from '../setup-sessions.ts';
 /** The one-time code GitHub put in the address of the setup page: letters and digits, as the real ones are. */
 export const FAKE_CODE = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
 
+/** A second one-time code GitHub issued, for a second App created from the same manifest form (the double submit of a browser). */
+export const SECOND_CODE = 'f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9';
+
+/** The codes the fake GitHub has issued. */
+const ISSUED_CODES: readonly string[] = [FAKE_CODE, SECOND_CODE];
+
 /**
  * What the conversion hands out. Every value is made up and distinct, so a test can look for each one on its own anywhere a
  * secret could leak to.
@@ -88,6 +94,37 @@ export interface FakeManifestGithub {
   answerNext(answer: Answer): void;
   /** The codes that were converted. */
   readonly converted: string[];
+  /**
+   * The next call waits, once it has been received, until `release` is called, and then answers as it would have (its queued
+   * answer, or the usual one): a conversion that is under way while the test does something else. `arrived` settles when
+   * the call has been received.
+   */
+  holdNext(): { readonly arrived: Promise<undefined>; readonly release: () => void };
+}
+
+/** A call that waits: `arrived` is told when it was received, and the call goes on when `gate` settles. */
+interface Hold {
+  readonly arrived: () => void;
+  readonly gate: Promise<undefined>;
+}
+
+/** A call to hold, and what the test gets to see it arrive and to let it go on. */
+function holdCall() {
+  const gate = Promise.withResolvers<undefined>();
+  const arrived = Promise.withResolvers<undefined>();
+  const hold: Hold = {
+    arrived: () => {
+      arrived.resolve(undefined);
+    },
+    gate: gate.promise,
+  };
+  const handle = {
+    arrived: arrived.promise,
+    release: () => {
+      gate.resolve(undefined);
+    },
+  };
+  return { hold, handle };
 }
 
 /** Starts the mocked GitHub for the rest of the test; a request to any other address fails the test. */
@@ -95,6 +132,7 @@ export function fakeManifestGithub(): FakeManifestGithub {
   const requests: SentConversion[] = [];
   const converted: string[] = [];
   const queued: Answer[] = [];
+  const held: Hold[] = [];
   const server = setupServer(
     http.post('https://api.github.com/app-manifests/:code/conversions', async ({ request, params }) => {
       requests.push({
@@ -103,14 +141,20 @@ export function fakeManifestGithub(): FakeManifestGithub {
         headers: Object.fromEntries(request.headers.entries()),
         body: await request.text(),
       });
+      const hold = held.shift();
+      if (hold !== undefined) {
+        hold.arrived();
+        await hold.gate;
+      }
       const queuedAnswer = queued.shift();
       if (queuedAnswer !== undefined) {
         return queuedAnswer();
       }
-      if (params['code'] !== FAKE_CODE || converted.includes(FAKE_CODE)) {
+      const code = String(params['code']);
+      if (!ISSUED_CODES.includes(code) || converted.includes(code)) {
         return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
       }
-      converted.push(FAKE_CODE);
+      converted.push(code);
       return HttpResponse.json(conversionBody(), { status: 201 });
     }),
   );
@@ -118,7 +162,16 @@ export function fakeManifestGithub(): FakeManifestGithub {
   onTestFinished(() => {
     server.close();
   });
-  return { requests, converted, answerNext: (answer) => queued.push(answer) };
+  return {
+    requests,
+    converted,
+    answerNext: (answer) => queued.push(answer),
+    holdNext: () => {
+      const { hold, handle } = holdCall();
+      held.push(hold);
+      return handle;
+    },
+  };
 }
 
 /** What a setup `POST /api/setup/convert` carries when nothing is taken away; each part can be changed or dropped. */

@@ -46,12 +46,36 @@ export interface SetupSessions {
   renew(session: SetupSession): void;
   /** Gives `session` a new `state`, replacing the one it had: only the last manifest issued can be completed. */
   issueState(session: SetupSession): string;
-  /** Uses the `state` of `session` up (E19-S11): a conversion that reached GitHub's verdict cannot be completed a second time with it. */
+  /**
+   * Uses the `state` of `session` up (E19-S11). A conversion calls it before it asks GitHub, so that a second request that
+   * arrives while the first waits finds nothing to complete: the credentials of one manifest are issued once.
+   */
   consumeState(session: SetupSession): void;
+  /**
+   * Gives `state` back to `session` after a conversion that reached no verdict of GitHub's (an outage), so the same page can
+   * try again. A manifest issued meanwhile has replaced it, and the newer `state` stays.
+   */
+  restoreState(session: SetupSession, state: string): void;
   /** Whether this process has handed out the credentials of an App (E19-S11). It stays so until the process restarts, whichever session asks. */
   readonly credentialsIssued: boolean;
   /** Records that the credentials of an App were handed out: the manifest and the conversion answer `409` from now on. */
   markCredentialsIssued(): void;
+}
+
+/** A new `state` for `session`, replacing the one it had. */
+function issueState(session: SetupSession): string {
+  session.state = randomValue();
+  return session.state;
+}
+
+/** Empties the `state` of `session`. */
+function consumeState(session: SetupSession): void {
+  session.state = undefined;
+}
+
+/** Puts `state` back into `session` unless it holds one by now. */
+function restoreState(session: SetupSession, state: string): void {
+  session.state ??= state;
 }
 
 /** An empty store on `clock`. */
@@ -90,13 +114,9 @@ export function createSetupSessions(clock: Clock): SetupSessions {
       live.delete(session.id);
       live.set(session.id, session);
     },
-    issueState(session) {
-      session.state = randomValue();
-      return session.state;
-    },
-    consumeState(session) {
-      session.state = undefined;
-    },
+    issueState,
+    consumeState,
+    restoreState,
     get credentialsIssued() {
       return credentialsIssued;
     },

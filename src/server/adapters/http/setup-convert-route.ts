@@ -32,25 +32,27 @@ const FAILURES = {
 } as const satisfies Record<ConversionFailureReason, { readonly status: number; readonly code: string }>;
 
 /**
- * Asks GitHub for the credentials behind `code`. An outage (GitHub could not be reached, `5xx`, `429`) leaves the `state` of the
- * session as it is, so the same page can press the button again; any other answer of GitHub's uses the code up, so the `state`
- * goes with it and a new manifest is the way on. The failure is told by its own code and never by what GitHub said.
+ * Asks GitHub for the credentials behind `code`, after the conversion has taken `state` from `session`. Only a verdict of
+ * GitHub's uses the code up, so any answer of GitHub's keeps the `state` taken, while an outage (GitHub could not be reached,
+ * `5xx`, `429`) and an error that is not the conversion's own give it back, so the same page can press the button again. The
+ * failure is told by its own code and never by what GitHub said.
  * @throws AppError the mapped failure of a {@link ManifestConversionFailure}; anything else is not ours to name and passes as it is.
  */
 async function convertCode(
   conversion: ManifestConversion,
   sessions: SetupGuardDeps['sessions'],
   session: SetupSession,
-  code: string,
+  { code, state }: { readonly code: string; readonly state: string },
 ): Promise<ManifestCredentials> {
   try {
     return await conversion.convert(code);
   } catch (error) {
     if (!(error instanceof ManifestConversionFailure)) {
+      sessions.restoreState(session, state);
       throw error;
     }
-    if (error.reason !== 'unreachable') {
-      sessions.consumeState(session);
+    if (error.reason === 'unreachable') {
+      sessions.restoreState(session, state);
     }
     throw new AppError(FAILURES[error.reason].status, FAILURES[error.reason].code);
   }
@@ -60,10 +62,12 @@ async function convertCode(
  * `POST /api/setup/convert` (E19-S11): the last step of the manifest flow. It needs the setup session (cookie, CSRF token and
  * `Origin`, see {@link requireSetupSession}, checked before the body is read and before the answer of `409` once the
  * credentials have been handed out) and the `state` of the manifest this very session was given last, compared in constant
- * time; any other `state` is `400 setup_code_invalid`, the same answer as a code GitHub does not know. On success it answers
- * `200` with the credentials, once: the `state` is used up and this process refuses the manifest and the conversion from then
- * on. The credentials exist in this handler's memory from GitHub's answer to the end of the response; they are written to no
- * table, file, log line or error, and the `setup.credentials.issued` event carries nothing but the request id.
+ * time; any other `state` is `400 setup_code_invalid`, the same answer as a code GitHub does not know. The `state` is used up
+ * before GitHub is asked, with no `await` between the comparison and the use, so of two requests that arrive together with one
+ * `state` (a form posted to GitHub twice) only one asks and the other is `400`. On success it answers `200` with the
+ * credentials, once: this process refuses the manifest and the conversion from then on. The credentials exist in this
+ * handler's memory from GitHub's answer to the end of the response; they are written to no table, file, log line or error,
+ * and the `setup.credentials.issued` event carries nothing but the request id.
  */
 export function convertRoute(app: Routes, options: ConvertRouteOptions): void {
   app.post(
@@ -76,8 +80,8 @@ export function convertRoute(app: Routes, options: ConvertRouteOptions): void {
       if (session.state === undefined || !sameSecret(session.state, state)) {
         throw new AppError(FAILURES.code_invalid.status, FAILURES.code_invalid.code);
       }
-      const credentials = await convertCode(options.conversion, options.sessions, session, code);
       options.sessions.consumeState(session);
+      const credentials = await convertCode(options.conversion, options.sessions, session, { code, state });
       options.sessions.markCredentialsIssued();
       request.log.info('setup.credentials.issued');
       return credentials;
