@@ -4,6 +4,7 @@ import { NoResultError } from 'kysely';
 import { expect, test } from 'vitest';
 import { twoTenants } from '../adapters/db/tenant-fixture/test-support.ts';
 import { migratedTestDatabase, publishVersion, sha256 } from '../adapters/db/test-support.ts';
+import { NO_NETWORK_METADATA } from './network-metadata.ts';
 import { findLiveSignature, insertSignature, insertSignerPii, type NewSignature } from './sign-record-queries.ts';
 
 // The statements that record a signature (E13-S04). The route tests show them through the whole request; these show each one
@@ -124,6 +125,7 @@ test('insertSignerPii stores the name, the address and the login of the signatur
     name: 'Ada Lovelace',
     email: 'Ada@Example.org',
     login: 'ada',
+    network: NO_NETWORK_METADATA,
   });
   const row = await w.db
     .selectFrom('signer_pii')
@@ -135,7 +137,28 @@ test('insertSignerPii stores the name, the address and the login of the signatur
     name: 'Ada Lovelace',
     email: 'Ada@Example.org',
     login: 'ada',
+    ip_address: null,
+    user_agent: null,
   });
+});
+
+test('insertSignerPii stores the address and the user agent it is given, next to the rest, and nothing else of the row changes', async () => {
+  const w = await world();
+  const signatureId = await publisherSigns(w);
+  await insertSignerPii(w.db, w.scope, {
+    signatureId,
+    userId: w.t1.publisherId,
+    name: 'Ada Lovelace',
+    email: 'ada@example.org',
+    login: 'ada',
+    network: { ipAddress: '2001:db8::7', userAgent: 'zzzz-agent/1.0' },
+  });
+  const row = await w.db
+    .selectFrom('signer_pii')
+    .select(['name', 'ip_address', 'user_agent'])
+    .where('signature_id', '=', signatureId)
+    .executeTakeFirstOrThrow();
+  expect(row).toEqual({ name: 'Ada Lovelace', ip_address: '2001:db8::7', user_agent: 'zzzz-agent/1.0' });
 });
 
 test.each([
@@ -155,6 +178,7 @@ test.each([
     name: 'Eve',
     email: 'eve@example.org',
     login: 'eve',
+    network: NO_NETWORK_METADATA,
     ...change(w),
   };
   await expect(insertSignerPii(w.db, w.scope, input)).rejects.toBeInstanceOf(NoResultError);
@@ -164,7 +188,14 @@ test.each([
 test('insertSignerPii does not overwrite the personal data a signature has: a second row for it is refused', async () => {
   const w = await world();
   const signatureId = await publisherSigns(w);
-  const input = { signatureId, userId: w.t1.publisherId, name: 'Ada', email: 'ada@example.org', login: 'ada' };
+  const input = {
+    signatureId,
+    userId: w.t1.publisherId,
+    name: 'Ada',
+    email: 'ada@example.org',
+    login: 'ada',
+    network: NO_NETWORK_METADATA,
+  };
   await insertSignerPii(w.db, w.scope, input);
   await expect(insertSignerPii(w.db, w.scope, { ...input, name: 'Eve' })).rejects.toMatchObject({ code: '23505' });
   expect(

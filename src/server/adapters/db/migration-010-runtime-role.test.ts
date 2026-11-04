@@ -2,14 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
-import {
-  addNetworkColumns,
-  CUTOFF,
-  networkOf,
-  purgeAuditRows,
-  setNetwork,
-  shifted,
-} from './network-metadata-fixture/test-support.ts';
+import { CUTOFF, networkOf, purgeAuditRows, setNetwork, shifted } from './network-metadata-fixture/test-support.ts';
 import { asRuntimeRole, migratedRuntimeDatabase, seedSignature, seedTenant } from './test-support.ts';
 
 // What the runtime role may do about the network metadata after migration 010 (E16-S05): run the purge, and nothing that
@@ -20,7 +13,6 @@ const OLDER_THAN_CUTOFF = shifted(CUTOFF, -1);
 
 async function withRuntimeRole() {
   const { db } = await migratedRuntimeDatabase();
-  await addNetworkColumns(db);
   const tenant = await seedTenant(db);
   const { signatureId } = await seedSignature(db, tenant, 111);
   await setNetwork(db, signatureId, OLDER_THAN_CUTOFF, { ip: '203.0.113.7', userAgent: 'TestAgent/1.0' });

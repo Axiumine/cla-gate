@@ -29,8 +29,6 @@ const NOT_PERSONAL: Readonly<Record<string, string>> = {
  * second test below fails until it does), so the map only ever shrinks.
  */
 const PLANNED_COLUMNS: Readonly<Record<string, string>> = {
-  'signer_pii.ip_address': 'E13-S05 adds it',
-  'signer_pii.user_agent': 'E13-S05 adds it',
   'allowlist_entries.login_snapshot': 'E14-S06 adds it',
 };
 

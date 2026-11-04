@@ -3,7 +3,6 @@
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
 import {
-  addNetworkColumns,
   type NetworkValues,
   NOW,
   networkOf,
@@ -35,7 +34,6 @@ const DEFAULT_RETENTION_DAYS = loadConfig({
 /** A migrated database with the two columns and one signature whose values were stored at `storedAt`; `at(iso)` moves the clock and `run()` runs the job. */
 async function world(storedAt: string, retentionDays = DEFAULT_RETENTION_DAYS) {
   const { db } = await migratedTestDatabase();
-  await addNetworkColumns(db);
   const { signatureId } = await seedSignature(db, await seedTenant(db), 111);
   await setNetwork(db, signatureId, storedAt, BOTH);
   let now = NOW;

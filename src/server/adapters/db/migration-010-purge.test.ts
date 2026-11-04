@@ -4,8 +4,8 @@ import { sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { auditMetadataSchema } from '../../../shared/audit-metadata.ts';
 import {
-  addNetworkColumns,
   CUTOFF,
+  dropNetworkColumns,
   type NetworkValues,
   networkOf,
   purgeAuditRows,
@@ -15,7 +15,7 @@ import {
 import { containing, migratedTestDatabase, seedSignature, seedTenant } from './test-support.ts';
 
 // purge_signer_network_metadata (E16-S05): the IP address and the user agent of a signing are removed from every row created
-// before the cutoff, and nothing else is touched. The columns are E13-S05's; the tests add them like that migration does.
+// before the cutoff, and nothing else is touched. The columns are E13-S05's (migration 014).
 
 const BOTH: NetworkValues = { ip: '203.0.113.7', userAgent: 'TestAgent/1.0' };
 const NONE: NetworkValues = { ip: null, userAgent: null };
@@ -27,7 +27,6 @@ const PURGE = (cutoff: string) =>
 /** A migrated database with the two columns, one tenant and `sign(githubId, createdAt, values)`: a signature whose personal data row has them. */
 async function world() {
   const { db } = await migratedTestDatabase();
-  await addNetworkColumns(db);
   const tenant = await seedTenant(db);
   const sign = async (githubId: number, createdAt: string, values: NetworkValues): Promise<number> => {
     const { signatureId } = await seedSignature(db, tenant, githubId);
@@ -140,8 +139,9 @@ test('an audit row that cannot be written undoes the purge: no row loses its val
   expect(await purgeAuditRows(db)).toEqual([]);
 });
 
-test('before E13-S05 adds the columns there is nothing to purge: the function returns 0 and writes nothing', async () => {
+test('without the columns (a database from before migration 014) there is nothing to purge: the function returns 0 and writes nothing', async () => {
   const { db } = await migratedTestDatabase();
+  await dropNetworkColumns(db);
   const tenant = await seedTenant(db);
   await seedSignature(db, tenant, 1);
   await sql`update signer_pii set created_at = ${shifted(CUTOFF, -DAY)}::timestamptz`.execute(db);

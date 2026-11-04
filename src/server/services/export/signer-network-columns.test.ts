@@ -2,30 +2,29 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
-import { addNetworkColumns } from '../../adapters/db/network-metadata-fixture/test-support.ts';
+import { dropNetworkColumns } from '../../adapters/db/network-metadata-fixture/test-support.ts';
 import { migratedTestDatabase } from '../../adapters/db/test-support.ts';
 import { signerNetworkColumns } from './signer-network-columns.ts';
 
-// Which optional network columns of signer_pii exist (E16-S06): none before E13-S05, the two it defines after it.
+// Which optional network columns of signer_pii exist (E16-S06): both after migration 014 (E13-S05), and the lookup still tells
+// when one or both are missing, as in a database from before it.
 
-test('a database without E13-S05 has neither column', async () => {
+test('a migrated database has both columns', async () => {
   const { db } = await migratedTestDatabase();
+  expect(await signerNetworkColumns(db)).toEqual({ ipAddress: true, userAgent: true });
+});
+
+test('a database from before migration 014 has neither column', async () => {
+  const { db } = await migratedTestDatabase();
+  await dropNetworkColumns(db);
   expect(await signerNetworkColumns(db)).toEqual({ ipAddress: false, userAgent: false });
 });
 
 test.each([
-  ['the address only', 'ip_address inet', { ipAddress: true, userAgent: false }],
-  ['the user agent only', 'user_agent text', { ipAddress: false, userAgent: true }],
-])('with %s the lookup finds just that column', async (_label, column, expected) => {
+  ['the address only', 'user_agent', { ipAddress: true, userAgent: false }],
+  ['the user agent only', 'ip_address', { ipAddress: false, userAgent: true }],
+])('with %s the lookup finds just that column (the other was dropped)', async (_label, dropped, expected) => {
   const { db } = await migratedTestDatabase();
-  await sql`alter table signer_pii add column ${sql.raw(column)}`.execute(db);
+  await sql`alter table signer_pii drop column ${sql.id(dropped)}`.execute(db);
   expect(await signerNetworkColumns(db)).toEqual(expected);
-});
-
-test('with both columns the lookup finds both, and a dropped column is not there', async () => {
-  const { db } = await migratedTestDatabase();
-  await addNetworkColumns(db);
-  expect(await signerNetworkColumns(db)).toEqual({ ipAddress: true, userAgent: true });
-  await sql`alter table signer_pii drop column user_agent`.execute(db);
-  expect(await signerNetworkColumns(db)).toEqual({ ipAddress: true, userAgent: false });
 });

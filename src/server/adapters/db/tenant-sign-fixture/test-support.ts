@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, NoResultError } from 'kysely';
+import { NO_NETWORK_METADATA } from '../../../services/network-metadata.ts';
 import { findSignDocument, findSignRepository, listViewerSignatures } from '../../../services/sign-context-queries.ts';
 import { findLiveSignature, insertSignature, insertSignerPii } from '../../../services/sign-record-queries.ts';
 import type { Database } from '../schema.ts';
@@ -111,6 +112,7 @@ export const SIGN_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string
           name: 'Registry Name',
           email: 'registry@example.test',
           login: 'registry-login',
+          network: NO_NETWORK_METADATA,
         });
         return ownersOfSignatures(db, [signatureId]);
       },

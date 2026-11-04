@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
+import type { NetworkMetadata } from './network-metadata.ts';
 
 // The statements that record a signature (E13-S04), all called inside the one transaction of `recordSignature`. Each names the
 // installation next to the ids, so a document, a version or a signature of another tenant is never written: the row is selected
@@ -30,13 +31,17 @@ export interface StoredSignedSignature {
   readonly signedAt: Date;
 }
 
-/** What the personal data of a signature is made of: the name as cleaned, the address as GitHub reported it, the login snapshot. */
+/**
+ * What the personal data of a signature is made of: the name as cleaned, the address as GitHub reported it, the login snapshot
+ * and, when the operator records it (E13-S05), the network metadata of the request.
+ */
 export interface NewSignerPii {
   readonly signatureId: number;
   readonly userId: number;
   readonly name: string;
   readonly email: string;
   readonly login: string;
+  readonly network: NetworkMetadata;
 }
 
 /** Which signature is asked for: the person (`users.id`), the document and the major version. */
@@ -110,7 +115,7 @@ export async function insertSignature(
 export async function insertSignerPii(db: Kysely<Database>, scope: TenantScope, input: NewSignerPii): Promise<void> {
   await db
     .insertInto('signer_pii')
-    .columns(['signature_id', 'user_id', 'name', 'email', 'login'])
+    .columns(['signature_id', 'user_id', 'name', 'email', 'login', 'ip_address', 'user_agent'])
     .expression((eb) =>
       eb
         .selectFrom('signatures as s')
@@ -120,6 +125,8 @@ export async function insertSignerPii(db: Kysely<Database>, scope: TenantScope, 
           eb.cast<string>(eb.val(input.name), 'text').as('name'),
           eb.cast<string>(eb.val(input.email), 'text').as('email'),
           eb.cast<string>(eb.val(input.login), 'text').as('login'),
+          eb.cast<string | null>(eb.val(input.network.ipAddress), sql`inet`).as('ip_address'),
+          eb.cast<string | null>(eb.val(input.network.userAgent), 'text').as('user_agent'),
         ])
         .where('s.installation_id', '=', scope.installationId)
         .where('s.id', '=', input.signatureId)

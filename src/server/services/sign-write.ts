@@ -4,6 +4,7 @@ import type { Transaction } from 'kysely';
 import type { SignRequest } from '../../shared/sign.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { appendAudit } from './audit.ts';
+import type { NetworkMetadata } from './network-metadata.ts';
 import {
   findLiveSignature,
   insertSignature,
@@ -16,10 +17,14 @@ import type { SignerIdentity } from './signer-input.ts';
 // The inserts of the sign request (E13-S04), in the transaction the caller opened: the signature, the personal data of its signer
 // and the audit row, or none of them when the signature exists already. The checks that come before are in sign-record.ts.
 
-/** A sign request and the person who makes it. */
+/**
+ * A sign request, the person who makes it and the network metadata to store with their personal data (E13-S05; nothing, unless
+ * the operator switched recording on).
+ */
 export interface SignAttempt {
   readonly request: SignRequest;
   readonly viewer: SignViewer;
+  readonly network: NetworkMetadata;
 }
 
 /** A signature that was recorded now (`created`) or that existed already. */
@@ -87,6 +92,7 @@ export async function writeSignature(trx: Transaction<Database>, recording: Reco
     name: identity.name,
     email: identity.email,
     login: viewer.login,
+    network: attempt.network,
   });
   await auditSignature(trx, recording, inserted.id);
   return {

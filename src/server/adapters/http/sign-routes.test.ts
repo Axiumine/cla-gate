@@ -97,6 +97,8 @@ test('the personal data is stored in signer_pii: the cleaned name, the address a
     email: 'Ada@Example.org',
     login: 'login-1234',
     created_at: ANY_DATE,
+    ip_address: null,
+    user_agent: null,
   });
 });
 

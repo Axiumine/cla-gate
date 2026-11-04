@@ -3,9 +3,9 @@
 import { type Kysely, sql } from 'kysely';
 import type { Database } from '../schema.ts';
 
-// The network metadata of a signing as the purge of E16-S05 sees it. The two columns are created by E13-S05, which is a
-// migration of its own, so the tests add them the way that migration does (`add column if not exists`) and read and write
-// them with SQL text: `schema.ts` does not describe them until then.
+// The network metadata of a signing as the purge of E16-S05 sees it. The two columns are created by migration 014 (E13-S05).
+// The erasure (009), the purge (010) and the export (E16-S06) look them up in the catalogue, so they must also work on a
+// database that does not have them: `dropNetworkColumns` makes one, the way a database from before that migration looks.
 
 /** The instant the purge tests treat as "now" (a fixed clock); the cutoff is 30 days before it. */
 export const NOW = new Date('2026-11-03T03:17:00.000Z');
@@ -19,11 +19,9 @@ export interface NetworkValues {
   readonly userAgent: string | null;
 }
 
-/** Adds `signer_pii.ip_address` and `signer_pii.user_agent` as E13-S05 defines them. */
-export async function addNetworkColumns(db: Kysely<Database>): Promise<void> {
-  await sql`alter table signer_pii add column if not exists ip_address inet, add column if not exists user_agent text`.execute(
-    db,
-  );
+/** Removes `signer_pii.ip_address` and `signer_pii.user_agent`, which migration 014 added: a database as it was before. */
+export async function dropNetworkColumns(db: Kysely<Database>): Promise<void> {
+  await sql`alter table signer_pii drop column ip_address, drop column user_agent`.execute(db);
 }
 
 /** Gives the `signer_pii` row of a signature the time it was created and the values of the two columns. */

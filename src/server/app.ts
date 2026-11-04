@@ -171,7 +171,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });
   await app.register(signContextRoutes, { db });
-  await app.register(signRoutes, { db });
+  await app.register(signRoutes, { db, recordNetworkMetadata: config.recordNetworkMetadata });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

@@ -2,7 +2,7 @@
 
 This is operational guidance for the people who run an instance. It is not legal advice. The operator decides, with counsel, the lawful basis for each kind of data, who is controller and who is processor (the operator, the maintainers of each org and GitHub may each be one, depending on how the instance is run), and how long data is kept. The numbers below are what the software does and enforces; they are not a recommendation that fits every jurisdiction.
 
-The tables and commands in this document are checked against the code by `src/server/docs/privacy-inventory.test.ts` and its neighbours, so a column, a path or a default that changes fails a test until this page says the same. Where the text names a story (E13-S05, E14-S06), that part is not built yet and the page says what to do until it is. The schema is described in [`data-model.md`](data-model.md), the access rules in [`security.md`](security.md), the variables in [`configuration.md`](configuration.md).
+The tables and commands in this document are checked against the code by `src/server/docs/privacy-inventory.test.ts` and its neighbours, so a column, a path or a default that changes fails a test until this page says the same. Where the text names a story (E14-S06), that part is not built yet and the page says what to do until it is. The schema is described in [`data-model.md`](data-model.md), the access rules in [`security.md`](security.md), the variables in [`configuration.md`](configuration.md).
 
 ## What the instance holds about a person
 
@@ -23,7 +23,7 @@ Every column that can hold a name, an email address, a login, an avatar, an addr
 | `sessions.verified_emails` | Verified addresses GitHub reported at login, so the signer can pick one without a stored user token | The signed-in person | The life of the session | Yes, the session rows are deleted |
 <!-- inventory:end -->
 
-`signer_pii.ip_address` and `signer_pii.user_agent` are added by E13-S05 and `allowlist_entries.login_snapshot` by E14-S06. Until they exist the rows above describe what will be stored, nothing is recorded, and the erasure and the purge already look for the columns and handle them when they appear.
+`signer_pii.ip_address` and `signer_pii.user_agent` exist since migration 014 (E13-S05) and stay empty unless `RECORD_NETWORK_METADATA=true`. `allowlist_entries.login_snapshot` is added by E14-S06; until it exists the row above describes what will be stored, nothing is recorded, and the erasure already looks for the column and handles it when it appears.
 
 ## What is never collected
 

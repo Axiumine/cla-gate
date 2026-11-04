@@ -4,6 +4,7 @@ import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import { SIGN_REFUSAL_STATUS, signRequestSchema, signRoute } from '../../../shared/sign.ts';
 import type { SignRefusal } from '../../domain/sign-request.ts';
+import { networkMetadataOf } from '../../services/network-metadata.ts';
 import { recordSignature, type SignOutcome } from '../../services/sign-record.ts';
 import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
@@ -16,6 +17,8 @@ import { answerSignRuleErrors } from './sign-rule-errors.ts';
 
 export interface SignRoutesOptions {
   readonly db: Kysely<Database>;
+  /** `RECORD_NETWORK_METADATA` (E13-S05): when false, the request's address and `User-Agent` are not read at all. */
+  readonly recordNetworkMetadata: boolean;
 }
 
 /**
@@ -70,6 +73,8 @@ function present(answer: ReturnType<typeof signatureOf>) {
  * person, keyed on the numeric GitHub id and spent after the guards have let the call in (`userRateLimit`). The body is read by
  * the handler and not by a route schema: Fastify validates a body before the guards run, and a request from another site or with no
  * session must not learn how its input was read. A rule the name or the address breaks is answered by the error handler of this scope.
+ * The address and the `User-Agent` of the request go to `signer_pii` only when the operator switched `RECORD_NETWORK_METADATA` on
+ * (E13-S05); otherwise the handler does not read them.
  */
 export const signRoutes: FastifyPluginCallbackZod<SignRoutesOptions> = (app, options, done) => {
   answerSignRuleErrors(app);
@@ -91,6 +96,7 @@ export const signRoutes: FastifyPluginCallbackZod<SignRoutesOptions> = (app, opt
       const outcome = await recordSignature(options.db, {
         request: body,
         viewer: { userId: user.id, githubId: user.githubId, login: user.login, sessionRowId: sessionId },
+        network: networkMetadataOf(request, options.recordNetworkMetadata),
       });
       const answer = present(signatureOf(outcome));
       setNoStore(reply);

@@ -52,13 +52,28 @@ export function bodyFor(tenant: Tenant, n: number, overrides: Readonly<Record<st
   };
 }
 
-/** The sign request as the page sends it: JSON, with the session cookie, the `Origin` and the CSRF token of `who`. */
-export function postSign(world: SignWorld, who: Signer, body: unknown): Promise<LightMyRequestResponse> {
+/**
+ * Where a sign request comes from (E13-S05): the address of the socket and the headers the browser adds to the ones of the page.
+ * A header set to `undefined` is not sent; for `user-agent` that matters, because the test client sends its own when it is left out.
+ */
+export interface RequestOrigin {
+  readonly remoteAddress?: string;
+  readonly headers?: Readonly<Record<string, string | undefined>>;
+}
+
+/** The sign request as the page sends it: JSON, with the session cookie, the `Origin` and the CSRF token of `who`, from `from`. */
+export function postSign(
+  world: SignWorld,
+  who: Signer,
+  body: unknown,
+  from: RequestOrigin = {},
+): Promise<LightMyRequestResponse> {
   return world.app.inject({
     method: 'POST',
     url: SIGN_PATH,
-    headers: { ...who.headers, 'content-type': 'application/json' },
+    headers: { ...who.headers, 'content-type': 'application/json', ...from.headers },
     payload: JSON.stringify(body),
+    ...(from.remoteAddress === undefined ? {} : { remoteAddress: from.remoteAddress }),
   });
 }
 

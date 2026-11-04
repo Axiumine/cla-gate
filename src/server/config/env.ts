@@ -44,6 +44,8 @@ export interface AppConfig {
   readonly source: { readonly url: string; readonly commit: string | null };
   /** How many days the IP address and user agent of a signature are kept (E16-S05), 1 to 90. */
   readonly networkMetadataRetentionDays: number;
+  /** Whether the sign request stores the client address and the user agent (E13-S05). Off unless `RECORD_NETWORK_METADATA=true`. */
+  readonly recordNetworkMetadata: boolean;
 }
 
 /** The mode, with the token only where it is used and a note when it is dropped. */
@@ -74,6 +76,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     webRoot: env.WEB_ROOT,
     source: { url: env.SOURCE_URL, commit: env.SOURCE_COMMIT },
     networkMetadataRetentionDays: env.NETWORK_METADATA_RETENTION_DAYS,
+    recordNetworkMetadata: env.RECORD_NETWORK_METADATA,
   };
 }
 
