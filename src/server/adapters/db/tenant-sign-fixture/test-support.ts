@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, NoResultError } from 'kysely';
 import { NO_NETWORK_METADATA } from '../../../services/network-metadata.ts';
+import { ownSignatureRows } from '../../../services/own-signatures-queries.ts';
 import { findSignDocument, findSignRepository, listViewerSignatures } from '../../../services/sign-context-queries.ts';
 import { findLiveSignature, insertSignature, insertSignerPii } from '../../../services/sign-record-queries.ts';
 import type { Database } from '../schema.ts';
@@ -9,8 +10,8 @@ import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { ownersOfDocuments, ownersOfSignatures } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery, TenantQuery } from '../tenant-registry/test-support.ts';
 
-// The registry entries (E11-S06) of the statements the sign page context runs over the tenant tables (E13-S02) and of the ones that
-// record a signature (E13-S04). The seed gives each tenant a document with its version 1.0 and one signature of its own signer on
+// The registry entries (E11-S06) of the statements the sign page context runs over the tenant tables (E13-S02), of the ones that
+// record a signature (E13-S04) and of the list of a person's own signatures (E13-S06). The seed gives each tenant a document with its version 1.0 and one signature of its own signer on
 // it, so a statement that strays into the other tenant has a row to meet. They sit in a file of their own so that the registry
 // stays under the size cap, as the entries of the exports do (`tenant-export-fixture`).
 
@@ -83,6 +84,20 @@ export const SIGN_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string
             );
       },
     }),
+  },
+  // The list of a person's own signatures (E13-S06) reads the person's rows in every tenant, on purpose: the reader is a signer and
+  // belongs to no tenant. The statement names the person's own key and nothing else, so called for the signer of tenant 1 it finds
+  // tenant 1's signature and for the signer of tenant 2 tenant 2's. The seed gives each tenant one signature by its own signer.
+  'services/own-signatures-queries.ts': {
+    ownSignatureRows: {
+      kind: 'by_design',
+      reason:
+        "the list of a person's own signatures shows the person's signatures in every tenant (E13-S06); the person is a signer and belongs to no tenant, and the statement filters on the person's own key, which comes from the session, and on nothing the caller supplies",
+      pinnedBy: 'services/own-signatures-queries.test.ts',
+      run: async (db, _scope, ids) =>
+        (await ownSignatureRows(db, ids.signer.userId, { limit: 10, from: null })).map((row) => row.id),
+      answers: (own, other) => ({ own: [own.signatureId], foreign: [other.signatureId] }),
+    },
   },
   'services/sign-record-queries.ts': {
     insertSignature: scoped({

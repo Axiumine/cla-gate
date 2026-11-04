@@ -4,12 +4,14 @@ import type { Kysely } from 'kysely';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
+import { OWN_SIGNATURES_PATH } from '../../../../shared/own-signatures.ts';
 import { signResponseSchema, signRoute } from '../../../../shared/sign.ts';
 import { signContextResponseSchema, signContextRoute } from '../../../../shared/sign-context.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
 import type { RowTable, TenantWorld } from '../../db/tenant-fixture/test-support.ts';
 import { sha256 } from '../../db/test-support.ts';
+import { OWN_SIGNATURES_CASE } from '../cross-tenant-own-signatures-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
@@ -411,7 +413,7 @@ const SIGN_CASE: IsolationCase = {
 };
 
 /**
- * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId` and `POST /api/sign`, E13-S06 adds
+ * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `POST /api/sign` and
  * `GET /api/me/signatures`; E16: `GET /api/me/export`). The export of a person's own data names the signatures of the person in
  * every tenant, and the personal data kept for each; the route takes no parameter at all (a query parameter is a `400`, shown in
  * data-export-routes.test.ts), so there is nothing of another tenant to inject and the request is the same with or without it.
@@ -432,6 +434,7 @@ export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
   },
   [`GET ${signContextRoute.path}`]: SIGN_CONTEXT_CASE,
   [`POST ${signRoute.path}`]: SIGN_CASE,
+  [`GET ${OWN_SIGNATURES_PATH}`]: OWN_SIGNATURES_CASE,
 };
 
 /** The `authenticated` routes that return no tenant data, each with the reason, so a new one is a decision somebody reads. */

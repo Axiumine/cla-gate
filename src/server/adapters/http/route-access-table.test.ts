@@ -150,6 +150,7 @@ test('the authenticated routes are the session read, the logout, the export of t
   expect(sorted(authenticated.map(nameOf))).toEqual([
     'GET /api/auth/session',
     'GET /api/me/export',
+    'GET /api/me/signatures',
     'GET /api/sign/:githubRepoId',
     'POST /api/auth/logout',
     'POST /api/sign',

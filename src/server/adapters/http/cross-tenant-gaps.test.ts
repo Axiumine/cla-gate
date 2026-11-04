@@ -117,7 +117,12 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);
-  expect(Object.keys(ISOLATION_CASES)).toEqual(['GET /api/me/export', 'GET /api/sign/:githubRepoId', 'POST /api/sign']);
+  expect(Object.keys(ISOLATION_CASES)).toEqual([
+    'GET /api/me/export',
+    'GET /api/sign/:githubRepoId',
+    'POST /api/sign',
+    'GET /api/me/signatures',
+  ]);
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
 });

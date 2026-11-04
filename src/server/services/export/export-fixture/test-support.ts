@@ -46,7 +46,7 @@ export interface SignatureSeed {
   readonly revoked?: { readonly afterMs: number; readonly byGithubId: number; readonly reason: RevokeReason };
   /** `repositories.id` the person signed from, or `null`. Defaults to the repository of the tenant. */
   readonly repositoryId?: number | null;
-  /** The pull request they signed for. Defaults to 7 when there is a repository. */
+  /** The pull request they signed for. Defaults to 7 when there is a repository; `null` stores none (signed from the dashboard). */
   readonly prNumber?: number | null;
 }
 
@@ -94,6 +94,14 @@ interface RowContext {
   readonly userId: (githubId: number) => number;
 }
 
+/** The pull request a seed signs for: none without a repository, the one the seed names (`null` included), else 7. */
+function prNumberOf(seed: SignatureSeed, repositoryId: number | null): number | null {
+  if (repositoryId === null) {
+    return null;
+  }
+  return seed.prNumber === undefined ? 7 : seed.prNumber;
+}
+
 /** The `signatures` row of one seed. */
 function signatureRow(seed: SignatureSeed, index: number, context: RowContext) {
   const { target, first, userId } = context;
@@ -111,7 +119,7 @@ function signatureRow(seed: SignatureSeed, index: number, context: RowContext) {
     signer_type: 'individual' as const,
     signed_at: signedAt,
     source_repository_id: repositoryId,
-    source_pr_number: repositoryId === null ? null : (seed.prNumber ?? 7),
+    source_pr_number: prNumberOf(seed, repositoryId),
     revoked_at: seed.revoked === undefined ? null : new Date(signedAt.getTime() + seed.revoked.afterMs),
     revoked_by: seed.revoked === undefined ? null : userId(seed.revoked.byGithubId),
     revoke_reason: seed.revoked?.reason ?? null,

@@ -53,6 +53,7 @@ test('a query that meets another tenant by design says why and names the test th
     'listInstallationsForOperator',
     'ownAllowlistEntries',
     'ownAuditEntries',
+    'ownSignatureRows',
     'ownSignatures',
     'releaseTransferred',
   ]);

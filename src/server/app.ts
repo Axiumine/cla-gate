@@ -19,6 +19,7 @@ import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
+import { ownSignaturesRoutes } from './adapters/http/own-signatures-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
@@ -172,6 +173,7 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   await app.register(dataExportRoutes, { db, clock });
   await app.register(signContextRoutes, { db });
   await app.register(signRoutes, { db, recordNetworkMetadata: config.recordNetworkMetadata });
+  await app.register(ownSignaturesRoutes, { db });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,
