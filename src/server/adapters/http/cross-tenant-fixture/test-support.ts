@@ -14,11 +14,15 @@ import {
   INSTALLATIONS_PATH,
   installationListSchema,
 } from '../../../../shared/installations.ts';
+import { OWN_SIGNATURES_PATH } from '../../../../shared/own-signatures.ts';
 import { REPOSITORY_CLA_DOCUMENT_PATH } from '../../../../shared/repository-document.ts';
 import { REPOSITORY_DISABLE_PATH, REPOSITORY_ENABLE_PATH } from '../../../../shared/repository-enabled.ts';
+import { signRoute } from '../../../../shared/sign.ts';
+import { signContextRoute } from '../../../../shared/sign-context.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
-import type { PersonName, RowTable } from '../../db/tenant-fixture/test-support.ts';
+import type { PersonName, RowTable, TenantWorld } from '../../db/tenant-fixture/test-support.ts';
+import { OWN_SIGNATURES_CASE } from '../cross-tenant-own-signatures-fixture/test-support.ts';
 import {
   addable,
   attachable,
@@ -29,6 +33,7 @@ import {
   removable,
   versionOne,
 } from '../cross-tenant-prepare/test-support.ts';
+import { SIGN_CASE, SIGN_CONTEXT_CASE } from '../cross-tenant-sign-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
@@ -128,6 +133,11 @@ interface IsolationViewer {
 }
 
 export interface IsolationCase {
+  /**
+   * Puts the world of the matrix in the state the request needs, for both tenants, before the first call (a repository that
+   * enforces a document that has a version). Without it a case has the rows `twoTenants` stores.
+   */
+  readonly arrange?: (db: Kysely<Database>, tenants: readonly TenantWorld[]) => Promise<void>;
   /**
    * Who asks, one person of each tenant, when the route shows nothing to the default pair (`member1` and `admin2`): the list of
    * installations (E14-S01) shows a person the tenants they hold a role in, and `member1` holds none.
@@ -399,10 +409,9 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
 };
 
 /**
- * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `GET /api/me/signatures`; E16:
- * `GET /api/me/export`). The export of a person's own data names the signatures of the person in every tenant, and the
- * personal data kept for each; the route takes no parameter at all (a query parameter is a `400`, shown in
- * data-export-routes.test.ts), so there is nothing of another tenant to inject and the request is the same with or without it.
+ * The `authenticated` routes that return tenant data by design (E13: the sign context, the sign request and the own signatures;
+ * E14: the list of installations; E16: the export of the own data). None takes the id of a tenant to inject, so the request is
+ * the same with or without one (the export and the lists take no parameter at all: a query parameter is a `400`).
  */
 export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
   // E14-S01. The list names the installations the person holds a role in, and takes no parameter at all (a query parameter is a
@@ -427,6 +436,9 @@ export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
     // Every export appends an audit row that the next one lists, so the second answer holds one entry more than the first.
     stable: (body) => ({ ...dataExportSchema.parse(body), auditEntries: [] }),
   },
+  [`GET ${signContextRoute.path}`]: SIGN_CONTEXT_CASE,
+  [`POST ${signRoute.path}`]: SIGN_CASE,
+  [`GET ${OWN_SIGNATURES_PATH}`]: OWN_SIGNATURES_CASE,
 };
 
 /** The `authenticated` routes that return no tenant data, each with the reason, so a new one is a decision somebody reads. */

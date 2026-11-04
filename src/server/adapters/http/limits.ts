@@ -40,3 +40,11 @@ export const CLA_BODY_LIMIT = 524_288;
  * need, so a larger body is refused with `413` before it is parsed.
  */
 export const SETUP_BODY_LIMIT = 4096;
+
+/**
+ * Bytes. The body limit of the sign request (E13-S04): 16 KiB. The body holds two ids, a hash, the id of a consent sentence, a name of
+ * at most 200 code points once cleaned and one e-mail address; even a name of 200 astral characters that JSON escapes as two
+ * `\uXXXX` sequences, with a long run of white space in it, fits many times over. A larger body is refused with `413` before it is
+ * parsed, so a request from anybody, signed in or not, never makes the server read the 1 MiB of the other routes.
+ */
+export const SIGN_BODY_LIMIT = 16_384;

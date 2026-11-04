@@ -28,10 +28,7 @@ const NOT_PERSONAL: Readonly<Record<string, string>> = {
  * (E16-S04) and the purge (E16-S05) already look for them in the catalogue. A name that is live leaves this map (the
  * second test below fails until it does), so the map only ever shrinks.
  */
-const PLANNED_COLUMNS: Readonly<Record<string, string>> = {
-  'signer_pii.ip_address': 'E13-S05 adds it',
-  'signer_pii.user_agent': 'E13-S05 adds it',
-};
+const PLANNED_COLUMNS: Readonly<Record<string, string>> = {};
 
 /** The columns the story names; the document may list more, never fewer. */
 const REQUIRED = [

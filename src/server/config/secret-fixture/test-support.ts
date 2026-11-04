@@ -77,5 +77,6 @@ export function sampleEnvironment(): Readonly<Record<string, string>> {
     SESSION_IDLE_SECONDS: '3600',
     SESSION_ABSOLUTE_SECONDS: '7200',
     NETWORK_METADATA_RETENTION_DAYS: '30',
+    RECORD_NETWORK_METADATA: 'false',
   };
 }

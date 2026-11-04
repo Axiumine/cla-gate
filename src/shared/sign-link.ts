@@ -9,7 +9,11 @@
 /** The largest pull request number: `pr_evaluations.pr_number` is a 32-bit integer. */
 export const MAX_PR_NUMBER = 2_147_483_647;
 
-/** Thrown for a repository id, a pull request number or a base URL that cannot make a sign link. Carries none of the values. */
+/**
+ * Thrown for a repository id, a pull request number or a base URL that cannot make a sign link. Carries none of the values.
+ *
+ * @internal
+ */
 export class InvalidSignLinkError extends Error {
   override readonly name = 'InvalidSignLinkError';
 
@@ -22,6 +26,8 @@ export class InvalidSignLinkError extends Error {
  * The path of the sign page of a pull request: `/sign/{githubRepoId}?pr={prNumber}`.
  * @throws InvalidSignLinkError when `githubRepoId` is not a positive safe integer or `prNumber` is not an integer from 1 to
  * {@link MAX_PR_NUMBER}; both are checked before anything is formatted.
+ *
+ * @internal
  */
 export function signPath(githubRepoId: number, prNumber: number): string {
   if (!Number.isSafeInteger(githubRepoId) || githubRepoId < 1) {

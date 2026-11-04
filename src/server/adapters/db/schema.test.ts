@@ -84,7 +84,16 @@ const COLUMNS = {
     revoked_by: true,
     revoke_reason: true,
   },
-  signer_pii: { signature_id: true, user_id: true, name: true, email: true, login: true, created_at: true },
+  signer_pii: {
+    signature_id: true,
+    user_id: true,
+    name: true,
+    email: true,
+    login: true,
+    created_at: true,
+    ip_address: true,
+    user_agent: true,
+  },
   commit_overrides: {
     id: true,
     installation_id: true,

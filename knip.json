@@ -26,7 +26,6 @@
     "src/shared/cla-markdown.ts!",
     "src/server/services/cla-content.ts!",
     "src/shared/hostile-names.ts!",
-    "src/shared/sign-link.ts!",
     "tests/leaks/scenarios/*.ts",
     "tests/leaks/control/*.ts",
     "tests/smoke/*.test.ts",

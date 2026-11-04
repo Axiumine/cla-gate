@@ -119,6 +119,10 @@ interface SignerPiiTable {
   email: string;
   login: string;
   created_at: Generated<Date>;
+  /** The address the signing request came from (E13-S05), only when `RECORD_NETWORK_METADATA` is on; `inet` reads back as text. */
+  ip_address: string | null;
+  /** The `User-Agent` of the signing request (E13-S05), at most 512 characters, only when `RECORD_NETWORK_METADATA` is on. */
+  user_agent: string | null;
 }
 
 interface CommitOverridesTable {

@@ -46,13 +46,15 @@ import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/te
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
 import { ENABLED_WRITES } from '../tenant-registry-enabled/test-support.ts';
 import { COUNT_READS, LISTING_READS } from '../tenant-registry-listing/test-support.ts';
+import { SCOPE_QUERIES } from '../tenant-registry-scope/test-support.ts';
 import {
   ENFORCING_READS,
   HISTORY_READS,
   VERSION_READS,
   VERSION_WRITES,
 } from '../tenant-registry-versions/test-support.ts';
-import { assertRepositoryInTenant, TenantMismatchError, type TenantScope } from '../tenant-scope.ts';
+import type { TenantScope } from '../tenant-scope.ts';
+import { SIGN_TENANT_QUERIES } from '../tenant-sign-fixture/test-support.ts';
 
 // The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
 // table; `TENANT_QUERIES` has an entry for every function they export, with the factory of its fixture arguments: how to
@@ -87,8 +89,10 @@ export const TENANT_MODULES = [
   'services/export/own-data-queries.ts',
   'services/export/own-signatures-query.ts',
   'services/export/signature-queries.ts',
+  'services/failing-evaluation-queries.ts',
   'services/finalise/finalise-rows.ts',
   'services/installation-operator.ts',
+  'services/own-signatures-queries.ts',
   'services/repo-admin-candidates.ts',
   'services/repository-count-queries.ts',
   'services/repository-document-lock-queries.ts',
@@ -98,6 +102,8 @@ export const TENANT_MODULES = [
   'services/repository-queries.ts',
   'services/repository-statements.ts',
   'services/repository-transfer.ts',
+  'services/sign-context-queries.ts',
+  'services/sign-record-queries.ts',
   'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
   'services/tenant-queries.ts',
@@ -177,17 +183,7 @@ const scoped = (
 
 /** Every exported function of every module of {@link TENANT_MODULES}, by module and name. */
 export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, TenantQuery>>>> = {
-  'adapters/db/tenant-scope.ts': {
-    assertRepositoryInTenant: scoped({
-      takesIds: true,
-      activeOnly: false,
-      refusal: (error) => error instanceof TenantMismatchError,
-      run: async (db, scope, ids) => {
-        await assertRepositoryInTenant(db, scope, ids.plain.repositoryId);
-        return ownersOfRepositories(db, [ids.plain.repositoryId]);
-      },
-    }),
-  },
+  'adapters/db/tenant-scope.ts': SCOPE_QUERIES,
   'services/admin-ledger-queries.ts': {
     recordAdminSeen: scoped({
       // The person is the ledger's key next to the tenant, not a resource of one: no other tenant's id exists to hand it.
@@ -471,6 +467,8 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   ...EXPORT_TENANT_QUERIES,
   // The statements of the reporter over the evaluation rows (E09-S04).
   ...LINK_TENANT_QUERIES,
+  // The statements of the sign page context (E13-S02).
+  ...SIGN_TENANT_QUERIES,
   ...ALLOWLIST_TENANT_QUERIES,
 };
 

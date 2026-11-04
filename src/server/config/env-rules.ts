@@ -39,6 +39,7 @@ const FIELD_RULES = {
   SESSION_IDLE_SECONDS: 'must be a whole number of seconds from 300 to 999999999 (digits only)',
   SESSION_ABSOLUTE_SECONDS: 'must be a whole number of seconds from 300 to 999999999 (digits only)',
   NETWORK_METADATA_RETENTION_DAYS: 'must be a whole number of days from 1 to 90 (digits only)',
+  RECORD_NETWORK_METADATA: 'must be exactly true or false (lower case)',
 } as const satisfies Record<keyof ValidEnv, string>;
 
 const RULES: ReadonlyMap<string, string> = new Map(Object.entries(FIELD_RULES));

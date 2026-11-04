@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { seedSignatures } from '../../services/export/export-fixture/test-support.ts';
-import { addNetworkColumns, setNetwork } from '../db/network-metadata-fixture/test-support.ts';
+import { dropNetworkColumns, setNetwork } from '../db/network-metadata-fixture/test-support.ts';
 import { ADA, adaWorld, REVOKER } from './data-export-fixture/test-support.ts';
 
-// The network values in the export of a person's own data (E16-S06): the address and the user agent of a signing exist only
-// once E13-S05 adds the columns, and have a value only when the operator switched recording on. The export shows them when
-// they are stored and `null` otherwise, whether or not the columns exist.
+// The network values in the export of a person's own data (E16-S06): the address and the user agent of a signing have a value
+// only when the operator switched recording on (E13-S05). The export shows them when they are stored and `null` otherwise, also
+// for a database that does not have the columns (one from before migration 014).
 
 const STORED = '2026-10-20T00:00:00.000Z';
 
@@ -22,7 +22,8 @@ async function signedTwice() {
 }
 
 test('with no network columns in the database every personalData has null for the address and the user agent', async () => {
-  const { exportedAda } = await signedTwice();
+  const { db, exportedAda } = await signedTwice();
+  await dropNetworkColumns(db);
   const { signatures } = await exportedAda();
   expect(signatures.map((signature) => [signature.personalData?.ipAddress, signature.personalData?.userAgent])).toEqual(
     [
@@ -41,7 +42,6 @@ test.each([
   'the columns are there and %s is stored: the export shows it, and null for the signature with none',
   async (_label, ip, userAgent) => {
     const { db, exportedAda, recorded } = await signedTwice();
-    await addNetworkColumns(db);
     await setNetwork(db, recorded, STORED, { ip, userAgent });
     const { signatures } = await exportedAda();
     expect(signatures.map((signature) => signature.personalData)).toEqual([
@@ -52,8 +52,7 @@ test.each([
 );
 
 test('the columns are there and nothing is stored: every value is null', async () => {
-  const { db, exportedAda } = await signedTwice();
-  await addNetworkColumns(db);
+  const { exportedAda } = await signedTwice();
   const { signatures } = await exportedAda();
   expect(signatures.map((signature) => signature.personalData)).toEqual([
     expect.objectContaining({ ipAddress: null, userAgent: null }),
@@ -63,7 +62,6 @@ test('the columns are there and nothing is stored: every value is null', async (
 
 test('a signature whose personal data was erased shows no network values either, because it shows no personal data', async () => {
   const { db, exportedAda, recorded } = await signedTwice();
-  await addNetworkColumns(db);
   await setNetwork(db, recorded, STORED, { ip: '203.0.113.7', userAgent: 'Browser/1.0' });
   await db.deleteFrom('signer_pii').where('signature_id', '=', recorded).execute();
   const { signatures } = await exportedAda();

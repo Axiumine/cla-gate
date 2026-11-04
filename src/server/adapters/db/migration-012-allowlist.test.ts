@@ -5,7 +5,7 @@ import path from 'node:path';
 import { type Kysely, sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { sharedSigner } from './erasure-fixture/test-support.ts';
-import { addNetworkColumns, CUTOFF, setNetwork, shifted } from './network-metadata-fixture/test-support.ts';
+import { CUTOFF, setNetwork, shifted } from './network-metadata-fixture/test-support.ts';
 import type { Database } from './schema.ts';
 import {
   asRuntimeRole,
@@ -111,7 +111,6 @@ test('the erasure of a person clears the login of their entries in that installa
 test('the purge of the network metadata leaves the login of every entry: it is not network metadata', async () => {
   const { db } = await migratedTestDatabase();
   const { t1, t2, firstSignatureId } = await sharedSigner(db, SIGNER);
-  await addNetworkColumns(db);
   await setNetwork(db, firstSignatureId, shifted(CUTOFF, -1), { ip: '203.0.113.7', userAgent: 'TestAgent/1.0' });
   await entryFor(db, t1, SIGNER, 'ada');
   await entryFor(db, t2, SIGNER, 'ada');

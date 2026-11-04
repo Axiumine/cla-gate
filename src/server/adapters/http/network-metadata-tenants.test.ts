@@ -4,7 +4,6 @@ import { expect, test } from 'vitest';
 import { AUDIT_LOG_PATH, auditLogPageSchema } from '../../../shared/audit-log.ts';
 import { createPurgeNetworkMetadataHandler } from '../../services/network-metadata-purge.ts';
 import {
-  addNetworkColumns,
   CUTOFF,
   type NetworkValues,
   NOW,
@@ -27,7 +26,6 @@ const OLD = shifted(CUTOFF, -1);
 /** The matrix world with the two columns, a signature in each tenant whose values were stored at the given times, and the job. */
 async function world(storedAt1: string, storedAt2: string) {
   const state = await matrixWorld();
-  await addNetworkColumns(state.db);
   await setNetwork(state.db, state.t1.signatureId, storedAt1, TENANT_1);
   await setNetwork(state.db, state.t2.signatureId, storedAt2, TENANT_2);
   const run = createPurgeNetworkMetadataHandler({

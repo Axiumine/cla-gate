@@ -64,7 +64,7 @@ test('every route of the table that switches the limit off is on the RATE_LIMIT_
 /** `expect.any` is typed `any`; as `unknown` it can sit in an object literal. */
 const anyFunction: unknown = expect.any(Function);
 
-test('the routes with a budget of their own are the four of the login, the save of a draft, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
+test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
   const own = table.filter((route) => typeof limitOf(route) === 'object');
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
@@ -76,6 +76,7 @@ test('the routes with a budget of their own are the four of the login, the save 
       'GET /api/auth/login',
       'GET /api/auth/session',
       'POST /api/auth/logout',
+      'POST /api/sign',
       'PUT /api/installations/:installationId/documents/:documentId/draft',
       csv,
       mine,
@@ -94,6 +95,8 @@ test('the routes with a budget of their own are the four of the login, the save 
       hook: 'preHandler',
       keyGenerator: anyFunction,
     },
+    // E13-S04: 10 sign requests a minute for each person, counted after the guard and keyed on the person, not on the address.
+    'POST /api/sign': { max: 10, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
   });
   // The exports key their budget on the person and check it after the guard of the route access (E16-S03, E16-S06).
   expect(Object.entries(budgets)).toContainEqual([

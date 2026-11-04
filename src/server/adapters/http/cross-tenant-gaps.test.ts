@@ -99,7 +99,7 @@ test('every gap is reported at once, in the order tenant, authenticated, stale, 
   ]);
 });
 
-test('the tables of the application hold the cases of the routes the stories added, and the two authenticated routes it has say why they return no tenant data', () => {
+test('the tables of the application hold the cases of the routes the stories added, and the two authenticated routes that return no tenant data say why', () => {
   expect(Object.keys(CROSS_TENANT_CASES)).toEqual([
     'POST /api/installations/:installationId/documents',
     'GET /api/installations/:installationId/documents',
@@ -126,7 +126,13 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);
-  expect(Object.keys(ISOLATION_CASES)).toEqual(['GET /api/installations', 'GET /api/me/export']);
+  expect(Object.keys(ISOLATION_CASES)).toEqual([
+    'GET /api/installations',
+    'GET /api/me/export',
+    'GET /api/sign/:githubRepoId',
+    'POST /api/sign',
+    'GET /api/me/signatures',
+  ]);
   expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
 });
@@ -181,6 +187,72 @@ test('the isolation case of the export compares two answers without their audit 
   const stable = ISOLATION_CASES['GET /api/me/export']?.stable;
   expect(stable?.(document([entry], 'ada'))).toEqual(stable?.(document([], 'ada')));
   expect(stable?.(document([], 'ada'))).not.toEqual(stable?.(document([], 'eve')));
+});
+
+test('the isolation case of the sign context names the document, the version and the signature of an answer, and shows a person only what is theirs in their own tenant', () => {
+  const context = (signature: unknown) => ({
+    repository: { githubRepoId: 9001, fullName: 'org-1/scoped', accountLogin: 'org-1' },
+    document: { id: 3, name: 'Individual CLA' },
+    version: {
+      id: 4,
+      major: 1,
+      minor: 0,
+      contentMd: 'Terms',
+      contentSha256: 'a'.repeat(64),
+      rationale: 'test',
+      publishedAt: '2026-11-02T10:00:00.000Z',
+    },
+    consent: { id: 'individual-v1', text: 'I agree' },
+    emails: [],
+    viewer: { githubId: 7, login: 'ada' },
+    pr: null,
+    prUrl: null,
+    state: signature === null ? 'ready' : 'already_signed',
+    signature,
+    revoked: null,
+    canSign: false,
+    blockedReason: 'no_verified_email',
+  });
+  const isolation = ISOLATION_CASES['GET /api/sign/:githubRepoId'];
+  const signed = { id: 5, major: 1, minor: 0, signedAt: '2026-11-02T10:00:00.000Z' };
+  expect(isolation?.rows(context(signed))).toEqual([
+    { table: 'cla_documents', id: 3 },
+    { table: 'cla_versions', id: 4 },
+    { table: 'signatures', id: 5 },
+  ]);
+  expect(isolation?.rows(context(null))).toEqual([
+    { table: 'cla_documents', id: 3 },
+    { table: 'cla_versions', id: 4 },
+  ]);
+  const viewer = {
+    userId: 10,
+    own: { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 1, entryId: 1 },
+  };
+  expect(isolation?.mayShow({ installationId: 1, userId: null }, viewer)).toBe(true);
+  expect(isolation?.mayShow({ installationId: 1, userId: 10 }, viewer)).toBe(true);
+  expect(isolation?.mayShow({ installationId: 1, userId: 11 }, viewer)).toBe(false);
+  expect(isolation?.mayShow({ installationId: 2, userId: null }, viewer)).toBe(false);
+});
+
+test('the isolation case of the sign request names the signature of an answer, asks as the viewer for their own repository, and shows a person only their own signature of their own tenant', () => {
+  const isolation = ISOLATION_CASES['POST /api/sign'];
+  const answer = {
+    signature: { id: 5, versionId: 4, major: 1, minor: 0, signedAt: '2026-11-02T10:00:00.000Z' },
+    created: false,
+  };
+  expect(isolation?.rows(answer)).toEqual([{ table: 'signatures', id: 5 }]);
+  const target = { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 9001, entryId: 1 };
+  const sent = isolation?.request(target, null);
+  expect(sent).toMatchObject({
+    method: 'POST',
+    url: '/api/sign',
+    payload: { githubRepoId: 9001, consentTextId: 'individual-v1' },
+  });
+  expect(sent).toEqual(isolation?.request(target, { ...target, githubRepoId: 18_001 }));
+  const viewer = { userId: 10, own: target };
+  expect(isolation?.mayShow({ installationId: 1, userId: 10 }, viewer)).toBe(true);
+  expect(isolation?.mayShow({ installationId: 1, userId: 11 }, viewer)).toBe(false);
+  expect(isolation?.mayShow({ installationId: 2, userId: 10 }, viewer)).toBe(false);
 });
 
 type Db = Awaited<ReturnType<typeof migratedTestDatabase>>['db'];
