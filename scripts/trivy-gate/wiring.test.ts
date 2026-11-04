@@ -98,16 +98,21 @@ test.each(SCANNED.map((file) => [file]))('%s mentions no compromised Trivy relea
   expect(compromisedReferences(repoText(file))).toEqual([]);
 });
 
-test('trivy-action is not used anywhere: Trivy comes from setup-trivy and yarn trivy', () => {
+test('no workflow uses a Trivy action: Trivy is the pinned release that scripts/ci/install-trivy.ts installs, and yarn trivy', () => {
   const uses = workflows().flatMap((flow) =>
     Object.values(flow.jobs).flatMap((job) =>
       job.steps.flatMap((step) => (step.uses === undefined ? [] : [step.uses])),
     ),
   );
-  expect(uses.filter((action) => /trivy/i.test(action))).toEqual([
-    expect.stringMatching(/^aquasecurity\/setup-trivy@[0-9a-f]{40}$/),
-  ]);
+  expect(uses.filter((action) => /trivy/i.test(action))).toEqual([]);
 });
+
+test.each(SCANNED.map((file) => [file]))(
+  '%s names neither get.trivy.dev (lapsed) nor the setup-trivy action',
+  (file) => {
+    expect(repoText(file)).not.toMatch(/get\.trivy\.dev|setup-trivy/i);
+  },
+);
 
 test('the repository .trivyignore, when it exists, has a reason and a valid, unexpired expiry on every entry', () => {
   expect(checkTrivyIgnoreFile(ROOT, new Date())).toEqual([]);
