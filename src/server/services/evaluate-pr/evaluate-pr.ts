@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
 import type { JobOutcome } from '../job-registry.ts';
 import { isInstallationUnavailable } from '../ports/installation-unavailable.ts';
+import { handOverRetry } from './enforcement-guard.ts';
 import { evaluateOpen, evaluationKey } from './evaluate-open.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
 import { type EvaluationKey, findEvaluation, type StoredResult } from './evaluation-rows.ts';
@@ -53,6 +54,9 @@ async function run(ports: EvaluatePrPorts, job: Job, context: EvaluatePrContext)
   const { logger } = context;
   const loaded = await loadPullRequest(ports, job);
   if (typeof loaded === 'string') {
+    if (loaded === 'repository_disabled') {
+      await handOverRetry({ ports, job, context });
+    }
     return skipped(logger, loaded);
   }
   const { resolved, pr } = loaded;
@@ -63,13 +67,14 @@ async function run(ports: EvaluatePrPorts, job: Job, context: EvaluatePrContext)
     logger.info('evaluate_pr.unchanged');
     return { outcome: 'unchanged' };
   }
-  return evaluateOpen({ ports, job, resolved, logger }, pr);
+  return evaluateOpen({ ports, job, resolved, context }, pr);
 }
 
 /**
  * Evaluates one pull request: the protocol above, with the facts of now.
  * - Ends `skipped:<reason>` with no GitHub call for a repository that is not the installation's, an installation or
- *   repository that is not evaluated (`installation_rejected`, `repository_disabled`, ...); ends `skipped:` when GitHub no
+ *   repository that is not evaluated (`installation_rejected`, `repository_disabled`, ...), except that a retry that finds the
+ *   repository switched off sends the `finalise-check` job of the pull request first (E14-S04); ends `skipped:` when GitHub no
  *   longer shows the repository, the pull request, or serves the installation; ends `unchanged` for the idempotent case;
  *   ends `superseded` when the head moved or the pull request closed while it ran; ends `evaluated` otherwise.
  * - Throws what GitHub, the database, the listing (`CommitListingMismatchError`) or the reporter throws: the job fails and the

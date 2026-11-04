@@ -36,7 +36,7 @@ Items marked (planned) do not exist yet.
 │   │                            connections of the real-Postgres tests are in real-postgres/test-support.ts and
 │   │                            re-exported by test-support.ts); document-lock.ts (the row lock of a document) and violations.ts (the constraint a failed
 │   │                            statement broke); tenant-scope.ts (`TenantScope`, `assertRepositoryInTenant`;
-│   │                            tenant-fixture/, tenant-registry/, tenant-registry-documents/, -drafts/ and -versions/ and tenant-scan/ are test only: the two tenants, the registry of
+│   │                            tenant-fixture/, tenant-registry/, tenant-registry-documents/, -drafts/, -versions/, -listing/, -attach/, -enabled/ and -allowlist/ and tenant-scan/ are test only: the two tenants, the registry of
 │   │                            tenant queries and the source scan of the cross-tenant tests); pr-evaluation-links.ts (E09: the `check_run_id` and `comment_id` of `pr_evaluations`; pr-evaluation-links-fixture/ and tenant-links-fixture/ are test only); the session store (sessions.ts with sessions-create,
 │   │                            -delete, -model, -read, -row and -touch.ts; sessions-fixture/ is test only) and the
 │   │                            user upsert (users.ts); global-setup.ts (the throw-away database of a real-server run) and
@@ -61,7 +61,9 @@ Items marked (planned) do not exist yet.
 │   │                            (user-login*.ts: exchange, identity, addresses, revoke); membership-fixture/ and
 │   │                            permission-fixture/ (test only: the contract fixtures of the two role calls), exemption-fixture/ and
 │   │                            public-members-guard/ (test only: the typed membership fixtures, and the guard that fails a test
-│   │                            that asks a public-members endpoint)
+│   │                            that asks a public-members endpoint); E14: octokit-user-accounts.ts (`GET /users/{login}`) and user-account-schema.ts,
+│   │                            the members probe in the Octokit client, and members-probe-fixture/ (the fixtures and the MSW route
+│   │                            `membersProbeRoute`) and user-account-fixture/ (test only)
 │   ├── adapters/github/webhook-schemas.ts  zod schemas of the subscribed events (webhook-fixture/ holds the test payloads)
 │   ├── adapters/github/manifest-conversion.ts  the adapter of the port services/ports/manifest-conversion.ts: GitHub's one-time code
 │   │                            for the credentials of the App (E19-S11); domain/app-manifest.ts builds the App manifest (E19-S06)
@@ -96,7 +98,14 @@ Items marked (planned) do not exist yet.
 │   │                            E16: audit-log-routes.ts (with audit-log-query.ts), signature-csv-routes.ts (with signature-csv-query.ts and
 │   │                            signature-csv-log.ts), erasure-routes.ts (with erasure-request.ts) and data-export-routes.ts; the
 │   │                            api-snapshots/ directory (the JSON of the own-data export) and the fixtures audit-route-state/,
-│   │                            signature-csv-fixture/, erasure-fixture/ and data-export-fixture/ are test only
+│   │                            signature-csv-fixture/, erasure-fixture/ and data-export-fixture/ are test only;
+│   │                            E14: installation-routes.ts (`GET /api/installations`), repository-list-routes.ts, repository-cursor.ts,
+│   │                            repository-document-routes.ts (attach and detach), repository-enable-routes.ts, repository-disable-routes.ts and
+│   │                            repository-switch-route.ts (their shared body), allowlist-entry-routes.ts (add), allowlist-entry-list-routes.ts,
+│   │                            allowlist-entry-remove-route.ts, allowlist-entry-resolver.ts, allowlist-entry-presenters.ts and
+│   │                            allowlist-entry-cursor.ts; installation-list-fixture/, repository-document-fixture/, repository-enable-fixture/,
+│   │                            repository-disable-fixture/, repository-flow-fixture/, allowlist-entry-fixture/, allowlist-list-fixture/ and
+│   │                            cross-tenant-prepare/ are test only
 │   ├── domain/                  admission.ts (who is served, pure), eligibility.ts (when an installation or repository
 │   │                            is evaluated), permissions.ts (the missing-permission check), jobs.ts (the job
 │   │                            catalogue), delivery-id.ts, webhook-routing*.ts (the routing table: delivery to job or
@@ -106,7 +115,10 @@ Items marked (planned) do not exist yet.
 │   │                            (`isOperator`, `createOperatorPolicy`); audit-cursor.ts (the cursor of the audit viewer), csv.ts (the
 │   │                            RFC 4180 encoder with the formula guard), signature-state.ts and network-retention.ts (the cutoff); the job envelopes (job-envelope.ts), the retry bounds (job-retry.ts),
 │   │                            recheck.ts (the `/recheck` rules and the rate limit key), sweep.ts and repository-jobs.ts (the
-│   │                            coalesce keys and reasons of the sweep and the repository-level jobs); version-number.ts (the next version number of a document); signing (E13): sign-state.ts, sign-request.ts, signer-email.ts, resign-path.ts, pull-request-url.ts and signature-evaluations.ts (the keys and the one question asked of a stored failure);
+│   │                            coalesce keys and reasons of the sweep and the repository-level jobs); version-number.ts (the next version number of a document);
+│   │                            E14: repository-action.ts (`requiredRoleForRepository`, `satisfiesRole`), repository-document-change.ts
+│   │                            (`requiredRoleForDocumentChange`) and allowlist-entry.ts (`checkAccountKind`);
+│   │                            signing (E13): sign-state.ts, sign-request.ts, signer-email.ts, resign-path.ts, pull-request-url.ts and signature-evaluations.ts (the keys and the one question asked of a stored failure);
 │   │                            test-support.ts is test only
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
@@ -141,7 +153,7 @@ Items marked (planned) do not exist yet.
 │                                tenant-authorization.ts and tenant-authorizer.ts (the guard's reads and decision), admin-ledger.ts and
 │                                admin-ledger-queries.ts (the ledger of org admins), document-placement.ts, operator-policies.ts;
 │                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only;
-│                                E16: audit-log-queries.ts, signer-erasure.ts (with signer-erasure-errors.ts), network-metadata-purge.ts (the
+│                                E16: audit-log-queries.ts, signer-erasure.ts (with signer-erasure-errors.ts and signer-erasure-counts.ts), network-metadata-purge.ts (the
 │                                handler of the daily purge) and export/ (signature-export*.ts, signature-queries.ts, signature-stream.ts,
 │                                signature-rows.ts, signature-filter.ts, own-data*.ts, own-signatures-query.ts and signer-network-columns.ts;
 │                                csv-snapshots/ and the fixtures are test only); audit-scan/, audit-conformance/ and audit-log-fixture/ are test only
@@ -150,7 +162,20 @@ Items marked (planned) do not exist yet.
 │                                cla-publish.ts, cla-publish-checks.ts, cla-publish-source.ts, cla-publish-types.ts, cla-version-queries.ts,
 │                                cla-version-rows.ts, cla-version-writes.ts, cla-version-sweeps.ts and cla-enforcing-queries.ts; cla-history.ts,
 │                                cla-history-queries.ts and cla-history-rows.ts; cla-content.ts (`prepareClaText`, the hash) and
-│                                cla-rule-error.ts; publish-fixture/ is test only; signing (E13): sign-context.ts, sign-context-queries.ts, sign-context-view.ts, sign-target.ts, sign-record.ts, sign-record-queries.ts, sign-write.ts, sign-evaluations.ts, failing-evaluation-queries.ts, sign-rule-error.ts, signer-input.ts, network-metadata.ts, own-signatures.ts, own-signatures-queries.ts and own-signature-item.ts
+│                                cla-rule-error.ts; publish-fixture/ is test only
+│                                signing (E13): sign-context.ts, sign-context-queries.ts, sign-context-view.ts, sign-target.ts, sign-record.ts, sign-record-queries.ts, sign-write.ts, sign-evaluations.ts, failing-evaluation-queries.ts, sign-rule-error.ts, signer-input.ts, network-metadata.ts, own-signatures.ts, own-signatures-queries.ts and own-signature-item.ts
+│                                E14: installation-list.ts and installation-roles.ts (the roles a person holds across the instance, on the list's
+│                                own lookup budget), map-concurrently.ts, repository-list.ts, repository-list-queries.ts, repository-count-queries.ts,
+│                                repository-entry.ts and repository-item.ts; repository-document-attach.ts, repository-document-checks.ts,
+│                                repository-document-lock-queries.ts, repository-document-queries.ts and repository-document-record.ts (attach and
+│                                detach); repository-switch.ts and repository-switch-types.ts (enable and disable in one transaction),
+│                                repository-enablement.ts, repository-enablement-checks.ts, repository-enablement-sweep.ts,
+│                                repository-disablement.ts and repository-disablement-finalise.ts; finalise/ (the `finalise-repository` and
+│                                `finalise-check` jobs and their handlers), evaluate-pr/enforcement-guard.ts, evaluation-handlers.ts (the handlers of
+│                                the delivery-driven jobs, moved out of job-handlers.ts); allowlist-entry-*.ts (create, list, remove, their queries
+│                                and types), allowlist-account.ts (the GitHub lookups before the transaction) and allowlist-sweeps.ts;
+│                                github-members-probe-contract/ and github-user-account-contract/ (the contract cases), fake-user-accounts/,
+│                                allowlist-removal-fixture/ are test only
 ├── src/shared/                  zod schemas shared by server and web (github-app.ts: the App's permissions and events; setup.ts: the setup
 │                                routes, schemas and error codes; health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
@@ -162,7 +187,8 @@ Items marked (planned) do not exist yet.
 │                                snapshots/ (the rendered files); the route
 │                                descriptors the SPA calls (`defineRoute`): contract.ts, auth-contract.ts, meta.ts (`GET /api/meta`); error-codes.ts
 │                                (the codes the SPA can see); hostile-names.ts (the hostile-name corpus, test only); E16: audit-log.ts,
-│                                signature-export.ts, erasure.ts and data-export.ts (paths, shapes and limits of the compliance routes))
+│                                signature-export.ts, erasure.ts and data-export.ts (paths, shapes and limits of the compliance routes); E14: installations.ts,
+│                                repository-document.ts, repository-enabled.ts and allowlist.ts (paths, queries and answers))
 ├── src/web/                     the React 19 SPA (Vite 8, Tailwind CSS 4); built to dist/web and served by the server; tests co-located
 │   ├── main.tsx  zod-config.ts  index.html
 │   │                            the entry (kept logic-free; zod-config.ts turns off Zod's eval probe and is its first import) and the page
@@ -195,7 +221,7 @@ Items marked (planned) do not exist yet.
 │   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
 │                                theme.ts, tailwind.ts and vitest.setup.ts
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; the numbers 006 and later go to the epics in order of merge)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           the operator stack (E19-S04): postgres, a one-shot migrate and app, and caddy in the profile `tls`; `docker compose up --build`

@@ -5,10 +5,12 @@ import { expect } from 'vitest';
 import { z } from 'zod';
 import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import { StubRoleLookup } from '../../../services/role-table-fixture/test-support.ts';
+import { FakeGitHub } from '../../../services/test-support.ts';
 import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
   type PersonName,
+  type RowTable,
   type TenantWorld,
   tenantChecksums,
   twoTenants,
@@ -69,16 +71,22 @@ function headersOf(
  * The world of the matrix: the real app (routes are added before the first request), two tenants with five people who are
  * logged in, and a `StubRoleLookup` that answers what GitHub says about them. `ask(who, spec)` sends a request as `who`
  * (nobody: no cookie); a state-changing one carries the origin and the token the app demands. `env` adds to the login
- * settings of the app (the operator ids of E11-S08, for instance); `app` adds the one option of the app a test sets (the queue the
- * publish of a major version sends its jobs to, E12-S04).
+ * settings of the app (the operator ids of E11-S08, for instance); `app` adds the options of the app a test sets (the queue the
+ * publish of a major version sends its jobs to, E12-S04, and the GitHub an allowlist entry looks accounts up on, E14-S06).
  */
 export async function matrixWorld(
   env: Readonly<Record<string, string>> = {},
-  app: Pick<TestAppOptions, 'enqueuer'> = {},
+  app: Pick<TestAppOptions, 'enqueuer' | 'allowlistGitHub'> = {},
 ) {
   const roles = new StubRoleLookup();
-  const world = await authWorld(env, { github: roles, ...app });
+  const fakeGitHub = new FakeGitHub();
+  const world = await authWorld(env, { github: roles, allowlistGitHub: fakeGitHub, ...app });
   const seeded = await twoTenants(world.db, roles);
+  // The GitHub of the allowlist (E14-S06) knows both organisations, so an `org_members` entry can be added to either tenant.
+  for (const { githubInstallationId, accountId, accountLogin } of [seeded.t1, seeded.t2]) {
+    const account = { id: accountId, login: accountLogin, type: 'Organization' } as const;
+    fakeGitHub.addInstallation({ id: githubInstallationId, account, suspendedAt: null, permissions: {} });
+  }
   const sessions = {
     admin1: await world.login(seeded.people.admin1.githubId),
     admin2: await world.login(seeded.people.admin2.githubId),
@@ -95,7 +103,7 @@ export async function matrixWorld(
       headers: headersOf(sessions, who, read, world.origin),
     });
   };
-  return { ...world, ...seeded, ask };
+  return { ...world, ...seeded, fakeGitHub, ask };
 }
 
 export type MatrixWorld = Awaited<ReturnType<typeof matrixWorld>>;
@@ -106,6 +114,7 @@ const UNKNOWN_TARGET: MatrixTarget = {
   repositoryId: 987_654,
   documentId: 987_654,
   githubRepoId: 987_654,
+  entryId: 987_654,
 };
 
 /** The resources of a tenant that no repo-scoped document covers: its installation, its plain repository and its installation-wide document. */
@@ -114,6 +123,7 @@ export const plainTarget = (tenant: TenantWorld): MatrixTarget => ({
   repositoryId: tenant.plain.repositoryId,
   documentId: tenant.documentId,
   githubRepoId: tenant.plain.githubRepoId,
+  entryId: tenant.entryId,
 });
 
 /** The resources of a tenant that carry a repo-scoped document: the repository `repoAdmin1` administers, and its document. */
@@ -122,16 +132,19 @@ export const scopedTarget = (tenant: TenantWorld): MatrixTarget => ({
   repositoryId: tenant.scoped.repositoryId,
   documentId: tenant.scoped.documentId,
   githubRepoId: tenant.scoped.githubRepoId,
+  entryId: tenant.entryId,
 });
 
 /** What the role matrix says for a class of endpoint, for tenant 1: the resource the allowed people reach and the one that is too high for a repo admin. */
 function planOf(endpointClass: EndpointClass, tenant: TenantWorld) {
   const nested = !endpointClass.startsWith('installation_');
+  const openToAnyRole = endpointClass === 'installation_role_read';
   return {
     ok: nested ? scopedTarget(tenant) : plainTarget(tenant),
-    tooLow: plainTarget(tenant),
-    /** Whether the admin of the repository that carries the resource passes: not for a route about the installation itself. */
-    repoAdminPasses: nested,
+    /** The resource that is too high for a repo admin, or null for a route that every role in the installation may call. */
+    tooLow: openToAnyRole ? null : plainTarget(tenant),
+    /** Whether the admin of the repository that carries the resource passes: not for a route about the installation itself, unless any role may call it. */
+    repoAdminPasses: nested || openToAnyRole,
     nested,
   };
 }
@@ -161,6 +174,28 @@ const crossed = (world: MatrixWorld): MatrixTarget[] => [
   { ...scopedTarget(world.t2), installationId: world.t1.installationId },
 ];
 
+/**
+ * The denials with crossed ids of a route about a repository: the admin of either tenant, asking with the installation of one
+ * tenant and the repository of the other, gets the answer for an unknown id. A route whose path has no installation id
+ * (`crossable: false`) has nothing to cross, and a route about the installation itself has no repository to cross it with.
+ */
+async function assertCrossedDenied(
+  world: MatrixWorld,
+  route: string,
+  c: CrossTenantCase,
+  denial: { readonly deny: Deny; readonly unknown: Shape },
+): Promise<void> {
+  const targets = planOf(c.endpointClass, world.t1).nested && c.crossable !== false ? crossed(world) : [];
+  for (const target of targets) {
+    for (const who of ADMINS) {
+      expect(
+        await denial.deny(who, c.request(target), 404, ' with crossed ids'),
+        `${route} with crossed ids as ${who}`,
+      ).toEqual(denial.unknown);
+    }
+  }
+}
+
 /** Every denial of the matrix, each an exact copy of the answer for a resource that does not exist. */
 async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
   const plan = planOf(c.endpointClass, world.t1);
@@ -172,15 +207,10 @@ async function assertDenials(world: MatrixWorld, route: string, c: CrossTenantCa
     );
   }
   await deny(null, c.request(plan.ok), 401);
-  await deny('repoAdmin1', c.request(plan.tooLow), 403);
-  for (const target of plan.nested ? crossed(world) : []) {
-    for (const who of ADMINS) {
-      expect(
-        await deny(who, c.request(target), 404, ' with crossed ids'),
-        `${route} with crossed ids as ${who}`,
-      ).toEqual(unknown);
-    }
+  if (plan.tooLow !== null) {
+    await deny('repoAdmin1', c.request(plan.tooLow), 403);
   }
+  await assertCrossedDenied(world, route, c, { deny, unknown });
 }
 
 /** Sends the request of the case as `who` to a call that must succeed, after the case has put the resource in the state it expects. */
@@ -207,9 +237,14 @@ async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCa
       `${route} as the admin of the repository`,
     ).toBe(success);
   } else {
+    // The success above may have used the resource up (the removal of an entry, E14-S07): the denial is for the resource as it was.
+    await c.prepare?.(world.db, plan.ok);
     await denialProbe(world, route)('repoAdmin1', c.request(plan.ok), 403);
   }
 }
+
+/** A little more than the minute of the per-person budget of uncached role lookups. */
+const LOOKUP_WINDOW_MS = 61_000;
 
 /**
  * Runs one case of `CROSS_TENANT_CASES` for tenant 1: tenant 2's admin, an org member, an outsider and crossed ids get the
@@ -219,6 +254,9 @@ async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCa
 export async function assertCrossTenantCase(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
   await assertDenials(world, route, c);
   await assertSuccess(world, route, c);
+  // A write asks GitHub again for every request (E11-S01) and a person has 30 uncached lookups a minute (E11-S04): the table has
+  // more writes than that for the admin of the repository, so the next case starts a minute later (E14-S06).
+  world.clock.advance(LOOKUP_WINDOW_MS);
 }
 
 /** The states a tenant can be in besides active, which the matrix runs once more for (E11-S07). */
@@ -278,14 +316,7 @@ async function assertAwayDenials(world: MatrixWorld, route: string, c: CrossTena
     );
   }
   await deny(null, c.request(plan.ok), 401);
-  for (const target of plan.nested ? crossed(world) : []) {
-    for (const who of ADMINS) {
-      expect(
-        await deny(who, c.request(target), 404, ' with crossed ids'),
-        `${route} with crossed ids as ${who}`,
-      ).toEqual(unknown);
-    }
-  }
+  await assertCrossedDenied(world, route, c, { deny, unknown });
 }
 
 /**
@@ -336,9 +367,6 @@ const operatorTargets = (world: MatrixWorld): MatrixTarget[] => [
   ...crossed(world),
 ];
 
-/** A little more than the minute of the per-person budget of uncached role lookups. */
-const LOOKUP_WINDOW_MS = 61_000;
-
 /**
  * Runs one case of the route table for the operator of `operatorWorld` (E11-S08), with tenant 1 in `state` (active when none
  * is given), then puts it back. An operator who is neither org admin nor admin the ledger remembers is a stranger to every
@@ -372,7 +400,7 @@ export async function assertOperatorCase(
 }
 
 /** The query for the owner of a row of a tenant table: its installation, and the person it is about. `signer_pii` and `cla_versions` have no installation column of their own. */
-function ownerQuery(ref: RowRef) {
+function ownerQuery(ref: { readonly table: RowTable; readonly id: number }) {
   const id = ref.id;
   switch (ref.table) {
     case 'repositories':
@@ -400,7 +428,12 @@ const ownerRow = z.object({ installation_id: z.number().nullable(), user_id: z.n
 
 /** Who owns the row `ref` names, read from the database and not from the answer. @throws ZodError when there is no such row. */
 export async function ownerOf(db: Kysely<Database>, ref: RowRef): Promise<RowOwner> {
-  const { rows } = await ownerQuery(ref).execute(db);
+  // An installation is its own tenant: its row names no other.
+  const query =
+    ref.table === 'installations'
+      ? sql`select id as installation_id, null::bigint as user_id from installations where id = ${ref.id}`
+      : ownerQuery({ table: ref.table, id: ref.id });
+  const { rows } = await query.execute(db);
   const row = ownerRow.parse(rows[0]);
   return { installationId: row.installation_id, userId: row.user_id };
 }
@@ -413,14 +446,20 @@ interface Viewer {
   readonly other: MatrixTarget;
 }
 
-const viewersOf = (world: MatrixWorld): Viewer[] => [
+/** The viewers of a case: the person of tenant 1 and the person of tenant 2 it names (`member1` and `admin2` by default). */
+const viewersOf = (world: MatrixWorld, people: IsolationCase['people'] = ['member1', 'admin2']): Viewer[] => [
   {
-    person: 'member1',
-    userId: world.people.member1.userId,
+    person: people[0],
+    userId: world.people[people[0]].userId,
     own: scopedTarget(world.t1),
     other: scopedTarget(world.t2),
   },
-  { person: 'admin2', userId: world.people.admin2.userId, own: scopedTarget(world.t2), other: scopedTarget(world.t1) },
+  {
+    person: people[1],
+    userId: world.people[people[1]].userId,
+    own: scopedTarget(world.t2),
+    other: scopedTarget(world.t1),
+  },
 ];
 
 /** The rows of the answer that the viewer may not be shown, as `table id`. */
@@ -440,7 +479,7 @@ async function rowsNotShown(world: MatrixWorld, c: IsolationCase, viewer: Viewer
  */
 export async function assertIsolationCase(world: MatrixWorld, route: string, c: IsolationCase): Promise<void> {
   await c.arrange?.(world.db, [world.t1, world.t2]);
-  for (const viewer of viewersOf(world)) {
+  for (const viewer of viewersOf(world, c.people)) {
     expect((await world.ask(null, c.request(viewer.own, null))).statusCode, `${route} with no session`).toBe(401);
     const clean = await world.ask(viewer.person, c.request(viewer.own, null));
     expect(clean.statusCode, `${route} as ${viewer.person}`).toBe(200);

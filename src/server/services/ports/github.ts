@@ -91,6 +91,17 @@ export interface GitHubAccountRef {
 }
 
 /**
+ * An account as `GET /users/{login}` describes it (E14-S06): the numeric id is the identity, the login is what GitHub calls the
+ * account now (always the shape of a login, so it can be shown), and `type` says what kind of account it is. `Other` is any type
+ * GitHub names that the platform has no word for.
+ */
+export interface GitHubUserAccount {
+  readonly id: GithubId;
+  readonly login: string;
+  readonly type: 'User' | 'Bot' | 'Organization' | 'Other';
+}
+
+/**
  * The kinds of account that can write a comment: the types of {@link GitHubCommitAccountType}, and `Other` for any type
  * GitHub names that the platform has no word for (an enterprise). Only `Bot` is ever treated differently.
  */
@@ -239,6 +250,24 @@ export interface GitHubClient {
    * the exemption lookup (E07-S10) and the admin role (E11-S02) both use it.
    */
   getOrgMembership(githubInstallationId: GithubId, org: string, login: string): Promise<GitHubOrgMembership | null>;
+
+  /**
+   * `GET /orgs/{org}/members?per_page=1` with the installation's token (Members: read; E14-S05): whether the App may list the
+   * members of the installation's own organisation, which an `org_members` allowlist entry needs. The organisation is the
+   * installation's account, read from `GET /app/installations/{id}` after the installation has been checked, so the answer
+   * is always about the installation that asks. Resolves true on 200 and false on a 403 that is not a rate limit (the
+   * permission is missing). The answer is never cached, and the public-members endpoints are never used.
+   * @throws GitHubNotFoundError when the installation's account is not an organisation (nothing is asked about members).
+   */
+  probeMembersPermission(githubInstallationId: GithubId): Promise<boolean>;
+
+  /**
+   * `GET /users/{login}` with the installation's token, the login URL-encoded (E14-S06): the account a login names, which an
+   * allowlist entry stores by its numeric id. Resolves null when GitHub has no such account (404) and for a login that cannot be
+   * one (the shape of `ALLOWLIST_LOGIN_PATTERN`; no request is sent for it, the installation is checked first all the same).
+   * @throws GitHubResponseError when the answer's id is not a positive integer or its login is not the shape of a login.
+   */
+  getUserAccount(githubInstallationId: GithubId, login: string): Promise<GitHubUserAccount | null>;
 
   /**
    * `GET /repos/{owner}/{repo}/collaborators/{username}/permission` with the installation's token (Metadata: read).

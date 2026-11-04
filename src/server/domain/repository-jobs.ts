@@ -9,7 +9,7 @@ import type { GithubId } from '../../shared/github-id.ts';
 // still pending. This module owns the closed set of reasons and the coalesce rule, so no later epic invents either.
 
 /**
- * Why a `sweep-repository` job exists, a closed set. The callers are E14-S02 (`repository_enabled`), E14-S03
+ * Why a `sweep-repository` job exists, a closed set. The callers are E14-S03 (`repository_enabled`), E14-S02
  * (`cla_document_changed`), E12-S04 (`cla_version_published`), E14-S06 (`allowlist_changed`) and E15-S03 to S06
  * (`signature_revoked`, `signatures_invalidated`, `override_changed`). The reason is for the log and the audit trail of the
  * caller: the run reads the policy at the time it runs, so it does the same whatever the reason.

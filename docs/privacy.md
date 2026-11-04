@@ -23,7 +23,7 @@ Every column that can hold a name, an email address, a login, an avatar, an addr
 | `sessions.verified_emails` | Verified addresses GitHub reported at login, so the signer can pick one without a stored user token | The signed-in person | The life of the session | Yes, the session rows are deleted |
 <!-- inventory:end -->
 
-`signer_pii.ip_address` and `signer_pii.user_agent` exist since migration 014 (E13-S05) and stay empty unless `RECORD_NETWORK_METADATA=true`. `allowlist_entries.login_snapshot` is added by E14-S06; until it exists the row above describes what will be stored, nothing is recorded, and the erasure already looks for the column and handles it when it appears.
+`signer_pii.ip_address` and `signer_pii.user_agent` exist since migration 014 (E13-S05) and stay empty unless `RECORD_NETWORK_METADATA=true`. `allowlist_entries.login_snapshot` (E14-S06) is a display snapshot of the login an allowlist entry was made under: it is cleared by the erasure of the person in that org, whether or not they ever signed (a bot or a maintainer on the allowlist usually did not), it is not network metadata, so the purge leaves it, and removing the entry deletes it with the row.
 
 ## What is never collected
 
@@ -52,7 +52,7 @@ Signatures, CLA versions and audit rows are immutable (database triggers refuse 
 Erasure removes the personal data one org holds for one person and leaves the signature core in place. The people who may run it are the org admins of the installation (for a `User` installation, the account owner); a repository admin gets `403`. The person asks the maintainers, who run it; there is no self-service erasure.
 
 1. **Find the numeric GitHub id** of the person (`github_user_id` in the signature CSV export). Never use a login: it is a snapshot and can be reused by someone else.
-2. **Preview:** `GET /api/installations/:installationId/erasure-preview?githubUserId=<id>`, where `:installationId` is `installations.id` of this instance and not GitHub's installation id. The answer is `{ githubUserId, signatures, signerPiiRows }`: counts only, no personal data. A person with no signature in this org is `404`.
+2. **Preview:** `GET /api/installations/:installationId/erasure-preview?githubUserId=<id>`, where `:installationId` is `installations.id` of this instance and not GitHub's installation id. The answer is `{ githubUserId, signatures, signerPiiRows, allowlistEntries }`: counts only, no personal data. A person with no signature and no allowlist entry in this org is `404`.
 3. **Execute:** `POST /api/installations/:installationId/erasures` with `{ "githubUserId": <id>, "expectedRows": <signerPiiRows from the preview> }` and the `x-csrf-token` header of the session. The answer is `200 { "erasedRows": n }`. If the live count differs from `expectedRows` the answer is `409 count_changed` and nothing changes: run the preview again.
 4. **What it did:** deleted the person's `signer_pii` rows of this org only; set `allowlist_entries.login_snapshot` to null for their entries in this org; and, only when no `signer_pii` row of the person is left in any org, replaced `users.login` by `erased-<id>`, cleared `users.name` and `users.avatar_url`, and deleted their sessions. One audit row `signer_pii.erased` records the org, the acting admin, the person's id and the number of rows, and nothing else. The log line `signer_erasure_done` has the same numbers and no name or email.
 5. **Check:** the signature CSV export shows the person's signatures with `pii_erased` true and empty `login`, `name` and `email`.

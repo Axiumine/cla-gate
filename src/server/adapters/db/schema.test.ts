@@ -109,6 +109,7 @@ const COLUMNS = {
     repository_id: true,
     kind: true,
     github_id: true,
+    login_snapshot: true,
     created_by: true,
     created_at: true,
   },

@@ -1,17 +1,39 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
+import {
+  ALLOWLIST_ENTRY_PATH,
+  INSTALLATION_ALLOWLIST_PATH,
+  REPOSITORY_ALLOWLIST_PATH,
+} from '../../../../shared/allowlist.ts';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
+import {
+  INSTALLATION_REPOSITORIES_PATH,
+  INSTALLATIONS_PATH,
+  installationListSchema,
+} from '../../../../shared/installations.ts';
 import { OWN_SIGNATURES_PATH } from '../../../../shared/own-signatures.ts';
-import { signResponseSchema, signRoute } from '../../../../shared/sign.ts';
-import { signContextResponseSchema, signContextRoute } from '../../../../shared/sign-context.ts';
+import { REPOSITORY_CLA_DOCUMENT_PATH } from '../../../../shared/repository-document.ts';
+import { REPOSITORY_DISABLE_PATH, REPOSITORY_ENABLE_PATH } from '../../../../shared/repository-enabled.ts';
+import { signRoute } from '../../../../shared/sign.ts';
+import { signContextRoute } from '../../../../shared/sign-context.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
-import type { RowTable, TenantWorld } from '../../db/tenant-fixture/test-support.ts';
-import { sha256 } from '../../db/test-support.ts';
+import type { PersonName, RowTable, TenantWorld } from '../../db/tenant-fixture/test-support.ts';
 import { OWN_SIGNATURES_CASE } from '../cross-tenant-own-signatures-fixture/test-support.ts';
+import {
+  addable,
+  attachable,
+  draftAtFirstRevision,
+  enforcing,
+  listable,
+  publishBody,
+  removable,
+  versionOne,
+} from '../cross-tenant-prepare/test-support.ts';
+import { SIGN_CASE, SIGN_CONTEXT_CASE } from '../cross-tenant-sign-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
@@ -27,9 +49,14 @@ import { declaredAccess } from '../route-access-model.ts';
 //     request: (target) => ({ method: 'POST', url: `/api/installations/${target.installationId}/documents`, payload: {...} }),
 //   },
 
-/** What a tenant route is about, which decides who may call it and how (the role matrix of the security notes). */
+/**
+ * What a tenant route is about, which decides who may call it and how (the role matrix of the security notes).
+ * `installation_role_read` is a read about the installation itself that every role in it may make (E14-S01: the list of its
+ * repositories): the admin of a repository passes too, and nobody who holds a role is told `403`.
+ */
 export type EndpointClass =
   | 'installation_read'
+  | 'installation_role_read'
   | 'installation_write'
   | 'repository_read'
   | 'repository_write'
@@ -46,6 +73,8 @@ export interface MatrixTarget {
   readonly documentId: number;
   /** GitHub's id of the repository, for the routes keyed by it. */
   readonly githubRepoId: number;
+  /** `allowlist_entries.id` of the entry that covers the whole installation (E14-S07). */
+  readonly entryId: number;
 }
 
 /** A request as the matrix sends it: a state-changing one carries the origin and the token of the signed-in person on its own. */
@@ -72,6 +101,12 @@ export interface CrossTenantCase {
    */
   readonly bodyFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<object>;
   /**
+   * False for a route whose path names the repository and no installation (`/api/repositories/:repositoryId/…`, E14-S02): the
+   * guard finds the installation from the repository, so there is no installation id to cross with another tenant's repository.
+   * The runner then leaves out the denials with crossed ids, which the dedicated tests of the route replace. Defaults to true.
+   */
+  readonly crossable?: boolean;
+  /**
    * The URL of a call that must succeed, when it names a row that `prepare` creates (the version of a document, E12-S05). The runner
    * reads it after `prepare` and sends it in place of the URL of `request`, which holds an id that names nothing and serves the
    * calls that are denied before the row is looked up.
@@ -79,9 +114,9 @@ export interface CrossTenantCase {
   readonly urlFor?: (db: Kysely<Database>, target: MatrixTarget) => Promise<string>;
 }
 
-/** A row a response names, by table and `id` (`signature_id` for `signer_pii`). */
+/** A row a response names, by table and `id` (`signature_id` for `signer_pii`); `installations` is the root of the tenant tables, which the list of installations names (E14-S01). */
 export interface RowRef {
-  readonly table: RowTable;
+  readonly table: RowTable | 'installations';
   readonly id: number;
 }
 
@@ -103,6 +138,11 @@ export interface IsolationCase {
    * enforces a document that has a version). Without it a case has the rows `twoTenants` stores.
    */
   readonly arrange?: (db: Kysely<Database>, tenants: readonly TenantWorld[]) => Promise<void>;
+  /**
+   * Who asks, one person of each tenant, when the route shows nothing to the default pair (`member1` and `admin2`): the list of
+   * installations (E14-S01) shows a person the tenants they hold a role in, and `member1` holds none.
+   */
+  readonly people?: readonly [PersonName, PersonName];
   /** The request of the viewer for their own resource; `injected` names resources of the other tenant, to try in a path, a query or a body. */
   readonly request: (own: MatrixTarget, injected: MatrixTarget | null) => RequestSpec;
   /** The tenant rows the body of the answer names. */
@@ -128,69 +168,7 @@ const documentsUrl = (target: MatrixTarget): string => `/api/installations/${tar
 
 const draftUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/draft`;
 
-/** Brings the draft of the document of `target` to revision 1, saving one first when it has none: the save of the matrix names revision 1. */
-async function draftAtFirstRevision(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
-  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
-  await db
-    .insertInto('cla_drafts')
-    .values({
-      document_id: target.documentId,
-      installation_id: target.installationId,
-      content_md: 'Matrix draft\n',
-      updated_by: person.id,
-    })
-    .onConflict((conflict) => conflict.column('document_id').doUpdateSet({ revision: 1 }))
-    .execute();
-}
-
 const versionsUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/versions`;
-
-/** The body of a publish that succeeds now: the saved draft as a major version over the version the document points at (none: the first). */
-async function publishBody(db: Kysely<Database>, target: MatrixTarget): Promise<object> {
-  const document = await db
-    .selectFrom('cla_documents')
-    .select('active_version_id')
-    .where('id', '=', target.documentId)
-    .executeTakeFirstOrThrow();
-  return {
-    source: { type: 'draft', revision: 1 },
-    bump: 'major',
-    rationale: 'Published by the matrix',
-    expectedActiveVersionId: document.active_version_id,
-    acknowledgeResigning: true,
-  };
-}
-
-/** Gives the document of `target` its version 1.0 when it has none, and points the document at it, as a publish would leave it. */
-async function versionOne(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
-  const existing = await db
-    .selectFrom('cla_versions')
-    .select('id')
-    .where('document_id', '=', target.documentId)
-    .executeTakeFirst();
-  if (existing !== undefined) {
-    return;
-  }
-  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
-  const version = await db
-    .insertInto('cla_versions')
-    .values({
-      document_id: target.documentId,
-      major: 1,
-      minor: 0,
-      content_md: 'Matrix version\n',
-      content_sha256: sha256('Matrix version\n'),
-      published_by: person.id,
-      rationale: 'Made for the matrix',
-    })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  await db
-    .updateTable('cla_documents')
-    .set({ active_version_id: version.id })
-    .where('id', '=', target.documentId)
-    .execute();
-}
 
 /** The URL of the first version of the document of `target`, which `versionOne` made if there was none. */
 async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Promise<string> {
@@ -313,6 +291,106 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       ),
     }),
   },
+  // E14-S01. Any role in the installation lists its repositories, each person the ones their role reaches. It comes before the erasure cases, which end the session of `member1`.
+  [`GET ${INSTALLATION_REPOSITORIES_PATH}`]: {
+    endpointClass: 'installation_role_read',
+    request: (target) => ({
+      method: 'GET',
+      url: INSTALLATION_REPOSITORIES_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  // E14-S02. The call attaches the document of `target` to its repository, which the role matrix lets an admin of the repository do for
+  // the repository's own document and an org admin for any; the installation-wide document of a plain repository is org admin only.
+  // The path names the repository alone, so the denials with crossed ids are those of the dedicated tests (repository-document-tenants.test.ts).
+  [`PUT ${REPOSITORY_CLA_DOCUMENT_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    prepare: attachable,
+    request: (target) => ({
+      method: 'PUT',
+      url: REPOSITORY_CLA_DOCUMENT_PATH.replace(':repositoryId', String(target.repositoryId)),
+      payload: { documentId: target.documentId },
+    }),
+  },
+  // E14-S03. The same role matrix as the attach: the policy of a repository is the scope of the document it enforces, which the repository
+  // of the case carries itself, so the admin of the repository passes. The path names the repository alone, so the denials with crossed ids
+  // are those of the dedicated tests (repository-enable-tenants.test.ts).
+  [`POST ${REPOSITORY_ENABLE_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    prepare: enforcing,
+    request: (target) => ({
+      method: 'POST',
+      url: REPOSITORY_ENABLE_PATH.replace(':repositoryId', String(target.repositoryId)),
+    }),
+  },
+  // E14-S04. The role matrix of the enable; the path names the repository alone, so the crossed ids are in repository-disable-tenants.test.ts.
+  [`POST ${REPOSITORY_DISABLE_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    prepare: attachable,
+    request: (target) => ({
+      method: 'POST',
+      url: REPOSITORY_DISABLE_PATH.replace(':repositoryId', String(target.repositoryId)),
+    }),
+  },
+  // E14-S06. The add exempts the members of the organisation, the one entry the world's GitHub can answer for without a login, and
+  // `addable` clears the entries the call before it left. The role matrix is that of the other writes: the installation needs an org
+  // admin, the repository the role its document asks for, which the repository of the case carries itself. The path of the
+  // second names the repository alone, so its crossed ids are those of allowlist-entry-tenants.test.ts.
+  [`POST ${INSTALLATION_ALLOWLIST_PATH}`]: {
+    endpointClass: 'installation_write',
+    success: 201,
+    prepare: addable,
+    request: (target) => ({
+      method: 'POST',
+      url: INSTALLATION_ALLOWLIST_PATH.replace(':installationId', String(target.installationId)),
+      payload: { kind: 'org_members' },
+    }),
+  },
+  [`POST ${REPOSITORY_ALLOWLIST_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    success: 201,
+    prepare: addable,
+    request: (target) => ({
+      method: 'POST',
+      url: REPOSITORY_ALLOWLIST_PATH.replace(':repositoryId', String(target.repositoryId)),
+      payload: { kind: 'org_members' },
+    }),
+  },
+  // E14-S07. The lists read the allowlist (the role matrix of the add: the installation needs an org admin, the repository the role its
+  // document asks for, which `listable` gives the repository of the case); the removal takes the entry that covers the installation
+  // (`removable` puts it back under the same id whoever asks first), so it is an installation write. The path of the list of a
+  // repository names the repository alone, so its crossed ids are those of allowlist-entry-list-tenants.test.ts.
+  [`GET ${INSTALLATION_ALLOWLIST_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: INSTALLATION_ALLOWLIST_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  [`GET ${REPOSITORY_ALLOWLIST_PATH}`]: {
+    endpointClass: 'repository_read',
+    crossable: false,
+    prepare: listable,
+    request: (target) => ({
+      method: 'GET',
+      url: REPOSITORY_ALLOWLIST_PATH.replace(':repositoryId', String(target.repositoryId)),
+    }),
+  },
+  [`DELETE ${ALLOWLIST_ENTRY_PATH}`]: {
+    endpointClass: 'installation_write',
+    success: 204,
+    prepare: removable,
+    request: (target) => ({
+      method: 'DELETE',
+      url: ALLOWLIST_ENTRY_PATH.replace(':installationId', String(target.installationId)).replace(
+        ':entryId',
+        String(target.entryId),
+      ),
+    }),
+  },
   [`GET ${ERASURE_PREVIEW_PATH}`]: {
     endpointClass: 'installation_read',
     request: (target) => ({
@@ -331,94 +409,20 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
 };
 
 /**
- * The sign context (E13-S02) is open to any signed-in person and answers with the document, version and signatures of the tenant
- * that holds the repository the path names. The path is the only input, so there is no id of another tenant to inject: the
- * request is the same with or without it, and the answer must be the same. The matrix makes the scoped repository of each
- * tenant enforce the tenant's document (version 1.0, signed by the tenant's signer), so tenant 1's signer is shown tenant 1's
- * document, version and own signature and nothing of tenant 2.
- */
-const SIGN_CONTEXT_CASE: IsolationCase = {
-  arrange: async (db, tenants) => {
-    await Promise.all(
-      tenants.map((tenant) =>
-        db
-          .updateTable('repositories')
-          .set({ cla_document_id: tenant.documentId })
-          .where('id', '=', tenant.scoped.repositoryId)
-          .execute(),
-      ),
-    );
-  },
-  request: (own) => ({
-    method: 'GET',
-    url: signContextRoute.path.replace(':githubRepoId', String(own.githubRepoId)),
-  }),
-  rows: (body) => {
-    const context = signContextResponseSchema.parse(body);
-    return [
-      { table: 'cla_documents' as const, id: context.document.id },
-      { table: 'cla_versions' as const, id: context.version.id },
-      ...(context.signature === null ? [] : [{ table: 'signatures' as const, id: context.signature.id }]),
-    ];
-  },
-  mayShow: (owner, viewer) =>
-    owner.installationId === viewer.own.installationId && (owner.userId === null || owner.userId === viewer.userId),
-};
-
-/** The version in force and its hash for the repository of each tenant, by GitHub's id of the repository, as `SIGN_CASE` arranged them. */
-const SIGN_TARGETS = new Map<number, { readonly versionId: number; readonly contentSha256: string }>();
-
-/**
- * The sign request (E13-S04) is open to any signed-in person and writes to the tenant that holds the repository its body names.
- * The body is the only input, and it is strict, so there is no id of another tenant to inject: the request is the same with or
- * without it, and the answer must be the same (the cases that put a version of one tenant into the request of another are in
- * sign-routes-tenants.test.ts). The matrix makes the scoped repository of each tenant enforce the tenant's document, gives every
- * session a verified address, and asks as the two signers of the world, who signed version 1.0 of their own tenant's document
- * already: the answer is the repeat (`200`, `created: false`) with the signature each of them has, so that the call can be made
- * more than once and writes nothing, and what it names is that signature and no other.
- */
-const SIGN_CASE: IsolationCase = {
-  arrange: async (db, tenants) => {
-    await Promise.all(
-      tenants.map(async (tenant) => {
-        SIGN_TARGETS.set(tenant.scoped.githubRepoId, {
-          versionId: tenant.versionId,
-          contentSha256: tenant.contentSha256,
-        });
-        await db
-          .updateTable('repositories')
-          .set({ cla_document_id: tenant.documentId })
-          .where('id', '=', tenant.scoped.repositoryId)
-          .execute();
-      }),
-    );
-    await db
-      .updateTable('sessions')
-      .set({ verified_emails: JSON.stringify([{ email: 'ada@example.org', primary: true }]) })
-      .execute();
-  },
-  request: (own) => ({
-    method: 'POST',
-    url: signRoute.path,
-    payload: {
-      githubRepoId: own.githubRepoId,
-      ...SIGN_TARGETS.get(own.githubRepoId),
-      consentTextId: 'individual-v1',
-      name: 'Ada Lovelace',
-      email: 'ada@example.org',
-    },
-  }),
-  rows: (body) => [{ table: 'signatures' as const, id: signResponseSchema.parse(body).signature.id }],
-  mayShow: (owner, viewer) => owner.installationId === viewer.own.installationId && owner.userId === viewer.userId,
-};
-
-/**
- * The `authenticated` routes that return tenant data by design (E13: `GET /api/sign/:githubRepoId`, `POST /api/sign` and
- * `GET /api/me/signatures`; E16: `GET /api/me/export`). The export of a person's own data names the signatures of the person in
- * every tenant, and the personal data kept for each; the route takes no parameter at all (a query parameter is a `400`, shown in
- * data-export-routes.test.ts), so there is nothing of another tenant to inject and the request is the same with or without it.
+ * The `authenticated` routes that return tenant data by design (E13: the sign context, the sign request and the own signatures;
+ * E14: the list of installations; E16: the export of the own data). None takes the id of a tenant to inject, so the request is
+ * the same with or without one (the export and the lists take no parameter at all: a query parameter is a `400`).
  */
 export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
+  // E14-S01. The list names the installations the person holds a role in, and takes no parameter at all (a query parameter is a
+  // `400`, shown in installation-list-routes.test.ts), so there is nothing of another tenant to inject and the request is the same
+  // with or without it. The admin of each tenant asks: `member1` holds no role and is shown nothing.
+  [`GET ${INSTALLATIONS_PATH}`]: {
+    people: ['admin1', 'admin2'],
+    request: () => ({ method: 'GET', url: INSTALLATIONS_PATH }),
+    rows: (body) => installationListSchema.parse(body).map((row) => ({ table: 'installations' as const, id: row.id })),
+    mayShow: (owner, viewer) => owner.installationId === viewer.own.installationId,
+  },
   [`GET ${DATA_EXPORT_PATH}`]: {
     request: () => ({ method: 'GET', url: DATA_EXPORT_PATH }),
     rows: (body) =>

@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import { createInstallationStore } from './installation-store.ts';
-import { renameActiveRepository } from './repository-queries.ts';
+import { isRepositoryEnabled, renameActiveRepository } from './repository-queries.ts';
 import { REPOSITORY_BATCH_SIZE } from './repository-rows.ts';
 import { listed, repoId, worldOfTwoTenants } from './store-fixture/test-support.ts';
 
@@ -265,4 +265,24 @@ test('renaming inside the caller transaction commits or rolls back with it', asy
     })
     .catch(() => undefined);
   expect((await repositoriesOf(db, a.installation.id))[0]?.full_name).toBe('org-1/repo-1');
+});
+
+// ------------------------------------------------------------------------------------------------------ enforcement
+
+test('enforcement is read off the row now: on is true, off and removed are false, and the repository of another installation is false (E14-S04)', async () => {
+  const { db, store, a, b } = await worldOfTwoTenants();
+  const [first, second] = await repositoriesOf(db, a.installation.id);
+  const [foreign] = await repositoriesOf(db, b.installation.id);
+  if (first === undefined || second === undefined || foreign === undefined) {
+    throw new Error('the world has no repositories');
+  }
+  await db.updateTable('repositories').set({ enabled: true }).execute();
+  expect(await isRepositoryEnabled(db, a.installation.id, first.id)).toBe(true);
+  expect(await isRepositoryEnabled(db, a.installation.id, foreign.id)).toBe(false);
+  expect(await isRepositoryEnabled(db, b.installation.id, foreign.id)).toBe(true);
+  await db.updateTable('repositories').set({ enabled: false }).where('id', '=', first.id).execute();
+  expect(await isRepositoryEnabled(db, a.installation.id, first.id)).toBe(false);
+  await store.markRepositoriesRemoved(a.installation.id, [repoId(1, 2)], REMOVED_AT);
+  expect(await isRepositoryEnabled(db, a.installation.id, second.id)).toBe(false);
+  expect(await isRepositoryEnabled(db, a.installation.id, 999_999)).toBe(false);
 });

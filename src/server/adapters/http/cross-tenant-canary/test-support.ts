@@ -29,6 +29,7 @@ const DOCUMENT_PATH = '/canary/installations/:installationId/documents/:document
 function pathOf(endpointClass: EndpointClass): string {
   switch (endpointClass) {
     case 'installation_read':
+    case 'installation_role_read':
     case 'installation_write':
       return INSTALLATION_PATH;
     case 'repository_read':

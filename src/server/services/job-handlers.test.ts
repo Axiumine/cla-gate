@@ -45,7 +45,7 @@ function registered(
   return registry;
 }
 
-test('the registry binds the five delivery-driven handlers, the two of the scheduler and sweep-repository, all of them job types of the catalogue', () => {
+test('the registry binds the five delivery-driven handlers, the two of the scheduler, sweep-repository and the two finalise jobs, all of them job types of the catalogue', () => {
   const types = registered().types();
   expect(types).toEqual(expect.arrayContaining(DELIVERY_DRIVEN));
   expect(types).toEqual([
@@ -57,6 +57,8 @@ test('the registry binds the five delivery-driven handlers, the two of the sched
     'sweep',
     'sweep-installation',
     'sweep-repository',
+    'finalise-repository',
+    'finalise-check',
   ]);
   for (const type of types) {
     expect(JOB_TYPES).toContain(type);
@@ -74,15 +76,14 @@ test('revoke-user-sessions has no consumer until E10 registers one, and a later 
   }).toThrow(HandlerRegisteredError);
 });
 
-test('finalise-repository and finalise-check have no consumer until E14-S04 registers them, and a later registration needs no change here (E07-S09)', () => {
+test('finalise-repository and finalise-check are bound since E14-S04, so a later registration of either is refused', () => {
   const registry = registered();
-  expect(registry.types()).not.toContain('finalise-repository');
-  expect(registry.types()).not.toContain('finalise-check');
-  registry.register('finalise-repository', completing('finalised'));
-  registry.register('finalise-check', completing('finalised'));
   expect(registry.types()).toEqual(expect.arrayContaining(['finalise-repository', 'finalise-check']));
   expect(() => {
     registry.register('finalise-check', completing());
+  }).toThrow(HandlerRegisteredError);
+  expect(() => {
+    registry.register('finalise-repository', completing());
   }).toThrow(HandlerRegisteredError);
 });
 
@@ -325,6 +326,16 @@ const SWEEP_JOBS = [
       githubRepoId: IDS.repository,
       reason: 'override_changed',
     },
+    'no GitHub App or no evaluation reporter (E09) is configured',
+  ],
+  [
+    'finalise-repository',
+    { type: 'finalise-repository', githubInstallationId: IDS.installation, githubRepoId: IDS.repository },
+    'no GitHub App or no evaluation reporter (E09) is configured',
+  ],
+  [
+    'finalise-check',
+    { type: 'finalise-check', githubInstallationId: IDS.installation, githubRepoId: IDS.repository, prNumber: 7 },
     'no GitHub App or no evaluation reporter (E09) is configured',
   ],
 ] as const;

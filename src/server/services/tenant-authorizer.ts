@@ -10,9 +10,13 @@ import { GitHubUnavailableError } from './ports/github-errors.ts';
 import { createRepoAdminLookup } from './repo-admin.ts';
 import { createRepoAdminDiscovery } from './repo-admin-discovery.ts';
 import type { RoleCache } from './role-cache.ts';
-import { createViewerLookupBudget } from './role-lookup-budget.ts';
+import { createViewerLookupBudget, INSTALLATION_LIST_LOOKUPS, type ViewerLookupBudget } from './role-lookup-budget.ts';
 import { createRoleLookups } from './role-lookups.ts';
-import { type AuthorizeTenant, createTenantAuthorization } from './tenant-authorization.ts';
+import {
+  type AuthorizeTenant,
+  createTenantAuthorization,
+  type TenantAuthorizationDeps,
+} from './tenant-authorization.ts';
 
 // The tenant authorisation of E11-S05 wired to what it reads: the GitHub client port for the roles, the role cache of
 // E11-S04 in front of it, the database for the role-in-installation discovery, and one budget per person for the lookups
@@ -48,19 +52,37 @@ export const roleGitHubNotWired: RoleGitHub = {
     Promise.reject(new GitHubUnavailableError('no GitHub App is configured: roles cannot be read')),
 };
 
-/** The authorisation over the real lookups, the cache and the budget. */
-export function createTenantAuthorizer(options: TenantAuthorizerOptions): AuthorizeTenant {
+/**
+ * What the authorisation reads, over the real lookups, the cache and the budget: the cached lookups, the discovery and the
+ * ledger. The guard decides with it ({@link createTenantAuthorizer}) and the lists of E14-S01 ask the same lookups, so the
+ * roles they show are the roles the guard enforces and both spend one budget of the person.
+ */
+export function createTenantAuthorizationDeps(options: TenantAuthorizerOptions): TenantAuthorizationDeps {
   const { db, github, log } = options;
   const ledger = createAdminLedger({ db, clock: options.clock });
-  const lookups = createRoleLookups({
-    cache: options.cache,
-    budget: createViewerLookupBudget(options.clock),
-    orgAdmin: recordingAdmins(createOrgAdminLookup({ github, log }), ledger),
-    repoAdmin: createRepoAdminLookup({ github, log }),
-  });
-  return createTenantAuthorization({
-    lookups,
+  const lookupsOver = (budget: ViewerLookupBudget) =>
+    createRoleLookups({
+      cache: options.cache,
+      budget,
+      orgAdmin: recordingAdmins(createOrgAdminLookup({ github, log }), ledger),
+      repoAdmin: createRepoAdminLookup({ github, log }),
+    });
+  const lookups = lookupsOver(createViewerLookupBudget(options.clock));
+  // The list of installations asks every installation once per cache lifetime: it spends a budget of its own, over the same cache.
+  const listed = lookupsOver(createViewerLookupBudget(options.clock, INSTALLATION_LIST_LOOKUPS)).read;
+  return {
+    lookups: { ...lookups, list: listed },
     discover: createRepoAdminDiscovery({ db, lookup: lookups.read.repoAdmin }),
+    discoverForList: createRepoAdminDiscovery({ db, lookup: listed.repoAdmin }),
     ledger,
-  });
+  };
+}
+
+/**
+ * The authorisation over the real lookups, the cache and the budget.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode): the application builds the deps
+ * itself, because the lists of E14-S01 read them too.
+ */
+export function createTenantAuthorizer(options: TenantAuthorizerOptions): AuthorizeTenant {
+  return createTenantAuthorization(createTenantAuthorizationDeps(options));
 }

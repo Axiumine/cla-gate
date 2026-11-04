@@ -81,6 +81,23 @@ export async function listServedInstallationIds(db: Kysely<Database>): Promise<G
     .map((row) => parseGithubId(row.github_installation_id));
 }
 
+/**
+ * The installations a person can administer on this instance (E14-S01): the ones the admission policy admitted and the App
+ * is still installed on, suspended ones included, by account login and id. A rejected tenant is invisible and an uninstalled
+ * one has nothing left to enforce. Like the operator's view this reads across tenants by design; the caller shows a row to
+ * the person only when a role lookup says they hold one in it.
+ */
+export function listAdministrableInstallations(db: Kysely<Database>): Promise<InstallationRow[]> {
+  return db
+    .selectFrom('installations')
+    .selectAll()
+    .where('admission_status', '=', 'admitted')
+    .where('deleted_at', 'is', null)
+    .orderBy('account_login')
+    .orderBy('id')
+    .execute();
+}
+
 /** Records that a sync wrote this installation's state at `at`. Touches the one row `installationId` names (`installations.id`). */
 export async function markInstallationSynced(
   db: Kysely<Database>,

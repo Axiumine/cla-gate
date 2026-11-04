@@ -114,7 +114,7 @@ test('the job runs as the runtime role: it reads what it needs and writes its ro
         }),
       },
       JOB,
-      { attempt: 0, logger },
+      { attempt: 0, logger, enqueuer: world.handedOver, jobId: 'job-1' },
     ),
   );
   expect(outcome).toEqual({ outcome: 'evaluated' });

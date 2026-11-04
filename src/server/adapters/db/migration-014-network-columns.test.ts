@@ -135,3 +135,45 @@ test('the privileges of the runtime role on the table are the ones before the mi
            has_column_privilege('cla_app', 'signer_pii', 'user_agent', 'update') as agent`.execute(db);
   expect(columns.rows).toEqual([{ ip: false, agent: false }]);
 });
+
+test('the erasure as migration 013 defines it takes the network values with the personal data row and clears the allowlist login of the same person, and still reaches an allowlisted account that never signed', async () => {
+  const { db } = await migratedTestDatabase();
+  const tenant = await seedTenant(db);
+  const { signatureId } = await seedSignature(db, tenant, 111);
+  await setNetwork(db, signatureId, CREATED, { ip: '203.0.113.7', userAgent: AGENT });
+  await db
+    .insertInto('allowlist_entries')
+    .values([
+      {
+        installation_id: tenant.installationId,
+        kind: 'user',
+        github_id: 111,
+        created_by: tenant.publisherId,
+        login_snapshot: 'ada',
+      },
+      {
+        installation_id: tenant.installationId,
+        kind: 'bot',
+        github_id: 222,
+        created_by: tenant.publisherId,
+        login_snapshot: 'ci-bot',
+      },
+    ])
+    .execute();
+
+  const signer = await sql<{ n: number }>`select erase_signer_pii(111, 9999, ${tenant.installationId}) as n`.execute(
+    db,
+  );
+  const listed = await sql<{ n: number }>`select erase_signer_pii(222, 9999, ${tenant.installationId}) as n`.execute(
+    db,
+  );
+
+  expect([signer.rows, listed.rows]).toEqual([[{ n: 1 }], [{ n: 0 }]]);
+  expect(await networkOf(db)).toEqual({});
+  expect(
+    await db.selectFrom('allowlist_entries').select(['github_id', 'login_snapshot']).orderBy('github_id').execute(),
+  ).toEqual([
+    { github_id: 111, login_snapshot: null },
+    { github_id: 222, login_snapshot: null },
+  ]);
+});

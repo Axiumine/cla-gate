@@ -141,6 +141,8 @@ interface AllowlistEntriesTable {
   repository_id: number | null;
   kind: 'user' | 'bot' | 'org_members';
   github_id: number;
+  /** The login GitHub gave the account when the entry was made, to be shown and never matched on (migration 012); null after an erasure. */
+  login_snapshot: string | null;
   created_by: number;
   created_at: Generated<Date>;
 }

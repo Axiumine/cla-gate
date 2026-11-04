@@ -88,6 +88,8 @@ export interface TestAppOptions {
   readonly roleCache?: RoleCache;
   /** Where the guard of a tenant route reads the roles (E11-S05); defaults to the app's own, which fails every call as an outage. */
   readonly github?: RoleGitHub;
+  /** Where an allowlist entry looks up the account it exempts (E14-S06); defaults to the app's own, which fails every call as an outage. */
+  readonly allowlistGitHub?: AppOptions['allowlistGitHub'];
   /** Who operates the instance (E11-S08); defaults to the app's own, from `OPERATOR_GITHUB_IDS` in `env`. */
   readonly operators?: OperatorPolicies;
   /** The job queue the app reports on and stops (E07-S01). Defaults to none. */

@@ -50,12 +50,14 @@ export function rolesWorld(tenants = 2) {
   const log = createLogger({ logLevel: 'info' }, logs.destination);
   const cache = new RoleCache({ clock });
   const budget = createViewerLookupBudget(clock);
-  const lookups = createRoleLookups({
+  const guarded = createRoleLookups({
     cache,
     budget,
     orgAdmin: createOrgAdminLookup({ github: fake, log }),
     repoAdmin: createRepoAdminLookup({ github: fake, log }),
   });
+  // The list of installations (E14-S01) has a budget of its own in the app; here it is the same one, which no test of the lookups reads.
+  const lookups = { ...guarded, list: guarded.read };
   /** What GitHub says of the viewer in tenant `n`: an admin of the organisation, or a plain member. */
   const setOrgRole = (n: number, role: 'admin' | 'member'): void => {
     fake.addMembership(id(githubInstallationOf(n)), `org-${n}`, 'alice', {

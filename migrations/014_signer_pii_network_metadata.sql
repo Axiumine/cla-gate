@@ -7,9 +7,10 @@
 -- Two nullable columns on the erasable personal data of a signature: the address the signing request came from (ip_address,
 -- inet) and its User-Agent header (user_agent, text, at most 512 characters). Both are NULL unless the operator switched
 -- RECORD_NETWORK_METADATA on, so the columns say nothing about the default installation. They are personal data and live
--- where the other personal data of a signer lives, in signer_pii: erase_signer_pii (migration 009) deletes the whole row,
--- and purge_signer_network_metadata (migration 010) sets the two columns to NULL after NETWORK_METADATA_RETENTION_DAYS.
--- Both functions find the columns in the catalogue, so neither is redefined here.
+-- where the other personal data of a signer lives, in signer_pii: erase_signer_pii (migration 009, redefined by 013 for an
+-- allowlisted account that never signed) deletes the whole row, and purge_signer_network_metadata (migration 010) sets the two
+-- columns to NULL after NETWORK_METADATA_RETENTION_DAYS. Neither function names the columns in a way that needs a change
+-- (the delete takes the row whole, the purge finds the columns in the catalogue), so neither is redefined here.
 --
 -- Nothing is added to signatures or audit_log: the immutable core and the audit trail stay free of network values. The
 -- runtime role's table-level INSERT and SELECT on signer_pii (migration 001) already cover a column added later, so no grant

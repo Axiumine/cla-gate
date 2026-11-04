@@ -70,6 +70,35 @@ export async function storePii(db: Kysely<Database>, signatureId: number, signer
     .execute();
 }
 
+/** An allowlist entry of the tenant for the account `githubId`, shown with the login `snapshot`: a person who may never have signed in or signed anything. */
+export async function listAccount(
+  db: Kysely<Database>,
+  tenant: Tenant,
+  githubId: number,
+  snapshot: string | null,
+): Promise<void> {
+  await db
+    .insertInto('allowlist_entries')
+    .values({
+      installation_id: tenant.installationId,
+      kind: 'user',
+      github_id: githubId,
+      created_by: tenant.publisherId,
+      login_snapshot: snapshot,
+    })
+    .execute();
+}
+
+/** The login snapshots of the allowlist, as (installation, account, snapshot), in a fixed order. */
+export function snapshots(db: Kysely<Database>) {
+  return db
+    .selectFrom('allowlist_entries')
+    .select(['installation_id', 'github_id', 'login_snapshot'])
+    .orderBy('installation_id')
+    .orderBy('github_id')
+    .execute();
+}
+
 /** Two tenants (`seedTenant` 1 and 2) and one person who signed the document of each, with the personal data held for both. */
 export async function sharedSigner(db: Kysely<Database>, githubId = 111) {
   const t1 = await seedTenant(db, 1);

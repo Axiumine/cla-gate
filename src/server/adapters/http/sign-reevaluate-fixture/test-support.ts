@@ -104,14 +104,13 @@ export async function reevaluationWorld() {
     open: (prNumber: number, head: number, state: 'open' | 'closed' = 'open') => {
       showPullRequest(github, { prNumber, head, state });
     },
-    /** Runs the evaluation job for the envelope, as a first attempt. */
-    run: (job: EnvelopeOf<'evaluate-pr'>) => evaluatePr(ports, job, { attempt: 0, logger }),
+    /** Runs the evaluation job for the envelope, as a first attempt; a switch-off it meets is handed over through the world's queue. */
+    run: (job: EnvelopeOf<'evaluate-pr'>) =>
+      evaluatePr(ports, job, { attempt: 0, logger, enqueuer: signing.queue, jobId: 'job-1' }),
     /** The jobs of the sign requests so far, in the order sent. */
     queued: async () => evaluationJobs(await sentJobs(world.db)),
     /** Every write the mocked GitHub accepted for a Check Run, oldest first: `<create or update> <run id> <status> <conclusion>`. */
     checkRunWrites: () =>
-      github.checkRuns.writes.map(
-        ({ kind, id, write }) => `${kind} ${id} ${write.status} ${write.conclusion ?? 'none'}`,
-      ),
+      github.checkRunWrites.map(({ kind, id, write }) => `${kind} ${id} ${write.status} ${write.conclusion ?? 'none'}`),
   };
 }

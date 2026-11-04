@@ -81,6 +81,8 @@ interface StoredRepository {
 /** What `seedTenant` stores, plus the second repository with its own document and the GitHub ids a role lookup needs. */
 export interface TenantWorld extends Tenant {
   readonly githubInstallationId: GithubId;
+  /** The GitHub id of the account the installation belongs to (`installations.account_id`). */
+  readonly accountId: GithubId;
   readonly accountLogin: string;
   /** The repository of `seedTenant`: no repo-scoped document, so the document of the tenant (`documentId`) covers it. */
   readonly plain: StoredRepository;
@@ -91,6 +93,8 @@ export interface TenantWorld extends Tenant {
   /** The person who administers the organisation: the one the ledger of org admins holds an entry for. */
   readonly admin: StoredPerson;
   readonly signatureId: number;
+  /** The allowlist entry that covers the whole installation (GitHub id `n * 100`), the one of two the world seeds that is not a repository's (E14-S07). */
+  readonly entryId: number;
 }
 
 export interface TwoTenants {
@@ -291,6 +295,12 @@ async function seedWorld(
   const { scoped, signature } = await extendTenant(db, tenant, n, signerGithubId);
   const signer = person(signature.userId, signerGithubId);
   const stored = admin ?? signer;
+  const entry = await db
+    .selectFrom('allowlist_entries')
+    .select('id')
+    .where('installation_id', '=', tenant.installationId)
+    .where('repository_id', 'is', null)
+    .executeTakeFirstOrThrow();
   await db
     .insertInto('installation_admin_seen')
     .values({ installation_id: tenant.installationId, user_github_id: stored.githubId, seen_at: ADMIN_SEEN_AT })
@@ -298,12 +308,14 @@ async function seedWorld(
   return {
     ...tenant,
     githubInstallationId: parseGithubId(n * 5000),
+    accountId: parseGithubId(n * 7000),
     accountLogin: `org-${n}`,
     plain: { repositoryId: tenant.repositoryId, githubRepoId: parseGithubId(n * 9000), fullName: `org-${n}/repo` },
     scoped,
     signer,
     admin: stored,
     signatureId: signature.signatureId,
+    entryId: entry.id,
   };
 }
 

@@ -25,29 +25,61 @@ export interface Resolved {
   readonly fullName: string;
 }
 
+/** The rows of the installation and the repository a job names, or the reason there are none. */
+async function findTenant(
+  db: Kysely<Database>,
+  job: Job,
+): Promise<Tenant | 'installation_not_found' | 'repository_not_found'> {
+  const installation = await findInstallationByGithubId(db, job.githubInstallationId);
+  if (installation === null) {
+    return 'installation_not_found';
+  }
+  const repository = await findRepositoryByGithubId(db, installation.id, job.githubRepoId);
+  return repository === null ? 'repository_not_found' : { installation, repository };
+}
+
+/** The states {@link evaluationEligibility} judges, read off the rows of a tenant; `enabled` is given, not read. */
+function eligibilityOf(tenant: Tenant, enabled: boolean) {
+  const { installation, repository } = tenant;
+  return evaluationEligibility(
+    {
+      admissionStatus: installation.admission_status,
+      deletedAt: installation.deleted_at,
+      suspendedAt: installation.suspended_at,
+    },
+    { removedAt: repository.removed_at, enabled },
+  );
+}
+
 /**
  * The stored installation and repository the job names, or the reason to skip it: no row for the installation or the
  * repository under it (a repository of another installation is not found, never read), or a state that is not evaluated.
  * No GitHub call is made for any of them.
  */
 export async function loadTenant(db: Kysely<Database>, job: Job): Promise<Tenant | string> {
-  const installation = await findInstallationByGithubId(db, job.githubInstallationId);
-  if (installation === null) {
-    return 'installation_not_found';
+  const tenant = await findTenant(db, job);
+  if (typeof tenant === 'string') {
+    return tenant;
   }
-  const repository = await findRepositoryByGithubId(db, installation.id, job.githubRepoId);
-  if (repository === null) {
-    return 'repository_not_found';
+  const eligibility = eligibilityOf(tenant, tenant.repository.enabled);
+  return eligibility.eligible ? tenant : eligibility.reason;
+}
+
+/**
+ * The tenant of a job that completes what a switched-off repository left (E14-S04), or the reason to skip it: the opposite of
+ * {@link loadTenant} on enforcement, the same on everything else. A repository whose enforcement is on again is skipped as
+ * `repository_enabled`, because its own sweep evaluates it and a neutral result would overwrite that one.
+ */
+export async function loadSwitchedOffTenant(db: Kysely<Database>, job: Job): Promise<Tenant | string> {
+  const tenant = await findTenant(db, job);
+  if (typeof tenant === 'string') {
+    return tenant;
   }
-  const eligibility = evaluationEligibility(
-    {
-      admissionStatus: installation.admission_status,
-      deletedAt: installation.deleted_at,
-      suspendedAt: installation.suspended_at,
-    },
-    { removedAt: repository.removed_at, enabled: repository.enabled },
-  );
-  return eligibility.eligible ? { installation, repository } : eligibility.reason;
+  const eligibility = eligibilityOf(tenant, true);
+  if (!eligibility.eligible) {
+    return eligibility.reason;
+  }
+  return tenant.repository.enabled ? 'repository_enabled' : tenant;
 }
 
 /**

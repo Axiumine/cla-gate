@@ -114,10 +114,20 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+    'GET /api/installations/:installationId/repositories',
+    'PUT /api/repositories/:repositoryId/cla-document',
+    'POST /api/repositories/:repositoryId/enable',
+    'POST /api/repositories/:repositoryId/disable',
+    'POST /api/installations/:installationId/allowlist-entries',
+    'POST /api/repositories/:repositoryId/allowlist-entries',
+    'GET /api/installations/:installationId/allowlist-entries',
+    'GET /api/repositories/:repositoryId/allowlist-entries',
+    'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);
   expect(Object.keys(ISOLATION_CASES)).toEqual([
+    'GET /api/installations',
     'GET /api/me/export',
     'GET /api/sign/:githubRepoId',
     'POST /api/sign',
@@ -214,7 +224,10 @@ test('the isolation case of the sign context names the document, the version and
     { table: 'cla_documents', id: 3 },
     { table: 'cla_versions', id: 4 },
   ]);
-  const viewer = { userId: 10, own: { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 1 } };
+  const viewer = {
+    userId: 10,
+    own: { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 1, entryId: 1 },
+  };
   expect(isolation?.mayShow({ installationId: 1, userId: null }, viewer)).toBe(true);
   expect(isolation?.mayShow({ installationId: 1, userId: 10 }, viewer)).toBe(true);
   expect(isolation?.mayShow({ installationId: 1, userId: 11 }, viewer)).toBe(false);
@@ -228,7 +241,7 @@ test('the isolation case of the sign request names the signature of an answer, a
     created: false,
   };
   expect(isolation?.rows(answer)).toEqual([{ table: 'signatures', id: 5 }]);
-  const target = { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 9001 };
+  const target = { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 9001, entryId: 1 };
   const sent = isolation?.request(target, null);
   expect(sent).toMatchObject({
     method: 'POST',

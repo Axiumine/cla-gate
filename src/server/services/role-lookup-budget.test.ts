@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
-import { createViewerLookupBudget, RoleLookupThrottledError } from './role-lookup-budget.ts';
+import { createViewerLookupBudget, INSTALLATION_LIST_LOOKUPS, RoleLookupThrottledError } from './role-lookup-budget.ts';
 import { FakeClock } from './test-support.ts';
 
 // What one person may cost the GitHub budgets of the tenants (E11-S04): 30 uncached lookups in a sliding minute.
@@ -31,6 +31,17 @@ function setup() {
 test('30 lookups in a minute are let through and the 31st is refused', () => {
   const { spendUpTo } = setup();
   expect(spendUpTo(ALICE, 100)).toBe(30);
+});
+
+test('the list of installations may make 300 lookups a minute, a budget of its own that the same function makes', () => {
+  expect(INSTALLATION_LIST_LOOKUPS).toBe(300);
+  const budget = createViewerLookupBudget(new FakeClock('2026-11-02T10:00:00.000Z'), INSTALLATION_LIST_LOOKUPS);
+  for (let lookup = 0; lookup < 300; lookup += 1) {
+    budget.spend(ALICE);
+  }
+  expect(() => {
+    budget.spend(ALICE);
+  }).toThrow(RoleLookupThrottledError);
 });
 
 test('the refusal says when to come back: the whole seconds until the oldest of the 30 leaves the minute', () => {

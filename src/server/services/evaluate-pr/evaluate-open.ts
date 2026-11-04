@@ -8,7 +8,8 @@ import type { GitHubPullRequest } from '../ports/github.ts';
 import type { ReportTarget } from '../ports/reporter.ts';
 import { collectCommits } from './commit-listing.ts';
 import { displayNamesOf } from './display-names.ts';
-import type { EvaluatePrPorts } from './evaluate-pr-ports.ts';
+import { handOverIfOff, publishAndHandOver } from './enforcement-guard.ts';
+import type { EvaluateRun } from './evaluate-pr-ports.ts';
 import { readEvaluationInput, type Tenant } from './evaluation-facts.ts';
 import { type EvaluationKey, finishEvaluation, startEvaluation } from './evaluation-rows.ts';
 import type { Resolved } from './evaluation-tenant.ts';
@@ -46,17 +47,10 @@ function targetOf(job: Job, resolved: Resolved, pr: GitHubPullRequest, evaluatio
   };
 }
 
-/** What every step of one run shares. */
-interface Run {
-  readonly ports: EvaluatePrPorts;
-  readonly job: Job;
-  readonly resolved: Resolved;
-  readonly logger: Logger;
-}
-
 /** Steps 3 to 8 for a pull request that is open and whose head is `pr.headSha`. */
-export async function evaluateOpen(run: Run, pr: GitHubPullRequest): Promise<JobOutcome> {
-  const { ports, job, resolved, logger } = run;
+export async function evaluateOpen(run: EvaluateRun, pr: GitHubPullRequest): Promise<JobOutcome> {
+  const { ports, job, resolved } = run;
+  const { logger } = run.context;
   const { installation } = resolved.tenant;
   const target = targetOf(job, resolved, pr, await startEvaluation(ports.db, evaluationKey(resolved.tenant, job, pr)));
   await ports.reporter.started(target);
@@ -74,9 +68,18 @@ export async function evaluateOpen(run: Run, pr: GitHubPullRequest): Promise<Job
     return superseded(logger);
   }
   await finishEvaluation(ports.db, installation.id, target.evaluationId, toStoredDetails(evaluation));
-  await ports.reporter.publish(target, evaluation, displayNamesOf(pr, collected.commits));
+  if (await handOverIfOff(run)) {
+    return switchedOff(logger);
+  }
+  await publishAndHandOver(run, target, evaluation, displayNamesOf(pr, collected.commits));
   logger.info({ result: evaluation.outcome, failureCodes: evaluation.failureCodes }, 'evaluate_pr.evaluated');
   return { outcome: 'evaluated' };
+}
+
+/** Enforcement was turned off while the run was going: nothing is written, the `finalise-check` job completes the check. */
+function switchedOff(logger: Logger): JobOutcome {
+  logger.info({ reason: 'repository_disabled' }, 'evaluate_pr.skipped');
+  return { outcome: 'skipped:repository_disabled' };
 }
 
 function superseded(logger: Logger): JobOutcome {

@@ -52,7 +52,7 @@ function setup(found: 'repo_admin' | 'none' = 'none') {
   const world = rolesWorld(2);
   const discover = vi.fn<DiscoverRepoAdminRole>(() => Promise.resolve({ role: found, truncated: false }));
   const ledger = { isAdmin: vi.fn<AdminLedger['isAdmin']>(() => Promise.resolve(false)) };
-  const authorize = createTenantAuthorization({ lookups: world.lookups, discover, ledger });
+  const authorize = createTenantAuthorization({ lookups: world.lookups, discover, discoverForList: discover, ledger });
   const ask = (overrides: Partial<TenantQuestion> = {}) =>
     authorize({
       mode: 'read',

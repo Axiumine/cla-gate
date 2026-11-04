@@ -5,6 +5,7 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import type { Database } from './adapters/db/schema.ts';
+import { allowlistEntryRoutes } from './adapters/http/allowlist-entry-routes.ts';
 import { auditLogRoutes } from './adapters/http/audit-log-routes.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
@@ -15,12 +16,17 @@ import { erasureRoutes } from './adapters/http/erasure-routes.ts';
 import { registerErrorHandlers } from './adapters/http/errors.ts';
 import { frameworkErrorHandlers } from './adapters/http/framework-errors.ts';
 import { healthRoutes } from './adapters/http/health.ts';
+import { installationRoutes } from './adapters/http/installation-routes.ts';
 import { HTTP_LIMITS } from './adapters/http/limits.ts';
 import { createLogger } from './adapters/http/logger.ts';
 import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { ownSignaturesRoutes } from './adapters/http/own-signatures-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
+import { repositoryDisableRoutes } from './adapters/http/repository-disable-routes.ts';
+import { repositoryDocumentRoutes } from './adapters/http/repository-document-routes.ts';
+import { repositoryEnableRoutes } from './adapters/http/repository-enable-routes.ts';
+import { repositoryListRoutes } from './adapters/http/repository-list-routes.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
@@ -38,13 +44,15 @@ import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
 import { webhookRoutes } from './adapters/http/webhook-routes.ts';
 import { authSettings } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
+import { type AllowlistGitHub, allowlistGitHubNotWired } from './services/allowlist-account.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer, JobQueue } from './services/ports/jobs.ts';
 import type { ManifestConversion } from './services/ports/manifest-conversion.ts';
 import { RoleCache } from './services/role-cache.ts';
-import { createTenantAuthorizer, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
+import { createTenantAuthorization, type TenantAuthorizationDeps } from './services/tenant-authorization.ts';
+import { createTenantAuthorizationDeps, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
 
 const DEFAULT_READINESS_TIMEOUT_MS = 2000;
 
@@ -75,6 +83,11 @@ export interface AppOptions {
    */
   readonly github?: RoleGitHub | undefined;
   /**
+   * Where an allowlist entry looks up the account it exempts (E14-S06): the GitHub client port, by numeric id. Defaults to one that
+   * fails every call as an outage, so a server with no GitHub App answers `502 github_unavailable` and never stores a login unchecked.
+   */
+  readonly allowlistGitHub?: AllowlistGitHub | undefined;
+  /**
    * Who operates the instance (E11-S08): `boot` passes the policy it built with the owner of the App. Defaults to the one
    * `OPERATOR_GITHUB_IDS` names, or to none when it is unset (the owner of the App is not known without the GitHub client).
    */
@@ -103,7 +116,7 @@ async function registerLoginChecks(
   options: AppOptions,
   clock: Clock,
   roleCache: RoleCache,
-): Promise<void> {
+): Promise<TenantAuthorizationDeps> {
   const { config, db } = options;
   // Before the rate limit, so that its 429 for a path no route answers carries the header too.
   app.addHook('onRequest', noStoreForAuth);
@@ -116,11 +129,9 @@ async function registerLoginChecks(
   const operators =
     options.operators ??
     createOperatorPolicies({ configured: config.github.operatorGithubIds, owner: undefined, logger: app.log });
-  guardRouteAccess(app, {
-    db,
-    authorize: createTenantAuthorizer({ db, github, cache: roleCache, clock, log: app.log }),
-    operators,
-  });
+  // What the guard decides with, kept for the routes that list what a person may see (E14-S01): one cache, one budget of the person.
+  const roles = createTenantAuthorizationDeps({ db, github, cache: roleCache, clock, log: app.log });
+  guardRouteAccess(app, { db, authorize: createTenantAuthorization(roles), operators });
   if (loginSettings !== undefined) {
     await registerAuth(app, {
       db,
@@ -131,6 +142,7 @@ async function registerLoginChecks(
       githubTimeoutMs: options.githubTimeoutMs,
     });
   }
+  return roles;
 }
 
 /** On close the job queue stops before the database is destroyed (E07-S01), so no job runs against a closed database. */
@@ -146,11 +158,17 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
- * probes, the operator's list (E11-S08), the public `GET /api/meta` (E17-S09), the first-run setup (E19-S06, whose unlock and
- * manifest exist in setup mode only) and the webhook (E06). The app's files answer every path that no route above does, so
- * they are registered last.
+ * probes, the operator's list (E11-S08), the documents (E12), the lists of what a person administers (E14-S01), the CLA a
+ * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06), the public
+ * `GET /api/meta` (E17-S09), the first-run setup (E19-S06, whose unlock and manifest exist in setup mode only) and the
+ * webhook (E06). The app's files answer every path that no route above does, so they are registered last.
  */
-async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: Clock): Promise<void> {
+async function registerRoutes(
+  app: FastifyInstance,
+  options: AppOptions,
+  clock: Clock,
+  roles: TenantAuthorizationDeps,
+): Promise<void> {
   const { config, db } = options;
   const enqueuer = options.enqueuer ?? options.jobQueue?.enqueuer ?? notWiredEnqueuer;
   await app.register(healthRoutes, {
@@ -160,6 +178,16 @@ async function registerRoutes(app: FastifyInstance, options: AppOptions, clock: 
   });
   await app.register(operatorRoutes, { db });
   await app.register(documentRoutes, { db, enqueuer });
+  await app.register(installationRoutes, { db, roles });
+  await app.register(repositoryListRoutes, { db, roles });
+  await app.register(repositoryDocumentRoutes, { db, enqueuer });
+  await app.register(repositoryEnableRoutes, { db, enqueuer });
+  await app.register(repositoryDisableRoutes, { db, enqueuer });
+  await app.register(allowlistEntryRoutes, {
+    db,
+    github: options.allowlistGitHub ?? allowlistGitHubNotWired,
+    enqueuer,
+  });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await app.register(setupRoutes, {
     config,
@@ -228,8 +256,8 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   const clock = options.clock ?? systemClock;
   const roleCache = options.roleCache ?? new RoleCache({ clock });
   registerRoleCache(app, roleCache);
-  await registerLoginChecks(app, options, clock, roleCache);
-  await registerRoutes(app, options, clock);
+  const roles = await registerLoginChecks(app, options, clock, roleCache);
+  await registerRoutes(app, options, clock, roles);
 
   closeQueueThenDatabase(app, db, options.jobQueue);
   return app;
