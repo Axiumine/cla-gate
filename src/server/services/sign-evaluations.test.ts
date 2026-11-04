@@ -81,6 +81,24 @@ test('the other failing pull requests follow the origin, newest first, from ever
   expect(await sent()).toEqual([`${plain}#45`, `${scoped}#62`, `${plain}#63`, `${plain}#61`]);
 });
 
+test('the failing row of a closed pull request is not sent after its author signs, and is sent again once the pull request is reopened (E15-S01)', async () => {
+  const { db, t1, signed, send, fail, sent } = await world();
+  const closed = await fail('plain', 61, 3);
+  await fail('plain', 62, 2);
+  await db.updateTable('pr_evaluations').set({ pr_state: 'closed' }).where('id', '=', closed).execute();
+  await send(signed(45));
+  expect(await sent()).toEqual([`${t1.plain.githubRepoId}#45`, `${t1.plain.githubRepoId}#62`]);
+  await db.updateTable('pr_evaluations').set({ pr_state: 'open' }).where('id', '=', closed).execute();
+  await send(signed(45, { signatureId: SIGNATURE_ID + 1 }));
+  expect(await sent()).toEqual([
+    `${t1.plain.githubRepoId}#45`,
+    `${t1.plain.githubRepoId}#62`,
+    `${t1.plain.githubRepoId}#45`,
+    `${t1.plain.githubRepoId}#61`,
+    `${t1.plain.githubRepoId}#62`,
+  ]);
+});
+
 test('a pull request that fails for the person and is the origin is sent once, and a failure that does not list the person is not sent', async () => {
   const { t1, ada, signed, send, fail, sent } = await world();
   await fail('plain', 45, 4);

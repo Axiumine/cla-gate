@@ -112,6 +112,41 @@ test.each([
   expect(await found()).toEqual([]);
 });
 
+test('a pull request that is closed is not answered, though its latest row failed for the person: the state of the latest row decides, and an older row says nothing (E15-S01)', async () => {
+  const { db, t1, ada, at, repository, found } = await world();
+  const details = failureDetails({ uncovered: [ada] });
+  const closed = await storeFailure(db, repository, { prNumber: 61, details, updatedAt: at(1) });
+  await storeFailure(db, repository, { prNumber: 62, headSha: headOf('1'), details, updatedAt: at(1) });
+  const olderClosed = await storeFailure(db, repository, {
+    prNumber: 62,
+    headSha: headOf('2'),
+    details,
+    updatedAt: at(2),
+  });
+  await storeFailure(db, repository, { prNumber: 63, headSha: headOf('1'), details, updatedAt: at(1) });
+  const latestClosed = await storeFailure(db, repository, {
+    prNumber: 63,
+    headSha: headOf('2'),
+    details,
+    updatedAt: at(2),
+  });
+  await db
+    .updateTable('pr_evaluations')
+    .set({ pr_state: 'closed' })
+    .where('id', 'in', [closed, olderClosed, latestClosed])
+    .execute();
+  await db
+    .updateTable('pr_evaluations')
+    .set({ pr_state: 'open' })
+    .where('repository_id', '=', t1.plain.repositoryId)
+    .where('pr_number', '=', 62)
+    .where('head_sha', '=', headOf('2'))
+    .execute();
+  expect(await found()).toEqual([`${t1.plain.githubRepoId}#62`]);
+  await db.updateTable('pr_evaluations').set({ pr_state: 'open' }).where('id', '=', closed).execute();
+  expect(await found()).toEqual([`${t1.plain.githubRepoId}#62`, `${t1.plain.githubRepoId}#61`]);
+});
+
 test('only the repositories attached to the signed document are looked at: another document, none, and a removed repository are not', async () => {
   const { db, t1, ada, at, repository, found } = await world();
   const details = failureDetails({ uncovered: [ada] });

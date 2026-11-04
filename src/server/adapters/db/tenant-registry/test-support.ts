@@ -82,6 +82,7 @@ export const TENANT_MODULES = [
   'services/cla-history-queries.ts',
   'services/cla-version-queries.ts',
   'services/cla-version-writes.ts',
+  'services/current-evaluation-queries.ts',
   'services/document-placement.ts',
   'services/evaluate-pr/evaluation-rows.ts',
   'services/evaluate-pr/policy-facts.ts',
@@ -106,6 +107,7 @@ export const TENANT_MODULES = [
   'services/sign-record-queries.ts',
   'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
+  'services/sweep/sweep-state-rows.ts',
   'services/tenant-queries.ts',
 ] as const;
 

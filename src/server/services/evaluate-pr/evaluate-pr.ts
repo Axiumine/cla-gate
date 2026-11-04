@@ -7,7 +7,7 @@ import { isInstallationUnavailable } from '../ports/installation-unavailable.ts'
 import { handOverRetry } from './enforcement-guard.ts';
 import { evaluateOpen, evaluationKey } from './evaluate-open.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
-import { type EvaluationKey, findEvaluation, type StoredResult } from './evaluation-rows.ts';
+import { type EvaluationKey, findEvaluation, type StoredResult, setPullRequestState } from './evaluation-rows.ts';
 import { loadPullRequest } from './evaluation-tenant.ts';
 
 // The `evaluate-pr` job (E07-S04): the protocol around the pure engine. The job names a pull request by numeric ids and is
@@ -15,6 +15,10 @@ import { loadPullRequest } from './evaluation-tenant.ts';
 //
 //   1. the repository (its name may have changed), 2. the pull request, 3. the evaluation row in progress and the report that
 //   it began, 4. the commits, 5. the policy facts, 6. the signatures, last, 7. the engine, 8. the pull request again.
+//
+// Between 2 and 3 a pull request that GitHub shows open has `pr_state = 'open'` set on every row it has (E15-S01): this is where a
+// reopen is recorded, because the `reopened` delivery is routed here, and it comes before the idempotency rule so that a reopen
+// that finds a final result for its head SHA still reopens the rows the close had marked.
 //
 // Step 8 decides whether the verdict may be written: a push or a close during the run discards it, because the Check Run is
 // per head SHA and the push that moved the head sent a delivery of its own.
@@ -63,7 +67,9 @@ async function run(ports: EvaluatePrPorts, job: Job, context: EvaluatePrContext)
   if (pr?.state !== 'open') {
     return skipped(logger, pr === null ? 'pull_request_not_found' : 'pull_request_closed');
   }
-  if (await alreadyEvaluated(ports, job, context, evaluationKey(resolved.tenant, job, pr))) {
+  const key = evaluationKey(resolved.tenant, job, pr);
+  await setPullRequestState(ports.db, key, pr.state);
+  if (await alreadyEvaluated(ports, job, context, key)) {
     logger.info('evaluate_pr.unchanged');
     return { outcome: 'unchanged' };
   }

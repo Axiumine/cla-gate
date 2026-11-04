@@ -85,6 +85,25 @@ test('a close for the installation that owns the repository cancels its rows onl
   ]);
 });
 
+test('closing pull request 7 of tenant 1 leaves pull request 7 of tenant 2, the same number at the same head SHA in another repository, open (E15-S01)', async () => {
+  const world = await closeWorld();
+  const { other } = await neighbour(world);
+  await seedEvaluation(world, { result: 'success' });
+  await world.runClose();
+  const states = (installationId: number) =>
+    world.raw
+      .selectFrom('pr_evaluations')
+      .select(['pr_number', 'pr_state'])
+      .where('installation_id', '=', installationId)
+      .orderBy('id')
+      .execute();
+  expect(await states(world.tenant.installationId)).toEqual([{ pr_number: PR_NUMBER, pr_state: 'closed' }]);
+  expect(await states(other.installationId)).toEqual([
+    { pr_number: PR_NUMBER, pr_state: 'open' },
+    { pr_number: 8, pr_state: 'open' },
+  ]);
+});
+
 test('the rows of another repository are not mistaken for another pull request of this one: a head SHA they share does not hide the job of this pull request', async () => {
   const world = await closeWorld();
   await neighbour(world);
