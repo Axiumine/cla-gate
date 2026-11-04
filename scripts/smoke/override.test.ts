@@ -6,10 +6,11 @@ import { parse } from 'yaml';
 import { z } from 'zod';
 import { readText } from '../ci/lib/test-support.ts';
 import { stackNames } from './names.ts';
-import { overrideFor } from './override.ts';
+import { NETWORK_SUBNETS, overrideFor } from './override.ts';
 import { ROOT } from './test-support.ts';
 
-// E19-S08: the compose override of a smoke stack labels everything the real docker-compose.yml declares and changes nothing else.
+// E19-S08: the compose override of a smoke stack labels everything the real docker-compose.yml declares, gives a subnet to each
+// network the file leaves to Docker, and changes nothing else.
 
 const COMPOSE = readText(path.join(ROOT, 'docker-compose.yml'));
 const NAMES = stackNames('cla-smoke-77-1', 'boot');
@@ -18,6 +19,10 @@ const CONTEXT = '/work/checkout';
 
 const resourceSchema = z.object({
   labels: z.record(z.string(), z.string()),
+  ipam: z
+    .object({ config: z.array(z.object({ subnet: z.string() }).strict()) })
+    .strict()
+    .optional(),
   image: z.string().optional(),
   build: z
     .object({ context: z.string(), labels: z.record(z.string(), z.string()) })
@@ -31,7 +36,7 @@ const fileSchema = z.object({
 });
 const declared = z.object({
   services: z.record(z.string(), z.unknown()),
-  networks: z.record(z.string(), z.unknown()),
+  networks: z.record(z.string(), z.object({ ipam: z.unknown().optional() }).nullable()),
   volumes: z.record(z.string(), z.unknown()),
 });
 
@@ -47,6 +52,23 @@ test('every service, network and volume of docker-compose.yml is labelled with t
   expect(all.length).toBeGreaterThan(8);
   for (const resource of all) {
     expect(resource.labels).toEqual(LABELS);
+  }
+});
+
+test('every network that docker-compose.yml leaves without a subnet gets one from the dotenv file, and the others keep theirs', () => {
+  const networks = Object.entries(real.networks);
+  const open = networks.filter(([, body]) => body?.ipam === undefined).map(([name]) => name);
+  const pinned = Object.keys(NETWORK_SUBNETS);
+  expect(open.length).toBeGreaterThan(0);
+  expect(open.toSorted((a, b) => a.localeCompare(b))).toEqual(pinned.toSorted((a, b) => a.localeCompare(b)));
+  const overridden = new Map(Object.entries(override.networks));
+  for (const [name, setting] of Object.entries(NETWORK_SUBNETS)) {
+    expect(overridden.get(name)?.ipam).toEqual({ config: [{ subnet: `\${${setting}}` }] });
+  }
+  const kept = networks.filter(([, body]) => body?.ipam !== undefined);
+  expect(kept.length).toBeGreaterThan(0);
+  for (const [name] of kept) {
+    expect(overridden.get(name)?.ipam, name).toBeUndefined();
   }
 });
 
@@ -73,6 +95,7 @@ test('a compose file with other names gets the same treatment, so a new service 
   expect(other.services['worker']?.image).toBe(NAMES.image);
   expect(other.services['cache']).toEqual({ labels: LABELS });
   expect([other.networks['edge']?.labels, other.volumes['data']?.labels]).toEqual([LABELS, LABELS]);
+  expect(other.networks['edge']?.ipam).toBeUndefined();
 });
 
 test('a file that is not a compose file is refused', () => {

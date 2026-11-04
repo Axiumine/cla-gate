@@ -14,11 +14,16 @@ import type { Stack, StackDeps } from './stack-types.ts';
 
 export const ROOT = path.resolve(import.meta.dirname, '../..');
 
-/** What `randomSubnet` returns for the smallest and the largest draw. */
+/** What `drawSubnets` gives the default network for the smallest and the largest draw. */
 // eslint-disable-next-line sonarjs/no-hardcoded-ip -- a private range written as data, not an address to connect to
 export const FIRST_SUBNET = '172.16.0.0/24';
 // eslint-disable-next-line sonarjs/no-hardcoded-ip -- a private range written as data, not an address to connect to
 export const LAST_SUBNET = '172.31.255.0/24';
+/** The /24 that follows `FIRST_SUBNET` in its /16, and the one after `LAST_SUBNET`, which wraps within its /16. */
+// eslint-disable-next-line sonarjs/no-hardcoded-ip -- a private range written as data, not an address to connect to
+export const SECOND_SUBNET = '172.16.1.0/24';
+// eslint-disable-next-line sonarjs/no-hardcoded-ip -- a private range written as data, not an address to connect to
+export const WRAPPED_SUBNET = '172.31.0.0/24';
 
 export interface Call {
   readonly file: string;
