@@ -21,9 +21,9 @@ export interface SignatureFilter {
  * The condition of a state, in the words of `signatureState` (src/server/domain/signature-state.ts): revoked is a set
  * `revoked_at`; outdated is not revoked and below the active major of the document; active is not revoked and not below it,
  * which a document with no active version satisfies. `av` is the active version of the document `d`, absent when there is none.
- * A test holds this statement and the function to the same answer.
+ * A test holds this statement and the function to the same answer. The search of E15-S02 uses it too.
  */
-function stateCondition(state: SignatureExportState): RawBuilder<SqlBool> {
+export function stateCondition(state: SignatureExportState): RawBuilder<SqlBool> {
   switch (state) {
     case 'all':
       return sql<SqlBool>`true`;

@@ -54,13 +54,12 @@ import {
   VERSION_WRITES,
 } from '../tenant-registry-versions/test-support.ts';
 import type { TenantScope } from '../tenant-scope.ts';
+import { SEARCH_TENANT_QUERIES } from '../tenant-search-fixture/test-support.ts';
 import { SIGN_TENANT_QUERIES } from '../tenant-sign-fixture/test-support.ts';
 
-// The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
-// table; `TENANT_QUERIES` has an entry for every function they export, with the factory of its fixture arguments: how to
-// call it for a tenant and for the ids of a tenant. The generated test calls each entry for tenant 1 with tenant 1's ids and
-// with tenant 2's, and a file that touches a tenant table without being listed, or a function that is listed nowhere, fails
-// the build (tenant-modules.test.ts), so a query cannot ship without the cross-tenant check.
+// The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant table;
+// `TENANT_QUERIES` has an entry for every function they export. The generated test calls each entry for tenant 1 with tenant 1's
+// ids and with tenant 2's; a file or function missing here fails the build (tenant-modules.test.ts), so no query ships unchecked.
 
 /** The files that run a statement over a tenant table, relative to `src/server`. */
 export const TENANT_MODULES = [
@@ -105,6 +104,8 @@ export const TENANT_MODULES = [
   'services/repository-transfer.ts',
   'services/sign-context-queries.ts',
   'services/sign-record-queries.ts',
+  'services/signature-search-queries.ts',
+  'services/signature-search-scope-queries.ts',
   'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
   'services/sweep/sweep-state-rows.ts',
@@ -472,6 +473,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   // The statements of the sign page context (E13-S02).
   ...SIGN_TENANT_QUERIES,
   ...ALLOWLIST_TENANT_QUERIES,
+  ...SEARCH_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

@@ -236,6 +236,7 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
     'GET /api/installations',
     'GET /api/installations/:installationId/repositories',
+    'GET /api/installations/:installationId/signatures',
     'PUT /api/repositories/:repositoryId/cla-document',
     'POST /api/repositories/:repositoryId/enable',
     'POST /api/repositories/:repositoryId/disable',
@@ -358,9 +359,9 @@ test('a webhook declaration on any other route keeps the app from becoming ready
 
 test('an authenticated route with a tenant parameter keeps the app from becoming ready, naming the route', async () => {
   const { app } = await testApp();
-  app.get('/api/installations/:installationId/signatures', { config: { access: 'authenticated' } }, () => 'x');
+  app.get('/api/installations/:installationId/widgets', { config: { access: 'authenticated' } }, () => 'x');
   await expect(app.ready()).rejects.toThrow(
-    'route GET /api/installations/:installationId/signatures is authenticated but its path has the tenant parameter :installationId',
+    'route GET /api/installations/:installationId/widgets is authenticated but its path has the tenant parameter :installationId',
   );
 });
 

@@ -38,6 +38,7 @@ import type { SetupSessions } from './adapters/http/setup-sessions.ts';
 import { signContextRoutes } from './adapters/http/sign-context-routes.ts';
 import { signRoutes } from './adapters/http/sign-routes.ts';
 import { signatureCsvRoutes } from './adapters/http/signature-csv-routes.ts';
+import { signatureSearchRoutes } from './adapters/http/signature-search-routes.ts';
 import { registerWeb } from './adapters/http/spa.ts';
 import { fastifyTrustProxy } from './adapters/http/trust-proxy.ts';
 import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
@@ -180,6 +181,7 @@ async function registerRoutes(
   await app.register(documentRoutes, { db, enqueuer });
   await app.register(installationRoutes, { db, roles });
   await app.register(repositoryListRoutes, { db, roles });
+  await app.register(signatureSearchRoutes, { db, roles });
   await app.register(repositoryDocumentRoutes, { db, enqueuer });
   await app.register(repositoryEnableRoutes, { db, enqueuer });
   await app.register(repositoryDisableRoutes, { db, enqueuer });

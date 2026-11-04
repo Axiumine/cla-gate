@@ -116,6 +116,10 @@ const SCOPED_QUERY_NAMES = [
   'services/allowlist-entry-remove-queries.ts deleteAllowlistEntry',
   'services/allowlist-entry-list-queries.ts listAllowlistEntries',
   'services/allowlist-sweeps.ts sendAllowlistSweeps',
+  'services/signature-search-queries.ts searchRows',
+  'services/signature-search-scope-queries.ts findRepositoryOfDocument',
+  'services/signature-search-scope-queries.ts repositoriesWithSignedDocuments',
+  'services/signature-search-scope-queries.ts documentsOfRepositories',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

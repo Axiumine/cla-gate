@@ -12,9 +12,12 @@ import { matrixWorld } from '../cross-tenant-runner/test-support.ts';
 export const csvPathOf = (installationId: number, documentId: number): string =>
   SIGNATURES_CSV_PATH.replace(':installationId', String(installationId)).replace(':documentId', String(documentId));
 
-/** The matrix world with `get(who, installationId, documentId, query)`: the export as that person (nobody: no session). */
-export async function csvWorld() {
-  const state = await matrixWorld();
+/**
+ * The matrix world with `get(who, installationId, documentId, query)`: the export as that person (nobody: no session). `app` adds
+ * the options of the app a test sets (the queue a new signature sends its evaluations to, E15-S02).
+ */
+export async function csvWorld(app: Parameters<typeof matrixWorld>[1] = {}) {
+  const state = await matrixWorld({}, app);
   const get = (who: PersonName | null, installationId: number, documentId: number, query = '') =>
     state.ask(who, { method: 'GET', url: `${csvPathOf(installationId, documentId)}${query}` });
   /** What `seedSignatures` needs for the repository-scoped document of tenant 1, which the seed leaves without a version. */
