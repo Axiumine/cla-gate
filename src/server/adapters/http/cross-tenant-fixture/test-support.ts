@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
+import { INSTALLATION_ALLOWLIST_PATH, REPOSITORY_ALLOWLIST_PATH } from '../../../../shared/allowlist.ts';
 import { AUDIT_LOG_PATH } from '../../../../shared/audit-log.ts';
 import { DATA_EXPORT_PATH, dataExportSchema } from '../../../../shared/data-export.ts';
 import { ERASURE_PREVIEW_PATH, ERASURES_PATH } from '../../../../shared/erasure.ts';
@@ -14,7 +15,14 @@ import { REPOSITORY_DISABLE_PATH, REPOSITORY_ENABLE_PATH } from '../../../../sha
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
 import type { PersonName, RowTable } from '../../db/tenant-fixture/test-support.ts';
-import { sha256 } from '../../db/test-support.ts';
+import {
+  addable,
+  attachable,
+  draftAtFirstRevision,
+  enforcing,
+  publishBody,
+  versionOne,
+} from '../cross-tenant-prepare/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
 // The two tables of the cross-tenant route matrix (E11-S06). Every route that acts inside one tenant has an entry in
@@ -142,69 +150,7 @@ const documentsUrl = (target: MatrixTarget): string => `/api/installations/${tar
 
 const draftUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/draft`;
 
-/** Brings the draft of the document of `target` to revision 1, saving one first when it has none: the save of the matrix names revision 1. */
-async function draftAtFirstRevision(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
-  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
-  await db
-    .insertInto('cla_drafts')
-    .values({
-      document_id: target.documentId,
-      installation_id: target.installationId,
-      content_md: 'Matrix draft\n',
-      updated_by: person.id,
-    })
-    .onConflict((conflict) => conflict.column('document_id').doUpdateSet({ revision: 1 }))
-    .execute();
-}
-
 const versionsUrl = (target: MatrixTarget): string => `${documentsUrl(target)}/${target.documentId}/versions`;
-
-/** The body of a publish that succeeds now: the saved draft as a major version over the version the document points at (none: the first). */
-async function publishBody(db: Kysely<Database>, target: MatrixTarget): Promise<object> {
-  const document = await db
-    .selectFrom('cla_documents')
-    .select('active_version_id')
-    .where('id', '=', target.documentId)
-    .executeTakeFirstOrThrow();
-  return {
-    source: { type: 'draft', revision: 1 },
-    bump: 'major',
-    rationale: 'Published by the matrix',
-    expectedActiveVersionId: document.active_version_id,
-    acknowledgeResigning: true,
-  };
-}
-
-/** Gives the document of `target` its version 1.0 when it has none, and points the document at it, as a publish would leave it. */
-async function versionOne(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
-  const existing = await db
-    .selectFrom('cla_versions')
-    .select('id')
-    .where('document_id', '=', target.documentId)
-    .executeTakeFirst();
-  if (existing !== undefined) {
-    return;
-  }
-  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
-  const version = await db
-    .insertInto('cla_versions')
-    .values({
-      document_id: target.documentId,
-      major: 1,
-      minor: 0,
-      content_md: 'Matrix version\n',
-      content_sha256: sha256('Matrix version\n'),
-      published_by: person.id,
-      rationale: 'Made for the matrix',
-    })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  await db
-    .updateTable('cla_documents')
-    .set({ active_version_id: version.id })
-    .where('id', '=', target.documentId)
-    .execute();
-}
 
 /** The URL of the first version of the document of `target`, which `versionOne` made if there was none. */
 async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Promise<string> {
@@ -216,29 +162,6 @@ async function firstVersionUrl(db: Kysely<Database>, target: MatrixTarget): Prom
     .limit(1)
     .executeTakeFirstOrThrow();
   return `${versionsUrl(target)}/${version.id}`;
-}
-
-/**
- * Makes the call of the attach case (and of the disable case, E14-S04) succeed whoever asks first: the repository of `target` is off (an
- * attach to an enforcing one sends a sweep, a disable of one a job, and the world has no queue) and the document is published (else `409`).
- */
-async function attachable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
-  await versionOne(db, target);
-  await db.updateTable('repositories').set({ enabled: false }).where('id', '=', target.repositoryId).execute();
-}
-
-/**
- * Makes the call of the enable case succeed whoever asks first (E14-S03): the repository of `target` enforces its own published CLA
- * already, so the call answers `changed: false` and sends no sweep (the world has no queue). The real change is shown by the tests
- * of the route (repository-enable-routes.test.ts).
- */
-async function enforcing(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
-  await versionOne(db, target);
-  await db
-    .updateTable('repositories')
-    .set({ enabled: true, cla_document_id: target.documentId })
-    .where('id', '=', target.repositoryId)
-    .execute();
 }
 
 /**
@@ -391,6 +314,31 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
     request: (target) => ({
       method: 'POST',
       url: REPOSITORY_DISABLE_PATH.replace(':repositoryId', String(target.repositoryId)),
+    }),
+  },
+  // E14-S06. The add exempts the members of the organisation, the one entry the world's GitHub can answer for without a login, and
+  // `addable` clears the entries the call before it left. The role matrix is that of the other writes: the installation needs an org
+  // admin, the repository the role its document asks for, which the repository of the case carries itself. The path of the
+  // second names the repository alone, so its crossed ids are those of allowlist-entry-tenants.test.ts.
+  [`POST ${INSTALLATION_ALLOWLIST_PATH}`]: {
+    endpointClass: 'installation_write',
+    success: 201,
+    prepare: addable,
+    request: (target) => ({
+      method: 'POST',
+      url: INSTALLATION_ALLOWLIST_PATH.replace(':installationId', String(target.installationId)),
+      payload: { kind: 'org_members' },
+    }),
+  },
+  [`POST ${REPOSITORY_ALLOWLIST_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    success: 201,
+    prepare: addable,
+    request: (target) => ({
+      method: 'POST',
+      url: REPOSITORY_ALLOWLIST_PATH.replace(':repositoryId', String(target.repositoryId)),
+      payload: { kind: 'org_members' },
     }),
   },
   [`GET ${ERASURE_PREVIEW_PATH}`]: {

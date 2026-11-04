@@ -3,6 +3,7 @@
 import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import type { MembersProbeAnswer } from '../fake-github/test-support.ts';
+import type { UserAccountAnswer } from '../fake-user-accounts/test-support.ts';
 import type {
   GitHubCheckRun,
   GitHubClient,
@@ -48,6 +49,8 @@ export interface GitHubWorld {
   ) => void;
   /** What the members probe (E14-S05) answers for an installation from now on; granted until a test says otherwise. */
   readonly scriptMembersProbe: (githubInstallationId: GithubId, answer: MembersProbeAnswer) => void;
+  /** What the lookup of an account by login (E14-S06) answers from now on: the account that has the login, or a failure. No script: no such account. */
+  readonly scriptUserAccount: (login: string, answer: UserAccountAnswer) => void;
   /** A pull request of a repository (`owner/name`) of an installation. */
   readonly addPullRequest: (githubInstallationId: GithubId, fullName: string, pullRequest: GitHubPullRequest) => void;
   /** What `listPullRequestCommits` lists for a pull request, in order. */
@@ -131,13 +134,10 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
     suspend: (githubInstallationId, at) => {
       fake.suspend(githubInstallationId, at);
     },
-    addMembership: (githubInstallationId, org, login, membership) => {
-      fake.addMembership(githubInstallationId, org, login, membership);
-    },
-    addRepositoryPermission: (githubInstallationId, fullName, login, permission) => {
-      fake.addRepositoryPermission(githubInstallationId, fullName, login, permission);
-    },
+    addMembership: fake.addMembership.bind(fake),
+    addRepositoryPermission: fake.addRepositoryPermission.bind(fake),
     scriptMembersProbe: fake.setMembersProbe.bind(fake),
+    scriptUserAccount: fake.scriptUserAccount.bind(fake),
     addPullRequest: (githubInstallationId, fullName, pullRequest) => {
       fake.addPullRequest(githubInstallationId, fullName, pullRequest);
     },

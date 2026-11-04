@@ -30,6 +30,7 @@ import {
 
 export type { GitHubMethod, RecordedCall };
 
+import { userAccountOf } from './fake-user-accounts/test-support.ts';
 import type { Clock } from './ports/clock.ts';
 import type {
   CheckRunWrite,
@@ -46,6 +47,7 @@ import type {
   GitHubPullRequestRef,
   GitHubRepository,
   GitHubRepositoryPermission,
+  GitHubUserAccount,
 } from './ports/github.ts';
 import {
   GitHubNotFoundError,
@@ -155,12 +157,8 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     return this.#serve('getApp', undefined, () => this.state.app);
   }
 
-  getInstallation(githubInstallationId: GithubId): Promise<GitHubInstallation | null> {
-    return this.#serve(
-      'getInstallation',
-      githubInstallationId,
-      () => this.state.installations.get(githubInstallationId)?.installation ?? null,
-    );
+  getInstallation(id: GithubId): Promise<GitHubInstallation | null> {
+    return this.#serve('getInstallation', id, () => this.state.installations.get(id)?.installation ?? null);
   }
 
   listInstallations(): Promise<GitHubInstallation[]> {
@@ -202,6 +200,10 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
       githubInstallationId,
       () => this.state.permissions.get(permissionKey(githubInstallationId, `${owner}/${repo}`, login)) ?? null,
     );
+  }
+
+  getUserAccount(id: GithubId, login: string): Promise<GitHubUserAccount | null> {
+    return this.#serveInstallation('getUserAccount', id, () => userAccountOf(this.state.userAccounts, login));
   }
 
   probeMembersPermission(id: GithubId): Promise<boolean> {

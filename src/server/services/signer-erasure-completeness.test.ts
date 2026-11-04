@@ -23,9 +23,9 @@ const PERSON_ID = parseGithubId(PERSON);
 
 /**
  * A tenant with one signer whose login, name and email are the sentinels wherever the schema keeps them: the display snapshot,
- * the personal data of the signature, the addresses of a session, the login snapshot of an allowlist entry (a column E14
- * adds, added here) and, as E08 writes it, the details of an evaluation of the person's pull request, which hold their
- * numeric id and codes and so none of the three strings.
+ * the personal data of the signature, the addresses of a session, the login snapshot of an allowlist entry (E14-S06) and, as E08
+ * writes it, the details of an evaluation of the person's pull request, which hold their numeric id and codes and so none of the
+ * three strings.
  */
 async function seededWithSentinels(db: Kysely<Database>) {
   const tenant = await seedTenant(db);
@@ -47,7 +47,6 @@ async function seededWithSentinels(db: Kysely<Database>) {
       verified_emails: JSON.stringify([{ email: EMAIL, primary: true }]),
     })
     .execute();
-  await sql`alter table allowlist_entries add column if not exists login_snapshot text`.execute(db);
   await sql`insert into allowlist_entries (installation_id, kind, github_id, created_by, login_snapshot)
             values (${tenant.installationId}, 'user', ${PERSON}, ${tenant.publisherId}, ${LOGIN})`.execute(db);
   const details = storedDetailsSample();

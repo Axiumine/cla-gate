@@ -79,6 +79,11 @@ test('the limits and the status of each rule are the ones the story names', () =
     repository_enabled: 409,
     forbidden: 403,
     no_active_cla: 409,
+    github_account_not_found: 422,
+    kind_mismatch: 422,
+    no_organization: 422,
+    members_permission_missing: 422,
+    allowlist_entry_exists: 409,
   });
 });
 

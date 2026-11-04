@@ -13,7 +13,6 @@ import type {
 import { GitHubNotFoundError } from '../../services/ports/github-errors.ts';
 import { fetchApp, fetchInstallation, fetchInstallations } from './octokit-app-calls.ts';
 import type { Tokens, WithJwt } from './octokit-auth.ts';
-import { OctokitCheckRuns } from './octokit-check-runs.ts';
 import { Dispatch } from './octokit-dispatch.ts';
 import {
   fetchMembership,
@@ -23,6 +22,7 @@ import {
   fetchRepositoryPermission,
   MEMBERS_ROUTE,
 } from './octokit-installation-calls.ts';
+import { OctokitUserAccounts } from './octokit-user-accounts.ts';
 import type { RateLimiter } from './rate-limiter.ts';
 
 // The Octokit adapter of the GitHub client port (E05-S04). The App-level methods are signed with the App JWT (and so
@@ -51,7 +51,7 @@ export interface OctokitClientOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
-export class OctokitGitHubClient extends OctokitCheckRuns implements GitHubClient {
+export class OctokitGitHubClient extends OctokitUserAccounts implements GitHubClient {
   readonly #options: OctokitClientOptions;
 
   constructor(options: OctokitClientOptions) {

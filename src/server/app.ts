@@ -5,6 +5,7 @@ import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import type { Database } from './adapters/db/schema.ts';
+import { allowlistEntryRoutes } from './adapters/http/allowlist-entry-routes.ts';
 import { auditLogRoutes } from './adapters/http/audit-log-routes.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
@@ -38,6 +39,7 @@ import { WEBHOOK_DEADLINE_MS } from './adapters/http/webhook-deadline.ts';
 import { webhookRoutes } from './adapters/http/webhook-routes.ts';
 import { authSettings } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
+import { type AllowlistGitHub, allowlistGitHubNotWired } from './services/allowlist-account.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
@@ -74,6 +76,11 @@ export interface AppOptions {
    * to one that fails every call as an outage, so a server with no GitHub App never allows a tenant that needs a role from GitHub.
    */
   readonly github?: RoleGitHub | undefined;
+  /**
+   * Where an allowlist entry looks up the account it exempts (E14-S06): the GitHub client port, by numeric id. Defaults to one that
+   * fails every call as an outage, so a server with no GitHub App answers `502 github_unavailable` and never stores a login unchecked.
+   */
+  readonly allowlistGitHub?: AllowlistGitHub | undefined;
   /**
    * Who operates the instance (E11-S08): `boot` passes the policy it built with the owner of the App. Defaults to the one
    * `OPERATOR_GITHUB_IDS` names, or to none when it is unset (the owner of the App is not known without the GitHub client).
@@ -142,7 +149,7 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
  * probes, the operator's list (E11-S08), the documents (E12), the lists of what a person administers (E14-S01), the CLA a
- * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer every
+ * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06), the public `GET /api/meta` (E17-S09) and the webhook (E06). The app's files answer every
  * path that no route above does, so they are registered last.
  */
 async function registerRoutes(
@@ -165,6 +172,11 @@ async function registerRoutes(
   await app.register(repositoryDocumentRoutes, { db, enqueuer });
   await app.register(repositoryEnableRoutes, { db, enqueuer });
   await app.register(repositoryDisableRoutes, { db, enqueuer });
+  await app.register(allowlistEntryRoutes, {
+    db,
+    github: options.allowlistGitHub ?? allowlistGitHubNotWired,
+    enqueuer,
+  });
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await registerTenantRoutes(app, db, clock);
   await app.register(dataExportRoutes, { db, clock });

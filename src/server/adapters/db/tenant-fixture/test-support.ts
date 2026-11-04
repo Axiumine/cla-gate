@@ -81,6 +81,8 @@ interface StoredRepository {
 /** What `seedTenant` stores, plus the second repository with its own document and the GitHub ids a role lookup needs. */
 export interface TenantWorld extends Tenant {
   readonly githubInstallationId: GithubId;
+  /** The GitHub id of the account the installation belongs to (`installations.account_id`). */
+  readonly accountId: GithubId;
   readonly accountLogin: string;
   /** The repository of `seedTenant`: no repo-scoped document, so the document of the tenant (`documentId`) covers it. */
   readonly plain: StoredRepository;
@@ -298,6 +300,7 @@ async function seedWorld(
   return {
     ...tenant,
     githubInstallationId: parseGithubId(n * 5000),
+    accountId: parseGithubId(n * 7000),
     accountLogin: `org-${n}`,
     plain: { repositoryId: tenant.repositoryId, githubRepoId: parseGithubId(n * 9000), fullName: `org-${n}/repo` },
     scoped,

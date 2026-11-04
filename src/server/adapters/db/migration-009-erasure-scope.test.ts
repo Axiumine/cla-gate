@@ -112,10 +112,9 @@ test('erasure leaves every signature row byte for byte as it was, in every tenan
   expect((await snapshot()).rows).toEqual(before);
 });
 
-test('the login snapshot of the allowlist entries of the person in that installation is cleared once the column exists, and no other', async () => {
+test('the login snapshot of the allowlist entries of the person in that installation is cleared, and no other', async () => {
   const { db } = await migratedTestDatabase();
   const { t1, t2, person } = await sharedSigner(db);
-  await sql`alter table allowlist_entries add column if not exists login_snapshot text`.execute(db);
   const entry = (installationId: number, createdBy: number, githubId: number) => {
     const snapshot = `snapshot-${githubId}`;
     return sql`insert into allowlist_entries (installation_id, kind, github_id, created_by, login_snapshot)

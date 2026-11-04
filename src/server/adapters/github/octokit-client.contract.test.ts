@@ -8,6 +8,7 @@ import { CONTRACT_CASES } from '../../services/github-contract/test-support.ts';
 import { MEMBERS_PROBE_CASES } from '../../services/github-members-probe-contract/test-support.ts';
 import { OPEN_PULL_CASES } from '../../services/github-open-pulls-contract/test-support.ts';
 import { PULL_CASES } from '../../services/github-pull-contract/test-support.ts';
+import { USER_ACCOUNT_CASES } from '../../services/github-user-account-contract/test-support.ts';
 import { httpWorld } from './http-world/test-support.ts';
 
 const signer = testGitHubKey();
@@ -19,6 +20,7 @@ test.each([
   ...OPEN_PULL_CASES,
   ...CHECK_CASES,
   ...MEMBERS_PROBE_CASES,
+  ...USER_ACCOUNT_CASES,
 ])('Octokit adapter: %s', async (_name, run) => {
   await run(await httpWorld(signer));
 });

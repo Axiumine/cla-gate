@@ -234,6 +234,8 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'PUT /api/repositories/:repositoryId/cla-document',
     'POST /api/repositories/:repositoryId/enable',
     'POST /api/repositories/:repositoryId/disable',
+    'POST /api/installations/:installationId/allowlist-entries',
+    'POST /api/repositories/:repositoryId/allowlist-entries',
     'GET /api/meta',
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',

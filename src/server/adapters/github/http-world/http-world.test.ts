@@ -34,12 +34,14 @@ test.each([
 });
 
 test.each([
-  ['no token', undefined],
-  ['a token of an installation nobody has', 'Bearer ghs_made-up-999-1'],
-])('the members route refuses %s with a 401', async (_name, authorization) => {
+  ['members', '/orgs/acme/members?per_page=1', 'no token', undefined],
+  ['members', '/orgs/acme/members?per_page=1', 'a token of an installation nobody has', 'Bearer ghs_made-up-999-1'],
+  ['users', '/users/ada', 'no token', undefined],
+  ['users', '/users/ada', 'a token of an installation nobody has', 'Bearer ghs_made-up-999-1'],
+])('the %s route (%s) refuses %s with a 401', async (_route, path, _name, authorization) => {
   const world = await httpWorld(signer);
   world.addInstallation(installation(11, 'acme'));
-  const response = await fetch(`${GITHUB_API_ORIGIN}/orgs/acme/members?per_page=1`, {
+  const response = await fetch(`${GITHUB_API_ORIGIN}${path}`, {
     headers: authorization === undefined ? {} : { authorization },
   });
   expect(response.status).toBe(401);

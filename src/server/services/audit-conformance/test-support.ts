@@ -24,6 +24,7 @@ export const siteId = (site: Pick<AuditCallSite, 'file' | 'actions'>): string =>
 
 const ORGANISATION = { account_id: 4242, account_type: 'organization' } as const;
 const REPOSITORY = { type: 'repository', id: 9000 } as const;
+const ALLOWLIST_ENTRY = { type: 'allowlist_entry', id: 31 } as const;
 
 /** The fixtures of every call site, by {@link siteId}. A call site added to the server needs an entry or the catalogue test fails. */
 export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = {
@@ -117,6 +118,23 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: 3 } },
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },
     { action: 'repository.disabled', subject: REPOSITORY, metadata: { repository_id: 12 } },
+  ],
+  'services/allowlist-entry-create.ts#allowlist_entry.created': [
+    {
+      action: 'allowlist_entry.created',
+      subject: ALLOWLIST_ENTRY,
+      metadata: { scope: 'installation', repository_id: null, kind: 'user', github_id: 4711 },
+    },
+    {
+      action: 'allowlist_entry.created',
+      subject: ALLOWLIST_ENTRY,
+      metadata: { scope: 'repository', repository_id: 12, kind: 'bot', github_id: 49699333 },
+    },
+    {
+      action: 'allowlist_entry.created',
+      subject: ALLOWLIST_ENTRY,
+      metadata: { scope: 'installation', repository_id: null, kind: 'org_members', github_id: 4242 },
+    },
   ],
   'services/repository-audit.ts#repository.added|repository.removed|repository.renamed': [
     { action: 'repository.added', subject: REPOSITORY },

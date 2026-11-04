@@ -5,6 +5,7 @@ import { expect } from 'vitest';
 import { z } from 'zod';
 import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import { StubRoleLookup } from '../../../services/role-table-fixture/test-support.ts';
+import { FakeGitHub } from '../../../services/test-support.ts';
 import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
@@ -70,16 +71,22 @@ function headersOf(
  * The world of the matrix: the real app (routes are added before the first request), two tenants with five people who are
  * logged in, and a `StubRoleLookup` that answers what GitHub says about them. `ask(who, spec)` sends a request as `who`
  * (nobody: no cookie); a state-changing one carries the origin and the token the app demands. `env` adds to the login
- * settings of the app (the operator ids of E11-S08, for instance); `app` adds the one option of the app a test sets (the queue the
- * publish of a major version sends its jobs to, E12-S04).
+ * settings of the app (the operator ids of E11-S08, for instance); `app` adds the options of the app a test sets (the queue the
+ * publish of a major version sends its jobs to, E12-S04, and the GitHub an allowlist entry looks accounts up on, E14-S06).
  */
 export async function matrixWorld(
   env: Readonly<Record<string, string>> = {},
-  app: Pick<TestAppOptions, 'enqueuer'> = {},
+  app: Pick<TestAppOptions, 'enqueuer' | 'allowlistGitHub'> = {},
 ) {
   const roles = new StubRoleLookup();
-  const world = await authWorld(env, { github: roles, ...app });
+  const fakeGitHub = new FakeGitHub();
+  const world = await authWorld(env, { github: roles, allowlistGitHub: fakeGitHub, ...app });
   const seeded = await twoTenants(world.db, roles);
+  // The GitHub of the allowlist (E14-S06) knows both organisations, so an `org_members` entry can be added to either tenant.
+  for (const { githubInstallationId, accountId, accountLogin } of [seeded.t1, seeded.t2]) {
+    const account = { id: accountId, login: accountLogin, type: 'Organization' } as const;
+    fakeGitHub.addInstallation({ id: githubInstallationId, account, suspendedAt: null, permissions: {} });
+  }
   const sessions = {
     admin1: await world.login(seeded.people.admin1.githubId),
     admin2: await world.login(seeded.people.admin2.githubId),
@@ -96,7 +103,7 @@ export async function matrixWorld(
       headers: headersOf(sessions, who, read, world.origin),
     });
   };
-  return { ...world, ...seeded, ask };
+  return { ...world, ...seeded, fakeGitHub, ask };
 }
 
 export type MatrixWorld = Awaited<ReturnType<typeof matrixWorld>>;
@@ -231,6 +238,9 @@ async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCa
   }
 }
 
+/** A little more than the minute of the per-person budget of uncached role lookups. */
+const LOOKUP_WINDOW_MS = 61_000;
+
 /**
  * Runs one case of `CROSS_TENANT_CASES` for tenant 1: tenant 2's admin, an org member, an outsider and crossed ids get the
  * `404` of a resource that does not exist, byte for byte; no session gets `401`; a repo admin gets `403` where the role
@@ -239,6 +249,9 @@ async function assertSuccess(world: MatrixWorld, route: string, c: CrossTenantCa
 export async function assertCrossTenantCase(world: MatrixWorld, route: string, c: CrossTenantCase): Promise<void> {
   await assertDenials(world, route, c);
   await assertSuccess(world, route, c);
+  // A write asks GitHub again for every request (E11-S01) and a person has 30 uncached lookups a minute (E11-S04): the table has
+  // more writes than that for the admin of the repository, so the next case starts a minute later (E14-S06).
+  world.clock.advance(LOOKUP_WINDOW_MS);
 }
 
 /** The states a tenant can be in besides active, which the matrix runs once more for (E11-S07). */
@@ -348,9 +361,6 @@ const operatorTargets = (world: MatrixWorld): MatrixTarget[] => [
   scopedTarget(world.t2),
   ...crossed(world),
 ];
-
-/** A little more than the minute of the per-person budget of uncached role lookups. */
-const LOOKUP_WINDOW_MS = 61_000;
 
 /**
  * Runs one case of the route table for the operator of `operatorWorld` (E11-S08), with tenant 1 in `state` (active when none

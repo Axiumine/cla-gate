@@ -40,6 +40,7 @@ import {
   ownersOfSignatures,
   removedRepositories,
 } from '../tenant-owners/test-support.ts';
+import { ALLOWLIST_TENANT_QUERIES } from '../tenant-registry-allowlist/test-support.ts';
 import { ATTACH_QUERIES, LOCK_QUERIES } from '../tenant-registry-attach/test-support.ts';
 import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/test-support.ts';
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
@@ -64,6 +65,8 @@ export const TENANT_MODULES = [
   'adapters/db/pr-evaluation-links.ts',
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
+  'services/allowlist-entry-queries.ts',
+  'services/allowlist-sweeps.ts',
   'services/audit-log-queries.ts',
   'services/close-pr/close-heads.ts',
   'services/close-pr/close-rows.ts',
@@ -469,6 +472,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   ...EXPORT_TENANT_QUERIES,
   // The statements of the reporter over the evaluation rows (E09-S04).
   ...LINK_TENANT_QUERIES,
+  ...ALLOWLIST_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

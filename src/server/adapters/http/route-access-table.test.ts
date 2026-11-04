@@ -132,7 +132,7 @@ test('the authenticated routes are the session read, the logout, the export of t
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the choice of the CLA of a repository, and the two switches of its enforcement', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the choice of the CLA of a repository, the two switches of its enforcement, and the two adds of an allowlist entry', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
   expect(sorted(table.filter((entry) => typeof entry.access === 'object').map(nameOf))).toEqual(
@@ -156,6 +156,8 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'PUT /api/repositories/:repositoryId/cla-document',
       'POST /api/repositories/:repositoryId/enable',
       'POST /api/repositories/:repositoryId/disable',
+      'POST /api/installations/:installationId/allowlist-entries',
+      'POST /api/repositories/:repositoryId/allowlist-entries',
     ]),
   );
 });

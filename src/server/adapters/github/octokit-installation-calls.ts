@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { ALLOWLIST_LOGIN_PATTERN } from '../../../shared/allowlist.ts';
 import type { GithubId } from '../../../shared/github-id.ts';
-import type { GitHubOrgMembership, GitHubRepository, GitHubRepositoryPermission } from '../../services/ports/github.ts';
+import type {
+  GitHubOrgMembership,
+  GitHubRepository,
+  GitHubRepositoryPermission,
+  GitHubUserAccount,
+} from '../../services/ports/github.ts';
 import {
   answeredUnlessForbidden,
   type Channel,
@@ -18,6 +24,7 @@ import {
   repositoryPermissionSchema,
   repositorySchema,
 } from './schemas.ts';
+import { userAccountSchema } from './user-account-schema.ts';
 
 // The requests the GitHub client port makes with an installation's token (E05-S04): `headers` carry the token. Route
 // templates name a route in errors and are what Octokit expands. `channel` is the installation's lane in the rate
@@ -67,6 +74,27 @@ export function fetchMembersPermission(channel: Channel, headers: RequestHeaders
     MEMBERS_ROUTE,
     () => channel.octokit.request(MEMBERS_ROUTE, { org, per_page: 1, headers }),
     membersProbeSchema,
+  );
+}
+
+/**
+ * The account `login` names (E14-S06), or null for a 404 and for a login that cannot be one, which sends no request. Octokit expands
+ * `{username}` percent-encoded, so `dependabot[bot]` goes out as `dependabot%5Bbot%5D`.
+ */
+export function fetchUserAccount(
+  channel: Channel,
+  headers: RequestHeaders,
+  login: string,
+): Promise<GitHubUserAccount | null> {
+  if (!ALLOWLIST_LOGIN_PATTERN.test(login)) {
+    return Promise.resolve(null);
+  }
+  const route = 'GET /users/{username}';
+  return readOrNull(
+    channel,
+    route,
+    () => channel.octokit.request(route, { username: login, headers }),
+    userAccountSchema,
   );
 }
 
