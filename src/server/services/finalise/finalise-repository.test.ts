@@ -92,12 +92,23 @@ test('a repository with nothing to finalise is queued all the same, with no send
   );
 });
 
-test('more than one batch is walked: every pull request is sent once, ascending, 50 to a transaction', async () => {
+test('a page of the walk holds 50 pull requests, as the story says', () => {
+  expect(FINALISE_BATCH).toBe(50);
+});
+
+test('more than one batch is walked: every pull request is sent once, ascending, 50 to a transaction and the rest in the last', async () => {
   const world = await finaliseWorld();
-  const count = FINALISE_BATCH * 2 + 20;
-  await seedMany(world, count, 'in_progress');
-  await world.runRepository();
-  expect(await prNumbersSent(world)).toEqual(Array.from({ length: count }, (_unused, index) => index + 1));
+  await seedMany(world, 120, 'in_progress');
+  const sendsPerTransaction = new Map<object, number>();
+  const counting: JobEnqueuer = {
+    enqueue: (tx, job, options) => {
+      sendsPerTransaction.set(tx, (sendsPerTransaction.get(tx) ?? 0) + 1);
+      return world.enqueuer.enqueue(tx, job, options);
+    },
+  };
+  await finaliseRepository(world.ports, REPOSITORY_JOB, { logger: world.logger, enqueuer: counting, jobId: 'job-9' });
+  expect([...sendsPerTransaction.values()]).toEqual([50, 50, 20]);
+  expect(await prNumbersSent(world)).toEqual(Array.from({ length: 120 }, (_unused, index) => index + 1));
 });
 
 test('the batches are transactions of their own: a send that fails rolls back its batch only, and the retry sends the rest under the same keys', async () => {
