@@ -40,12 +40,14 @@ Every column that can hold a name, an email address, a login, an avatar, an addr
 | IP address and user agent in `signer_pii` | 30 days | 90 days | `NETWORK_METADATA_RETENTION_DAYS` |
 | Session, idle lifetime | 8 hours | the absolute lifetime | `SESSION_IDLE_SECONDS` |
 | Session, absolute lifetime | 7 days | none | `SESSION_ABSOLUTE_SECONDS` |
+| Expired sessions, until the retention sweep deletes them | 1 day after expiry | none | none |
+| Record of a processed webhook delivery (no personal data) | 30 days | 3650 days | `RETENTION_WEBHOOK_DELIVERIES_DAYS` |
 | Name, email and login in `signer_pii` | until erased | none | none |
 | Signatures and CLA versions | indefinitely | none | none |
 | Audit log | indefinitely | none | none |
 <!-- retention:end -->
 
-Signatures, CLA versions and audit rows are immutable (database triggers refuse `UPDATE` beyond the revocation columns, `DELETE` and `TRUNCATE`) and have no retention setting, because they are the evidence the product exists to keep. Sessions are removed at logout, at expiry and when the person's data is erased.
+Signatures, CLA versions and audit rows are immutable (database triggers refuse `UPDATE` beyond the revocation columns, `DELETE` and `TRUNCATE`) and have no retention setting, because they are the evidence the product exists to keep. Sessions are removed at logout, at expiry and when the person's data is erased; a session that expired is deleted by the daily retention sweep a day later, together with the webhook delivery records older than the setting (E22-S04: operational rows that hold no personal data, no signature and no audit row; the settings are defaults, not legal advice, and the sweep is described in [`operations.md`](operations.md)). Each sweep that deleted something writes one audit row `retention.swept` with the two counts.
 
 ## Erasure runbook
 
@@ -57,7 +59,7 @@ Erasure removes the personal data one org holds for one person and leaves the si
 4. **What it did:** deleted the person's `signer_pii` rows of this org only; set `allowlist_entries.login_snapshot` to null for their entries in this org; and, only when no `signer_pii` row of the person is left in any org, replaced `users.login` by `erased-<id>`, cleared `users.name` and `users.avatar_url`, and deleted their sessions. One audit row `signer_pii.erased` records the org, the acting admin, the person's id and the number of rows, and nothing else. The log line `signer_erasure_done` has the same numbers and no name or email.
 5. **Check:** the signature CSV export shows the person's signatures with `pii_erased` true and empty `login`, `name` and `email`.
 
-If the maintainers of an org are gone, the operator can call the function with the owner database role: `select erase_signer_pii(<github id>, <acting github id>, <installations.id>)`. The acting id is the caller's attribution and the database cannot verify it; use your own numeric id. The function is the only way to remove or change a `signer_pii` row, because the runtime role has no `delete` or `update` on the table.
+If the maintainers of an org are gone, or the request reached the operator and not an org admin, the operator runs the command `node src/server/erase.ts --github-id <id> --actor-github-id <id> [--execute]` (E22-S05; steps, exit codes and limits in [`operations.md`](operations.md#erasure-requests)), which covers every org the person is in. The single-installation form is to call the function with the owner database role: `select erase_signer_pii(<github id>, <acting github id>, <installations.id>)`. The acting id is the caller's attribution and the database cannot verify it; use your own numeric id. The function is the only way to remove or change a `signer_pii` row, because the runtime role has no `delete` or `update` on the table.
 
 Erasing again is harmless (0 rows, one more audit row). The person can sign again later, which stores a fresh `signer_pii` row.
 
