@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 import { z } from 'zod';
 import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import { StubRoleLookup } from '../../../services/role-table-fixture/test-support.ts';
-import { FakeGitHub } from '../../../services/test-support.ts';
+import { FakeGitHub, lookupPorts } from '../../../services/test-support.ts';
 import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
@@ -25,11 +25,11 @@ import type {
   RowOwner,
   RowRef,
 } from '../cross-tenant-fixture/test-support.ts';
+import { scriptMatrixCommits } from '../cross-tenant-revocation-fixture/test-support.ts';
 import { shapeOf } from '../tenant-guard-fixture/test-support.ts';
 
-// The runner of the cross-tenant route matrix (E11-S06): the world it runs in (the real app on a migrated PGlite, two
-// tenants, five people with sessions, and the roles GitHub reports from a table) and the assertions of one case of each
-// table. The tables are in cross-tenant-fixture/test-support.ts; the routes the runner is proved on are the canaries.
+// The runner of the cross-tenant route matrix (E11-S06): the world it runs in (the real app on a migrated PGlite, two tenants, five people
+// with sessions, the roles GitHub reports from a table) and the assertions of one case of each table (the tables are in cross-tenant-fixture/test-support.ts).
 
 type LoggedIn = Awaited<ReturnType<AuthWorld['login']>>;
 
@@ -68,25 +68,25 @@ function headersOf(
 }
 
 /**
- * The world of the matrix: the real app (routes are added before the first request), two tenants with five people who are
- * logged in, and a `StubRoleLookup` that answers what GitHub says about them. `ask(who, spec)` sends a request as `who`
- * (nobody: no cookie); a state-changing one carries the origin and the token the app demands. `env` adds to the login
- * settings of the app (the operator ids of E11-S08, for instance); `app` adds the options of the app a test sets (the queue the
- * publish of a major version sends its jobs to, E12-S04, and the GitHub an allowlist entry looks accounts up on, E14-S06).
+ * The world of the matrix: the real app (routes are added before the first request), two tenants with five people who are logged in,
+ * and a `StubRoleLookup` that answers what GitHub says about them. `ask(who, spec)` sends a request as `who` (nobody: no cookie); a
+ * state-changing one carries the origin and the token the app demands. `env` adds to the login settings (the operator ids, E11-S08);
+ * `app` adds the options a test sets (the queue of a publish, E12-S04, the GitHub of an allowlist entry, E14-S06).
  */
 export async function matrixWorld(
   env: Readonly<Record<string, string>> = {},
-  app: Pick<TestAppOptions, 'enqueuer' | 'allowlistGitHub'> = {},
+  app: Pick<TestAppOptions, 'enqueuer' | 'allowlistGitHub' | 'commitGitHub'> = {},
 ) {
   const roles = new StubRoleLookup();
   const fakeGitHub = new FakeGitHub();
-  const world = await authWorld(env, { github: roles, allowlistGitHub: fakeGitHub, publicGitHub: fakeGitHub, ...app });
+  const world = await authWorld(env, { github: roles, ...lookupPorts(fakeGitHub), ...app });
   const seeded = await twoTenants(world.db, roles);
-  // The GitHub of the allowlist (E14-S06) knows both organisations, so an `org_members` entry can be added to either tenant.
+  // The GitHub of the allowlist (E14-S06) knows both organisations, and the one of the overrides (E15-S05) the commit of the override case.
   for (const { githubInstallationId, accountId, accountLogin } of [seeded.t1, seeded.t2]) {
     const account = { id: accountId, login: accountLogin, type: 'Organization' } as const;
     fakeGitHub.addInstallation({ id: githubInstallationId, account, suspendedAt: null, permissions: {} });
   }
+  scriptMatrixCommits(fakeGitHub, [seeded.t1, seeded.t2]);
   const sessions = {
     admin1: await world.login(seeded.people.admin1.githubId),
     admin2: await world.login(seeded.people.admin2.githubId),
@@ -115,6 +115,7 @@ const UNKNOWN_TARGET: MatrixTarget = {
   documentId: 987_654,
   githubRepoId: 987_654,
   entryId: 987_654,
+  signatureId: 987_654,
 };
 
 /** The resources of a tenant that no repo-scoped document covers: its installation, its plain repository and its installation-wide document. */
@@ -124,6 +125,7 @@ export const plainTarget = (tenant: TenantWorld): MatrixTarget => ({
   documentId: tenant.documentId,
   githubRepoId: tenant.plain.githubRepoId,
   entryId: tenant.entryId,
+  signatureId: tenant.signatureId,
 });
 
 /** The resources of a tenant that carry a repo-scoped document: the repository `repoAdmin1` administers, and its document. */
@@ -133,6 +135,7 @@ export const scopedTarget = (tenant: TenantWorld): MatrixTarget => ({
   documentId: tenant.scoped.documentId,
   githubRepoId: tenant.scoped.githubRepoId,
   entryId: tenant.entryId,
+  signatureId: tenant.signatureId,
 });
 
 /** What the role matrix says for a class of endpoint, for tenant 1: the resource the allowed people reach and the one that is too high for a repo admin. */

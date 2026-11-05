@@ -114,6 +114,14 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
     'GET /api/installations/:installationId/audit-log',
     'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+    'GET /api/installations/:installationId/signatures',
+    'POST /api/installations/:installationId/signatures/:signatureId/revoke',
+    'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
+    'POST /api/installations/:installationId/documents/:documentId/invalidations',
+    'POST /api/repositories/:repositoryId/commit-overrides',
+    'GET /api/repositories/:repositoryId/commit-overrides',
+    'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
+    'GET /api/installations/:installationId/pending-prs',
     'GET /api/installations/:installationId/repositories',
     'PUT /api/repositories/:repositoryId/cla-document',
     'POST /api/repositories/:repositoryId/enable',
@@ -228,7 +236,7 @@ test('the isolation case of the sign context names the document, the version and
   ]);
   const viewer = {
     userId: 10,
-    own: { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 1, entryId: 1 },
+    own: { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 1, entryId: 1, signatureId: 1 },
   };
   expect(isolation?.mayShow({ installationId: 1, userId: null }, viewer)).toBe(true);
   expect(isolation?.mayShow({ installationId: 1, userId: 10 }, viewer)).toBe(true);
@@ -243,7 +251,7 @@ test('the isolation case of the sign request names the signature of an answer, a
     created: false,
   };
   expect(isolation?.rows(answer)).toEqual([{ table: 'signatures', id: 5 }]);
-  const target = { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 9001, entryId: 1 };
+  const target = { installationId: 1, repositoryId: 1, documentId: 1, githubRepoId: 9001, entryId: 1, signatureId: 1 };
   const sent = isolation?.request(target, null);
   expect(sent).toMatchObject({
     method: 'POST',

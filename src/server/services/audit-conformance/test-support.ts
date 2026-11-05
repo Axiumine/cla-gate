@@ -25,6 +25,18 @@ export const siteId = (site: Pick<AuditCallSite, 'file' | 'actions'>): string =>
 const ORGANISATION = { account_id: 4242, account_type: 'organization' } as const;
 const REPOSITORY = { type: 'repository', id: 9000 } as const;
 const ALLOWLIST_ENTRY = { type: 'allowlist_entry', id: 31 } as const;
+const COMMIT_OVERRIDE = { type: 'commit_override', id: 31 } as const;
+
+/** The two commits an override call site writes a row for (E15-S05, E15-S06): a SHA-1 id and a SHA-256 one. */
+function overrideFixtures(action: 'commit_override.created' | 'commit_override.deleted'): readonly AuditFixture[] {
+  return ['a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', '0123456789abcdef'.repeat(4)].map(
+    (commitSha): AuditFixture => ({
+      action,
+      subject: COMMIT_OVERRIDE,
+      metadata: { repository_id: 12, commit_sha: commitSha },
+    }),
+  );
+}
 
 /** The three entries an allowlist call site writes a row for (E14-S06, E14-S07): one that covers the installation, one of a repository, and `org_members`. */
 function allowlistFixtures(action: 'allowlist_entry.created' | 'allowlist_entry.deleted'): readonly AuditFixture[] {
@@ -123,6 +135,30 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { document_id: 12, version_id: 22, major: 2, source_repository_id: 9, source_pr_number: null },
     },
   ],
+  'services/signature-revoke-audit.ts#signature.revoked': [
+    {
+      action: 'signature.revoked',
+      subject: { type: 'signature', id: 31 },
+      metadata: { document_id: 12, version_id: 21, major: 1, user_github_id: 4711, reason_code: 'signer_request' },
+    },
+    {
+      action: 'signature.revoked',
+      subject: { type: 'signature', id: 32 },
+      metadata: { document_id: 12, version_id: 22, major: 2, user_github_id: 4712, reason_code: 'maintainer_decision' },
+    },
+  ],
+  'services/signature-invalidate.ts#signatures.invalidated': [
+    {
+      action: 'signatures.invalidated',
+      subject: { type: 'document', id: 12 },
+      metadata: { major: 1, count: 1, reason_code: 'maintainer_decision' },
+    },
+    {
+      action: 'signatures.invalidated',
+      subject: { type: 'document', id: 12 },
+      metadata: { major: 2, count: 25_000, reason_code: 'legal_request' },
+    },
+  ],
   'services/dead-letter/dead-letter-sync.ts#installation.sync_failed': [
     {
       action: 'installation.sync_failed',
@@ -152,6 +188,8 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },
     { action: 'repository.disabled', subject: REPOSITORY, metadata: { repository_id: 12 } },
   ],
+  'services/commit-override-record.ts#commit_override.created': overrideFixtures('commit_override.created'),
+  'services/commit-override-remove.ts#commit_override.deleted': overrideFixtures('commit_override.deleted'),
   'services/repository-public-verification.ts#repository.public_verification_changed': [
     {
       action: 'repository.public_verification_changed',

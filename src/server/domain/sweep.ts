@@ -22,6 +22,13 @@ export const MAX_SWEPT_PULLS = 1000;
 /** Pull requests per page of GitHub's listing, the most it gives. */
 export const SWEEP_PAGE_SIZE = 100;
 
+/**
+ * The most pull requests of one repository whose `pr_state` one sweep asks GitHub about, in each direction (closing and reopening
+ * the rows the listing contradicts, E15-S01): a repository with a long history is corrected over several sweeps, and a run never
+ * spends more than this many requests on it.
+ */
+export const MAX_STATE_CONFIRMATIONS = 50;
+
 /** Seconds an evaluation may stay `in_progress` before the sweep takes it for lost: 30 minutes, well past the last retry of a job. */
 export const STALE_AFTER_SECONDS = 30 * 60;
 

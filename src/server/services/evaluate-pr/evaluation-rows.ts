@@ -3,12 +3,14 @@
 import { type Kysely, sql } from 'kysely';
 import type { PrEvaluationDetails } from '../../../shared/pr-evaluation-details.ts';
 import type { InstallationRowId } from '../../adapters/db/installation-row-id.ts';
-import type { Database } from '../../adapters/db/schema.ts';
+import type { Database, PullRequestState } from '../../adapters/db/schema.ts';
 
 // The rows of `pr_evaluations` the evaluation job writes (E07-S04): `result` and `details`; the dead-letter handler writes
 // `failure` with a code (E07-S05). The two columns of the reporter
-// (`check_run_id`, `comment_id`, E09-S04) are read here and never written, and the upsert keeps them. Every statement
-// filters by the installation, so one tenant never reaches the rows of another.
+// (`check_run_id`, `comment_id`, E09-S04) are read here and never written, and the upsert keeps them. The job also writes
+// `pr_state` (E15-S01): the upsert sets it from the pull request it fetched, and {@link setPullRequestState} sets it on every
+// row of a pull request, for the close and the reopen; neither touches `updated_at`, which orders the rows of a pull request.
+// Every statement filters by the installation, so one tenant never reaches the rows of another.
 
 /** One pull request at one head SHA of one repository of an installation: the unique key of the table, with its tenant. */
 export interface EvaluationKey {
@@ -44,11 +46,16 @@ export async function findEvaluation(db: Kysely<Database>, key: EvaluationKey): 
 }
 
 /**
- * Sets the evaluation of `key` to `in_progress` with empty details, creating the row when there is none: one statement, so
- * a retry, or two jobs of one pull request, leave one row. A row that exists keeps its reporter columns and its id.
+ * Sets the evaluation of `key` to `in_progress` with empty details and the state of the pull request the job fetched, creating
+ * the row when there is none: one statement, so a retry, or two jobs of one pull request, leave one row. A row that exists
+ * keeps its reporter columns and its id.
  * @returns the id of the row.
  */
-export async function startEvaluation(db: Kysely<Database>, key: EvaluationKey): Promise<number> {
+export async function startEvaluation(
+  db: Kysely<Database>,
+  key: EvaluationKey,
+  prState: PullRequestState,
+): Promise<number> {
   const row = await db
     .insertInto('pr_evaluations')
     .values({
@@ -57,17 +64,42 @@ export async function startEvaluation(db: Kysely<Database>, key: EvaluationKey):
       pr_number: key.prNumber,
       head_sha: key.headSha,
       result: 'in_progress',
+      pr_state: prState,
       details: '{}',
     })
     .onConflict((conflict) =>
       conflict
         .columns(['repository_id', 'pr_number', 'head_sha'])
-        .doUpdateSet({ result: 'in_progress', details: '{}', updated_at: sql`now()` })
+        .doUpdateSet({ result: 'in_progress', pr_state: prState, details: '{}', updated_at: sql`now()` })
         .where('pr_evaluations.installation_id', '=', key.installationId),
     )
     .returning('id')
     .executeTakeFirstOrThrow();
   return row.id;
+}
+
+/**
+ * Sets `pr_state` on every row of pull request `key.prNumber` of the repository (every head SHA it was evaluated at) that does not
+ * hold it yet: `closed` when the pull request was closed or merged, `open` when it was reopened or is evaluated again. One
+ * statement that names the installation, and it leaves `updated_at` alone, because that column decides which row of a pull
+ * request is the latest (E15-S01).
+ * @returns how many rows changed.
+ */
+export async function setPullRequestState(
+  db: Kysely<Database>,
+  key: Pick<EvaluationKey, 'installationId' | 'repositoryId' | 'prNumber'>,
+  prState: PullRequestState,
+): Promise<number> {
+  const rows = await db
+    .updateTable('pr_evaluations')
+    .set({ pr_state: prState })
+    .where('installation_id', '=', key.installationId)
+    .where('repository_id', '=', key.repositoryId)
+    .where('pr_number', '=', key.prNumber)
+    .where('pr_state', '<>', prState)
+    .returning('id')
+    .execute();
+  return rows.length;
 }
 
 /** Stores the verdict and the details of the evaluation `evaluationId` of the installation. @throws when the installation has no such row. */

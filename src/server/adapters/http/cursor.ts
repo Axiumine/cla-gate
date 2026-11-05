@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { z } from 'zod';
+import { z } from 'zod';
 import { AppError } from './errors.ts';
 
 // The opaque cursor of a paged list (E12-S01, E12-S05): the position of the first row of the next page, as the base64url
@@ -38,3 +38,16 @@ function parseJson(text: string): unknown {
     return undefined;
   }
 }
+
+/** The first year Postgres stores: `0000-…` is a calendar instant to zod and a statement that fails in the database. */
+const NO_YEAR_ZERO = /^(?!0000)/u;
+
+/**
+ * The position `[instant, id]` of a list ordered by a timestamp and an id (E15-S02, E15-S06): a real calendar instant with six
+ * decimals and the `Z` of UTC, from the year 0001, and a positive integer. The six decimals are the precision of a `timestamptz`
+ * column, so two rows of one millisecond keep their order. A list reads it with `.transform` into its own position type.
+ */
+export const instantPositionSchema = z.tuple([
+  z.iso.datetime({ precision: 6 }).regex(NO_YEAR_ZERO),
+  z.int().positive(),
+]);

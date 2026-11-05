@@ -86,6 +86,23 @@ test('the stored details carry the verdict field by field', () => {
   });
 });
 
+test('an uncovered bot is stored with bot: true and a person, an organisation and a covered bot with no such field (E15-S07)', () => {
+  const details = toStoredDetails(
+    evaluatePullRequest(
+      evaluationInput({
+        opener: account(1, 'Bot'),
+        commits: [commitFacts(2, { author: account(2, 'User'), committer: account(3, 'Organization') })],
+        allowlist: [],
+      }),
+    ),
+  );
+  const byId = new Map(details.actors.map((actor) => [actor.githubId, actor]));
+  expect(byId.get(1)).toEqual({ githubId: 1, roles: ['opener'], covered: false, basis: null, bot: true });
+  expect(byId.get(2)).not.toHaveProperty('bot');
+  expect(byId.get(3)).not.toHaveProperty('bot');
+  expect(parseStoredDetails(details)).toEqual({ ok: true, details });
+});
+
 test('without a CLA the stored document and major are both null', () => {
   const details = toStoredDetails(evaluatePullRequest(evaluationInput({ policy: null })));
   expect(details).toMatchObject({

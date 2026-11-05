@@ -120,6 +120,8 @@ export async function seedAged(
     readonly headSha: string;
     readonly result: 'in_progress' | 'success' | 'failure' | 'cancelled';
     readonly ageMinutes?: number;
+    /** Whether the pull request is open or closed (E15-S01); open unless given. */
+    readonly prState?: 'open' | 'closed';
   },
 ): Promise<number> {
   const touched = new Date(world.clock.now().getTime() - (row.ageMinutes ?? 0) * MINUTE);
@@ -131,6 +133,7 @@ export async function seedAged(
       pr_number: row.prNumber,
       head_sha: row.headSha,
       result: row.result,
+      pr_state: row.prState ?? 'open',
       created_at: touched,
       updated_at: touched,
     })

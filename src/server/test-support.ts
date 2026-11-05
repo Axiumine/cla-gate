@@ -90,6 +90,8 @@ export interface TestAppOptions {
   readonly github?: RoleGitHub;
   /** Where an allowlist entry looks up the account it exempts (E14-S06); defaults to the app's own, which fails every call as an outage. */
   readonly allowlistGitHub?: AppOptions['allowlistGitHub'];
+  /** Where a per-commit override looks up the commit (E15-S05); defaults to the app's own, which fails every call as an outage. */
+  readonly commitGitHub?: AppOptions['commitGitHub'];
   /** Where the public signature check looks a login up (E22-S02); defaults to the app's own, which fails every call as an outage. */
   readonly publicGitHub?: AppOptions['publicGitHub'];
   /** Who operates the instance (E11-S08); defaults to the app's own, from `OPERATOR_GITHUB_IDS` in `env`. */

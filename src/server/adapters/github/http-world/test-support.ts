@@ -27,6 +27,7 @@ import { FakeClock, FakeGate } from '../../../services/test-support.ts';
 import { captureLogs, testConfig } from '../../../test-support.ts';
 import { createLogger } from '../../http/logger.ts';
 import { checkRoutes } from '../check-world/test-support.ts';
+import { commitRoute } from '../commit-world/test-support.ts';
 import { GITHUB_API_ORIGIN } from '../github-http.ts';
 import {
   commentBody,
@@ -38,6 +39,7 @@ import {
 } from '../http-bodies/test-support.ts';
 import { membersProbeRoute } from '../members-probe-fixture/test-support.ts';
 import { guardPublicMembers } from '../public-members-guard/test-support.ts';
+import { type Stall, stallNext } from '../stall-fixture/test-support.ts';
 import { startGitHubApp } from '../start.ts';
 import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-support.ts';
 import { userAccountRoute } from '../user-account-fixture/test-support.ts';
@@ -80,7 +82,7 @@ interface State {
   readonly checkRuns: CheckRunStore;
   readonly requests: string[];
   /** The next `GET /app/installations/{id}` is answered when this settles; `arrived` is called as it comes in. */
-  stall?: { readonly arrived: () => void; readonly released: Promise<void> } | undefined;
+  stall?: Stall | undefined;
 }
 
 /** What a test can look at after the run. */
@@ -358,6 +360,11 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
     }),
     userAccountRoute({ accounts: state.userAccounts, known: (req) => installationOf(state, req) !== undefined }),
     ...pullRoutes(state),
+    commitRoute({
+      scripted: state,
+      reaches: (request, params) => reaches(state, request, params),
+      repository: (request, params) => repositoryOf(state, request, params),
+    }),
     ...commentRoutes(state),
     ...conversationRoutes(state),
     ...checkRoutes({ store: state.checkRuns, reached: (request) => installationOf(state, request) }),
@@ -421,24 +428,6 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
     },
     reached: () => state.requests.length,
     stallGetInstallation: () => stallNext(state),
-  };
-}
-
-/** The next `GET /app/installations/{id}` is answered when the test lets it go; `arrived` settles when it is waiting. */
-function stallNext(state: State): { readonly arrived: Promise<void>; readonly release: () => void } {
-  const arrived = Promise.withResolvers<undefined>();
-  const released = Promise.withResolvers<undefined>();
-  state.stall = {
-    arrived: () => {
-      arrived.resolve(undefined);
-    },
-    released: released.promise,
-  };
-  return {
-    arrived: arrived.promise,
-    release: () => {
-      released.resolve(undefined);
-    },
   };
 }
 

@@ -34,6 +34,7 @@ import {
   versionOne,
 } from '../cross-tenant-prepare/test-support.ts';
 import { PUBLIC_VERIFICATION_CASES } from '../cross-tenant-public-fixture/test-support.ts';
+import { REVOCATION_CASES } from '../cross-tenant-revocation-fixture/test-support.ts';
 import { SIGN_CASE, SIGN_CONTEXT_CASE } from '../cross-tenant-sign-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 
@@ -43,12 +44,8 @@ import { declaredAccess } from '../route-access-model.ts';
 // (`matrixGaps`) names the route that has none, so a route cannot be added without its case. The matrix itself is in
 // cross-tenant-runner/test-support.ts, and the cases it is proved on are the canary routes of cross-tenant-canary.
 //
-// A story that adds a route adds its case here in the same change:
-//
-//   'POST /api/installations/:installationId/documents': {
-//     endpointClass: 'installation_write',
-//     request: (target) => ({ method: 'POST', url: `/api/installations/${target.installationId}/documents`, payload: {...} }),
-//   },
+// A story that adds a route adds its case here in the same change, keyed `METHOD path` like the entries below (the cases of E15 are in
+// cross-tenant-revocation-fixture, which keeps this file under the size cap).
 
 /**
  * What a tenant route is about, which decides who may call it and how (the role matrix of the security notes).
@@ -76,6 +73,8 @@ export interface MatrixTarget {
   readonly githubRepoId: number;
   /** `allowlist_entries.id` of the entry that covers the whole installation (E14-S07). */
   readonly entryId: number;
+  /** `signatures.id` of the tenant's signature on its installation-wide document (E15-S03). */
+  readonly signatureId: number;
 }
 
 /** A request as the matrix sends it: a state-changing one carries the origin and the token of the signed-in person on its own. */
@@ -292,6 +291,7 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       ),
     }),
   },
+  ...REVOCATION_CASES,
   // E14-S01. Any role in the installation lists its repositories, each person the ones their role reaches. It comes before the erasure cases, which end the session of `member1`.
   [`GET ${INSTALLATION_REPOSITORIES_PATH}`]: {
     endpointClass: 'installation_role_read',

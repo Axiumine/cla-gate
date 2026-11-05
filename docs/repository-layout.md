@@ -72,6 +72,11 @@ Items marked (planned) do not exist yet.
 │   ├── adapters/github/webhook-schemas.ts  zod schemas of the subscribed events (webhook-fixture/ holds the test payloads)
 │   ├── adapters/github/manifest-conversion.ts  the adapter of the port services/ports/manifest-conversion.ts: GitHub's one-time code
 │   │                            for the credentials of the App (E19-S11); domain/app-manifest.ts builds the App manifest (E19-S06)
+│   ├── adapters/http/ (E15)     signature-search-routes.ts (with -cursor, -presenter, -query), signature-revoke-routes.ts, signature-invalidate-routes.ts,
+│   │                            commit-override-routes.ts, commit-override-list-routes.ts, commit-override-remove-route.ts and commit-override-cursor.ts,
+│   │                            pending-prs-routes.ts (with -cursor, -presenter, -query); the fixtures (signature-search-, signature-revoke-,
+│   │                            signature-invalidate-, commit-override-, commit-override-flow-, pending-prs- and cross-tenant-revocation-fixture/) are test only
+│   ├── adapters/github/octokit-commit-call.ts  `getCommit`: one commit by SHA, null for a 404 or 422 (E15-S05)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (errors.ts: AppError; also for
 │   │                            failures that never reach a route), HTTP limits, health routes, trust-proxy conversion,
 │   │                            the /api route-audit guard (audit-routes.ts); the webhook route: webhook-routes.ts (the
@@ -129,6 +134,7 @@ Items marked (planned) do not exist yet.
 │   │                            (`requiredRoleForDocumentChange`) and allowlist-entry.ts (`checkAccountKind`);
 │   │                            signing (E13): sign-state.ts, sign-request.ts, signer-email.ts, resign-path.ts, pull-request-url.ts and signature-evaluations.ts (the keys and the one question asked of a stored failure);
 │   │                            test-support.ts is test only
+│   ├── domain/affected-prs.ts  domain/pending-reasons.ts  the keys and the questions of the re-evaluation an action asks for, and the reasons a pull request is pending (E15)
 │   ├── domain/evaluation/       the PR evaluation engine: pure functions over plain facts (actors, co-authors, unlinked
 │   │                            identities, allowlist, signatures, commit listing, `evaluatePullRequest`), `index.ts` is
 │   │                            its public surface
@@ -188,6 +194,13 @@ Items marked (planned) do not exist yet.
 │                                and types), allowlist-account.ts (the GitHub lookups before the transaction) and allowlist-sweeps.ts;
 │                                github-members-probe-contract/ and github-user-account-contract/ (the contract cases), fake-user-accounts/,
 │                                allowlist-removal-fixture/ are test only
+│                                E15: current-evaluation-queries.ts (`latestEvaluationPerPr`, the shared latest-row query), affected-prs.ts and
+│                                affected-prs-queries.ts (the re-evaluation an action asks for), signature-search*.ts (the scope, the statement, its columns
+│                                and filters), signature-revoke.ts, signature-revoke-queries.ts, signature-revoke-audit.ts and signature-reevaluate.ts,
+│                                signature-invalidate*.ts, commit-override-*.ts (record, request, lookup, list, remove) and github-deadline.ts, pending-prs*.ts
+│                                (the pending view: scope, served, repositories, reason, position, queries, current), user-logins.ts and
+│                                administered-repositories.ts (shared with the signature search); sweep/sweep-state-rows.ts (the sweep's correction of
+│                                `pr_state`); revocation-fixture/ is test only
 ├── src/shared/                  zod schemas shared by server and web (github-app.ts: the App's permissions and events; setup.ts: the setup
 │                                routes, schemas and error codes; health, error body, GithubId, route constants in
 │                                routes.ts (WEBHOOK_PATH), the session response in auth.ts, verified-email.ts, the audit
@@ -201,6 +214,7 @@ Items marked (planned) do not exist yet.
 │                                (the codes the SPA can see); E22: public-verification.ts (the public paths, the opt-in and snippet descriptors and answers); hostile-names.ts (the hostile-name corpus, test only); E16: audit-log.ts,
 │                                signature-export.ts, erasure.ts and data-export.ts (paths, shapes and limits of the compliance routes); E14: installations.ts,
 │                                repository-document.ts, repository-enabled.ts and allowlist.ts (paths, queries and answers))
+│                                E15: signature-search.ts, signature-revoke.ts, signature-invalidate.ts, commit-override.ts and pending-prs.ts (paths, queries, bodies, pages)
 ├── src/web/                     the React 19 SPA (Vite 8, Tailwind CSS 4); built to dist/web and served by the server; tests co-located
 │   ├── main.tsx  zod-config.ts  index.html
 │   │                            the entry (kept logic-free; zod-config.ts turns off Zod's eval probe and is its first import) and the page
@@ -233,7 +247,7 @@ Items marked (planned) do not exist yet.
 │   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
 │                                theme.ts, tailwind.ts and vitest.setup.ts
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; the numbers 006 and later go to the epics in order of merge)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; 16: `pr_evaluations.pr_state`; 17: the index `signer_pii_login_lower_idx`; 18: the table `merge_group_evaluations`; 19: `repositories.public_verification`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           the operator stack (E19-S04): postgres, a one-shot migrate and app, and caddy in the profile `tls`; `docker compose up --build`

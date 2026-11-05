@@ -149,6 +149,9 @@ interface AllowlistEntriesTable {
   created_at: Generated<Date>;
 }
 
+/** The state of a pull request as `pr_evaluations.pr_state` holds it: a merged pull request is `closed` (E15-S01). */
+export type PullRequestState = 'open' | 'closed';
+
 interface PrEvaluationsTable {
   id: Generated<number>;
   installation_id: number;
@@ -156,6 +159,8 @@ interface PrEvaluationsTable {
   pr_number: number;
   head_sha: string;
   result: 'in_progress' | 'success' | 'failure' | 'cancelled';
+  /** Whether the pull request is open or closed (merged counts as closed): the lifecycle flag of migration 016 (E15-S01), `open` by default. */
+  pr_state: Generated<PullRequestState>;
   details: JsonObject<true>;
   check_run_id: number | null;
   comment_id: number | null;

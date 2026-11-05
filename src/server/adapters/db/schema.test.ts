@@ -121,6 +121,7 @@ const COLUMNS = {
     pr_number: true,
     head_sha: true,
     result: true,
+    pr_state: true,
     details: true,
     check_run_id: true,
     comment_id: true,

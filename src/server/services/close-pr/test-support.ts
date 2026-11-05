@@ -62,6 +62,8 @@ export async function seedEvaluation(
     readonly headSha?: string;
     readonly prNumber?: number;
     readonly checkRunId?: number | null;
+    /** Whether the pull request is open or closed (E15-S01); open unless given. */
+    readonly prState?: 'open' | 'closed';
   },
 ): Promise<number> {
   const inserted = await world.raw
@@ -73,6 +75,7 @@ export async function seedEvaluation(
       head_sha: row.headSha ?? HEAD,
       result: row.result,
       check_run_id: row.checkRunId ?? null,
+      pr_state: row.prState ?? 'open',
     })
     .returning('id')
     .executeTakeFirstOrThrow();
@@ -82,4 +85,20 @@ export async function seedEvaluation(
 /** The rows of `pr_evaluations` as `[pr number, head SHA, result]`, oldest first. */
 export async function resultsOf(world: EvaluateWorld): Promise<[number, string, string][]> {
   return (await world.rows()).map((row) => [row.pr_number, row.head_sha, row.result]);
+}
+
+/** The rows of `pr_evaluations` as `[pr number, head SHA, pr_state]`, oldest first (E15-S01). */
+export async function statesOf(world: EvaluateWorld): Promise<[number, string, string][]> {
+  const rows = await world.raw
+    .selectFrom('pr_evaluations')
+    .select(['pr_number', 'head_sha', 'pr_state'])
+    .orderBy('id')
+    .execute();
+  return rows.map((row) => [row.pr_number, row.head_sha, row.pr_state]);
+}
+
+/** When each row of `pr_evaluations` was last touched, oldest row first, as milliseconds: what a change of state must leave as it is (E15-S01). */
+export async function touchedOf(world: EvaluateWorld): Promise<number[]> {
+  const rows = await world.raw.selectFrom('pr_evaluations').select('updated_at').orderBy('id').execute();
+  return rows.map((row) => row.updated_at.getTime());
 }

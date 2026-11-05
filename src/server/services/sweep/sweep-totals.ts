@@ -20,6 +20,8 @@ export interface Totals {
   deduplicated: number;
   closed: number;
   superseded: number;
+  markedClosed: number;
+  markedOpen: number;
   unreachable: number;
   failed: number;
 }
@@ -33,6 +35,8 @@ export const emptyTotals = (): Totals => ({
   deduplicated: 0,
   closed: 0,
   superseded: 0,
+  markedClosed: 0,
+  markedOpen: 0,
   unreachable: 0,
   failed: 0,
 });
@@ -55,4 +59,6 @@ export function addSettled(totals: Totals, settled: Settled): void {
   totals.deduplicated += sweep.deduplicated;
   totals.closed += sweep.closed;
   totals.superseded += sweep.superseded;
+  totals.markedClosed += sweep.markedClosed;
+  totals.markedOpen += sweep.markedOpen;
 }

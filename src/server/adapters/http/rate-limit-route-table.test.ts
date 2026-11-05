@@ -4,6 +4,7 @@ import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
 import { DATA_EXPORT_PATH } from '../../../shared/data-export.ts';
 import { SIGNATURES_CSV_PATH } from '../../../shared/signature-export.ts';
+import { SIGNATURES_PATH } from '../../../shared/signature-search.ts';
 import { AUTH_ENV } from '../../config/auth-fixture/test-support.ts';
 import { testApp } from '../../test-support.ts';
 import { RATE_LIMIT_EXEMPT, rateLimitProblem } from './rate-limit.ts';
@@ -64,12 +65,13 @@ test('every route of the table that switches the limit off is on the RATE_LIMIT_
 /** `expect.any` is typed `any`; as `unknown` it can sit in an object literal. */
 const anyFunction: unknown = expect.any(Function);
 
-test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
+test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
   const own = table.filter((route) => typeof limitOf(route) === 'object');
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
   const csv = `GET ${SIGNATURES_CSV_PATH}`;
   const mine = `GET ${DATA_EXPORT_PATH}`;
+  const search = `GET ${SIGNATURES_PATH}`;
   expect(Object.keys(budgets).toSorted((a, b) => a.localeCompare(b))).toEqual(
     [
       'GET /api/auth/callback',
@@ -80,6 +82,7 @@ test('the routes with a budget of their own are the four of the login, the save 
       'PUT /api/installations/:installationId/documents/:documentId/draft',
       csv,
       mine,
+      search,
     ].toSorted((a, b) => a.localeCompare(b)),
   );
   expect(Object.fromEntries(Object.entries(budgets).filter(([name]) => name !== csv && name !== mine))).toEqual({
@@ -97,6 +100,8 @@ test('the routes with a budget of their own are the four of the login, the save 
     },
     // E13-S04: 10 sign requests a minute for each person, counted after the guard and keyed on the person, not on the address.
     'POST /api/sign': { max: 10, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
+    // E15-S02: 30 searches of signatures a minute for each person, counted after the guard and keyed on the person.
+    [search]: { max: 30, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
   });
   // The exports key their budget on the person and check it after the guard of the route access (E16-S03, E16-S06).
   expect(Object.entries(budgets)).toContainEqual([

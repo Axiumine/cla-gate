@@ -54,14 +54,11 @@ import {
   VERSION_READS,
   VERSION_WRITES,
 } from '../tenant-registry-versions/test-support.ts';
+import { E15_TENANT_MODULES, E15_TENANT_QUERIES } from '../tenant-revocation-fixture/test-support.ts';
 import type { TenantScope } from '../tenant-scope.ts';
 import { SIGN_TENANT_QUERIES } from '../tenant-sign-fixture/test-support.ts';
 
-// The registry of the tenant data access (E11-S06). `TENANT_MODULES` lists the files that run a statement over a tenant
-// table; `TENANT_QUERIES` has an entry for every function they export, with the factory of its fixture arguments: how to
-// call it for a tenant and for the ids of a tenant. The generated test calls each entry for tenant 1 with tenant 1's ids and
-// with tenant 2's, and a file that touches a tenant table without being listed, or a function that is listed nowhere, fails
-// the build (tenant-modules.test.ts), so a query cannot ship without the cross-tenant check.
+// The registry of the tenant data access (E11-S06): the files that run a statement over a tenant table and an entry for each function they export, which the matrix calls for two tenants.
 
 /** The files that run a statement over a tenant table, relative to `src/server`. */
 export const TENANT_MODULES = [
@@ -83,6 +80,7 @@ export const TENANT_MODULES = [
   'services/cla-history-queries.ts',
   'services/cla-version-queries.ts',
   'services/cla-version-writes.ts',
+  'services/current-evaluation-queries.ts',
   'services/document-placement.ts',
   'services/evaluate-pr/evaluation-rows.ts',
   'services/evaluate-pr/policy-facts.ts',
@@ -112,9 +110,13 @@ export const TENANT_MODULES = [
   'services/repository-transfer.ts',
   'services/sign-context-queries.ts',
   'services/sign-record-queries.ts',
+  'services/signature-search-queries.ts',
+  'services/signature-search-scope-queries.ts',
   'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
+  'services/sweep/sweep-state-rows.ts',
   'services/tenant-queries.ts',
+  ...E15_TENANT_MODULES,
 ] as const;
 
 /** The one file that writes `audit_log`: rows are appended in the transaction of the change they record, naming the installation the entry carries (E04-S09); nothing else inserts them, and reads of the table belong to a tenant module. */
@@ -466,6 +468,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   // The statements of the public signature check (E22-S02), and those of the instance operator (E05-S07, E22-S05).
   ...PUBLIC_TENANT_QUERIES,
   ...OPERATOR_TENANT_QUERIES,
+  ...E15_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

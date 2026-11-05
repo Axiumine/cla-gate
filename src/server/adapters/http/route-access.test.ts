@@ -217,53 +217,63 @@ test('the error names every offending route, one per line, and its name is Route
   );
 });
 
+/** The routes the application registers itself, in the order it registers them (the order of `registerRoutes` in app.ts). */
+const REGISTERED_ROUTES = [
+  'GET /healthz',
+  'GET /readyz',
+  'GET /api/operator/installations',
+  'POST /api/installations/:installationId/documents',
+  'GET /api/installations/:installationId/documents',
+  'GET /api/installations/:installationId/repositories/:repositoryId/documents',
+  'GET /api/installations/:installationId/documents/:documentId',
+  'PATCH /api/installations/:installationId/documents/:documentId',
+  'GET /api/installations/:installationId/documents/:documentId/draft',
+  'PUT /api/installations/:installationId/documents/:documentId/draft',
+  'DELETE /api/installations/:installationId/documents/:documentId/draft',
+  'POST /api/installations/:installationId/documents/:documentId/versions',
+  'GET /api/installations/:installationId/documents/:documentId/versions',
+  'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
+  'GET /api/installations',
+  'GET /api/installations/:installationId/repositories',
+  'GET /api/installations/:installationId/signatures',
+  'POST /api/installations/:installationId/signatures/:signatureId/revoke',
+  'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
+  'POST /api/installations/:installationId/documents/:documentId/invalidations',
+  'GET /api/installations/:installationId/pending-prs',
+  'PUT /api/repositories/:repositoryId/cla-document',
+  'POST /api/repositories/:repositoryId/enable',
+  'POST /api/repositories/:repositoryId/disable',
+  'POST /api/installations/:installationId/allowlist-entries',
+  'POST /api/repositories/:repositoryId/allowlist-entries',
+  'GET /api/installations/:installationId/allowlist-entries',
+  'GET /api/repositories/:repositoryId/allowlist-entries',
+  'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
+  'POST /api/repositories/:repositoryId/commit-overrides',
+  'GET /api/repositories/:repositoryId/commit-overrides',
+  'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
+  'GET /api/meta',
+  'GET /api/public/repos/:githubRepoId/signers/:login',
+  'GET /api/public/repos/:githubRepoId/badge.svg',
+  'GET /api/public/repos/:githubRepoId/signers/:login/badge.svg',
+  'GET /api/setup/status',
+  'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
+  'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
+  'GET /api/installations/:installationId/audit-log',
+  'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+  'GET /api/installations/:installationId/erasure-preview',
+  'POST /api/installations/:installationId/erasures',
+  'GET /api/me/export',
+  'GET /api/sign/:githubRepoId',
+  'POST /api/sign',
+  'GET /api/me/signatures',
+  'POST /webhooks/github',
+];
+
 test('the app becomes ready with the routes it registers itself, and the not-found handler needs no declaration', async () => {
   const { app } = await testApp();
   await app.ready();
-  const unknown = await app.inject('/nothing-answers-here');
-  expect(unknown.statusCode).toBe(404);
-  expect(app.routeAccess.map((entry) => `${entry.method} ${entry.url}`)).toEqual([
-    'GET /healthz',
-    'GET /readyz',
-    'GET /api/operator/installations',
-    'POST /api/installations/:installationId/documents',
-    'GET /api/installations/:installationId/documents',
-    'GET /api/installations/:installationId/repositories/:repositoryId/documents',
-    'GET /api/installations/:installationId/documents/:documentId',
-    'PATCH /api/installations/:installationId/documents/:documentId',
-    'GET /api/installations/:installationId/documents/:documentId/draft',
-    'PUT /api/installations/:installationId/documents/:documentId/draft',
-    'DELETE /api/installations/:installationId/documents/:documentId/draft',
-    'POST /api/installations/:installationId/documents/:documentId/versions',
-    'GET /api/installations/:installationId/documents/:documentId/versions',
-    'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
-    'GET /api/installations',
-    'GET /api/installations/:installationId/repositories',
-    'PUT /api/repositories/:repositoryId/cla-document',
-    'POST /api/repositories/:repositoryId/enable',
-    'POST /api/repositories/:repositoryId/disable',
-    'POST /api/installations/:installationId/allowlist-entries',
-    'POST /api/repositories/:repositoryId/allowlist-entries',
-    'GET /api/installations/:installationId/allowlist-entries',
-    'GET /api/repositories/:repositoryId/allowlist-entries',
-    'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
-    'GET /api/meta',
-    'GET /api/public/repos/:githubRepoId/signers/:login',
-    'GET /api/public/repos/:githubRepoId/badge.svg',
-    'GET /api/public/repos/:githubRepoId/signers/:login/badge.svg',
-    'GET /api/setup/status',
-    'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
-    'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
-    'GET /api/installations/:installationId/audit-log',
-    'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
-    'GET /api/installations/:installationId/erasure-preview',
-    'POST /api/installations/:installationId/erasures',
-    'GET /api/me/export',
-    'GET /api/sign/:githubRepoId',
-    'POST /api/sign',
-    'GET /api/me/signatures',
-    'POST /webhooks/github',
-  ]);
+  expect((await app.inject('/nothing-answers-here')).statusCode).toBe(404);
+  expect(app.routeAccess.map((entry) => `${entry.method} ${entry.url}`)).toEqual(REGISTERED_ROUTES);
 });
 
 test('a route that declares no access keeps the app from becoming ready, and the error names it', async () => {
@@ -366,9 +376,9 @@ test('a webhook declaration on any other route keeps the app from becoming ready
 
 test('an authenticated route with a tenant parameter keeps the app from becoming ready, naming the route', async () => {
   const { app } = await testApp();
-  app.get('/api/installations/:installationId/signatures', { config: { access: 'authenticated' } }, () => 'x');
+  app.get('/api/installations/:installationId/widgets', { config: { access: 'authenticated' } }, () => 'x');
   await expect(app.ready()).rejects.toThrow(
-    'route GET /api/installations/:installationId/signatures is authenticated but its path has the tenant parameter :installationId',
+    'route GET /api/installations/:installationId/widgets is authenticated but its path has the tenant parameter :installationId',
   );
 });
 

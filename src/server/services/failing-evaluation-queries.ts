@@ -35,10 +35,11 @@ export interface FailingLookup {
  * The latest evaluation of each pull request of the tenant, for the pull requests of repositories attached to the document that
  * still fail and whose stored details list the signer among the actors that are not covered. "Latest" is the row touched last
  * (`updated_at`, then the id): a pull request whose newest evaluation passes, is in progress or was cancelled is not listed, even
- * when an older head SHA of it failed. Newest first, at most `limit` rows, so a pull request appears once. Repositories that GitHub
- * no longer lists (removed) are left out: nothing can be evaluated there. The pull request of `origin` is left out in the
- * statement, so that it does not use up a row of the limit. The containment test on the details only narrows the rows; the
- * caller decides on the parsed value.
+ * when an older head SHA of it failed. A pull request that is closed (`pr_state`, E15-S01) is not listed either: nothing is
+ * evaluated again for it, and the signer's new signature must not send work for it. Newest first, at most `limit` rows, so a
+ * pull request appears once. Repositories that GitHub no longer lists (removed) are left out: nothing can be evaluated there.
+ * The pull request of `origin` is left out in the statement, so that it does not use up a row of the limit. The containment
+ * test on the details only narrows the rows; the caller decides on the parsed value.
  */
 export async function findFailingEvaluations(
   db: Kysely<Database>,
@@ -57,6 +58,7 @@ export async function findFailingEvaluations(
     .where('r.cla_document_id', '=', lookup.documentId)
     .where('r.removed_at', 'is', null)
     .where('e.result', '=', 'failure')
+    .where('e.pr_state', '=', 'open')
     .where(sql<boolean>`e.details @> ${uncoveredActorNeedle(lookup.githubId)}::jsonb`)
     .where((eb) =>
       eb.not(

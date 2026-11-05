@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { REPOSITORY_ENABLE_PATH, repositoryEnabledResponseSchema } from '../../../../shared/repository-enabled.ts';
+import type { CommitGitHub } from '../../../services/commit-override-lookup.ts';
 import { createJobsTable, fakeEnqueuer, type SentJob, sentJobs } from '../../../services/jobs-fixture/test-support.ts';
 import type { JobEnqueuer } from '../../../services/ports/jobs.ts';
 import type { PersonName } from '../../db/tenant-fixture/test-support.ts';
@@ -31,10 +32,10 @@ export const enabledAnswerOf = (response: { json: () => unknown }) => parsed(res
 
 /**
  * A world whose queue is `enqueuer` (the fake one unless given), in which the plain repository of tenant 1 is off and points at the
- * published installation-wide document, so an org admin can turn it on.
+ * published installation-wide document, so an org admin can turn it on. `commitGitHub` replaces the GitHub a commit is looked up on (E15-S05).
  */
-export async function enableWorld(enqueuer: JobEnqueuer = fakeEnqueuer()) {
-  const world = await documentWorld({ enqueuer });
+export async function enableWorld(enqueuer: JobEnqueuer = fakeEnqueuer(), commitGitHub?: CommitGitHub) {
+  const world = await documentWorld({ enqueuer, ...(commitGitHub === undefined ? {} : { commitGitHub }) });
   await createJobsTable(world.db);
   await pointAt(world, world.t1.plain.repositoryId, world.t1.documentId);
   return world;

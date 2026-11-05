@@ -69,6 +69,13 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * for, `kind_mismatch` an account of another type than the kind asked for (an organisation is told to use `org_members`),
  * `no_organization` an `org_members` entry on the installation of a user account, `members_permission_missing` an App that may not
  * list the members of the organisation yet, and `allowlist_entry_exists` the same account, kind and scope listed already.
+ * `already_revoked` (E15-S03) is a revocation of a signature that is revoked already, also by a simultaneous call: nothing changes.
+ * `count_changed` and `nothing_to_invalidate` (E15-S04) are the invalidation of a major whose signatures in force are not the number
+ * the maintainer confirmed (somebody revoked or signed meanwhile), and of one that has none: nothing changes in either case.
+ * `invalid_commit_sha` and `invalid_reason` (E15-S05) are an override for something that is not a full commit id (40 or 64 hexadecimal
+ * characters) and a reason that is empty once trimmed, too long or not text the database can hold; `commit_not_found` is a commit GitHub
+ * does not have in the repository, `override_exists` the same commit overridden already, and `repository_disabled` a repository that
+ * enforces nothing, which takes no new override.
  * `public_verification_disabled` (E22-S03) is asking for the README snippet of a repository whose maintainers have not opted in to the
  * public signature check: there is no badge to show until they do.
  */
@@ -101,6 +108,14 @@ export const CLA_RULE_STATUS = {
   members_permission_missing: 422,
   allowlist_entry_exists: 409,
   public_verification_disabled: 409,
+  already_revoked: 409,
+  count_changed: 409,
+  nothing_to_invalidate: 409,
+  invalid_commit_sha: 422,
+  invalid_reason: 422,
+  commit_not_found: 422,
+  override_exists: 409,
+  repository_disabled: 409,
 } as const;
 
 export type ClaRule = keyof typeof CLA_RULE_STATUS;
