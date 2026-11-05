@@ -7,6 +7,7 @@ import { isUniqueViolation } from '../adapters/db/violations.ts';
 import { judgeApprovalRequest } from '../domain/corporate-approval-request.ts';
 import { requireManagedAgreement } from './corporate-agreements.ts';
 import { auditApprovalAdded, auditedOf } from './corporate-approval-audit.ts';
+import { clearExpiredUserApproval } from './corporate-approval-expired.ts';
 import { type CorporateGitHub, resolveSubject } from './corporate-approval-lookup.ts';
 import { getApprovalRow } from './corporate-approval-queries.ts';
 import type { ApprovalRow } from './corporate-approval-row.ts';
@@ -28,7 +29,8 @@ export interface ApprovalDeps {
 
 /**
  * Adds the approval the request asks for under the agreement `agreementId` of the manager. A subject that already has an approval in
- * force under the agreement is the unique violation of `corporate_approvals_active_unique`, mapped to `approval_exists`.
+ * force under the agreement is the unique violation of `corporate_approvals_active_unique`, mapped to `approval_exists`; a person whose
+ * derived approval has expired is approved anew, the expired one being revoked first.
  * @returns the approval as it now stands.
  * @throws CorporateRuleError the rules above.
  */
@@ -47,8 +49,16 @@ export async function addApproval(
   }
   const subject = await resolveSubject(github, agreement.githubInstallationId, judged.subject);
   try {
-    return await inLockedAgreement(db, { agreement, actor }, async ({ trx, scope, audit }) => {
+    return await inLockedAgreement(db, { agreement, actor }, async (locked) => {
+      const { trx, scope, audit } = locked;
       await requireRoom(trx, scope, { agreementId: agreement.id, adding: 1 });
+      if (subject.kind === 'user') {
+        await clearExpiredUserApproval(locked, {
+          agreementId: agreement.id,
+          githubId: subject.githubId,
+          revokedBy: actor.userId,
+        });
+      }
       const id = await insertManagerApproval(trx, scope, {
         agreementId: agreement.id,
         approvedBy: actor.userId,

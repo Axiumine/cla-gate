@@ -3,8 +3,8 @@
 import type { Kysely } from 'kysely';
 import { NO_MATCHING_APPROVAL_HINT } from '../../shared/corporate-claims.ts';
 import type { Database } from '../adapters/db/schema.ts';
-import { auditApprovalDerived, auditApprovalRevoked } from './corporate-approval-audit.ts';
-import { revokeApprovalRow } from './corporate-approval-revoke-queries.ts';
+import { auditApprovalDerived } from './corporate-approval-audit.ts';
+import { revokeExpiredApproval } from './corporate-approval-expired.ts';
 import { type AgreementWork, inLockedAgreement } from './corporate-approval-transaction.ts';
 import { reevaluateAfterClaim } from './corporate-claim-evaluations.ts';
 import type { Claimant, ClaimMatch } from './corporate-claim-match.ts';
@@ -48,18 +48,22 @@ export interface ClaimWriteDeps {
  * rule derives from is not in force any more.
  */
 async function deriveApproval(
-  { trx, scope, audit }: AgreementWork,
+  work: AgreementWork,
   at: { readonly match: ClaimMatch; readonly claimant: Claimant; readonly expired: UserApproval | null },
 ): Promise<number> {
   const { match, claimant, expired } = at;
+  const { trx, scope, audit } = work;
   const agreementId = match.agreement.id;
   if (match.via === 'user' || !(await isRuleParentInForce(trx, scope, { agreementId, approvalId: match.parentId }))) {
     throw noMatchingApproval();
   }
   if (expired !== null) {
-    const revocation = { agreementId, approvalId: expired.id, revokedBy: claimant.userId, reason: 'expired' };
-    await revokeApprovalRow(trx, scope, revocation);
-    await auditApprovalRevoked(trx, audit('expired'), { id: expired.id, kind: 'user', githubId: claimant.githubId });
+    await revokeExpiredApproval(work, {
+      agreementId,
+      approvalId: expired.id,
+      githubId: claimant.githubId,
+      revokedBy: claimant.userId,
+    });
   }
   const id = await insertDerivedApproval(trx, scope, {
     agreementId,

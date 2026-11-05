@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import { readOwnAgreement, requireManagedAgreement } from './corporate-agreements.ts';
 import { auditApprovalAdded, auditedOf } from './corporate-approval-audit.ts';
+import { clearExpiredUserApproval } from './corporate-approval-expired.ts';
 import { activeApprovalRows } from './corporate-approval-queries.ts';
 import { subjectKey } from './corporate-approval-subject.ts';
 import { type ApprovalActor, inLockedAgreement, requireRoom } from './corporate-approval-transaction.ts';
@@ -14,7 +15,8 @@ import { CorporateRuleError } from './corporate-rule-error.ts';
 // agreement with a roster of one. This copies the manager's own approvals in force from their earlier agreement for the same corporate
 // document to the new one, so the roster is not retyped. A copy is a new decision of the same manager: its own row, with its own audit
 // row (`corporate_approval.added`, code `carried_over`), under the new agreement. Approvals of source `rule` are not copied (they are
-// derived per employee and expire), nor are revoked ones, and an approval the new agreement has in force already is left as it is.
+// derived per employee and expire), nor are revoked ones, and an approval the new agreement has in force already is left as it is. A person whose derived approval under the new agreement has expired
+// is copied all the same: the expired row is revoked first (see corporate-approval-expired.ts).
 
 /** How many approvals the new agreement got and how many it had already. */
 export interface CarryOverResult {
@@ -41,12 +43,20 @@ export async function carryOverApprovals(
   if (source.documentId !== agreement.documentId || source.major >= agreement.major) {
     throw new CorporateRuleError('validation_failed', { field: 'fromAgreementId' });
   }
-  return inLockedAgreement(db, { agreement, actor }, async ({ trx, scope, audit }) => {
+  return inLockedAgreement(db, { agreement, actor }, async (locked) => {
+    const { trx, scope, audit } = locked;
     const wanted = (await activeApprovalRows(trx, scope, source.id)).filter((row) => row.source === 'manager');
     const have = new Set((await activeApprovalRows(trx, scope, agreement.id)).map((row) => subjectKey(row.subject)));
     const fresh = wanted.filter((row) => !have.has(subjectKey(row.subject)));
     await requireRoom(trx, scope, { agreementId: agreement.id, adding: fresh.length });
     for (const row of fresh) {
+      if (row.subject.kind === 'user') {
+        await clearExpiredUserApproval(locked, {
+          agreementId: agreement.id,
+          githubId: row.subject.githubId,
+          revokedBy: actor.userId,
+        });
+      }
       const id = await insertManagerApproval(trx, scope, {
         agreementId: agreement.id,
         approvedBy: actor.userId,
