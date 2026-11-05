@@ -6,6 +6,7 @@ import { CLA_TEXT_MAX_BYTES } from '../../shared/cla-text.ts';
 import { draftTextOf, tenantChecksums, twoTenants } from '../adapters/db/tenant-fixture/test-support.ts';
 import { migratedTestDatabase } from '../adapters/db/test-support.ts';
 import { readDocument } from './cla-documents.ts';
+import { findDraftedDocumentIds } from './cla-draft-queries.ts';
 import { discardDraft, readDraft, saveDraft } from './cla-drafts.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 
@@ -239,4 +240,14 @@ test('a document is read with hasDraft true when a draft is saved and false when
   const { db, scope, wide, scoped } = await world();
   expect(await readDocument(db, scope, scoped)).toMatchObject({ id: scoped, hasDraft: true });
   expect(await readDocument(db, scope, wide)).toMatchObject({ id: wide, hasDraft: false });
+});
+
+test("the documents that have a draft are found by id, within the tenant: none for no ids, and not another tenant's documents (E18-S05)", async () => {
+  const { db, scope, wide, scoped, t2 } = await world();
+  expect(await findDraftedDocumentIds(db, scope, [])).toEqual(new Set());
+  expect(await findDraftedDocumentIds(db, scope, [wide, scoped])).toEqual(new Set([scoped]));
+  expect(await findDraftedDocumentIds(db, scope, [t2.documentId, t2.scoped.documentId])).toEqual(new Set());
+  expect(await findDraftedDocumentIds(db, { installationId: t2.installationId }, [t2.scoped.documentId])).toEqual(
+    new Set([t2.scoped.documentId]),
+  );
 });

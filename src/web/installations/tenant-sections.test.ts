@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { switchTarget, TENANT_SECTIONS, TENANT_START, type TenantSection } from './tenant-sections.ts';
+import { sectionLabel, switchTarget, TENANT_SECTIONS, TENANT_START, type TenantSection } from './tenant-sections.ts';
 
 // E18-S04: where the tenant switcher takes a person: the same screen when the other installation has it, else the start.
 
@@ -49,7 +49,26 @@ test('a bare slash is the root, not an empty path', () => {
   expect(switchTarget([{ to: '/', roles: ['org_admin'] }], START, '/', 'org_admin')).toBe('/');
 });
 
-test('the screens of the app are the overview, for both roles, and a tenant starts on it', () => {
-  expect(TENANT_SECTIONS).toEqual([{ to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] }]);
+test('the screens of the app are the overview, for both roles, and the documents, for an org admin; a tenant starts on the overview', () => {
+  expect(TENANT_SECTIONS).toEqual([
+    { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
+    { to: '/installations/$installationId/documents', roles: ['org_admin'] },
+  ]);
   expect(TENANT_START).toBe('/installations/$installationId');
+});
+
+test('a repo admin keeps the overview and is taken there from the documents list, which only an org admin can open', () => {
+  expect(switchTarget(TENANT_SECTIONS, TENANT_START, '/installations/$installationId/documents', 'repo_admin')).toBe(
+    TENANT_START,
+  );
+  expect(switchTarget(TENANT_SECTIONS, TENANT_START, '/installations/$installationId/documents', 'org_admin')).toBe(
+    '/installations/$installationId/documents',
+  );
+});
+
+test('every screen has its words in the navigation', () => {
+  expect(TENANT_SECTIONS.map((section) => sectionLabel(section.to))).toEqual([
+    'tenant.nav.overview',
+    'tenant.nav.documents',
+  ]);
 });

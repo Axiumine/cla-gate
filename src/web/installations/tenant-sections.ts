@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { InstallationRole } from '../../shared/installations.ts';
+import type { PlainMessageKey } from '../i18n/index.ts';
 
 // The screens below an installation and where the tenant switcher takes the person (E18-S04). Choosing another installation keeps
 // the person on the same screen when the other installation has it, and sends them to the start of that installation otherwise.
 
 /** The `to` of every screen below an installation that the switcher can keep the person on. Each story that adds one adds it here. */
-export type TenantTo = '/installations/$installationId';
+export type TenantTo = '/installations/$installationId' | '/installations/$installationId/documents';
 
 /** One screen below an installation and the roles that can open it. */
 export interface TenantSection<To extends string> {
@@ -20,10 +21,28 @@ export interface TenantSection<To extends string> {
  */
 export const TENANT_START: TenantTo = '/installations/$installationId';
 
-/** The screens below an installation, with the roles that can open each. The overview is for every role in the installation. */
+/**
+ * The screens below an installation, with the roles that can open each. The overview is for every role in the installation; the list
+ * of the documents of the installation is for an org admin (E18-S05: a repo admin reaches the documents of a repository from the
+ * repository screen).
+ */
 export const TENANT_SECTIONS: readonly TenantSection<TenantTo>[] = [
   { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
+  { to: '/installations/$installationId/documents', roles: ['org_admin'] },
 ];
+
+/**
+ * The words of the link to a screen in the navigation of a tenant (E18-S05). One `switch` over the screens with no default branch and
+ * a return type that has no `undefined`, so a screen added to {@link TenantTo} fails `tsc` until it has its words.
+ */
+export function sectionLabel(to: TenantTo): PlainMessageKey {
+  switch (to) {
+    case '/installations/$installationId':
+      return 'tenant.nav.overview';
+    case '/installations/$installationId/documents':
+      return 'tenant.nav.documents';
+  }
+}
 
 /** A path as the router spells a matched route: an index route ends in a slash, which the table does not write. */
 function withoutTrailingSlash(path: string): string {

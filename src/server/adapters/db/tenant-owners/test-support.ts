@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
+import type { TenantRows } from '../../../services/tenant-queries.ts';
 import type { Database } from '../schema.ts';
 
 // The reads that tell the registry of the tenant data access (tenant-registry/test-support.ts) who owns the rows a query
@@ -71,4 +72,19 @@ export async function ledgerOwnersOf(db: Kysely<Database>, person: number): Prom
     .where('user_github_id', '=', person)
     .execute();
   return rows.map((row) => row.installation_id);
+}
+
+/**
+ * The installations that own the rows the guard's read returned: the installation and its repository, which the
+ * registry always asks for.
+ * @throws Error when the read answers an installation with no repository: the entry asked for one.
+ */
+export function ownersOfTenantRows(rows: TenantRows | null): number[] {
+  if (rows === null) {
+    return [];
+  }
+  if (rows.repository === null) {
+    throw new Error('the registry asks for a repository and the read answered none');
+  }
+  return [rows.installation.id, rows.repository.installation_id];
 }

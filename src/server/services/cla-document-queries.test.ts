@@ -20,6 +20,7 @@ test('a document is found with its active version, and a tenant counts its own d
   expect(document).toEqual({
     id: t1.documentId,
     repositoryId: null,
+    repositoryFullName: null,
     name: 'Individual CLA',
     kind: 'individual',
     activeVersion: {
@@ -117,6 +118,19 @@ test('the list of a tenant holds its documents only', async () => {
   const listed = await listDocuments(db, { installationId: t1.installationId }, { limit: 100, from: null });
   expect(listed.map((document) => document.id)).toEqual([t1.documentId, t1.scoped.documentId]);
   expect(listed.map((document) => document.id)).not.toContain(t2.documentId);
+});
+
+test('every read names the repository of a scoped document, by the repository of the same tenant, and has none for a document of the installation (E18-S05)', async () => {
+  const { db, t1, t2 } = await world();
+  const scope = { installationId: t1.installationId };
+  const listed = await listDocuments(db, scope, { limit: 100, from: null });
+  expect(listed.map((document) => [document.id, document.repositoryFullName])).toEqual([
+    [t1.documentId, null],
+    [t1.scoped.documentId, t1.scoped.fullName],
+  ]);
+  expect((await findDocument(db, scope, t1.scoped.documentId))?.repositoryFullName).toBe(t1.scoped.fullName);
+  const other = await listDocuments(db, { installationId: t2.installationId }, { limit: 100, from: null });
+  expect(other.map((document) => document.repositoryFullName)).toEqual([null, t2.scoped.fullName]);
 });
 
 test('the documents of a repository are its own and those of the installation, each in the order of the list', async () => {

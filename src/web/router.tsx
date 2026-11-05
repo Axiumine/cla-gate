@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
+import { documentRouteParams } from './documents/document-params.ts';
+import { DocumentRoute, DocumentsRoute } from './documents/route-components.tsx';
 import { InstallationsPage } from './installations/InstallationsPage.tsx';
 import { installationRouteParams } from './installations/installation-params.ts';
 import { InstallationHomeRoute, InstallationRoute } from './installations/route-components.tsx';
@@ -165,6 +167,24 @@ const installationHomeRoute = createRoute({
   component: InstallationHomeRoute,
 });
 
+// The CLA documents of a tenant (E18-S05): the list, and one document with its editor. `$documentId` is `cla_documents.id`; a segment
+// that is not a plain positive number is no page of the app. The list needs an org admin, a document the role of its scope: the
+// server decides on every request.
+const documentsRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: 'documents',
+  ...tenantPage('documents.title'),
+  component: DocumentsRoute,
+});
+
+const documentRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: 'documents/$documentId',
+  ...tenantPage('document.title'),
+  params: documentRouteParams,
+  component: DocumentRoute,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -175,7 +195,7 @@ const routeTree = rootRoute.addChildren([
   signRoute,
   mySignaturesRoute,
   installationsRoute,
-  installationRoute.addChildren([installationHomeRoute]),
+  installationRoute.addChildren([installationHomeRoute, documentsRoute, documentRoute]),
 ]);
 
 /**

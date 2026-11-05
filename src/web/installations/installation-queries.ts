@@ -15,10 +15,7 @@ import type { ApiClient } from '../api/index.ts';
  */
 export const INSTALLATIONS_KEY = ['installations'] as const;
 
-/**
- * The start of the key of every query that belongs to one installation.
- * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
- */
+/** The start of the key of every query that belongs to one installation. */
 export function installationKey(installationId: number) {
   return ['installation', installationId] as const;
 }

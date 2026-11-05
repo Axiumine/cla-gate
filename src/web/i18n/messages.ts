@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { documentMessages } from './messages-documents.ts';
 
 /**
  * The English message catalog (E17-S02): every string the user can read, under a dotted key. A flat `as const` object, so
@@ -61,6 +62,7 @@ export const messages = {
   'errors.unprocessable_entity': 'What you entered could not be processed. Check it and try again.',
   'errors.unsupported_media_type': 'The server does not accept that kind of content.',
   'errors.uri_too_long': 'The address of the request was too long.',
+  ...documentMessages,
   'footer.licence': 'Licensed under {licence}',
   'footer.sourceCode': 'Source code',
   'installation.facts.repositories': 'Repositories',

@@ -66,3 +66,24 @@ export async function findDraftRevision(
     .executeTakeFirst();
   return row?.revision ?? null;
 }
+
+/**
+ * The ids, among `documentIds`, of the documents of the tenant that have a draft saved: what the list of documents shows as "Draft saved"
+ * (E18-S05). Only the ids are read, never a text, and a document of another tenant is never in the answer.
+ */
+export async function findDraftedDocumentIds(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  documentIds: readonly number[],
+): Promise<ReadonlySet<number>> {
+  if (documentIds.length === 0) {
+    return new Set();
+  }
+  const rows = await db
+    .selectFrom('cla_drafts')
+    .select('document_id')
+    .where('installation_id', '=', scope.installationId)
+    .where('document_id', 'in', documentIds)
+    .execute();
+  return new Set(rows.map((row) => row.document_id));
+}
