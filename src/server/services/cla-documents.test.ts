@@ -81,22 +81,16 @@ test('a failure after the insert rolls the document back: when the audit row can
   expect(await tenantChecksums(db)).toEqual(before);
 });
 
-test('the corporate kind, a name that is not one and a taken name are each the rule they break, and nothing is stored', async () => {
+test('a name that is not one, a taken name and a repository of another tenant are each the rule they break, and nothing is stored', async () => {
   const { db, t1 } = await world();
   const scope = { installationId: t1.installationId };
   const before = await tenantChecksums(db);
   const attempts = [
-    createDocument(db, scope, ACTOR, { name: 'Corporate', kind: 'corporate', repositoryId: null }),
     createDocument(db, scope, ACTOR, { name: '\n', kind: 'individual', repositoryId: null }),
     createDocument(db, scope, ACTOR, { name: 'Individual CLA', kind: 'individual', repositoryId: null }),
     createDocument(db, scope, ACTOR, { name: 'Elsewhere', kind: 'individual', repositoryId: 987_654 }),
   ];
-  expect(await Promise.all(attempts.map(ruleOf))).toEqual([
-    'kind_not_supported',
-    'invalid_name',
-    'document_name_taken',
-    'not_found',
-  ]);
+  expect(await Promise.all(attempts.map(ruleOf))).toEqual(['invalid_name', 'document_name_taken', 'not_found']);
   expect(await tenantChecksums(db)).toEqual(before);
 });
 

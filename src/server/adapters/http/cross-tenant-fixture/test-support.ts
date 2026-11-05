@@ -14,7 +14,6 @@ import {
   INSTALLATIONS_PATH,
   installationListSchema,
 } from '../../../../shared/installations.ts';
-import { OWN_SIGNATURES_PATH } from '../../../../shared/own-signatures.ts';
 import { REPOSITORY_CLA_DOCUMENT_PATH } from '../../../../shared/repository-document.ts';
 import { REPOSITORY_DISABLE_PATH, REPOSITORY_ENABLE_PATH } from '../../../../shared/repository-enabled.ts';
 import { signRoute } from '../../../../shared/sign.ts';
@@ -22,7 +21,7 @@ import { signContextRoute } from '../../../../shared/sign-context.ts';
 import { SIGNATURES_CSV_PATH } from '../../../../shared/signature-export.ts';
 import type { Database } from '../../db/schema.ts';
 import type { PersonName, RowTable, TenantWorld } from '../../db/tenant-fixture/test-support.ts';
-import { OWN_SIGNATURES_CASE } from '../cross-tenant-own-signatures-fixture/test-support.ts';
+import { LATER_CROSS, LATER_ISOLATION, LATER_NO_DATA } from '../cross-tenant-later-fixture/test-support.ts';
 import {
   addable,
   attachable,
@@ -44,8 +43,8 @@ import { declaredAccess } from '../route-access-model.ts';
 // (`matrixGaps`) names the route that has none, so a route cannot be added without its case. The matrix itself is in
 // cross-tenant-runner/test-support.ts, and the cases it is proved on are the canary routes of cross-tenant-canary.
 //
-// A story that adds a route adds its case here in the same change, keyed `METHOD path` like the entries below (the cases of E15 are in
-// cross-tenant-revocation-fixture, which keeps this file under the size cap).
+// A story that adds a route adds its case here in the same change, keyed `METHOD path` like the entries below (the cases of the later stories are
+// collected by cross-tenant-later-fixture, which keeps this file under the size cap).
 
 /**
  * What a tenant route is about, which decides who may call it and how (the role matrix of the security notes).
@@ -291,7 +290,7 @@ export const CROSS_TENANT_CASES: Readonly<Record<string, CrossTenantCase>> = {
       ),
     }),
   },
-  ...REVOCATION_CASES,
+  ...LATER_CROSS,
   // E14-S01. Any role in the installation lists its repositories, each person the ones their role reaches. It comes before the erasure cases, which end the session of `member1`.
   [`GET ${INSTALLATION_REPOSITORIES_PATH}`]: {
     endpointClass: 'installation_role_read',
@@ -438,13 +437,14 @@ export const ISOLATION_CASES: Readonly<Record<string, IsolationCase>> = {
   },
   [`GET ${signContextRoute.path}`]: SIGN_CONTEXT_CASE,
   [`POST ${signRoute.path}`]: SIGN_CASE,
-  [`GET ${OWN_SIGNATURES_PATH}`]: OWN_SIGNATURES_CASE,
+  ...LATER_ISOLATION,
 };
 
 /** The `authenticated` routes that return no tenant data, each with the reason, so a new one is a decision somebody reads. */
 export const NO_TENANT_DATA: Readonly<Record<string, string>> = {
   'GET /api/auth/session': 'it answers with the signed-in person and nothing of any tenant (E10-S02)',
   'POST /api/auth/logout': 'it ends the session of the caller and returns no data (E10-S06)',
+  ...LATER_NO_DATA,
 };
 
 /** The tables the completeness check holds a route table to. */

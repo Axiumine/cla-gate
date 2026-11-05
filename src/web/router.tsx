@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
+import { CorporateAgreementsPage } from './corporate/CorporateAgreementsPage.tsx';
+import { CorporateSignPage } from './corporate/CorporateSignPage.tsx';
 import { AppShell } from './layout/AppShell.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
@@ -87,6 +89,49 @@ const repositorySettingsRoute = createRoute({
   },
 });
 
+// Corporate signing (E21-S02): the page where an authorised signatory signs for a company, and the list of the agreements a person
+// signed. Both need a login. The paths are those of CORPORATE_SIGN_PAGE_PATH and CORPORATE_AGREEMENTS_PAGE_PATH in the shared contract
+// (TanStack spells a parameter `$name`; router.test.tsx holds the two spellings together).
+
+/** GitHub's id of a repository in an address: digits only, no leading zero, small enough to be an exact number. */
+const REPOSITORY_ID_IN_PATH = /^[1-9]\d{0,14}$/u;
+
+const corporateSignRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/corporate/sign/$githubRepoId',
+  ...withAccess('authenticated', { title: 'corporate.sign.title' }),
+  component: function CorporateSignRoute() {
+    const { githubRepoId } = corporateSignRoute.useParams();
+    return REPOSITORY_ID_IN_PATH.test(githubRepoId) ? (
+      <CorporateSignPage githubRepoId={Number(githubRepoId)} />
+    ) : (
+      <NotFoundPage />
+    );
+  },
+});
+
+/** `?cursor=` of the list: the opaque cursor of the page on screen, else the first page. The raw value goes no further. */
+const corporateAgreementsSearch = z.object({ cursor: z.string().max(512).optional().catch(undefined) });
+
+const corporateAgreementsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/corporate/agreements',
+  ...withAccess('authenticated', { title: 'corporate.agreements.title' }),
+  validateSearch: corporateAgreementsSearch,
+  component: function CorporateAgreementsRoute() {
+    const { cursor } = corporateAgreementsRoute.useSearch();
+    const navigate = corporateAgreementsRoute.useNavigate();
+    return (
+      <CorporateAgreementsPage
+        cursor={cursor}
+        onCursorChange={(next) => {
+          void navigate({ search: { cursor: next } });
+        }}
+      />
+    );
+  },
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -94,6 +139,8 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   setupCallbackRoute,
   repositorySettingsRoute,
+  corporateSignRoute,
+  corporateAgreementsRoute,
 ]);
 
 /**

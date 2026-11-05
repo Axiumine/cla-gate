@@ -54,6 +54,7 @@ test('a query that meets another tenant by design says why and names the test th
     'installationOfRepository',
     'isActiveRepositoryOfAnotherInstallation',
     'listInstallationsForOperator',
+    'ownAgreementRows',
     'ownAllowlistEntries',
     'ownAuditEntries',
     'ownSignatureRows',

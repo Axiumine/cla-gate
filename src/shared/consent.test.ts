@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { CONSENT_TEXTS, CURRENT_CONSENT_ID, currentIndividualConsent, getConsentText } from './consent.ts';
+import {
+  CONSENT_TEXTS,
+  CURRENT_CONSENT_ID,
+  currentCorporateConsent,
+  currentIndividualConsent,
+  getConsentText,
+} from './consent.ts';
 
 // E13-S01: the registry of consent sentences. What a signature proves is the id it stores, so these tests pin what each id
 // means: a published sentence is never edited, and a new sentence is a new id.
@@ -38,13 +44,17 @@ test('the SHA-256 of every published text is pinned', async () => {
   );
   expect(hashes).toMatchInlineSnapshot(`
     {
+      "corporate-v1": "1e957da12afe49a3e7de8b43dce76cd87eb09997d05df15efad283bdbd17843c",
       "individual-v1": "eac89b388fbd5338267383e49008177870b0d99faa790f5c2a2e14c962454f48",
     }
   `);
 });
 
 test('every id keeps the kind it was published with', () => {
-  expect(Object.fromEntries(entries.map(([id, entry]) => [id, entry.kind]))).toEqual({ 'individual-v1': 'individual' });
+  expect(Object.fromEntries(entries.map(([id, entry]) => [id, entry.kind]))).toEqual({
+    'individual-v1': 'individual',
+    'corporate-v1': 'corporate',
+  });
 });
 
 test('there is at least one entry and every id matches the pattern and fits 1 to 64 characters', () => {
@@ -76,11 +86,11 @@ test('every value of CURRENT_CONSENT_ID is an id of CONSENT_TEXTS, for the kind 
     expect(Object.keys(CONSENT_TEXTS), kind).toContain(id);
     expect(getConsentText(id)?.kind, kind).toBe(kind);
   }
-  expect(Object.keys(CURRENT_CONSENT_ID)).toEqual(['individual']);
+  expect(Object.keys(CURRENT_CONSENT_ID)).toEqual(['individual', 'corporate']);
 });
 
-test('individual-v1 is plain text of at most 600 characters', () => {
-  const text = getConsentText('individual-v1')?.text ?? '';
+test.each(['individual-v1', 'corporate-v1'])('%s is plain text of at most 600 characters', (id) => {
+  const text = getConsentText(id)?.text ?? '';
   expect(text.length).toBeGreaterThan(0);
   expect(text.length).toBeLessThanOrEqual(600);
   // Plain text: no control character (a line break included), no markup or Markdown syntax, nothing to trim or collapse.
@@ -123,4 +133,18 @@ test('the consent offered to an individual is the id of CURRENT_CONSENT_ID with 
   });
   expect(currentIndividualConsent().id).toBe(CURRENT_CONSENT_ID.individual);
   expect(getConsentText(currentIndividualConsent().id)?.text).toBe(currentIndividualConsent().text);
+});
+
+test('the consent offered to the signatory of a corporate CLA is the id of CURRENT_CONSENT_ID with the sentence of that very entry (E21-S02)', () => {
+  expect(currentCorporateConsent()).toEqual({ id: 'corporate-v1', text: CONSENT_TEXTS['corporate-v1'].text });
+  expect(currentCorporateConsent().id).toBe(CURRENT_CONSENT_ID.corporate);
+});
+
+test.each([
+  ['the signatory is authorised to sign for the company', /\bauthorised to sign for the company\b/u],
+  ['the corporate CLA version shown was read', /\bread the Corporate Contributor License Agreement version shown\b/u],
+  ['the company is bound', /\bOn behalf of the company I agree to be bound by it\b/u],
+  ['the company name, the title, the name and the address are stored', /\bcompany name, my title\b.*\bstored\b/u],
+])('corporate-v1 states that %s', (_what, statement) => {
+  expect(getConsentText('corporate-v1')?.text).toMatch(statement);
 });

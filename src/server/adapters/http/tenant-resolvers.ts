@@ -3,6 +3,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
+import type { Role } from '../../domain/authz.ts';
 import {
   type DocumentPlacement,
   findDocumentPlacement,
@@ -69,13 +70,14 @@ async function installationOf(
 
 /**
  * The resolver of a route about one repository (`/…/repositories/:repositoryId/…`, with or without `:installationId`
- * before it): the requirement is `repo_admin`, which an org admin satisfies too. The repository is read with its
+ * before it): the requirement is `repo_admin`, which an org admin satisfies too, unless the route asks for `org_admin` (the
+ * corporate CLA of a repository is the organisation's to choose, E21-S02). The repository is read with its
  * installation id, so a repository of another installation than the one in the path is null, as are an unknown
  * repository, a removed one and one of a rejected tenant. A route whose requirement follows the scope of the resource
  * (E14) writes its own resolver.
  * @throws AppError 400 when `:repositoryId` or `:installationId` is not a positive integer in plain digits.
  */
-export function byRepositoryParam(db: Kysely<Database>): TenantResolver {
+export function byRepositoryParam(db: Kysely<Database>, requirement: Role = 'repo_admin'): TenantResolver {
   return async (request) => {
     const params = paramsOf(repositoryParams, request);
     const installationId = await installationOf(db, params);
@@ -83,7 +85,7 @@ export function byRepositoryParam(db: Kysely<Database>): TenantResolver {
       return null;
     }
     const rows = await findAdmittedTenantRows(db, { installationId }, params.repositoryId);
-    return rows === null ? null : { installationId, repositoryId: params.repositoryId, requirement: 'repo_admin' };
+    return rows === null ? null : { installationId, repositoryId: params.repositoryId, requirement };
   };
 }
 

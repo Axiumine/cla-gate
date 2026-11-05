@@ -135,6 +135,25 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { document_id: 12, version_id: 22, major: 2, source_repository_id: 9, source_pr_number: null },
     },
   ],
+  'services/corporate-agreement-write.ts#corporate_agreement.signed': [
+    {
+      action: 'corporate_agreement.signed',
+      subject: { type: 'corporate_agreement', id: 41 },
+      metadata: { document_id: 12, version_id: 21, signature_id: 31, major: 1, source_repository_id: 9 },
+    },
+  ],
+  'services/repository-corporate-document.ts#repository.corporate_document_set': [
+    {
+      action: 'repository.corporate_document_set',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: 3, previous_document_id: null },
+    },
+    {
+      action: 'repository.corporate_document_set',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: null, previous_document_id: 3 },
+    },
+  ],
   'services/signature-revoke-audit.ts#signature.revoked': [
     {
       action: 'signature.revoked',

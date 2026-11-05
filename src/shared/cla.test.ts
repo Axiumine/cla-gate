@@ -39,12 +39,12 @@ test('the paths are the ones the routes, the tests and the screens share', () =>
   expect(DRAFT_PATH).toBe('/api/installations/:installationId/documents/:documentId/draft');
 });
 
-test('the schema accepts both kinds, and the corporate kind is off until E21 flips the constant', () => {
+test('the schema accepts both kinds, and the corporate kind is on since E21-S02 flipped the constant', () => {
   expect(CLA_DOCUMENT_KINDS).toEqual(['individual', 'corporate']);
   expect(createDocumentRequestSchema.safeParse({ name: 'x', kind: 'corporate' }).success).toBe(true);
-  expect(CORPORATE_KIND_ENABLED).toBe(false);
+  expect(CORPORATE_KIND_ENABLED).toBe(true);
   expect(isKindSupported('individual')).toBe(true);
-  expect(isKindSupported('corporate')).toBe(false);
+  expect(isKindSupported('corporate')).toBe(true);
 });
 
 test('a kind is supported when it is individual, or corporate while the corporate kind is on', () => {

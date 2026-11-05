@@ -52,20 +52,18 @@ export interface LiveSignatureKey {
 }
 
 /**
- * Appends the signature of the person for the version of the document of the tenant, unless a signature that is not revoked
- * exists already for the person, the document and the major version of that version (the partial unique index
- * `signatures_active_unique`: `on conflict ... do nothing`, so the statement waits for a concurrent insert of the same key
- * and then writes nothing). `major` and `content_sha256` are copied from the version row, the type is `individual`, and the
- * time is the database's (`signed_at`'s default; a trigger refuses any other). A document or version of another tenant selects
- * no row and writes nothing.
- * @returns the new row, or `null` when nothing was written (the signature exists, or the document or version is not the tenant's).
+ * The statement that appends a signature of `signerType` for the version of the document of the tenant: `major` and `content_sha256`
+ * are copied from the version row, and the time is the database's (`signed_at`'s default; a trigger refuses any other). A document or
+ * version of another tenant selects no row and writes nothing. What a conflict with a signature that is not revoked does is the
+ * business of the two functions below.
  */
-export async function insertSignature(
+function signatureInsert(
   db: Kysely<Database>,
   scope: TenantScope,
   input: NewSignature,
-): Promise<{ readonly id: number; readonly signedAt: Date } | null> {
-  const row = await db
+  signerType: 'individual' | 'corporate',
+) {
+  return db
     .insertInto('signatures')
     .columns([
       'installation_id',
@@ -91,20 +89,53 @@ export async function insertSignature(
           'v.major',
           'v.content_sha256',
           eb.cast<string>(eb.val(input.consentTextId), 'text').as('consent_text_id'),
-          eb.cast<'individual'>(eb.val('individual'), 'text').as('signer_type'),
+          eb.cast<'individual' | 'corporate'>(eb.val(signerType), 'text').as('signer_type'),
           eb.cast<number | null>(eb.val(input.sourceRepositoryId), 'bigint').as('source_repository_id'),
           eb.cast<number | null>(eb.val(input.sourcePrNumber), 'integer').as('source_pr_number'),
         ])
         .where('d.installation_id', '=', scope.installationId)
         .where('d.id', '=', input.documentId)
         .where('v.id', '=', input.versionId),
-    )
+    );
+}
+
+/**
+ * Appends the signature of the person for the version of the document of the tenant, unless a signature that is not revoked
+ * exists already for the person, the document and the major version of that version (the partial unique index
+ * `signatures_active_unique`: `on conflict ... do nothing`, so the statement waits for a concurrent insert of the same key
+ * and then writes nothing). The type is `individual`. See {@link signatureInsert} for the rest.
+ * @returns the new row, or `null` when nothing was written (the signature exists, or the document or version is not the tenant's).
+ */
+export async function insertSignature(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  input: NewSignature,
+): Promise<{ readonly id: number; readonly signedAt: Date } | null> {
+  const row = await signatureInsert(db, scope, input, 'individual')
     .onConflict((conflict) =>
       conflict.columns(['user_id', 'document_id', 'major']).where('revoked_at', 'is', null).doNothing(),
     )
     .returning(['id', 'signed_at'])
     .executeTakeFirst();
   return row === undefined ? null : { id: row.id, signedAt: row.signed_at };
+}
+
+/**
+ * Appends the consent of the signatory of a corporate agreement (E21-S02): the same row as {@link insertSignature} with the type
+ * `corporate`, but with no `on conflict` clause. A second agreement of the person for the document and the major version is not a
+ * repeat to answer with the first: the database refuses it with the unique violation of `signatures_active_unique` (SQLSTATE
+ * 23505), which the caller maps to `agreement_exists`.
+ * @throws NoResultError when the document or the version is not the tenant's (the caller has just read them, so this is a defect).
+ */
+export async function insertCorporateSignature(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  input: NewSignature,
+): Promise<{ readonly id: number; readonly signedAt: Date }> {
+  const row = await signatureInsert(db, scope, input, 'corporate')
+    .returning(['id', 'signed_at'])
+    .executeTakeFirstOrThrow();
+  return { id: row.id, signedAt: row.signed_at };
 }
 
 /**

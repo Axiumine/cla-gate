@@ -99,51 +99,66 @@ test('every gap is reported at once, in the order tenant, authenticated, stale, 
   ]);
 });
 
-test('the tables of the application hold the cases of the routes the stories added, and the two authenticated routes that return no tenant data say why', () => {
-  expect(Object.keys(CROSS_TENANT_CASES)).toEqual([
-    'POST /api/installations/:installationId/documents',
-    'GET /api/installations/:installationId/documents',
-    'GET /api/installations/:installationId/repositories/:repositoryId/documents',
-    'GET /api/installations/:installationId/documents/:documentId',
-    'PATCH /api/installations/:installationId/documents/:documentId',
-    'GET /api/installations/:installationId/documents/:documentId/draft',
-    'PUT /api/installations/:installationId/documents/:documentId/draft',
-    'DELETE /api/installations/:installationId/documents/:documentId/draft',
-    'POST /api/installations/:installationId/documents/:documentId/versions',
-    'GET /api/installations/:installationId/documents/:documentId/versions',
-    'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
-    'GET /api/installations/:installationId/audit-log',
-    'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
-    'GET /api/installations/:installationId/signatures',
-    'POST /api/installations/:installationId/signatures/:signatureId/revoke',
-    'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
-    'POST /api/installations/:installationId/documents/:documentId/invalidations',
-    'POST /api/repositories/:repositoryId/commit-overrides',
-    'GET /api/repositories/:repositoryId/commit-overrides',
-    'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
-    'GET /api/installations/:installationId/pending-prs',
-    'GET /api/installations/:installationId/repositories',
-    'PUT /api/repositories/:repositoryId/cla-document',
-    'POST /api/repositories/:repositoryId/enable',
-    'POST /api/repositories/:repositoryId/disable',
-    'POST /api/installations/:installationId/allowlist-entries',
-    'POST /api/repositories/:repositoryId/allowlist-entries',
-    'GET /api/installations/:installationId/allowlist-entries',
-    'GET /api/repositories/:repositoryId/allowlist-entries',
-    'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
-    'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
-    'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
-    'GET /api/installations/:installationId/erasure-preview',
-    'POST /api/installations/:installationId/erasures',
+/** The tenant routes that have a case, in the order of the table. */
+const CROSS_ROUTES: readonly string[] = [
+  'POST /api/installations/:installationId/documents',
+  'GET /api/installations/:installationId/documents',
+  'GET /api/installations/:installationId/repositories/:repositoryId/documents',
+  'GET /api/installations/:installationId/documents/:documentId',
+  'PATCH /api/installations/:installationId/documents/:documentId',
+  'GET /api/installations/:installationId/documents/:documentId/draft',
+  'PUT /api/installations/:installationId/documents/:documentId/draft',
+  'DELETE /api/installations/:installationId/documents/:documentId/draft',
+  'POST /api/installations/:installationId/documents/:documentId/versions',
+  'GET /api/installations/:installationId/documents/:documentId/versions',
+  'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
+  'GET /api/installations/:installationId/audit-log',
+  'GET /api/installations/:installationId/documents/:documentId/signatures.csv',
+  'GET /api/installations/:installationId/signatures',
+  'POST /api/installations/:installationId/signatures/:signatureId/revoke',
+  'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
+  'POST /api/installations/:installationId/documents/:documentId/invalidations',
+  'POST /api/repositories/:repositoryId/commit-overrides',
+  'GET /api/repositories/:repositoryId/commit-overrides',
+  'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
+  'GET /api/installations/:installationId/pending-prs',
+  'PUT /api/installations/:installationId/repositories/:repositoryId/corporate-document',
+  'GET /api/installations/:installationId/corporate-agreements',
+  'GET /api/installations/:installationId/repositories',
+  'PUT /api/repositories/:repositoryId/cla-document',
+  'POST /api/repositories/:repositoryId/enable',
+  'POST /api/repositories/:repositoryId/disable',
+  'POST /api/installations/:installationId/allowlist-entries',
+  'POST /api/repositories/:repositoryId/allowlist-entries',
+  'GET /api/installations/:installationId/allowlist-entries',
+  'GET /api/repositories/:repositoryId/allowlist-entries',
+  'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
+  'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
+  'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
+  'GET /api/installations/:installationId/erasure-preview',
+  'POST /api/installations/:installationId/erasures',
+];
+
+/** The authenticated routes that return tenant data, in the order of the table. */
+const ISOLATION_ROUTES: readonly string[] = [
+  'GET /api/installations',
+  'GET /api/me/export',
+  'GET /api/sign/:githubRepoId',
+  'POST /api/sign',
+  'GET /api/me/signatures',
+  'GET /api/corporate/repositories/:githubRepoId/document',
+  'GET /api/corporate/agreements',
+  'GET /api/corporate/agreements/:agreementId',
+];
+
+test('the tables of the application hold the cases of the routes the stories added, and the authenticated routes that return no tenant data say why', () => {
+  expect(Object.keys(CROSS_TENANT_CASES)).toEqual(CROSS_ROUTES);
+  expect(Object.keys(ISOLATION_CASES)).toEqual(ISOLATION_ROUTES);
+  expect(Object.keys(NO_TENANT_DATA)).toEqual([
+    'GET /api/auth/session',
+    'POST /api/auth/logout',
+    'POST /api/corporate/agreements',
   ]);
-  expect(Object.keys(ISOLATION_CASES)).toEqual([
-    'GET /api/installations',
-    'GET /api/me/export',
-    'GET /api/sign/:githubRepoId',
-    'POST /api/sign',
-    'GET /api/me/signatures',
-  ]);
-  expect(Object.keys(NO_TENANT_DATA)).toEqual(['GET /api/auth/session', 'POST /api/auth/logout']);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
 });
 

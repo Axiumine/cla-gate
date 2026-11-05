@@ -24,7 +24,7 @@ export const HOUR_MS = 3_600_000;
  * takes its override through {@link routeRateLimit}. `signatureExport` is the budget of each signed-in person for the
  * signature CSV (E16-S03) per minute, and `dataExport` the budget for their own data (E16-S06) per hour, both taken through
  * {@link userRateLimit}; `sign` is the budget of each signed-in person for the sign request (E13-S04) per minute, taken the same way,
- * and `signatureSearch` the budget for the search of signatures (E15-S02), which shows the personal data of up to 100 signers a page and
+ * `corporateSign` the same budget for the signing of a corporate agreement (E21-S02), and `signatureSearch` the budget for the search of signatures (E15-S02), which shows the personal data of up to 100 signers a page and
  * writes no audit row, so a person cannot read all of it faster than the audited export would give it.
  */
 export const RATE_LIMITS = {
@@ -36,6 +36,7 @@ export const RATE_LIMITS = {
   signatureExport: 6,
   dataExport: 5,
   sign: 10,
+  corporateSign: 10,
   signatureSearch: 30,
 } as const;
 

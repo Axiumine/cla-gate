@@ -116,6 +116,7 @@ const SCOPED_QUERY_NAMES = [
   'services/sign-context-queries.ts listViewerSignatures',
   'services/failing-evaluation-queries.ts findFailingEvaluations',
   'services/sign-record-queries.ts insertSignature',
+  'services/sign-record-queries.ts insertCorporateSignature',
   'services/sign-record-queries.ts insertSignerPii',
   'services/sign-record-queries.ts findLiveSignature',
   'services/allowlist-entry-queries.ts insertAllowlistEntry',
@@ -144,6 +145,14 @@ const SCOPED_QUERY_NAMES = [
   'services/pending-prs-current.ts pendingOf',
   'services/pending-prs-current.ts repositoriesWithPending',
   'services/pending-prs-queries.ts pendingRows',
+  'services/corporate-agreement-queries.ts tenantAgreementRows',
+  'services/corporate-agreement-queries.ts insertAgreement',
+  'services/corporate-agreement-queries.ts insertAgreementText',
+  'services/corporate-agreement-queries.ts insertSignatoryApproval',
+  'services/corporate-repository-queries.ts findCorporateSetting',
+  'services/corporate-repository-queries.ts lockCorporateRepository',
+  'services/corporate-repository-queries.ts findCorporateChoice',
+  'services/corporate-repository-queries.ts setCorporateDocument',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

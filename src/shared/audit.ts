@@ -62,6 +62,10 @@ export const AUDIT_ACTIONS = [
   // Added by E22-S04: a run of the retention sweep deleted webhook deliveries or expired sessions (metadata the two counts, numbers
   // only). Instance-wide and written by a schedule, so it has neither an installation nor an actor.
   'retention.swept',
+  // Added by E21-S02: a company signed a corporate CLA through its signatory (metadata ids and the major only, never the company, the
+  // title, the name or an address), and a maintainer chose or removed the corporate CLA document of a repository (ids only).
+  'corporate_agreement.signed',
+  'repository.corporate_document_set',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

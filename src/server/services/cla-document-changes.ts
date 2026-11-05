@@ -39,7 +39,7 @@ export interface NewDocument {
  * Creates a document for the tenant and appends the audit row `cla_document.created` (ids and the kind, never the name) in
  * the same transaction. The count of the tenant's documents and the insert run under the creation lock of the tenant, so
  * two simultaneous requests cannot pass the limit; the unique constraint on the name decides two that race for one name.
- * @throws ClaRuleError `kind_not_supported` (the corporate kind is off until E21), `invalid_name`,
+ * @throws ClaRuleError `kind_not_supported` (a kind the switch of `isKindSupported` has off), `invalid_name`,
  * `document_limit_reached`, `document_name_taken`, and `not_found` when the repository is another tenant's or removed.
  */
 export async function createDocument(

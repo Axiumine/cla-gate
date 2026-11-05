@@ -11,6 +11,7 @@ import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
 import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
 import { commitOverrideRoutes } from './adapters/http/commit-override-routes.ts';
+import { corporateRoutes } from './adapters/http/corporate-routes.ts';
 import { dataExportRoutes } from './adapters/http/data-export-routes.ts';
 import { documentRoutes } from './adapters/http/document-routes.ts';
 import { erasureRoutes } from './adapters/http/erasure-routes.ts';
@@ -218,6 +219,7 @@ async function registerRoutes(
   await app.register(signContextRoutes, { db });
   await app.register(signRoutes, { db, enqueuer, recordNetworkMetadata: config.recordNetworkMetadata });
   await app.register(ownSignaturesRoutes, { db });
+  await app.register(corporateRoutes, { db });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

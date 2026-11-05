@@ -25,7 +25,7 @@ export const VERSION_PATH = `${VERSIONS_PATH}/:versionId`;
 export const REPOSITORY_DOCUMENTS_PATH = '/api/installations/:installationId/repositories/:repositoryId/documents';
 
 /**
- * Who signs under a document. The schema accepts both; the corporate kind is switched on by E21.
+ * Who signs under a document. The schema accepts both; the corporate kind is switched on since E21-S02.
  * @internal exported for the tests of the schema
  */
 export const CLA_DOCUMENT_KINDS = ['individual', 'corporate'] as const;
@@ -35,11 +35,11 @@ const claDocumentKindSchema = z.enum(CLA_DOCUMENT_KINDS);
 export type ClaDocumentKind = z.infer<typeof claDocumentKindSchema>;
 
 /**
- * Whether a document of the corporate kind can be created. E21 flips it when the corporate flow exists; until then the
- * service answers `422 kind_not_supported` (E12-S01).
+ * Whether a document of the corporate kind can be created. E21-S02 flipped it when the corporate flow came; the parameter of
+ * `isKindSupported` keeps the refusal (`422 kind_not_supported`, E12-S01) tested.
  * @internal exported for the tests of the switch
  */
-export const CORPORATE_KIND_ENABLED = false;
+export const CORPORATE_KIND_ENABLED = true;
 
 /** True when documents of `kind` can be created. `corporateEnabled` is a parameter so that both outcomes are tested. */
 export function isKindSupported(kind: ClaDocumentKind, corporateEnabled: boolean = CORPORATE_KIND_ENABLED): boolean {
