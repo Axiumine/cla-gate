@@ -130,6 +130,11 @@ const SCOPED_QUERY_NAMES = [
   'services/commit-override-queries.ts insertCommitOverride',
   'services/commit-override-queries.ts deleteCommitOverride',
   'services/commit-override-list-queries.ts listCommitOverrides',
+  'services/pending-prs-repositories.ts servedRepositories',
+  'services/pending-prs-repositories.ts isRepositoryOfTenant',
+  'services/pending-prs-current.ts pendingOf',
+  'services/pending-prs-current.ts repositoriesWithPending',
+  'services/pending-prs-queries.ts pendingRows',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

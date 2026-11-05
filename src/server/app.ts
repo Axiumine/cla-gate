@@ -23,6 +23,7 @@ import { createLogger } from './adapters/http/logger.ts';
 import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { ownSignaturesRoutes } from './adapters/http/own-signatures-routes.ts';
+import { pendingPrsRoutes } from './adapters/http/pending-prs-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { repositoryDisableRoutes } from './adapters/http/repository-disable-routes.ts';
 import { repositoryDocumentRoutes } from './adapters/http/repository-document-routes.ts';
@@ -243,7 +244,7 @@ async function registerRepositoryRoutes(
   });
 }
 
-/** The routes that look for the signatures of a tenant (E13-S08), revoke one (E15-S03, which sends the jobs of the pull requests it affects) and invalidate a major of a document (E15-S04, which sweeps the repositories that enforce it). */
+/** The routes that look for the signatures of a tenant (E13-S08), revoke one (E15-S03, which sends the jobs of the pull requests it affects), invalidate a major of a document (E15-S04, which sweeps the repositories that enforce it) and list the pull requests the check blocks (E15-S07). */
 async function registerSignatureRoutes(
   app: FastifyInstance,
   deps: { readonly db: Kysely<Database>; readonly roles: TenantAuthorizationDeps; readonly enqueuer: JobEnqueuer },
@@ -251,6 +252,7 @@ async function registerSignatureRoutes(
   await app.register(signatureSearchRoutes, { db: deps.db, roles: deps.roles });
   await app.register(signatureRevokeRoutes, { db: deps.db, enqueuer: deps.enqueuer });
   await app.register(signatureInvalidateRoutes, { db: deps.db, enqueuer: deps.enqueuer });
+  await app.register(pendingPrsRoutes, { db: deps.db, roles: deps.roles });
 }
 
 /**

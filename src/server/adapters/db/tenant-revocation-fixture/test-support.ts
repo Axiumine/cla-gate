@@ -8,6 +8,7 @@ import { countActiveSignatures, invalidateActiveSignatures } from '../../../serv
 import { findSignatureToRevoke, markSignatureRevoked } from '../../../services/signature-revoke-queries.ts';
 import type { Database } from '../schema.ts';
 import { ownersOfRepositories, ownersOfSignatures } from '../tenant-owners/test-support.ts';
+import { PENDING_TENANT_QUERIES } from '../tenant-pending-fixture/test-support.ts';
 import type { ScopedQuery, TenantQuery } from '../tenant-registry/test-support.ts';
 import { isForeignKeyViolation } from '../tenant-registry-allowlist/test-support.ts';
 import { SEARCH_TENANT_QUERIES } from '../tenant-search-fixture/test-support.ts';
@@ -22,6 +23,9 @@ export const E15_TENANT_MODULES = [
   'services/affected-prs-queries.ts',
   'services/commit-override-list-queries.ts',
   'services/commit-override-queries.ts',
+  'services/pending-prs-current.ts',
+  'services/pending-prs-queries.ts',
+  'services/pending-prs-repositories.ts',
   'services/signature-invalidate-queries.ts',
   'services/signature-revoke-queries.ts',
 ] as const;
@@ -147,8 +151,9 @@ const REVOCATION_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
   },
 };
 
-/** The entries of epic E15 for the registry: the search for signatures (E15-S02) and the revocation (E15-S03). */
+/** The entries of epic E15 for the registry: the search for signatures (E15-S02), the revocation (E15-S03) and the pending pull requests (E15-S07). */
 export const E15_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, TenantQuery>>>> = {
   ...SEARCH_TENANT_QUERIES,
   ...REVOCATION_TENANT_QUERIES,
+  ...PENDING_TENANT_QUERIES,
 };

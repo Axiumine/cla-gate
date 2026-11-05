@@ -10,7 +10,7 @@ import { ADVISORY_CODES, ALLOWLIST_KINDS, ALLOWLIST_SCOPES, ROLES, UNLINKED_ROLE
 export const idSchema = z.int().positive();
 
 /** A commit SHA as git prints it, lower case, SHA-1 (40) or SHA-256 (64) like the `commit_overrides` check. */
-const shaSchema = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/);
+export const shaSchema = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/);
 
 export const countSchema = z.int().nonnegative();
 
@@ -34,12 +34,18 @@ const allowlistBasisSchema = z.strictObject({
  */
 const coveringBasisSchema = z.discriminatedUnion('kind', [signatureBasisSchema, allowlistBasisSchema]);
 
+/**
+ * One person or account of the pull request, as stored. `bot` is present, and `true`, only for an account GitHub reported as a Bot
+ * (E15-S07): a person and a bot who are both uncovered fail with different codes and need different fixes, and the list of pending
+ * pull requests must tell them apart without asking GitHub. A value stored before the mark existed lacks it and reads as not a bot.
+ */
 export const actorSchema = z
   .strictObject({
     githubId: idSchema,
     roles: z.array(z.enum(ROLES)).min(1).max(ROLES.length),
     covered: z.boolean(),
     basis: coveringBasisSchema.nullable(),
+    bot: z.literal(true).optional(),
   })
   .refine((actor) => actor.covered === (actor.basis !== null), {
     message: 'An actor is covered exactly when it has a covering basis.',

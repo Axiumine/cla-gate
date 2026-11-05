@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
 import { COMMIT_OVERRIDE_PATH, COMMIT_OVERRIDES_PATH } from '../../../../shared/commit-override.ts';
+import { PENDING_PRS_PATH } from '../../../../shared/pending-prs.ts';
 import { INVALIDATION_PREVIEW_PATH, INVALIDATIONS_PATH } from '../../../../shared/signature-invalidate.ts';
 import { SIGNATURE_REVOKE_PATH } from '../../../../shared/signature-revoke.ts';
 import { SIGNATURES_PATH } from '../../../../shared/signature-search.ts';
@@ -151,7 +152,9 @@ const revocationUrl = (installationId: number, signatureId: number): string =>
  * names the repository alone, so the crossed ids are those of commit-override-tenants.test.ts, and the GitHub of the matrix has the commit
  * (`scriptMatrixCommits`). E15-S06: the list of the overrides and the removal of one follow the role of the record (`listable` gives the
  * repository the document of the case; `deletable` also puts an override there, whoever asks first, and its URL is read after that); the
- * ids that cross tenants are those of commit-override-remove-tenants.test.ts and commit-override-list-tenants.test.ts.
+ * ids that cross tenants are those of commit-override-remove-tenants.test.ts and commit-override-list-tenants.test.ts. E15-S07: the list of the
+ * pending pull requests is a read about the installation that any role in it may make, like the search for signatures (the pull requests
+ * each person sees follow their role, which pending-prs-routes.test.ts shows).
  */
 export const REVOCATION_CASES: Readonly<Record<string, CrossTenantCase>> = {
   [`GET ${SIGNATURES_PATH}`]: {
@@ -212,5 +215,12 @@ export const REVOCATION_CASES: Readonly<Record<string, CrossTenantCase>> = {
     prepare: deletable,
     urlFor: newestOverrideUrl,
     request: (target) => ({ method: 'DELETE', url: overrideUrl(target.repositoryId, 987_654) }),
+  },
+  [`GET ${PENDING_PRS_PATH}`]: {
+    endpointClass: 'installation_role_read',
+    request: (target) => ({
+      method: 'GET',
+      url: PENDING_PRS_PATH.replace(':installationId', String(target.installationId)),
+    }),
   },
 };

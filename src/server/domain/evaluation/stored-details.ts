@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type PrEvaluationDetails, STORED_LIMITS } from '../../../shared/pr-evaluation-details.ts';
+import { classifyAccount } from './classify.ts';
 import type { CoveredActor } from './coverage-types.ts';
 import type { Evaluation } from './evaluation-types.ts';
 import type { CoveringBasis } from './types.ts';
@@ -25,12 +26,17 @@ function storedBasis(basis: CoveringBasis | null): StoredActor['basis'] {
   }
 }
 
+/**
+ * The actor as stored. A bot carries `bot: true` (E15-S07) and a person nothing, so every value stored for people is as it was; the
+ * mark comes from the account type GitHub reported and from nothing else, the rule of `classifyAccount`.
+ */
 function storedActor(actor: CoveredActor): StoredActor {
   return {
     githubId: actor.account.id,
     roles: [...actor.roles],
     covered: actor.covered,
     basis: storedBasis(actor.basis),
+    ...(classifyAccount(actor.account) === 'bot' ? { bot: true } : {}),
   };
 }
 

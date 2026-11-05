@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
+import { administeredRepositories } from './administered-repositories.ts';
 import { findDocumentPlacement } from './document-placement.ts';
-import { mapConcurrently } from './map-concurrently.ts';
 import type { RoleViewer } from './org-admin.ts';
 import { PROBE_BUDGETS } from './probe-budget.ts';
 import type { ListedFor } from './repository-list.ts';
@@ -12,16 +12,12 @@ import {
   documentsOfRepositories,
   findRepositoryOfDocument,
   repositoriesWithSignedDocuments,
-  type ScopeRepository,
 } from './signature-search-scope-queries.ts';
 
 // Which documents the signatures of a search may come from (E15-S02). Authorisation is by document, the role matrix of E11-S07: an org
 // admin reaches every document of the installation; a viewer who is only a repository admin reaches the documents scoped to a
 // repository they administer, which GitHub confirms through the cached lookup of E11-S04, for at most 50 repositories a request. A
 // document that is not in the tenant, and one that is not in the viewer's set, are the same answer: none.
-
-/** How many repositories are asked about at once. */
-const LOOKUP_CONCURRENCY = 5;
 
 export interface SearchScopeDeps {
   readonly db: Kysely<Database>;
@@ -38,24 +34,6 @@ export interface DocumentScope {
   readonly truncated: boolean;
 }
 
-/** The repositories among `repositories` that the viewer administers, as the cached lookup says. */
-async function administered(
-  deps: SearchScopeDeps,
-  listedFor: ListedFor,
-  viewer: RoleViewer,
-  repositories: readonly ScopeRepository[],
-): Promise<ScopeRepository[]> {
-  const verdicts = await mapConcurrently(repositories, LOOKUP_CONCURRENCY, async (repository) => ({
-    repository,
-    administers: await deps.lookup(
-      { id: listedFor.installationId, github_installation_id: repository.githubInstallationId },
-      { github_repo_id: repository.githubRepoId, full_name: repository.fullName, removed_at: null },
-      viewer,
-    ),
-  }));
-  return verdicts.filter(({ administers }) => administers).map(({ repository }) => repository);
-}
-
 /** The scope of a repository admin who named a document: that document when it is scoped to a repository they administer, else none. */
 async function namedDocumentOfRepoAdmin(
   deps: SearchScopeDeps,
@@ -67,7 +45,7 @@ async function namedDocumentOfRepoAdmin(
   if (repository === undefined) {
     return null;
   }
-  const [confirmed] = await administered(deps, listedFor, viewer, [repository]);
+  const [confirmed] = await administeredRepositories(deps.lookup, listedFor, viewer, [repository]);
   return confirmed === undefined ? null : { documentIds: [documentId], truncated: false };
 }
 
@@ -79,7 +57,7 @@ async function documentsOfRepoAdmin(
 ): Promise<DocumentScope> {
   const asking = PROBE_BUDGETS.repositoryList;
   const candidates = await repositoriesWithSignedDocuments(deps.db, listedFor, asking + 1);
-  const confirmed = await administered(deps, listedFor, viewer, candidates.slice(0, asking));
+  const confirmed = await administeredRepositories(deps.lookup, listedFor, viewer, candidates.slice(0, asking));
   const documentIds =
     confirmed.length === 0
       ? []

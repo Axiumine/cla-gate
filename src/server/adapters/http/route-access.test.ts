@@ -217,8 +217,7 @@ test('the error names every offending route, one per line, and its name is Route
 test('the app becomes ready with the routes it registers itself, and the not-found handler needs no declaration', async () => {
   const { app } = await testApp();
   await app.ready();
-  const unknown = await app.inject('/nothing-answers-here');
-  expect(unknown.statusCode).toBe(404);
+  expect((await app.inject('/nothing-answers-here')).statusCode).toBe(404);
   expect(app.routeAccess.map((entry) => `${entry.method} ${entry.url}`)).toEqual([
     'GET /healthz',
     'GET /readyz',
@@ -240,6 +239,7 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'POST /api/installations/:installationId/signatures/:signatureId/revoke',
     'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
     'POST /api/installations/:installationId/documents/:documentId/invalidations',
+    'GET /api/installations/:installationId/pending-prs',
     'PUT /api/repositories/:repositoryId/cla-document',
     'POST /api/repositories/:repositoryId/enable',
     'POST /api/repositories/:repositoryId/disable',

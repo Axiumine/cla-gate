@@ -159,7 +159,7 @@ test('the authenticated routes are the session read, the logout, the export of t
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the search for signatures, the revocation of one and the invalidation of a major of a document with its preview, the choice of the CLA of a repository, the two switches of its enforcement, and the adds, the two lists and the removal of an allowlist entry, and the record, the list and the removal of a per-commit override', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the search for signatures, the revocation of one and the invalidation of a major of a document with its preview, the list of the pending pull requests, the choice of the CLA of a repository, the two switches of its enforcement, and the adds, the two lists and the removal of an allowlist entry, and the record, the list and the removal of a per-commit override', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
   expect(sorted(table.filter((entry) => typeof entry.access === 'object').map(nameOf))).toEqual(
@@ -184,6 +184,7 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'POST /api/installations/:installationId/signatures/:signatureId/revoke',
       'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
       'POST /api/installations/:installationId/documents/:documentId/invalidations',
+      'GET /api/installations/:installationId/pending-prs',
       'PUT /api/repositories/:repositoryId/cla-document',
       'POST /api/repositories/:repositoryId/enable',
       'POST /api/repositories/:repositoryId/disable',

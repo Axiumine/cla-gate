@@ -290,3 +290,14 @@ test('an actor that is covered without a basis, or has a basis and is not covere
   const basis = { kind: 'signature', signatureId: 1, versionId: 1, major: 1 };
   expect(messages({ githubId: 1, roles: ['opener'], covered: false, basis })).toEqual([message]);
 });
+
+test('an actor may carry bot: true and nothing else in its place: false, a string and a number are refused (E15-S07)', () => {
+  const sample = storedDetailsSample();
+  const [first] = sample.actors;
+  const withBot = (bot: unknown) => ({ ...sample, actors: [{ ...first, bot }] });
+  expect(accepted(withBot(true))).toBe(true);
+  expect(accepted({ ...sample, actors: [{ ...first }] })).toBe(true);
+  for (const bot of [false, 'true', 1, null]) {
+    expect(accepted(withBot(bot))).toBe(false);
+  }
+});
