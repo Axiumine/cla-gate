@@ -59,7 +59,9 @@ test('the engine runs once per pull request, on its opener now and its own commi
   const world = await evaluateWorld();
   const scene = addGroup(world, [43, 41, 42]);
   expect(await runGroup(world, groupJob(scene))).toEqual({ outcome: 'evaluated' });
-  expect(world.evaluate.mock.calls.map(([input]) => [input.opener.id, input.headSha, input.commits.length])).toEqual([
+  // The members are read and evaluated up to five at once, so the order of the calls is the order the answers arrived in.
+  const calls = world.evaluate.mock.calls.map(([input]) => [input.opener.id, input.headSha, input.commits.length]);
+  expect(calls.toSorted((first, second) => Number(first[0]) - Number(second[0]))).toEqual([
     [41, prHead(41), 1],
     [42, prHead(42), 1],
     [43, prHead(43), 1],
