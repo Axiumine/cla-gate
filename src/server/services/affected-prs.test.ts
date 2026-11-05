@@ -87,6 +87,13 @@ test('the same action sent again sends nothing twice: the keys name the action, 
   expect(await sentAs(db)).toEqual(['9000#61', '9001#62', '9000#61', '9001#62']);
 });
 
+test('a pull request whose evaluation is in flight is sent too, for its run may have read the facts before the action committed', async () => {
+  const { db, t1, send } = await world();
+  await storePr(db, t1, 'plain', { prNumber: 63, result: 'in_progress', details: coveredBy() });
+  expect(await send()).toBe(3);
+  expect(await sentAs(db)).toEqual(['9000#61', '9000#63', '9001#62']);
+});
+
 test('only the repositories the action names are looked at, and none names nothing to send', async () => {
   const { db, t1, send, queue } = await world();
   expect(await send(undefined, { repositoryIds: [t1.scoped.repositoryId] })).toBe(1);

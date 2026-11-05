@@ -241,7 +241,7 @@ export async function overriddenPullRequest(
   spec: {
     readonly prNumber: number;
     readonly unlinked: PrEvaluationDetails['unlinked'];
-    readonly result?: 'success' | 'failure';
+    readonly result?: 'success' | 'failure' | 'in_progress';
     readonly state?: 'open' | 'closed';
     /** The head the evaluation was made at, as a number turned into 40 hexadecimal digits; the number of the pull request when absent. */
     readonly head?: number;

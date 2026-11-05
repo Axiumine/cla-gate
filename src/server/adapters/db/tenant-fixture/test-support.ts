@@ -175,7 +175,9 @@ async function seedPolicyRows(db: Kysely<Database>, tenant: Tenant, n: number): 
 /**
  * The rows the statements of the job queue (E07) need a neighbour for: an allowlist entry of the repository alone, next to the
  * installation-wide one (a read for the repository of another tenant must not meet it), and an evaluation that is still
- * running, which the cancellation and the reaper act on.
+ * running, which the cancellation and the reaper act on. Its pull request is closed (`pr_state`): the actions of a maintainer
+ * evaluate an open pull request whose evaluation is in flight again (E15-S03), and the tests of what they send would otherwise
+ * each have to name this one.
  */
 async function seedJobRows(db: Kysely<Database>, tenant: Tenant, n: number): Promise<void> {
   await db
@@ -196,6 +198,7 @@ async function seedJobRows(db: Kysely<Database>, tenant: Tenant, n: number): Pro
       pr_number: 8,
       head_sha: 'c'.repeat(40),
       result: 'in_progress',
+      pr_state: 'closed',
     })
     .execute();
 }

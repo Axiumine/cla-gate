@@ -8,14 +8,19 @@ import { latestEvaluationPerPr } from './current-evaluation-queries.ts';
 
 // The statements behind the pull requests an action of a maintainer re-evaluates (E15-S03, E15-S05, E15-S06). Both start from the latest
 // evaluation of each pull request (E15-S01), named with the installation, and filter on the outer query, as the query asks: the newest
-// row of a pull request decides, never an older head SHA that happens to match. The repository is read with its installation id too,
-// for the ids a job names (GitHub's, never the surrogate keys of our tables).
+// row of a pull request decides, never an older head SHA that happens to match. An evaluation that is in flight (the latest row is
+// `in_progress`, its details empty) is matched too, whatever the filter says: the run read the signatures, the overrides and the policy
+// before the action committed, so only another run can say what the action changed, and the queue serialises it after the first. The
+// repository is read with its installation id too, for the ids a job names (GitHub's, never the surrogate keys of our tables).
 
 /** The question a latest row must answer to be affected, besides the pull request being open. */
 export interface AffectedFilter {
-  /** The result the latest row has: `success` for the pull requests a revocation can turn red, `failure` for the ones an override can turn green. */
+  /**
+   * The result the latest row has: `success` for the pull requests a revocation can turn red, `failure` for the ones an override can
+   * turn green. A pull request whose evaluation is in flight answers every filter, because its row has no verdict yet.
+   */
   readonly result: 'success' | 'failure';
-  /** A condition on the stored details of the row (`pr_evaluations.details`), built on the expression it is given; none for every row of the result. */
+  /** A condition on the stored details of the row (`pr_evaluations.details`), built on the expression it is given; none for every row of the result. Not asked of a row in flight. */
   readonly detailsMatch?: (details: Expression<unknown>) => Expression<SqlBool>;
 }
 
@@ -39,7 +44,7 @@ function affectedRows(
   filter: AffectedFilter,
 ) {
   const { detailsMatch } = filter;
-  const rows = db
+  return db
     .selectFrom(latestEvaluationPerPr(db, scope.installationId, repositoryIds).as('latest'))
     .innerJoin('repositories as r', (join) =>
       join.onRef('r.id', '=', 'latest.repository_id').onRef('r.installation_id', '=', 'latest.installation_id'),
@@ -51,8 +56,15 @@ function affectedRows(
       'r.github_repo_id as githubRepoId',
     ])
     .where('latest.pr_state', '=', 'open')
-    .where('latest.result', '=', filter.result);
-  return detailsMatch === undefined ? rows : rows.where((eb) => detailsMatch(eb.ref('latest.details')));
+    .where((eb) =>
+      eb.or([
+        eb('latest.result', '=', 'in_progress'),
+        eb.and([
+          eb('latest.result', '=', filter.result),
+          detailsMatch === undefined ? eb.lit(true) : detailsMatch(eb.ref('latest.details')),
+        ]),
+      ]),
+    );
 }
 
 /** The repository of a row, with the ids a job names read through the schema of a GitHub id. */
@@ -70,9 +82,9 @@ function repositoryOf(row: {
 
 /**
  * The open pull requests of the repositories `repositoryIds` of the tenant whose latest evaluation answers the filter, in the order
- * of repository and number, at most `limit`. A closed pull request, one whose latest row is in progress or cancelled, and one whose
- * older head SHA matched while the latest does not, are not listed. The installation is in the query, so a repository id of another
- * tenant finds nothing.
+ * of repository and number, at most `limit`, and the open ones whose evaluation is in flight (see the filter). A closed pull request,
+ * one whose latest row is cancelled, and one whose older head SHA matched while the latest does not, are not listed. The installation
+ * is in the query, so a repository id of another tenant finds nothing.
  */
 export async function findAffectedPrs(
   db: Kysely<Database>,

@@ -7,8 +7,8 @@ import { findAffectedPrs, findAffectedRepositories } from './affected-prs-querie
 import { coveredBy, revocationWorld, storePr } from './revocation-fixture/test-support.ts';
 
 // The statements behind the pull requests an action re-evaluates (E15-S03): the open pull requests whose latest evaluation has the
-// result asked for and, when a condition on the details is given, answers it. The newest row of a pull request decides, never an
-// older head SHA, and nothing of another tenant is read. Tenant 1's repositories are `org-1/repo` (GitHub id 9000) and `org-1/scoped` (9001).
+// result asked for and, when a condition on the details is given, answers it, and the ones whose evaluation is in flight, which have no
+// verdict yet. The newest row of a pull request decides, never an older head SHA, and nothing of another tenant is read. Tenant 1's repositories are `org-1/repo` (GitHub id 9000) and `org-1/scoped` (9001).
 
 const SIGNER = 4711;
 const SIGNATURE = 31;
@@ -39,7 +39,7 @@ async function world() {
 const namesSigner = (details: Expression<unknown>): Expression<SqlBool> =>
   sql<boolean>`${details} @> ${JSON.stringify({ actors: [{ githubId: SIGNER, covered: true }] })}::jsonb`;
 
-/** The pull requests as `<GitHub repository id>#<number>`, without the ones the world seeds (7, 9 and 10, finished successes with no actors; 8, running). */
+/** The pull requests as `<GitHub repository id>#<number>`, without the ones the world seeds (7, 9 and 10, finished successes with no actors; 8, in flight on a closed pull request). */
 const asText = (rows: readonly { githubRepoId: number; prNumber: number }[]) =>
   rows.filter((row) => row.prNumber >= 61).map((row) => `${row.githubRepoId}#${row.prNumber}`);
 
@@ -50,8 +50,8 @@ test('the open pull requests whose latest success names the signer are found in 
     detailsMatch: namesSigner,
     limit: 10,
   });
-  expect(asText(found)).toEqual(['9000#61', '9000#64', '9001#61']);
-  expect(found[0]).toEqual({
+  expect(asText(found)).toEqual(['9000#61', '9000#64', '9000#65', '9001#61']);
+  expect(found.find((row) => row.prNumber === 61 && row.githubRepoId === t1.plain.githubRepoId)).toEqual({
     repositoryId: t1.plain.repositoryId,
     githubInstallationId: t1.githubInstallationId,
     githubRepoId: t1.plain.githubRepoId,
@@ -68,7 +68,7 @@ test('only the latest row of a pull request counts: an older head that matched i
   expect(found).toContain('9000#64');
 });
 
-test('a closed pull request, one in progress and one cancelled are not found, with or without a condition', async () => {
+test('a closed pull request and a cancelled one are not found, with or without a condition', async () => {
   const { db, scope, repositories } = await world();
   const withCondition = asText(
     await findAffectedPrs(db, scope, repositories, { result: 'success', detailsMatch: namesSigner, limit: 10 }),
@@ -76,8 +76,20 @@ test('a closed pull request, one in progress and one cancelled are not found, wi
   const without = asText(await findAffectedPrs(db, scope, repositories, { result: 'success', limit: 10 }));
   for (const found of [withCondition, without]) {
     expect(found).not.toContain('9000#62');
-    expect(found).not.toContain('9000#65');
     expect(found).not.toContain('9000#66');
+  }
+});
+
+test('a pull request whose evaluation is in flight is found whatever result and condition are asked for, because its row has no verdict to match', async () => {
+  const { db, scope, repositories } = await world();
+  const never = (): Expression<SqlBool> => sql<boolean>`false`;
+  for (const filter of [
+    { result: 'success' as const },
+    { result: 'failure' as const },
+    { result: 'success' as const, detailsMatch: namesSigner },
+    { result: 'failure' as const, detailsMatch: never },
+  ]) {
+    expect(asText(await findAffectedPrs(db, scope, repositories, { ...filter, limit: 10 }))).toContain('9000#65');
   }
 });
 
@@ -87,9 +99,13 @@ test('with no condition on the details every open pull request whose latest resu
     '9000#61',
     '9000#63',
     '9000#64',
+    '9000#65',
     '9001#61',
   ]);
-  expect(asText(await findAffectedPrs(db, scope, repositories, { result: 'failure', limit: 10 }))).toEqual(['9000#67']);
+  expect(asText(await findAffectedPrs(db, scope, repositories, { result: 'failure', limit: 10 }))).toEqual([
+    '9000#65',
+    '9000#67',
+  ]);
 });
 
 test('no more than the limit is found, the first ones in the order', async () => {
@@ -113,6 +129,7 @@ test('the pull requests of another tenant are never found, whatever repository i
     '9000#61',
     '9000#63',
     '9000#64',
+    '9000#65',
     '9001#61',
   ]);
   const foreign = [t2.plain.repositoryId, t2.scoped.repositoryId];
@@ -138,9 +155,10 @@ test('the repositories with such a pull request are listed once each, in the ord
       githubRepoId: t1.scoped.githubRepoId,
     },
   ]);
+  // The condition matches no finished result, so only the repository that has a pull request in flight (65) is listed.
   const onlyScoped = await findAffectedRepositories(db, scope, repositories, {
     result: 'success',
     detailsMatch: (details) => sql<boolean>`${details} @> ${JSON.stringify({ actors: [{ githubId: 1 }] })}::jsonb`,
   });
-  expect(onlyScoped).toEqual([]);
+  expect(onlyScoped.map((repository) => repository.githubRepoId)).toEqual([t1.plain.githubRepoId]);
 });

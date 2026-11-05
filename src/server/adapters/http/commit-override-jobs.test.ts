@@ -26,7 +26,8 @@ import { auditRows, documentWorld, errorCodeOf, tablesOf } from './document-fixt
 import { pointAt, setEnabled } from './repository-document-fixture/test-support.ts';
 
 // The pull requests that recording an override evaluates again (E15-S05), through the queue of the app: one `evaluate-pr` job for each
-// open pull request of the repository whose latest evaluation is a failure, or above 100 of them one `sweep-repository` job with the
+// open pull request of the repository whose latest evaluation is a failure or is in flight (the run may have read the overrides before
+// this one committed), or above 100 of them one `sweep-repository` job with the
 // reason `override_changed`, in the transaction of the record, so a queue that fails leaves the override, the audit log and the queue as
 // they were and a retry then succeeds. The queue is the fake of the webhook intake.
 
@@ -35,7 +36,7 @@ type World = Awaited<ReturnType<typeof overrideWorld>>;
 const numbersOf = async (world: World) =>
   (await jobsOf(world, 'evaluate-pr')).flatMap((sent) => (sent.job.type === 'evaluate-pr' ? [sent.job.prNumber] : []));
 
-test('each open pull request of the repository whose latest evaluation failed gets an evaluate-pr job, and no other pull request does', async () => {
+test('each open pull request of the repository whose latest evaluation failed or is in flight gets an evaluate-pr job, and no other pull request does', async () => {
   const world = await overrideWorld();
   const { t1, t2 } = world;
   await evaluatedPullRequests(world, plainOf(t1), { numbers: [101, 102, 103], result: 'failure' });
@@ -48,7 +49,7 @@ test('each open pull request of the repository whose latest evaluation failed ge
   expect(response.statusCode).toBe(201);
   const { id } = overrideOf(response);
   expect(await sentJobs(world.db)).toEqual(
-    [101, 102, 103].map((prNumber) => ({
+    [101, 102, 103, 105].map((prNumber) => ({
       idempotencyKey: `override_changed:created:${id}:${t1.plain.githubRepoId}:${prNumber}`,
       dedupeKey: null,
       job: {

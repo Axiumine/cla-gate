@@ -27,8 +27,8 @@ import { auditRows, documentWorld, errorCodeOf, tablesOf } from './document-fixt
 import { pointAt, setEnabled } from './repository-document-fixture/test-support.ts';
 
 // The pull requests that removing an override evaluates again (E15-S06), through the queue of the app: one `evaluate-pr` job for each
-// open pull request of the repository whose latest result is a success and whose stored details list the commit with an override, or above
-// 100 of them one `sweep-repository` job with the reason `override_changed`, in the transaction of the removal, so a queue that fails
+// open pull request of the repository whose latest result is a success and whose stored details list the commit with an override, or
+// whose evaluation is in flight (the run may have read the override before it was removed), or above 100 of them one `sweep-repository` job with the reason `override_changed`, in the transaction of the removal, so a queue that fails
 // leaves the override, the audit log and the queue as they were. The queue is the fake of the webhook intake.
 
 type World = Awaited<ReturnType<typeof overrideWorld>>;
@@ -39,7 +39,7 @@ const numbersOf = async (world: World) =>
 /** The override of tenant 1's plain repository that the world stores, which the pull requests of these tests rest on. */
 const seeded = (world: World) => overrideIdOf(world, world.t1.plain.repositoryId, SEEDED_COMMIT);
 
-test('each open pull request whose latest result is a success that rests on the override gets an evaluate-pr job, and no other pull request does', async () => {
+test('each open pull request whose latest result is a success that rests on the override, or is in flight, gets an evaluate-pr job, and no other pull request does', async () => {
   const world = await overrideWorld();
   const { t1, t2 } = world;
   const id = await seeded(world);
@@ -60,9 +60,10 @@ test('each open pull request whose latest result is a success that rests on the 
   await overriddenPullRequest(world, target, { prNumber: 107, unlinked: [] });
   await overriddenPullRequest(world, scopedOf(t1), { prNumber: 108, unlinked: waivedBy(id) });
   await overriddenPullRequest(world, plainOf(t2), { prNumber: 109, unlinked: waivedBy(other) });
+  await overriddenPullRequest(world, target, { prNumber: 110, unlinked: [], result: 'in_progress' });
   expect((await removeOverrideAs(world, 'admin1', t1.plain.repositoryId, id)).statusCode).toBe(204);
   expect(await sentJobs(world.db)).toEqual(
-    [101, 102].map((prNumber) => ({
+    [101, 102, 110].map((prNumber) => ({
       idempotencyKey: `override_changed:deleted:${id}:${t1.plain.githubRepoId}:${prNumber}`,
       dedupeKey: null,
       job: {
