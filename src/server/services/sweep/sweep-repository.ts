@@ -13,7 +13,8 @@ import { reconcilePullRequestStates } from './sweep-state-rows.ts';
 
 // The sweep of one repository (E07-S08): the open pull requests are read, the ones with no final result for their head SHA are
 // sent to be evaluated, and the evaluations that stayed `in_progress` are settled by the reaper. A listing that was read to its
-// last page also corrects `pr_state` where a close or a reopen was missed (E15-S01).
+// last page also corrects `pr_state` where a close or a reopen was missed (E15-S01), last, after every send, and only for the
+// pull requests GitHub confirms one by one: the listing alone is not the truth, because pull requests close while its pages are read.
 
 /** What the sweep of one repository did: counts only, for the log of the job. */
 export interface RepositorySweep extends SendCounts {
@@ -39,8 +40,8 @@ const byNumber = (pulls: readonly GitHubPullRequestRef[]): Map<number, GitHubPul
  * pages did not show, and one `evaluate-pr` job (trigger `sweep`) for each pull request that needs one (see
  * {@link needsSweepEvaluation}). The list is read first, so a repository GitHub no longer shows ends here with
  * nothing sent and nothing written. When the list was read whole (not cut at the 1,000 pull requests of one run) it is also
- * the truth about `pr_state` (E15-S01): see {@link reconcilePullRequestStates}; a list that failed on a page, or was cut,
- * changes no state.
+ * a list of the pull requests worth asking about for `pr_state` (E15-S01): see {@link reconcilePullRequestStates}, which asks GitHub
+ * about each row it would change; a list that failed on a page, or was cut, changes no state.
  * @throws GitHubNotFoundError and GitHubForbiddenError from the listing, a rate limit, and whatever the database, the queue or
  * the reporter throws; the caller decides what each means.
  */
@@ -59,9 +60,6 @@ export async function sweepRepository(
   const listed = byNumber(listing.pulls);
   const resolved = await resolveUnlisted(ports, context, tenant, { stale, listed });
   const open = byNumber([...listing.pulls, ...resolved.open]);
-  const corrected = listing.truncated
-    ? { closed: 0, reopened: 0 }
-    : await reconcilePullRequestStates(ports.db, scope, { open: [...open.keys()], listedAt });
   const states = await evaluationStates(ports.db, scope, [...open.keys()]);
   const wanted = [...open.values()].filter((pull) =>
     needsSweepEvaluation(states.get(evaluationKey(pull.number, pull.headSha)), now),
@@ -77,6 +75,11 @@ export async function sweepRepository(
     SWEEP_REQUEST,
   );
   const superseded = await cancelSuperseded(ports, tenant, { stale, open });
+  const confirmOpen = async (prNumber: number): Promise<boolean> =>
+    (await ports.github.getPullRequest(githubInstallationId, repository.full_name, prNumber))?.state === 'open';
+  const corrected = listing.truncated
+    ? { closed: 0, reopened: 0 }
+    : await reconcilePullRequestStates(ports.db, scope, { open: [...open.keys()], listedAt }, confirmOpen);
   return {
     ...sent,
     listed: listing.pulls.length,

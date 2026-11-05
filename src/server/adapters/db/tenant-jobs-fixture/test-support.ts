@@ -287,8 +287,13 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
   'services/sweep/sweep-state-rows.ts': {
     reconcilePullRequestStates: scoped({
       run: async (db, scope, ids) => {
-        // A listing with no pull request closes the latest row of both pull requests the fixture stores for the repository.
-        const corrected = await reconcilePullRequestStates(db, repositoryOf(scope, ids), { open: [], listedAt: LATER });
+        // A listing with no pull request closes the latest row of both pull requests the fixture stores for the repository, GitHub agreeing.
+        const corrected = await reconcilePullRequestStates(
+          db,
+          repositoryOf(scope, ids),
+          { open: [], listedAt: LATER },
+          () => Promise.resolve(false),
+        );
         return corrected.closed === 0 ? [] : ownersOfEvaluations(db, await evaluationsOfRepository(db, ids, [7, 8]));
       },
     }),

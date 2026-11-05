@@ -69,23 +69,23 @@ test('a pull request GitHub no longer shows is cleared too', async () => {
   expect(world.pending.targets.map((target) => target.prNumber)).toEqual([8]);
 });
 
-test('an evaluation younger than 30 minutes is a job that still runs: a closed pull request is left to its own close job and GitHub is not asked', async () => {
+test('an evaluation younger than 30 minutes is a job that still runs: a closed pull request is left to its own close job, and the only question to GitHub is the one that confirms its state', async () => {
   const world = await sweepWorld();
   closePull(world);
   await seedAged(world, { prNumber: 7, headSha: HEAD, result: 'in_progress', ageMinutes: 29 });
   await world.runSweep();
-  expect(world.calls()).toEqual(['listOpenPullRequests']);
+  expect(world.calls()).toEqual(['listOpenPullRequests', 'getPullRequest']);
   expect(await resultsOf(world)).toEqual([[7, HEAD, 'in_progress']]);
   expect(world.reporter.cancellations).toEqual([]);
   expect(world.pending.targets).toEqual([]);
 });
 
-test('an evaluation with a verdict is not touched, however old, and a closed pull request with only verdicts is not asked about', async () => {
+test('an evaluation with a verdict is not touched, however old, and a closed pull request with only verdicts is asked about only to confirm its state', async () => {
   const world = await sweepWorld();
   closePull(world);
   await seedAged(world, { prNumber: 7, headSha: HEAD, result: 'success', ageMinutes: 5000 });
   await world.runSweep();
-  expect(world.calls()).toEqual(['listOpenPullRequests']);
+  expect(world.calls()).toEqual(['listOpenPullRequests', 'getPullRequest']);
   expect(await resultsOf(world)).toEqual([[7, HEAD, 'success']]);
 });
 
