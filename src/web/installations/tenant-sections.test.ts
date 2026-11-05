@@ -49,12 +49,13 @@ test('a bare slash is the root, not an empty path', () => {
   expect(switchTarget([{ to: '/', roles: ['org_admin'] }], START, '/', 'org_admin')).toBe('/');
 });
 
-test('the screens of the app are the overview, the allowlist and the signatures, for both roles, and the documents, for an org admin; a tenant starts on the overview', () => {
+test('the screens of the app are the overview, the allowlist, the signatures and the pending pull requests, for both roles, and the documents, for an org admin; a tenant starts on the overview', () => {
   expect(TENANT_SECTIONS).toEqual([
     { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
     { to: '/installations/$installationId/documents', roles: ['org_admin'] },
     { to: '/installations/$installationId/allowlist', roles: ['org_admin', 'repo_admin'] },
     { to: '/installations/$installationId/signatures', roles: ['org_admin', 'repo_admin'] },
+    { to: '/installations/$installationId/pending', roles: ['org_admin', 'repo_admin'] },
   ]);
   expect(TENANT_START).toBe('/installations/$installationId');
 });
@@ -80,11 +81,18 @@ test('a repo admin keeps the signatures when the other installation has them for
   );
 });
 
+test('a repo admin keeps the pending pull requests when the other installation has them for them', () => {
+  expect(switchTarget(TENANT_SECTIONS, TENANT_START, '/installations/$installationId/pending', 'repo_admin')).toBe(
+    '/installations/$installationId/pending',
+  );
+});
+
 test('every screen has its words in the navigation', () => {
   expect(TENANT_SECTIONS.map((section) => sectionLabel(section.to))).toEqual([
     'tenant.nav.overview',
     'tenant.nav.documents',
     'tenant.nav.allowlist',
     'tenant.nav.signatures',
+    'tenant.nav.pending',
   ]);
 });

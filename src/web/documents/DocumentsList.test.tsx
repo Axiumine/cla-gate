@@ -178,7 +178,12 @@ test('the navigation of the tenant has the documents for an org admin, and a rep
     within(nav)
       .getAllByRole('link')
       .map((link) => link.textContent),
-  ).toEqual([messages['tenant.nav.overview'], messages['tenant.nav.allowlist'], messages['tenant.nav.signatures']]);
+  ).toEqual([
+    messages['tenant.nav.overview'],
+    messages['tenant.nav.allowlist'],
+    messages['tenant.nav.signatures'],
+    messages['tenant.nav.pending'],
+  ]);
 });
 
 test('the navigation takes an org admin from the overview to the documents', async () => {

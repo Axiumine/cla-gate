@@ -19,6 +19,8 @@ import { MySignaturesPage } from './me/MySignaturesPage.tsx';
 import { mySignaturesSearchSchema } from './me/signatures-search.ts';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
+import { pendingSearchSchema } from './pending/pending-search.ts';
+import { PendingRoute } from './pending/route-components.tsx';
 import { RepositorySettingsPage } from './repository-settings/RepositorySettingsPage.tsx';
 import { type RouterContext, withAccess } from './route-access.ts';
 import { SetupCallbackPage } from './setup/SetupCallbackPage.tsx';
@@ -209,6 +211,17 @@ const signaturesRoute = createRoute({
   component: SignaturesRoute,
 });
 
+// The pending pull requests and the commit overrides of a tenant (E18-S08): `?tab=&repository=&reason=&cursor=`, so a filtered view is shared by
+// its address. Any role of the tenant opens it; the server decides which repositories a person may read and who may record or remove an
+// override, on every request.
+const pendingRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: 'pending',
+  ...tenantPage('pending.title'),
+  validateSearch: pendingSearchSchema,
+  component: PendingRoute,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -225,6 +238,7 @@ const routeTree = rootRoute.addChildren([
     documentRoute,
     allowlistRoute,
     signaturesRoute,
+    pendingRoute,
   ]),
 ]);
 

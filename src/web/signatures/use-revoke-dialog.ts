@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { useRef, useState } from 'react';
+import { useVanished } from '../ui/use-vanished.ts';
 import { type RevokeOutcome, type RevokeReason, useRevokeSignature } from './use-revoke-signature.ts';
-import { useVanished } from './use-vanished.ts';
 
 export interface RevokeDialogInput {
   /** `installations.id` of the tenant in the address. */

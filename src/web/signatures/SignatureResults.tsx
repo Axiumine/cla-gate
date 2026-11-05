@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useApiClient } from '../auth/hooks.ts';
 import { useT } from '../i18n/index.ts';
-import { LoadingState } from '../states/LoadingState.tsx';
-import { Heading } from '../ui/index.ts';
-import { usePagedList } from '../ui/use-paged-list.ts';
+import { EmptyState } from '../states/EmptyState.tsx';
+import { PagedResults } from '../ui/PagedResults.tsx';
 import { ResultStatus } from './ResultStatus.tsx';
-import { ResultsPager } from './ResultsPager.tsx';
-import { SignatureListing } from './SignatureListing.tsx';
 import { type RevokeControl, SignaturesTable } from './SignaturesTable.tsx';
-import type { Filters } from './signature-filters.ts';
-import { type SignaturePage, signaturesQueryOptions } from './signature-queries.ts';
+import { type Filters, isFiltered } from './signature-filters.ts';
+import { signaturesQueryOptions } from './signature-queries.ts';
 import type { RevokeOutcome } from './use-revoke-signature.ts';
 
 export interface SignatureResultsProps {
@@ -44,39 +41,25 @@ export function SignatureResults({
 }: SignatureResultsProps) {
   const t = useT();
   const query = useQuery(signaturesQueryOptions(useApiClient(), installationId, { filters, cursor }));
-  const { shown, keptPage, cursorRefused, goTo } = usePagedList(query, { cursor, onCursorChange, onFirstPage });
   const [notice, setNotice] = useState<RevokeOutcome | undefined>(undefined);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const rows = (page: SignaturePage) => (
-    <SignaturesTable
-      items={page.items}
-      revoke={{
-        ...revoke,
-        onOutcome: setNotice,
-        onVanished: () => {
-          heading.current?.focus();
-        },
-      }}
-    />
-  );
   return (
-    <div className="flex flex-col gap-4">
-      <Heading level={2} ref={heading} focusable>
-        {t('signatures.results.title')}
-      </Heading>
-      <ResultStatus shown={shown} notice={notice} />
-      {cursorRefused ? (
-        <LoadingState />
-      ) : (
-        <SignatureListing query={query} keptPage={keptPage} filters={filters} rows={rows} />
+    <PagedResults
+      query={query}
+      cursor={cursor}
+      onCursorChange={onCursorChange}
+      onFirstPage={onFirstPage}
+      title={t('signatures.results.title')}
+      status={(shown) => <ResultStatus shown={shown} notice={notice} />}
+      empty={
+        <EmptyState
+          level={3}
+          title={t('signatures.empty.title')}
+          description={t(isFiltered(filters) ? 'signatures.empty.filtered' : 'signatures.empty.none')}
+        />
+      }
+      rows={(page, focusHeading) => (
+        <SignaturesTable items={page.items} revoke={{ ...revoke, onOutcome: setNotice, onVanished: focusHeading }} />
       )}
-      <ResultsPager
-        shown={shown}
-        cursor={cursor}
-        onCursorChange={goTo}
-        loading={query.isFetching}
-        failed={keptPage !== undefined}
-      />
-    </div>
+    />
   );
 }

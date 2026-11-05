@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { allowlistMessages } from './messages-allowlist.ts';
 import { documentMessages } from './messages-documents.ts';
+import { pendingMessages } from './messages-pending.ts';
 import { signatureMessages } from './messages-signatures.ts';
 
 /**
@@ -66,6 +67,7 @@ export const messages = {
   'errors.uri_too_long': 'The address of the request was too long.',
   ...allowlistMessages,
   ...documentMessages,
+  ...pendingMessages,
   ...signatureMessages,
   'footer.licence': 'Licensed under {licence}',
   'footer.sourceCode': 'Source code',

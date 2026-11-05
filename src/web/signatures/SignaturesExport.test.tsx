@@ -3,6 +3,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { envelope } from '../api/test-support.ts';
+import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { spyOnConsole, stubDownloads } from '../setup/test-support.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
@@ -88,6 +89,22 @@ test('a click is one same-origin GET of that address with the cookie, and the pa
   const blob = downloads.create.mock.calls[0]?.[0];
   expect(blob?.type).toMatch(/^text\/csv/);
   expect(await blob?.text()).toBe('signature_id,github_user_id\r\n900,4711\r\n');
+});
+
+test('the link is busy while the file is on its way, and a second click sends no second request', async () => {
+  const downloads = stubDownloads();
+  const gate = held(csvFile());
+  const { served, user } = await openSignatures(`${SIGNATURES_ROUTE}?document=11`, { csv: [gate.answer] });
+  await user.click(exportLink());
+  await waitFor(() => {
+    expect(exportLink()).toHaveAttribute('aria-busy', 'true');
+  });
+  await user.click(exportLink());
+  expect(served.csv).toHaveLength(1);
+  gate.release();
+  expect(await screen.findByText('Saved as signatures-11-2026-11-04.csv.')).toBeInTheDocument();
+  expect(exportLink()).not.toHaveAttribute('aria-busy');
+  expect(downloads.saved()).toHaveLength(1);
 });
 
 test('a click does not follow the link: the page stays where it was', async () => {

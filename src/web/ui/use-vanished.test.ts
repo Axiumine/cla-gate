@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 import { useVanished } from './use-vanished.ts';
 
-// E18-S07: the callback runs when the component goes away after the revocation went through, and for no other reason.
+// E18-S07, E18-S08: the callback runs when the component goes away after the revocation went through, and for no other reason.
 
 test('it runs nothing while the component is there, settled or not', () => {
   const onVanished = vi.fn<() => void>();

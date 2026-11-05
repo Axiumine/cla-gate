@@ -113,13 +113,14 @@ test('an installation the list does not hold is asked for all the same, and the 
   expect(screen.queryByRole('table')).toBeNull();
 });
 
-test('the navigation of a tenant has the allowlist and the signatures for a repo admin and, with the documents, for an org admin', async () => {
+test('the navigation of a tenant has the allowlist, the signatures and the pending list for a repo admin and, with the documents, for an org admin', async () => {
   serveAllowlist({ tenants: [GLOBEX] });
   const first = renderAllowlist(GLOBEX_ROUTE);
   const repoNav = await screen.findByRole('navigation', { name: messages['tenant.nav.label'] });
   await within(repoNav).findByRole('link', { name: messages['tenant.nav.allowlist'] });
   expect(within(repoNav).queryByRole('link', { name: messages['tenant.nav.documents'] })).toBeNull();
   expect(within(repoNav).getByRole('link', { name: messages['tenant.nav.signatures'] })).toBeInTheDocument();
+  expect(within(repoNav).getByRole('link', { name: messages['tenant.nav.pending'] })).toBeInTheDocument();
   first.unmount();
   await openAllowlist('/installations/5/allowlist');
   const orgNav = screen.getByRole('navigation', { name: messages['tenant.nav.label'] });
@@ -132,5 +133,6 @@ test('the navigation of a tenant has the allowlist and the signatures for a repo
     messages['tenant.nav.documents'],
     messages['tenant.nav.allowlist'],
     messages['tenant.nav.signatures'],
+    messages['tenant.nav.pending'],
   ]);
 });
