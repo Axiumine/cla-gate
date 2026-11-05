@@ -33,7 +33,6 @@ import {
   versionOne,
 } from '../cross-tenant-prepare/test-support.ts';
 import { PUBLIC_VERIFICATION_CASES } from '../cross-tenant-public-fixture/test-support.ts';
-import { REVOCATION_CASES } from '../cross-tenant-revocation-fixture/test-support.ts';
 import { SIGN_CASE, SIGN_CONTEXT_CASE } from '../cross-tenant-sign-fixture/test-support.ts';
 import { declaredAccess } from '../route-access-model.ts';
 

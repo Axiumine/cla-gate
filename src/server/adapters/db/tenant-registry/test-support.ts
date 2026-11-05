@@ -468,7 +468,6 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   // The statements of the public signature check (E22-S02), and those of the instance operator (E05-S07, E22-S05).
   ...PUBLIC_TENANT_QUERIES,
   ...OPERATOR_TENANT_QUERIES,
-  ...E15_TENANT_QUERIES,
   ...LATER_TENANT_QUERIES,
 };
 
