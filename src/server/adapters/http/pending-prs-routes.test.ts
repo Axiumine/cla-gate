@@ -14,9 +14,9 @@ import {
 } from './pending-prs-fixture/test-support.ts';
 
 // `GET /api/installations/:installationId/pending-prs` (E15-S07): who may read it, what an item holds, and that it reads only. The
-// boundaries of the rows are in pending-prs-boundaries.test.ts, the filters in pending-prs-filters.test.ts, the reasons in
-// pending-prs-reasons.test.ts, the pages in pending-prs-pages.test.ts, the query string in pending-prs-query.test.ts and the tenants
-// in pending-prs-tenants.test.ts.
+// boundaries of the rows are in pending-prs-boundaries.test.ts, the filters in pending-prs-filters.test.ts, the pages in
+// pending-prs-pages.test.ts, the query string in pending-prs-query.test.ts and the tenants in pending-prs-tenants.test.ts; the reason
+// each failure is told as is decided in domain/pending-reasons.test.ts.
 
 test('an org admin sees the open pull requests whose latest evaluation failed, in every enabled repository, the most recently written first', async () => {
   const world = await pendingWorld();
