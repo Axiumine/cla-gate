@@ -106,6 +106,52 @@ test.each([
 );
 
 test.each([
+  ['an escaped letter', '/api/%70ublic/repos/9000/signers/zzzz-login'],
+  ['an escaped first segment', '/%61pi/public/repos/9000/signers/zzzz-login'],
+  ['an escaped slash', '/api%2Fpublic/repos/9000/signers/zzzz-login'],
+  ['capital letters', '/API/Public/repos/9000/signers/zzzz-login'],
+  ['a doubled slash', '//api//public/repos/9000/signers/zzzz-login'],
+  ['backslashes', '/api\\public\\repos/9000/signers/zzzz-login'],
+  ['a prefix escaped twice', '/api/%2570ublic/repos/9000/signers/zzzz-login'],
+  ['a prefix escaped three times', '/api/%252570ublic/repos/9000/signers/zzzz-login'],
+  ['a prefix escaped four times, which is masked for hiding', '/api/%25252570ublic/repos/9000/signers/zzzz-login'],
+  ['a bad escape after the prefix', '/api/public/repos/9000/signers/zzzz-login%zz'],
+  ['a dot segment', '/./api/public/repos/9000/signers/zzzz-login'],
+])(
+  'a path that reads as the public API in any spelling is logged as the public prefix, matched or not: %s',
+  (_case, url) => {
+    for (const routeOptions of [undefined, { url: '/*' }]) {
+      const { log, logs } = logger();
+      log.info({ req: { method: 'GET', url, routeOptions } }, 'incoming request');
+      expect(logs.lines()[0]?.['req']).toEqual({ method: 'GET', url: '/api/public/*' });
+      expect(logs.text()).not.toContain('zzzz');
+    }
+  },
+);
+
+test('a request that matched a route of the public API is logged by its template, whatever the spelling of its path', () => {
+  const { log, logs } = logger();
+  const routeOptions = { url: '/api/public/repos/:githubRepoId/signers/:login' };
+  log.info(
+    { req: { method: 'GET', url: '/api/%70ublic/repos/9000/signers/zzzz-login', routeOptions } },
+    'incoming request',
+  );
+  expect(logs.lines()[0]?.['req']).toEqual({ method: 'GET', url: routeOptions.url });
+  expect(logs.text()).not.toContain('zzzz');
+});
+
+test.each([
+  ['/api/installations/5/documents%20x?zzzz=1', '/api/installations/5/documents%20x'],
+  ['/api/%69nstallations/5/documents', '/api/%69nstallations/5/documents'],
+  ['/assets/app%zz.js', '/assets/app%zz.js'],
+  ['/publicity/api', '/publicity/api'],
+])('a path that does not read as the public API in any spelling is logged as it is: %s', (url, logged) => {
+  const { log, logs } = logger();
+  log.info({ req: { method: 'GET', url } }, 'incoming request');
+  expect(logs.lines()[0]?.['req']).toEqual({ method: 'GET', url: logged });
+});
+
+test.each([
   ['/api/public', '/api/public'],
   ['/api/publicity/x', '/api/publicity/x'],
   ['/api/installations/5/documents', '/api/installations/5/documents'],

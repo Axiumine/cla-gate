@@ -113,3 +113,34 @@ test('a path that matched no route is logged as the public prefix and nothing of
   expect(urls).toEqual(['/api/public/*', '/api/public/*', '/api/public/*', '/api/public/*']);
   expect(lookups(world)).toBe(0);
 });
+
+test.each([
+  [
+    'an escaped letter in the prefix',
+    (repository: number) => `/api/%70ublic/repos/${repository}/signers/${MARKER_LOGIN}`,
+  ],
+  [
+    'an escaped letter in the first segment',
+    (repository: number) => `/%61pi/public/repos/${repository}/signers/${MARKER_LOGIN}`,
+  ],
+  ['a doubled slash', (repository: number) => `//api/public/repos/${repository}/signers/${MARKER_LOGIN}`],
+  ['a capital letter', (repository: number) => `/API/public/repos/${repository}/signers/${MARKER_LOGIN}`],
+  ['a twice-escaped letter', (repository: number) => `/api/%2570ublic/repos/${repository}/signers/${MARKER_LOGIN}`],
+  ['a dot segment', (repository: number) => `/./api/public/repos/${repository}/signers/${MARKER_LOGIN}`],
+  ['a backslash', (repository: number) => `/api\\public/repos/${repository}/signers/${MARKER_LOGIN}`],
+])(
+  'a path that reaches the route, or is refused, in a spelling that is not the plain prefix is logged without the login: %s',
+  async (_name, spell) => {
+    const world = await publicWorld();
+    const response = await world.app.inject({ url: spell(world.t1.plain.githubRepoId) });
+    expect([200, 400, 404]).toContain(response.statusCode);
+    expect(world.logs.text()).not.toContain('zzzz');
+    const urls = world.logs
+      .lines()
+      .flatMap((line) =>
+        typeof line['req'] === 'object' && line['req'] !== null && 'url' in line['req'] ? [line['req'].url] : [],
+      );
+    expect(urls).toHaveLength(1);
+    expect(String(urls[0]).startsWith('/api/public/')).toBe(true);
+  },
+);

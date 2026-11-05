@@ -32,17 +32,62 @@ interface LoggedRequest {
   readonly routeOptions?: { readonly url?: string | undefined };
 }
 
+/** How many times a path is percent-decoded to see what it names: more than that is an attempt to hide, and is masked. */
+const MAX_DECODES = 3;
+
+/** `path` decoded once, or as it is when it holds an escape that is not valid. */
+function decodedOnce(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
+/** The spelling every router and every reader folds together: lower case, one kind of slash, no doubled slash. */
+const flattened = (path: string): string =>
+  path
+    .toLowerCase()
+    .replaceAll('\\', '/')
+    .replaceAll(/\/{2,}/g, '/');
+
+/**
+ * Whether a path names the public API in any spelling a router could still serve or a reader would take for it: escaped letters
+ * (`/api/%70ublic/`), capitals, doubled slashes or a prefix that is itself escaped twice. A path that is still changing after
+ * {@link MAX_DECODES} decodes is masked too. A path that matched no route is judged by this alone, and a request that matched a
+ * route of the public API is logged by its template whatever its path looked like (see {@link serializeRequest}).
+ */
+function readsAsPublic(path: string): boolean {
+  let spelled = path;
+  for (let pass = 0; pass <= MAX_DECODES; pass++) {
+    if (flattened(spelled).includes(PUBLIC_API_PREFIX)) {
+      return true;
+    }
+    const decoded = decodedOnce(spelled);
+    if (decoded === spelled) {
+      return false;
+    }
+    spelled = decoded;
+  }
+  return true;
+}
+
 /**
  * Method and path only. No headers, no body, no query string (OAuth `code` and `state` live there), and no client
  * address: network metadata is not recorded unless a configuration flag asks for it (docs/architecture.md), and a log
  * is a record. A request of the public API (E22-S02) is logged by the template of the route that matched
- * (`/api/public/repos/:githubRepoId/signers/:login`) and not by its path, which names a person's login; one that matched no
- * route (a malformed or over-long path) is logged as `/api/public/*`.
+ * (`/api/public/repos/:githubRepoId/signers/:login`) and not by its path, which names a person's login, whatever the path looked
+ * like (the router reads `/api/%70ublic/` as the same route); one that matched no public route but reads as the public API in
+ * any spelling (see {@link readsAsPublic}) is logged as `/api/public/*`.
  */
 function serializeRequest(request: LoggedRequest): Record<string, unknown> {
   const path = request.url?.split('?', 1)[0];
-  const isPublic = path?.startsWith(PUBLIC_API_PREFIX) === true;
-  return { method: request.method, url: isPublic ? (request.routeOptions?.url ?? `${PUBLIC_API_PREFIX}*`) : path };
+  const template = request.routeOptions?.url;
+  if (template?.startsWith(PUBLIC_API_PREFIX) === true) {
+    return { method: request.method, url: template };
+  }
+  const masked = path !== undefined && readsAsPublic(path);
+  return { method: request.method, url: masked ? `${PUBLIC_API_PREFIX}*` : path };
 }
 
 function serializeResponse(reply: { readonly statusCode?: number }): Record<string, unknown> {
