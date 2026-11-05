@@ -196,14 +196,11 @@ test('a dry run counts the login on an allowlist and a real run is not "nothing"
   await eraseInInstallation(db, { githubId: target, actor: operator }, t1.installationId);
   await eraseInInstallation(db, { githubId: target, actor: operator }, t2.installationId);
   await listAccount(db, t3, TARGET, 'zzzz-target-login');
-  expect(await runOperatorErasure(db, DRY)).toMatchObject({
-    kind: 'dry_run',
-    before: {
-      installations: expect.arrayContaining([
-        { installationId: t3.installationId, signatures: 0, signerPiiRows: 0, loginSnapshots: 1 },
-      ]) as unknown,
-    },
-  });
+  const dry = await runOperatorErasure(db, DRY);
+  expect(dry.kind).toBe('dry_run');
+  expect(dry.kind === 'dry_run' ? dry.before.installations.filter((entry) => entry.loginSnapshots > 0) : []).toEqual([
+    { installationId: t3.installationId, signatures: 0, signerPiiRows: 0, loginSnapshots: 1 },
+  ]);
   expect(await runOperatorErasure(db, REAL)).toMatchObject({ kind: 'erased' });
   expect(await snapshots(db)).toEqual([
     { installation_id: t3.installationId, github_id: TARGET, login_snapshot: null },
