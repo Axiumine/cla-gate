@@ -28,7 +28,7 @@ test('the limit is between linear time, which is 1, and quadratic time, which is
   expect(MOST_LINEAR_SLOWDOWN).toBe(6);
 });
 
-test('each run is one pass over the large text and then the ratio of passes over the small one, on a clock read around each', () => {
+test('each run is the passes over the small texts and then one pass over the large text, on a clock read around each', () => {
   const events: string[] = [];
   let time = 0;
   slowdownOf(
@@ -45,7 +45,38 @@ test('each run is one pass over the large text and then the ratio of passes over
   );
   const smalls = Array.from({ length: SIZE_RATIO }, () => '1000');
   const run = ['read', ...smalls, 'read', 'read', '16000', 'read'];
-  expect(events).toEqual(Array.from({ length: 7 }, () => run).flat());
+  // Linear on every read of the clock: after the least number of runs, two, the measurement ends.
+  expect(events).toEqual(Array.from({ length: 2 }, () => run).flat());
+});
+
+/** The number of passes `work` made over the large text, and the slowdown measured on a clock where a large pass costs `largeCost(call)` and the 16 small ones 16 ms together. */
+function measure(largeCost: (call: number) => number) {
+  let largeCalls = 0;
+  const { now, work } = clockOf((size, call) => {
+    if (size !== BYTES) {
+      return 1;
+    }
+    largeCalls = call;
+    return largeCost(call);
+  });
+  const slowdown = slowdownOf(work, letters, BYTES, now);
+  return { slowdown, largeCalls };
+}
+
+test('a result under the limit ends the measurement after two runs', () => {
+  expect(measure(() => 16)).toEqual({ slowdown: 1, largeCalls: 2 });
+});
+
+test('a result at the limit, which is not under it, takes all seven runs', () => {
+  expect(measure(() => 16 * MOST_LINEAR_SLOWDOWN)).toEqual({ slowdown: MOST_LINEAR_SLOWDOWN, largeCalls: 7 });
+});
+
+test('a quadratic result takes all seven runs', () => {
+  expect(measure(() => 16 * SIZE_RATIO)).toEqual({ slowdown: SIZE_RATIO, largeCalls: 7 });
+});
+
+test('runs that are slow on the large text keep the measurement going until a run is not: the fastest of them counts', () => {
+  expect(measure((call) => (call <= 2 ? 500 : 1) * 16)).toEqual({ slowdown: 1, largeCalls: 3 });
 });
 
 test('work that takes time in proportion to the size is a slowdown of exactly 1, which is within the limit', () => {
@@ -70,7 +101,7 @@ const pausedIn = (slowRun: number) =>
   clockOf((size, call) => (size / 1000) * (runOf(size, call) === slowRun ? 500 : 1));
 
 test('a run that is slow once, on either side, does not count: the fastest of the runs is compared', () => {
-  for (const slowRun of [1, 3]) {
+  for (const slowRun of [1, 2]) {
     const { now, work } = pausedIn(slowRun);
     expect(slowdownOf(work, letters, BYTES, now)).toBe(1);
   }

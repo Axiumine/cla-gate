@@ -2,7 +2,13 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { CLA_TEXT_MAX_BYTES } from '../../shared/cla-text.ts';
-import { indentedBullets, MOST_LINEAR_SLOWDOWN, nestedQuotes, slowdownOf } from '../../shared/test-support.ts';
+import {
+  indentedBullets,
+  MOST_LINEAR_SLOWDOWN,
+  nestedQuotes,
+  slowdownOf,
+  TIMED_BYTES,
+} from '../../shared/test-support.ts';
 import { prepareClaText, sha256Hex } from './cla-content.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 
@@ -111,5 +117,5 @@ test('a text of 204 796 bytes made of setext headings is prepared in time linear
   const prepared = prepareClaText(setextHeadings(204_796));
   expect(prepared.contentSha256).toBe(sha256Hex(prepared.contentMd));
   expect(prepared.contentMd.length).toBeGreaterThan(204_000);
-  expect(slowdownOf(prepareClaText, setextHeadings, 204_796)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
+  expect(slowdownOf(prepareClaText, setextHeadings, TIMED_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
 });

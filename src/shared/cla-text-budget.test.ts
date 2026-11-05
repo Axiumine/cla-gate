@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { CLA_TEXT_MAX_BYTES, canonicalise, validateClaText } from './cla-text.ts';
-import { MOST_LINEAR_SLOWDOWN, slowdownOf } from './test-support.ts';
+import { MOST_LINEAR_SLOWDOWN, slowdownOf, TIMED_BYTES } from './test-support.ts';
 
 // A text is validated on the request that saves or publishes it, on the one thread that serves every tenant and the webhooks. The
 // Markdown parser of the rendering takes minutes for the texts below at the size limit (its time grows with the square of the number
 // of lines), so the validation must never wait for it: its time is linear in the size of the text. That is checked as a slowdown,
-// not as seconds: one pass over a text of 200 KiB must take about as long as sixteen passes over a text of a sixteenth of the size
+// not as seconds: one pass over a text of 64 KiB (`TIMED_BYTES`) must take about as long as sixteen passes over a text of a sixteenth of the size
 // (a ratio of 1; a quadratic scan gives 16, and the limit is 6, `slowdownOf`). A bound in seconds failed on a loaded runner (3.2 s
 // for a scan that needs 15 ms, in the dry run of the mutation gate), and a parser on this path fails the ratio, and the test
 // timeout, at any speed. Each case returns the canonical text of at most the size it is given.
@@ -34,7 +34,7 @@ test.each(ACCEPTED)('validateClaText accepts 200 KiB of %s and reads it in time 
   const text = repeating(unit)(CLA_TEXT_MAX_BYTES);
   expect(new TextEncoder().encode(text).byteLength).toBeGreaterThan(CLA_TEXT_MAX_BYTES - 100);
   expect(validateClaText(text)).toBeNull();
-  expect(slowdownOf(validateClaText, repeating(unit), CLA_TEXT_MAX_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
+  expect(slowdownOf(validateClaText, repeating(unit), TIMED_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
 });
 
 /** A run of setext headings that fills the size, and then a line of 51 nested quotes at the very end. */
@@ -50,6 +50,6 @@ test.each(REFUSED)(
   'validateClaText refuses 200 KiB of %s as too deeply nested in time linear in its size',
   (_label, build) => {
     expect(validateClaText(build(CLA_TEXT_MAX_BYTES))).toEqual({ rule: 'content_too_deeply_nested' });
-    expect(slowdownOf(validateClaText, build, CLA_TEXT_MAX_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
+    expect(slowdownOf(validateClaText, build, TIMED_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
   },
 );
