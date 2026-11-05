@@ -11,6 +11,7 @@ import {
   tenantAgreementPageSchema,
 } from '../../../shared/corporate.ts';
 import { listTenantAgreements } from '../../services/corporate-agreements.ts';
+import type { JobEnqueuer } from '../../services/ports/jobs.ts';
 import { changeCorporateDocument } from '../../services/repository-corporate-document.ts';
 import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
@@ -23,6 +24,8 @@ import { byInstallationParam, byRepositoryParam, repositoryIdOf } from './tenant
 
 export interface CorporateTenantRoutesOptions {
   readonly db: Kysely<Database>;
+  /** Where the sweep of a repository whose corporate CLA changed is sent. */
+  readonly enqueuer: JobEnqueuer;
 }
 
 /**
@@ -32,14 +35,15 @@ export interface CorporateTenantRoutesOptions {
  * CLA of a repository (a document of the corporate kind of the tenant that covers the installation or this repository), or removes
  * the choice with `null`. The requirement is `org_admin` and the call is a `write`, so the role is asked of GitHub again and a
  * suspended tenant is `409 installation_suspended`; a stranger gets the uniform `404`. A document the repository may not take is
- * `422 document_not_corporate`, whatever the reason. Audited as `repository.corporate_document_set` in the transaction of the change.
+ * `422 document_not_corporate`, whatever the reason. Audited as `repository.corporate_document_set` in the transaction of the change,
+ * which also sends the sweep of the repository when it enforces the CLA, so its open pull requests are evaluated again.
  *
  * `GET /api/installations/:installationId/corporate-agreements` lists the agreements of the tenant, newest first, a page at a time:
  * the number of approvals in force and whether the agreement was revoked. It is a `read`, so a suspended tenant is served. Revoking an
  * agreement is the revocation of its signature (E15-S03) by the `signatureId` the list names.
  */
 export const corporateTenantRoutes: FastifyPluginCallbackZod<CorporateTenantRoutesOptions> = (app, options, done) => {
-  const { db } = options;
+  const { db, enqueuer } = options;
   answerCorporateErrors(app);
   app.put(
     REPOSITORY_CORPORATE_DOCUMENT_PATH,
@@ -54,7 +58,7 @@ export const corporateTenantRoutes: FastifyPluginCallbackZod<CorporateTenantRout
     async (request, reply) => {
       const tenant = requireTenant(request);
       const body = parseInput(repositoryCorporateDocumentRequestSchema, request.body);
-      const changed = await changeCorporateDocument(db, tenant, {
+      const changed = await changeCorporateDocument({ db, enqueuer }, tenant, {
         repositoryId: repositoryIdOf(request),
         actorGithubId: requireAuth(request).user.githubId,
         documentId: body.documentId,

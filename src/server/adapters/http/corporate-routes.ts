@@ -34,7 +34,7 @@ export const corporateRoutes: FastifyPluginCallbackZod<CorporateRoutesOptions> =
   app.register(corporateAgreementRoutes, { db });
   app.register(corporateApprovalRoutes, { db, github, enqueuer });
   app.register(corporateClaimRoutes, { db, github, enqueuer });
-  app.register(corporateTenantRoutes, { db });
+  app.register(corporateTenantRoutes, { db, enqueuer });
   app.register(corporateExportRoutes, { db, clock });
   done();
 };

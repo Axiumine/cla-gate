@@ -3,6 +3,7 @@
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { repositoryCorporateDocumentResponseSchema } from '../../../shared/corporate.ts';
+import { createJobsTable, fakeEnqueuer } from '../../services/jobs-fixture/test-support.ts';
 import {
   type CorporateWorld,
   choiceUrl,
@@ -17,6 +18,13 @@ import { suspendTenantOne } from './repository-document-fixture/test-support.ts'
 
 // `PUT /api/installations/:installationId/repositories/:repositoryId/corporate-document` (E21-S02): an org admin chooses the
 // corporate CLA of a repository, or removes the choice. The repository of the world starts with the corporate document `c1`.
+
+/** The world with the fake queue: the repository of the world enforces the CLA, so a change of its corporate CLA sends a sweep. */
+async function choiceWorld() {
+  const world = await corporateWorld({}, { enqueuer: fakeEnqueuer() });
+  await createJobsTable(world.db);
+  return world;
+}
 
 /** Sends `payload` as `who` to the choice of the corporate CLA of the plain repository of tenant 1 (or of `repositoryId`). */
 function choose(
@@ -51,7 +59,7 @@ const auditRows = (world: CorporateWorld) =>
     .execute();
 
 test('an org admin takes another corporate document: 200 with the document and changed true, one audit row of ids only', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   const other = await storeCorporateDocument(world, { name: 'Corporate CLA 2' });
   const response = await choose(world, 'admin1', { documentId: other });
   expect(response.statusCode).toBe(200);
@@ -77,7 +85,7 @@ test('an org admin takes another corporate document: 200 with the document and c
 });
 
 test('the same choice again is 200 with changed false and writes no audit row', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   const response = await choose(world, 'admin1', { documentId: world.c1.document.documentId });
   expect(repositoryCorporateDocumentResponseSchema.parse(response.json())).toEqual({
     documentId: world.c1.document.documentId,
@@ -87,7 +95,7 @@ test('the same choice again is 200 with changed false and writes no audit row', 
 });
 
 test('null removes the choice: the repository has no corporate CLA, the audit row names the one it had, and the page says so', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   const response = await choose(world, 'admin1', { documentId: null });
   expect(repositoryCorporateDocumentResponseSchema.parse(response.json())).toEqual({ documentId: null, changed: true });
   expect(await pointer(world)).toBeNull();
@@ -104,7 +112,7 @@ test('null removes the choice: the repository has no corporate CLA, the audit ro
 });
 
 test('a corporate document of the repository itself may be taken, and the document that is still a draft is taken too', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   const scopedHere = await storeCorporateDocument(world, {
     name: 'Scoped here',
     repositoryId: world.t1.plain.repositoryId,
@@ -120,7 +128,7 @@ test('a corporate document of the repository itself may be taken, and the docume
 });
 
 test('every document the repository may not take is the same 422 document_not_corporate, and nothing changes', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   const elsewhere = await storeCorporateDocument(world, {
     name: 'Scoped elsewhere',
     repositoryId: world.t1.scoped.repositoryId,
@@ -146,7 +154,7 @@ test.each([
   ['the org admin of another tenant', 'admin2', 404, 'not_found'],
   ['nobody', null, 401, 'unauthorized'],
 ] as const)('%s cannot choose it, and nothing changes', async (_label, who, status, code) => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   const other = await storeCorporateDocument(world, { name: 'Corporate CLA 2' });
   const response = await choose(world, who, { documentId: other });
   expect(failureOf(response)).toEqual([status, code]);
@@ -154,7 +162,7 @@ test.each([
 });
 
 test('a repository of another tenant under this tenant’s path is the 404 of an unknown repository', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   const unknown = await choose(world, 'admin1', { documentId: world.c1.document.documentId }, 987_654);
   const crossed = await choose(
     world,
@@ -173,7 +181,7 @@ test('a repository of another tenant under this tenant’s path is the 404 of an
 });
 
 test('the choice of a suspended installation is a 409 installation_suspended, and nothing changes', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   await suspendTenantOne(world);
   const response = await choose(world, 'admin1', { documentId: null });
   expect(failureOf(response)).toEqual([409, 'installation_suspended']);
@@ -189,13 +197,13 @@ test.each([
   ['a key the schema does not know', { documentId: null, extra: 1 }],
   ['an array', []],
 ])('%s is a 400 bad_request and nothing changes', async (_label, payload) => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   expect(failureOf(await choose(world, 'admin1', payload))).toEqual([400, 'bad_request']);
   expect(await pointer(world)).toBe(world.c1.document.documentId);
 });
 
 test('a failure writing the audit row rolls the choice back: 500, the pointer is the old one, and a retry succeeds', async () => {
-  const world = await corporateWorld();
+  const world = await choiceWorld();
   await sql`create function inject_failure() returns trigger language plpgsql as $$ begin raise exception 'injected failure'; end $$`.execute(
     world.db,
   );

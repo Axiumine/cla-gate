@@ -44,6 +44,10 @@ export interface LockedCorporateRepository {
   readonly id: number;
   /** GitHub's id of the repository: the subject of the audit row, which names no repository. */
   readonly githubRepoId: GithubId;
+  /** GitHub's id of the installation, which the envelope of a job names. */
+  readonly githubInstallationId: GithubId;
+  /** Whether the repository enforces the CLA: only then is there a pull request to evaluate again after a change. */
+  readonly enabled: boolean;
   readonly corporateDocumentId: number | null;
 }
 
@@ -59,16 +63,19 @@ export async function lockCorporateRepository(
   repositoryId: number,
 ): Promise<LockedCorporateRepository | null> {
   const row = await db
-    .selectFrom('repositories')
-    .select(['id', 'github_repo_id', 'corporate_document_id'])
-    .where('installation_id', '=', scope.installationId)
-    .where('id', '=', repositoryId)
-    .where('removed_at', 'is', null)
-    .forUpdate()
+    .selectFrom('repositories as r')
+    .innerJoin('installations as i', 'i.id', 'r.installation_id')
+    .select(['r.id', 'r.github_repo_id', 'r.enabled', 'r.corporate_document_id', 'i.github_installation_id'])
+    .where('r.installation_id', '=', scope.installationId)
+    .where('r.id', '=', repositoryId)
+    .where('r.removed_at', 'is', null)
+    .forUpdate('r')
     .executeTakeFirst();
   return mapFound(row, (found) => ({
     id: found.id,
     githubRepoId: parseGithubId(found.github_repo_id),
+    githubInstallationId: parseGithubId(found.github_installation_id),
+    enabled: found.enabled,
     corporateDocumentId: found.corporate_document_id,
   }));
 }
@@ -101,6 +108,7 @@ export async function findCorporateChoice(
 /**
  * Points the repository `repositoryId` of the tenant at the corporate document `documentId`, or at none (`null`), and touches its
  * `updated_at`. The composite foreign key refuses a document of another installation and the trigger one that is not corporate.
+ * @returns the time of the change, which names it.
  * @throws NoResultError when the tenant has no such repository (the caller holds its lock, so it does not happen).
  */
 export async function setCorporateDocument(
@@ -108,13 +116,14 @@ export async function setCorporateDocument(
   scope: TenantScope,
   repositoryId: number,
   documentId: number | null,
-): Promise<void> {
-  await db
+): Promise<Date> {
+  const row = await db
     .updateTable('repositories')
     .set({ corporate_document_id: documentId, updated_at: sql`now()` })
     .where('installation_id', '=', scope.installationId)
     .where('id', '=', repositoryId)
     .where('removed_at', 'is', null)
-    .returning('id')
+    .returning('updated_at')
     .executeTakeFirstOrThrow();
+  return row.updated_at;
 }
