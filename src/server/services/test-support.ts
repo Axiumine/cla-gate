@@ -30,6 +30,7 @@ import {
 
 export type { GitHubMethod, RecordedCall };
 
+import { findCommit } from './fake-commits/test-support.ts';
 import { userAccountOf } from './fake-user-accounts/test-support.ts';
 import type { Clock } from './ports/clock.ts';
 import type {
@@ -38,6 +39,7 @@ import type {
   GitHubCheckRun,
   GitHubClient,
   GitHubCommitPage,
+  GitHubCommitRef,
   GitHubInstallation,
   GitHubIssueComment,
   GitHubIssueCommentPage,
@@ -167,10 +169,8 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     );
   }
 
-  listInstallationRepositories(githubInstallationId: GithubId): Promise<GitHubRepository[]> {
-    return this.#serveInstallation('listInstallationRepositories', githubInstallationId, (entry) => [
-      ...entry.repositories,
-    ]);
+  listInstallationRepositories(id: GithubId): Promise<GitHubRepository[]> {
+    return this.#serveInstallation('listInstallationRepositories', id, (entry) => [...entry.repositories]);
   }
 
   getRepositoryById(githubInstallationId: GithubId, githubRepoId: GithubId): Promise<GitHubRepository | null> {
@@ -216,6 +216,10 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
       id,
       () => this.state.pullRequests.get(pullKey(id, fullName, prNumber)) ?? null,
     );
+  }
+
+  getCommit(id: GithubId, name: string, sha: string): Promise<GitHubCommitRef | null> {
+    return this.#serveInstallation('getCommit', id, () => findCommit(this.state, repositoryKey(id, name), sha));
   }
 
   listOpenPullRequests(id: GithubId, name: string, page: number): Promise<GitHubPullRequestPage> {

@@ -17,7 +17,7 @@ import type { Refusal, ScopedQuery } from '../tenant-registry/test-support.ts';
 // an allowlist entry of the installation and one of the repository for each tenant.
 
 /** The `Error` of a database that refused a row for a foreign key (`23503`): a repository that is another installation's. */
-const isForeignKeyViolation: Refusal = (error) =>
+export const isForeignKeyViolation: Refusal = (error) =>
   typeof error === 'object' && error !== null && 'code' in error && error.code === '23503';
 
 /** The GitHub id of the account the entries of the fixture exempt: no entry of the world has it. */

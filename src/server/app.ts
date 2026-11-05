@@ -10,6 +10,7 @@ import { auditLogRoutes } from './adapters/http/audit-log-routes.ts';
 import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
 import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
+import { commitOverrideRoutes } from './adapters/http/commit-override-routes.ts';
 import { dataExportRoutes } from './adapters/http/data-export-routes.ts';
 import { documentRoutes } from './adapters/http/document-routes.ts';
 import { erasureRoutes } from './adapters/http/erasure-routes.ts';
@@ -48,6 +49,7 @@ import { webhookRoutes } from './adapters/http/webhook-routes.ts';
 import { authSettings } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
 import { type AllowlistGitHub, allowlistGitHubNotWired } from './services/allowlist-account.ts';
+import { type CommitGitHub, commitGitHubNotWired } from './services/commit-override-lookup.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
@@ -90,6 +92,11 @@ export interface AppOptions {
    * fails every call as an outage, so a server with no GitHub App answers `502 github_unavailable` and never stores a login unchecked.
    */
   readonly allowlistGitHub?: AllowlistGitHub | undefined;
+  /**
+   * Where a per-commit override looks up the commit it is for (E15-S05): the GitHub client port, by numeric id. Defaults to one that
+   * fails every call as an outage, so a server with no GitHub App answers `502 github_unavailable` and never stores a commit unchecked.
+   */
+  readonly commitGitHub?: CommitGitHub | undefined;
   /**
    * Who operates the instance (E11-S08): `boot` passes the policy it built with the owner of the App. Defaults to the one
    * `OPERATOR_GITHUB_IDS` names, or to none when it is unset (the owner of the App is not known without the GitHub client).
@@ -162,8 +169,8 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
 /**
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
  * probes, the operator's list (E11-S08), the documents (E12), the lists of what a person administers (E14-S01), the CLA a
- * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06), the public
- * `GET /api/meta` (E17-S09), the first-run setup (E19-S06, whose unlock and manifest exist in setup mode only) and the
+ * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06) and the per-commit overrides
+ * (E15-S05), the public `GET /api/meta` (E17-S09), the first-run setup (E19-S06, whose unlock and manifest exist in setup mode only) and the
  * webhook (E06). The app's files answer every path that no route above does, so they are registered last.
  */
 async function registerRoutes(
@@ -184,14 +191,7 @@ async function registerRoutes(
   await app.register(installationRoutes, { db, roles });
   await app.register(repositoryListRoutes, { db, roles });
   await registerSignatureRoutes(app, { db, roles, enqueuer });
-  await app.register(repositoryDocumentRoutes, { db, enqueuer });
-  await app.register(repositoryEnableRoutes, { db, enqueuer });
-  await app.register(repositoryDisableRoutes, { db, enqueuer });
-  await app.register(allowlistEntryRoutes, {
-    db,
-    github: options.allowlistGitHub ?? allowlistGitHubNotWired,
-    enqueuer,
-  });
+  await registerRepositoryRoutes(app, options, enqueuer);
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
   await app.register(setupRoutes, {
     config,
@@ -215,6 +215,32 @@ async function registerRoutes(
     deadlineMs: options.webhookDeadlineMs ?? WEBHOOK_DEADLINE_MS,
   });
   await registerWeb(app, config);
+}
+
+/**
+ * The routes of a repository and of the policy around it, in the order they are registered, which the route tables of the tests spell
+ * out: the CLA it enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06) and the per-commit overrides
+ * (E15-S05). The last two look something up on GitHub, through the clients `options` names.
+ */
+async function registerRepositoryRoutes(
+  app: FastifyInstance,
+  options: AppOptions,
+  enqueuer: JobEnqueuer,
+): Promise<void> {
+  const { db } = options;
+  await app.register(repositoryDocumentRoutes, { db, enqueuer });
+  await app.register(repositoryEnableRoutes, { db, enqueuer });
+  await app.register(repositoryDisableRoutes, { db, enqueuer });
+  await app.register(allowlistEntryRoutes, {
+    db,
+    github: options.allowlistGitHub ?? allowlistGitHubNotWired,
+    enqueuer,
+  });
+  await app.register(commitOverrideRoutes, {
+    db,
+    github: options.commitGitHub ?? commitGitHubNotWired,
+    enqueuer,
+  });
 }
 
 /** The routes that look for the signatures of a tenant (E13-S08), revoke one (E15-S03, which sends the jobs of the pull requests it affects) and invalidate a major of a document (E15-S04, which sweeps the repositories that enforce it). */

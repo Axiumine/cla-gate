@@ -95,6 +95,25 @@ export async function enforcing(db: Kysely<Database>, target: MatrixTarget): Pro
     .execute();
 }
 
+/** The commit the matrix records an override for (E15-S05): both tenants have it in both of their repositories, so one SHA is asked of each. */
+export const MATRIX_COMMIT_SHA = '7'.repeat(40);
+
+/**
+ * Makes the recording of a commit override succeed whoever asks first (E15-S05): the repository of `target` enforces the document of
+ * `target` (the role the call needs is the one that document asks for, as for the enable) and the overrides of the repository that
+ * earlier calls left are removed (the one the world seeds stays), since the same commit cannot carry two (`409 override_exists`). No pull request of the tenant has
+ * a failing evaluation, so the call sends no job (the world has no queue); the jobs are shown by the tests of the route
+ * (commit-override-jobs.test.ts).
+ */
+export async function overridable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  await enforcing(db, target);
+  await db
+    .deleteFrom('commit_overrides')
+    .where('repository_id', '=', target.repositoryId)
+    .where('commit_sha', '=', MATRIX_COMMIT_SHA)
+    .execute();
+}
+
 /**
  * Makes the add of an allowlist entry succeed whoever asks first (E14-S06): the add is `org_members`, which exists once per scope, so
  * the `org_members` entries of the tenant that earlier calls left are removed (the entries the world seeds stay: the removal of one is

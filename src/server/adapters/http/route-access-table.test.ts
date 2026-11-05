@@ -192,6 +192,7 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'GET /api/installations/:installationId/allowlist-entries',
       'GET /api/repositories/:repositoryId/allowlist-entries',
       'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
+      'POST /api/repositories/:repositoryId/commit-overrides',
     ]),
   );
 });

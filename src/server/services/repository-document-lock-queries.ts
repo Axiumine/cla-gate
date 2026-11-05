@@ -17,6 +17,8 @@ export interface LockedRepository {
   readonly githubRepoId: GithubId;
   /** GitHub's id of the installation, which the envelope of a job names. */
   readonly githubInstallationId: GithubId;
+  /** `owner/name` as GitHub showed the repository when it was last synced: the name a call to GitHub for a commit of it uses (E15-S05). */
+  readonly fullName: string;
   readonly enabled: boolean;
   /**
    * The document the repository enforces, or null when it has none. `repositoryId` is the repository the document is scoped to,
@@ -57,7 +59,8 @@ async function readRepository(
   const select = db
     .selectFrom('repositories as r')
     .innerJoin('installations as i', 'i.id', 'r.installation_id')
-    .select(['r.id', 'r.github_repo_id', 'r.enabled', 'r.cla_document_id', 'i.github_installation_id'])
+    .selectAll('r')
+    .select('i.github_installation_id')
     .where('r.installation_id', '=', scope.installationId)
     .where('r.id', '=', read.repositoryId)
     .where('r.removed_at', 'is', null);
@@ -69,6 +72,7 @@ async function readRepository(
     id: row.id,
     githubRepoId: parseGithubId(row.github_repo_id),
     githubInstallationId: parseGithubId(row.github_installation_id),
+    fullName: row.full_name,
     enabled: row.enabled,
     document: row.cla_document_id === null ? null : await readDocumentScope(db, scope, row.cla_document_id),
   };

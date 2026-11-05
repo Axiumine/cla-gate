@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
+import { COMMIT_OVERRIDES_PATH } from '../../../../shared/commit-override.ts';
 import { INVALIDATION_PREVIEW_PATH, INVALIDATIONS_PATH } from '../../../../shared/signature-invalidate.ts';
 import { SIGNATURE_REVOKE_PATH } from '../../../../shared/signature-revoke.ts';
 import { SIGNATURES_PATH } from '../../../../shared/signature-search.ts';
+import { commit } from '../../../services/github-pull-contract/test-support.ts';
+import type { FakeGitHub } from '../../../services/test-support.ts';
 import { installationRowIdSchema } from '../../db/installation-row-id.ts';
 import type { Database } from '../../db/schema.ts';
+import type { TenantWorld } from '../../db/tenant-fixture/test-support.ts';
 import type { CrossTenantCase, MatrixTarget } from '../cross-tenant-fixture/test-support.ts';
-import { versionOne } from '../cross-tenant-prepare/test-support.ts';
+import { MATRIX_COMMIT_SHA, overridable, versionOne } from '../cross-tenant-prepare/test-support.ts';
 
 // The cases of the routes of epic E15 (revocation, overrides and pending pull requests) for the route matrix (E11-S06). They sit in a
 // file of their own so that the fixture of the matrix stays under the size cap, as the cases of the sign routes do
@@ -39,6 +43,17 @@ async function newestRevocationUrl(db: Kysely<Database>, target: MatrixTarget): 
     .limit(1)
     .executeTakeFirstOrThrow();
   return revocationUrl(target.installationId, newest.id);
+}
+
+/** Gives the GitHub of the matrix the commit {@link MATRIX_COMMIT_SHA} in every repository of the tenants, which the override of a commit checks for. */
+export function scriptMatrixCommits(github: FakeGitHub, tenants: readonly TenantWorld[]): void {
+  for (const tenant of tenants) {
+    for (const repository of [tenant.plain, tenant.scoped]) {
+      github.setRepositoryCommits(tenant.githubInstallationId, repository.fullName, [
+        commit(777, { sha: MATRIX_COMMIT_SHA }),
+      ]);
+    }
+  }
 }
 
 const documentUrl = (path: string, target: MatrixTarget): string =>
@@ -115,7 +130,10 @@ const revocationUrl = (installationId: number, signatureId: number): string =>
  * of one tenant under the path of the other, are in signature-revoke-roles.test.ts and signature-revoke-tenants.test.ts. E15-S04: the
  * preview and the invalidation of a major follow the scope of the document, like the export of its signatures: the admin of a repository
  * passes for the repository's own document and an org admin for any (`document_read`, `document_write`); `invalidatable` puts one
- * signature in force on the document, whoever asks first, and the body names the count of that moment.
+ * signature in force on the document, whoever asks first, and the body names the count of that moment. E15-S05: recording an override
+ * is a repository write like the enable (the role its document asks for, which `overridable` gives the repository of the case); the path
+ * names the repository alone, so the crossed ids are those of commit-override-tenants.test.ts, and the GitHub of the matrix has the commit
+ * (`scriptMatrixCommits`).
  */
 export const REVOCATION_CASES: Readonly<Record<string, CrossTenantCase>> = {
   [`GET ${SIGNATURES_PATH}`]: {
@@ -147,6 +165,17 @@ export const REVOCATION_CASES: Readonly<Record<string, CrossTenantCase>> = {
       method: 'POST',
       url: documentUrl(INVALIDATIONS_PATH, target),
       payload: { major: 1, reasonCode: 'maintainer_decision', expectedCount: 1 },
+    }),
+  },
+  [`POST ${COMMIT_OVERRIDES_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    success: 201,
+    prepare: overridable,
+    request: (target) => ({
+      method: 'POST',
+      url: COMMIT_OVERRIDES_PATH.replace(':repositoryId', String(target.repositoryId)),
+      payload: { commitSha: MATRIX_COMMIT_SHA, reason: 'Recorded by the matrix' },
     }),
   },
 };

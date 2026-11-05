@@ -72,6 +72,10 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * `already_revoked` (E15-S03) is a revocation of a signature that is revoked already, also by a simultaneous call: nothing changes.
  * `count_changed` and `nothing_to_invalidate` (E15-S04) are the invalidation of a major whose signatures in force are not the number
  * the maintainer confirmed (somebody revoked or signed meanwhile), and of one that has none: nothing changes in either case.
+ * `invalid_commit_sha` and `invalid_reason` (E15-S05) are an override for something that is not a full commit id (40 or 64 hexadecimal
+ * characters) and a reason that is empty once trimmed, too long or not text the database can hold; `commit_not_found` is a commit GitHub
+ * does not have in the repository, `override_exists` the same commit overridden already, and `repository_disabled` a repository that
+ * enforces nothing, which takes no new override.
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -104,6 +108,11 @@ export const CLA_RULE_STATUS = {
   already_revoked: 409,
   count_changed: 409,
   nothing_to_invalidate: 409,
+  invalid_commit_sha: 422,
+  invalid_reason: 422,
+  commit_not_found: 422,
+  override_exists: 409,
+  repository_disabled: 409,
 } as const;
 
 export type ClaRule = keyof typeof CLA_RULE_STATUS;

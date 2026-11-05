@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { findAffectedPrs, findAffectedRepositories } from '../../../services/affected-prs-queries.ts';
+import { insertCommitOverride } from '../../../services/commit-override-queries.ts';
 import { countActiveSignatures, invalidateActiveSignatures } from '../../../services/signature-invalidate-queries.ts';
 import { findSignatureToRevoke, markSignatureRevoked } from '../../../services/signature-revoke-queries.ts';
 import { ownersOfRepositories, ownersOfSignatures } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery, TenantQuery } from '../tenant-registry/test-support.ts';
+import { isForeignKeyViolation } from '../tenant-registry-allowlist/test-support.ts';
 import { SEARCH_TENANT_QUERIES } from '../tenant-search-fixture/test-support.ts';
 
 // The registry entries (E11-S06) of the statements a revocation runs over a tenant table (E15-S03): the signature it reads and sets, and
-// the pull requests it finds to evaluate again; and those of the invalidation of a major (E15-S04): the signatures it counts and revokes. They sit in a file of their own so that the registry stays under the size cap, as the
+// the pull requests it finds to evaluate again; and those of the invalidation of a major (E15-S04): the signatures it counts and revokes; and the one that stores a per-commit override (E15-S05). They sit in a file of their own so that the registry stays under the size cap, as the
 // entries of the search do (`tenant-search-fixture`). `twoTenants` stores, for each tenant, a signature on its installation-wide
 // document and finished evaluations (success) of pull requests 7, 9 and 10 of the plain repository, so a statement that strays has rows to meet.
 
 /** The files of epic E15 that run a statement over a tenant table, which `TENANT_MODULES` spreads in (the file of the registry is at its size cap). */
 export const E15_TENANT_MODULES = [
   'services/affected-prs-queries.ts',
+  'services/commit-override-queries.ts',
   'services/signature-invalidate-queries.ts',
   'services/signature-revoke-queries.ts',
 ] as const;
@@ -73,6 +76,34 @@ const REVOCATION_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
       });
       return revokedAt === null ? [] : ownersOfSignatures(db, [ids.signatureId]);
     }),
+  },
+  'services/commit-override-queries.ts': {
+    // The row names the installation of the scope in its own column, so a repository of another tenant is turned away by the
+    // composite foreign key of migration 001 and nothing is stored. The world stores an override of the commit `aaaa…` for each plain repository, so the commit here is another and is new.
+    insertCommitOverride: {
+      kind: 'scoped',
+      takesIds: true,
+      activeOnly: false,
+      refusal: isForeignKeyViolation,
+      run: async (db, scope, ids) => {
+        const commitSha = 'b'.repeat(40);
+        await db.transaction().execute((trx) =>
+          insertCommitOverride(trx, scope, {
+            repositoryId: ids.plain.repositoryId,
+            commitSha,
+            reason: 'Made up for the registry',
+            createdBy: ids.admin.userId,
+          }),
+        );
+        const rows = await db
+          .selectFrom('commit_overrides')
+          .select('installation_id')
+          .where('repository_id', '=', ids.plain.repositoryId)
+          .where('commit_sha', '=', commitSha)
+          .execute();
+        return rows.map((row) => row.installation_id);
+      },
+    },
   },
 };
 

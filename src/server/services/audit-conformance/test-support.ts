@@ -25,6 +25,7 @@ export const siteId = (site: Pick<AuditCallSite, 'file' | 'actions'>): string =>
 const ORGANISATION = { account_id: 4242, account_type: 'organization' } as const;
 const REPOSITORY = { type: 'repository', id: 9000 } as const;
 const ALLOWLIST_ENTRY = { type: 'allowlist_entry', id: 31 } as const;
+const COMMIT_OVERRIDE = { type: 'commit_override', id: 31 } as const;
 
 /** The three entries an allowlist call site writes a row for (E14-S06, E14-S07): one that covers the installation, one of a repository, and `org_members`. */
 function allowlistFixtures(action: 'allowlist_entry.created' | 'allowlist_entry.deleted'): readonly AuditFixture[] {
@@ -175,6 +176,18 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: 3 } },
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },
     { action: 'repository.disabled', subject: REPOSITORY, metadata: { repository_id: 12 } },
+  ],
+  'services/commit-override-record.ts#commit_override.created': [
+    {
+      action: 'commit_override.created',
+      subject: COMMIT_OVERRIDE,
+      metadata: { repository_id: 12, commit_sha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678' },
+    },
+    {
+      action: 'commit_override.created',
+      subject: COMMIT_OVERRIDE,
+      metadata: { repository_id: 12, commit_sha: '0123456789abcdef'.repeat(4) },
+    },
   ],
   'services/allowlist-entry-create.ts#allowlist_entry.created': allowlistFixtures('allowlist_entry.created'),
   'services/allowlist-entry-remove.ts#allowlist_entry.deleted': allowlistFixtures('allowlist_entry.deleted'),
