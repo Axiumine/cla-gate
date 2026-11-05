@@ -27,6 +27,12 @@ function isCleanText(text: string): boolean {
 
 const actionSchema = z.string().max(MAX_ACTION_LENGTH).refine(isCleanText);
 
+/**
+ * GitHub's own limit for the name of a ref is far below this; the bound keeps a hostile `head_ref` of a merge group (E22-S01) from
+ * being read at any length. The ref is parsed by the router and never stored or carried by a job.
+ */
+const MAX_REF_LENGTH = 1024;
+
 /** A pull request or issue number: a positive safe integer, like the ids. */
 const numberSchema = z.int().positive();
 
@@ -78,6 +84,23 @@ const issueCommentPayloadSchema = z.object({
   installation: idOnlySchema,
 });
 
+/**
+ * A merge queue's group (E22-S01). `head_sha` is the commit the required check must be reported on, `base_sha` the tip of the
+ * base branch the group was built on, and `head_ref` (`refs/heads/gh-readonly-queue/<base>/pr-<number>-<sha>`) names the last
+ * pull request of the group. `checks_requested` and `destroyed` carry the same fields; the extras of `destroyed` (the reason) are
+ * stripped.
+ */
+const mergeGroupPayloadSchema = z.object({
+  action: actionSchema,
+  merge_group: z.object({
+    head_sha: shaSchema,
+    base_sha: shaSchema,
+    head_ref: z.string().max(MAX_REF_LENGTH).refine(isCleanText),
+  }),
+  repository: idOnlySchema,
+  installation: idOnlySchema,
+});
+
 /** `installation` and `installation_repositories` share it: the job re-fetches the rest from the API (E05-S08). */
 const installationPayloadSchema = z.object({
   action: actionSchema,
@@ -104,6 +127,7 @@ export const webhookDeliverySchema = z.discriminatedUnion('event', [
   delivery('check_run', checkRunPayloadSchema),
   delivery('check_suite', checkSuitePayloadSchema),
   delivery('issue_comment', issueCommentPayloadSchema),
+  delivery('merge_group', mergeGroupPayloadSchema),
   delivery('installation', installationPayloadSchema),
   delivery('installation_repositories', installationPayloadSchema),
   delivery('github_app_authorization', appAuthorizationPayloadSchema),

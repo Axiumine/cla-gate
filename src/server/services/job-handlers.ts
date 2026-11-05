@@ -6,6 +6,7 @@ import type { EvaluatePrPorts } from './evaluate-pr/evaluate-pr-ports.ts';
 import {
   closePrHandler,
   evaluateHeadShaHandler,
+  evaluateMergeGroupHandler,
   evaluatePrHandler,
   recheckCommentHandler,
 } from './evaluation-handlers.ts';
@@ -48,7 +49,7 @@ export interface HandlerDeps {
     | undefined;
   /**
    * What the `evaluate-pr` job runs on, for one job (E07-S04), and the `close-pr` job (E07-S06), the two jobs of the manual
-   * re-evaluation, `recheck-comment` and `evaluate-head-sha` (E07-S07), and the `sweep-repository` job (E07-S09) as well
+   * re-evaluation, `recheck-comment` and `evaluate-head-sha` (E07-S07), the `evaluate-merge-group` job (E22-S01), and the `sweep-repository` job (E07-S09) as well
    * (they use the part of it that is not the engine), and the two `finalise-*` jobs (E14-S04): its GitHub client is bound to the
    * `signal` of the job, so a job that is being shut down does not hold the process on a request. Undefined when the application has no GitHub App or no reporter (the reporter
    * is E09): the handlers then fail every job and keep its delivery for a redelivery.
@@ -115,14 +116,16 @@ function onEvaluationPorts<T extends JobType>(
  * Binds the handlers of the delivery-driven jobs (`evaluate-pr`, `evaluate-head-sha`, `close-pr`, `recheck-comment`,
  * `sync-installation`), of the two the scheduler starts (`sweep`, `sweep-installation`, E07-S08) and of the one a change of
  * policy starts (`sweep-repository`, E07-S09), and of the two that turning enforcement off starts (`finalise-repository` and
- * `finalise-check`, E14-S04), and of the daily purge the scheduler starts (`retention-sweep`, E22-S04). The ones whose
- * consumer is not available fail their jobs (see {@link HandlerUnavailableError}) instead of completing them.
+ * `finalise-check`, E14-S04), of the one a merge queue's group starts (`evaluate-merge-group`, E22-S01), and of the daily purge
+ * the scheduler starts (`retention-sweep`, E22-S04). The ones whose consumer is not available fail their jobs (see
+ * {@link HandlerUnavailableError}) instead of completing them.
  * @throws HandlerRegisteredError when a type already has a handler.
  */
 export function registerHandlers(registry: HandlerRegistry, deps: HandlerDeps): void {
   bindOrFail(registry, 'sync-installation', { needs: deps.syncInstallation, reason: NO_APP }, syncInstallation);
   onEvaluationPorts(registry, deps, 'evaluate-pr', evaluatePrHandler);
   onEvaluationPorts(registry, deps, 'evaluate-head-sha', evaluateHeadShaHandler);
+  onEvaluationPorts(registry, deps, 'evaluate-merge-group', evaluateMergeGroupHandler);
   onEvaluationPorts(registry, deps, 'close-pr', closePrHandler);
   onEvaluationPorts(registry, deps, 'recheck-comment', recheckCommentHandler);
   bindOrFail(registry, 'sweep', { needs: deps.sweep, reason: NO_APP }, sweepHandler);

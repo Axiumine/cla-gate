@@ -158,7 +158,7 @@ test('the recorder sees two jobs of one key at once and two keys at once, and no
 });
 
 realPostgresRolesOnly(
-  'the migrate step creates evaluate-pr as a singleton queue that takes a job back after 300 seconds, the two finalise queues as singleton ones (E07-S09), sweep as an exclusive one (E07-S08), retention-sweep as an exclusive one (E22-S04), and the others as standard',
+  'the migrate step creates evaluate-pr as a singleton queue that takes a job back after 300 seconds, evaluate-merge-group (E22-S01) and the two finalise queues as singleton ones (E07-S09), sweep as an exclusive one (E07-S08), retention-sweep as an exclusive one (E22-S04), and the others as standard',
   async () => {
     const { owner } = await world();
     const { rows } = await sql<{ name: string; policy: string; expire_seconds: number }>`
@@ -169,6 +169,7 @@ realPostgresRolesOnly(
       expire_seconds: 300,
     });
     expect(rows.filter((row) => row.policy !== 'standard').map((row) => row.name)).toEqual([
+      'evaluate-merge-group',
       'evaluate-pr',
       'finalise-check',
       'finalise-repository',

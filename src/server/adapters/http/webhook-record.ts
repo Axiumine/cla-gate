@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { FastifyBaseLogger } from 'fastify';
-import type { WebhookDeliveries } from '../../services/webhook-deliveries.ts';
+import type { DeliveryOutcome, WebhookDeliveries } from '../../services/webhook-deliveries.ts';
 import type { WebhookDelivery } from '../github/webhook-schemas.ts';
 import { AppError } from './errors.ts';
 import type { RecordDelivery } from './webhook-answer.ts';
@@ -37,9 +37,9 @@ export function recordingOf(
   context: RecordingContext,
 ): RecordDelivery {
   const subject = { deliveryId: envelope.deliveryId, event: envelope.event, action: actionOf(delivery) };
-  return async (job) => {
+  const recorded = async (record: () => Promise<DeliveryOutcome>): Promise<DeliveryOutcome> => {
     try {
-      return await deliveries.record(subject, job, context.signal);
+      return await record();
     } catch (error) {
       if (context.signal.aborted) {
         throw error;
@@ -47,5 +47,9 @@ export function recordingOf(
       context.log.error({ err: error }, 'webhook.enqueue_failed');
       throw new AppError(503, 'webhook_enqueue_failed');
     }
+  };
+  return {
+    job: (job) => recorded(() => deliveries.record(subject, job, context.signal)),
+    destroyed: (group) => recorded(() => deliveries.recordDestroyed(subject, group, context.signal)),
   };
 }

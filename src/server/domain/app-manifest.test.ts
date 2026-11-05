@@ -28,9 +28,10 @@ test('the manifest has the shape of the story, in full', () => {
       checks: 'write',
       issues: 'read',
       members: 'read',
+      merge_queues: 'read',
       emails: 'read',
     },
-    default_events: ['pull_request', 'check_run', 'check_suite', 'issue_comment'],
+    default_events: ['pull_request', 'check_run', 'check_suite', 'issue_comment', 'merge_group'],
   });
 });
 

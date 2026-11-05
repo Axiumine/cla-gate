@@ -53,10 +53,11 @@ test('createPgBoss builds the real pg-boss without connecting to anything', asyn
   expect(errors).toEqual([]);
 });
 
-test('the queues are the thirteen of the epic, each once, in lower case', () => {
+test('the queues are the fourteen of the epics, each once, in lower case', () => {
   expect(QUEUES).toEqual([
     'evaluate-pr',
     'evaluate-head-sha',
+    'evaluate-merge-group',
     'close-pr',
     'recheck-comment',
     'sync-installation',

@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { ABSENT, FIXTURE_IDS, FIXTURE_SHA, sorted, webhookFixture, withValue } from './webhook-fixture/test-support.ts';
+import {
+  ABSENT,
+  FIXTURE_BASE_SHA,
+  FIXTURE_GROUP_SHA,
+  FIXTURE_IDS,
+  FIXTURE_SHA,
+  sorted,
+  webhookFixture,
+  withValue,
+} from './webhook-fixture/test-support.ts';
 import { hasPayloadSchema, webhookDeliverySchema } from './webhook-schemas.ts';
 
 const EVENTS = webhookDeliverySchema.options.map((option) => option.shape.event.value);
@@ -53,6 +62,19 @@ const KEPT = [
       installation,
     },
   ],
+  [
+    'merge_group',
+    {
+      action: 'checks_requested',
+      merge_group: {
+        head_sha: FIXTURE_GROUP_SHA,
+        base_sha: FIXTURE_BASE_SHA,
+        head_ref: `refs/heads/gh-readonly-queue/main/pr-7-${FIXTURE_GROUP_SHA}`,
+      },
+      repository,
+      installation,
+    },
+  ],
   ['installation', { action: 'created', installation: { id: FIXTURE_IDS.installation, account } }],
   ['installation_repositories', { action: 'added', installation: { id: FIXTURE_IDS.installation, account } }],
   ['github_app_authorization', { action: 'revoked', sender: { id: FIXTURE_IDS.sender } }],
@@ -64,9 +86,9 @@ test.each(KEPT)('the %s fixture is accepted and keeps only the declared fields',
   expect(result.data).toEqual({ event, payload: kept });
 });
 
-test('the supported events are the seven the App subscribes to, each with a kept-fields row above', () => {
+test('the supported events are the eight the App subscribes to, each with a kept-fields row above', () => {
   expect(sorted(EVENTS)).toEqual(sorted(KEPT.map(([event]) => event)));
-  expect(EVENTS).toHaveLength(7);
+  expect(EVENTS).toHaveLength(8);
 });
 
 test.each(EVENTS)('an action nobody handles still validates for %s (the router ignores it, E06-S04)', (event) => {

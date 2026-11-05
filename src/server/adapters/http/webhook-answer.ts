@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import type { Job } from '../../domain/jobs.ts';
 import { routeWebhook } from '../../domain/webhook-routing.ts';
-import { IGNORE_REASONS, type Routing } from '../../domain/webhook-routing-types.ts';
+import { type DestroyedGroup, IGNORE_REASONS, type Routing } from '../../domain/webhook-routing-types.ts';
 import type { AdmittedRouting } from '../../domain/webhook-tenant.ts';
 import type { DeliveryOutcome } from '../../services/webhook-deliveries.ts';
 import type { WebhookDelivery } from '../github/webhook-schemas.ts';
@@ -53,8 +53,14 @@ export function routeDelivery(
     : routeWebhook(delivery.event, delivery.payload.action, delivery.payload, context);
 }
 
-/** Records a delivery and sends its job (E06-S06): what {@link answerFor} calls for a delivery that starts one. */
-export type RecordDelivery = (job: Job) => Promise<DeliveryOutcome>;
+/**
+ * What {@link answerFor} calls to record a delivery (E06-S06): `job` records a delivery that starts one and sends it; `destroyed`
+ * (E22-S01) records the delivery of a merge group GitHub took down and marks its evaluation, with no job.
+ */
+export interface RecordDelivery {
+  readonly job: (job: Job) => Promise<DeliveryOutcome>;
+  readonly destroyed: (group: DestroyedGroup) => Promise<DeliveryOutcome>;
+}
 
 const DUPLICATE: WebhookAnswer = { statusCode: 200, body: { status: 'duplicate' } };
 
@@ -64,7 +70,8 @@ const DUPLICATE: WebhookAnswer = { statusCode: 200, body: { status: 'duplicate' 
  * job sent through `record` first: `202` `accepted` when it was recorded now, `200` `duplicate` when it was already.
  * A delivery the tenant filter replaced by a sync (E06-S05) is recorded the same way, as the sync it became, and is
  * answered `202` `ignored` with the reason it was replaced for (its event is not acted on, and the reason is what an
- * operator reads in GitHub's delivery log), or `200` `duplicate`. A `record` that fails is not caught here.
+ * operator reads in GitHub's delivery log), or `200` `duplicate`. A merge group taken down is recorded with no job and answered
+ * like a job: `202` `accepted`, or `200` `duplicate` for a redelivery. A `record` that fails is not caught here.
  */
 export async function answerFor(admitted: AdmittedRouting, record: RecordDelivery): Promise<WebhookAnswer> {
   switch (admitted.kind) {
@@ -73,11 +80,15 @@ export async function answerFor(admitted: AdmittedRouting, record: RecordDeliver
     case 'ignored':
       return { statusCode: 202, body: { status: 'ignored', reason: admitted.reason } };
     case 'redirected':
-      return (await record(admitted.job)) === 'duplicate'
+      return (await record.job(admitted.job)) === 'duplicate'
         ? DUPLICATE
         : { statusCode: 202, body: { status: 'ignored', reason: admitted.reason } };
     case 'job':
-      return (await record(admitted.job)) === 'duplicate'
+      return (await record.job(admitted.job)) === 'duplicate'
+        ? DUPLICATE
+        : { statusCode: 202, body: { status: 'accepted' } };
+    case 'destroyed':
+      return (await record.destroyed(admitted.group)) === 'duplicate'
         ? DUPLICATE
         : { statusCode: 202, body: { status: 'accepted' } };
   }

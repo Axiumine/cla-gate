@@ -46,7 +46,12 @@ export type RowTable = (typeof ROW_TABLES)[number];
  * is keyed by the pair (installation, person), so no route names one of its rows. The drafts (E12-S03) are keyed by their
  * document, which the path of a route names; a response never names a row of them by an id of its own.
  */
-export const TENANT_TABLES = [...ROW_TABLES, 'installation_admin_seen', 'cla_drafts'] as const;
+export const TENANT_TABLES = [
+  ...ROW_TABLES,
+  'installation_admin_seen',
+  'cla_drafts',
+  'merge_group_evaluations',
+] as const;
 
 export type TenantTable = (typeof TENANT_TABLES)[number];
 
@@ -175,7 +180,8 @@ async function seedPolicyRows(db: Kysely<Database>, tenant: Tenant, n: number): 
 /**
  * The rows the statements of the job queue (E07) need a neighbour for: an allowlist entry of the repository alone, next to the
  * installation-wide one (a read for the repository of another tenant must not meet it), and an evaluation that is still
- * running, which the cancellation and the reaper act on.
+ * running, which the cancellation and the reaper act on, and (E22-S01) the evaluation of a merge group, whose head SHA is the same
+ * for both tenants (the unique key is the repository's) and whose Check Run id names its owner.
  */
 async function seedJobRows(db: Kysely<Database>, tenant: Tenant, n: number): Promise<void> {
   await db
@@ -196,6 +202,17 @@ async function seedJobRows(db: Kysely<Database>, tenant: Tenant, n: number): Pro
       pr_number: 8,
       head_sha: 'c'.repeat(40),
       result: 'in_progress',
+    })
+    .execute();
+  await db
+    .insertInto('merge_group_evaluations')
+    .values({
+      installation_id: tenant.installationId,
+      repository_id: tenant.repositoryId,
+      head_sha: '9'.repeat(40),
+      base_sha: '8'.repeat(40),
+      result: 'in_progress',
+      check_run_id: n * 10_000 + 5,
     })
     .execute();
 }

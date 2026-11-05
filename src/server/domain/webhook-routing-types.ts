@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { GithubId } from '../../shared/github-id.ts';
 import type { Job } from './jobs.ts';
 
 // The vocabulary of the routing table (E06-S04): what a delivery can become, and what each row of the table is given.
@@ -35,10 +36,26 @@ export const IGNORE_REASONS = [
 /** One reason of {@link IGNORE_REASONS}. */
 export type IgnoreReason = (typeof IGNORE_REASONS)[number];
 
-/** What a delivery becomes: exactly one job, nothing (with the reason), or the answer to a ping. */
+/**
+ * A merge group GitHub took down (E22-S01): where the group was, and the delivery that said so. Numeric ids and the two SHAs
+ * only. It is the one delivery that is recorded without a job: the intake marks the delivery processed and the evaluation of the
+ * group destroyed in one transaction, creating the row when no job has yet (a tombstone, so a job that runs later writes nothing).
+ */
+export interface DestroyedGroup {
+  readonly githubInstallationId: GithubId;
+  readonly githubRepoId: GithubId;
+  readonly headSha: string;
+  /** The base SHA of the group: the row of a group that was destroyed before any job ran needs one. */
+  readonly baseSha: string;
+  /** The `X-GitHub-Delivery` id, which is the idempotency key of the recording. */
+  readonly deliveryId: string;
+}
+
+/** What a delivery becomes: exactly one job, nothing (with the reason), a merge group taken down, or the answer to a ping. */
 export type Routing =
   | { readonly kind: 'job'; readonly job: Job }
   | { readonly kind: 'ignored'; readonly reason: IgnoreReason }
+  | { readonly kind: 'destroyed'; readonly group: DestroyedGroup }
   | { readonly kind: 'pong' };
 
 /** What the router needs to know besides the delivery itself. */

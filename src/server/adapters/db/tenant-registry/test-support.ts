@@ -93,6 +93,7 @@ export const TENANT_MODULES = [
   'services/failing-evaluation-queries.ts',
   'services/finalise/finalise-rows.ts',
   'services/installation-operator.ts',
+  'services/merge-group/merge-group-rows.ts',
   'services/operator-erasure-queries.ts',
   'services/own-signatures-queries.ts',
   'services/public-verification-queries.ts',

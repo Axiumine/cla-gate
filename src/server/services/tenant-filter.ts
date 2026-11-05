@@ -5,11 +5,11 @@ import type { Database } from '../adapters/db/schema.ts';
 import type { Routing } from '../domain/webhook-routing-types.ts';
 import {
   type AdmittedRouting,
-  isTenantJob,
   judgeInstallation,
   judgeRepository,
-  type TenantJob,
+  type TenantSubject,
   type TenantVerdict,
+  tenantSubjectOf,
 } from '../domain/webhook-tenant.ts';
 import { findInstallationByGithubId } from './installation-queries.ts';
 import { createLogLimiter } from './log-limiter.ts';
@@ -39,8 +39,9 @@ export interface TenantFilterOptions {
 
 export interface TenantFilter {
   /**
-   * What the routed delivery becomes once its tenant is known. A routing that is not a job of a tenant's repository
-   * (`ping`, an ignored delivery, `sync-installation`, `revoke-user-sessions`) is returned as it is, with no read.
+   * What the routed delivery becomes once its tenant is known. A routing that is not about a tenant's repository
+   * (`ping`, an ignored delivery, `sync-installation`, `revoke-user-sessions`) is returned as it is, with no read. A job of a
+   * tenant's repository and a merge group taken down (E22-S01) are about one.
    * Otherwise the stored installation named by the payload is read, and for an installation that is served the stored
    * repository too; the delivery then stays the job it was, is ignored with the reason, or is replaced by a sync.
    * A failing read is not caught: the delivery fails and GitHub can redeliver it, never lets a tenant through unchecked.
@@ -52,10 +53,10 @@ export interface TenantFilter {
 type Reader = Pick<TenantFilterOptions, 'db'>;
 
 /** The installation's verdict, then (only for one that is served) the repository's. At most two statements. */
-async function verdictFor({ db }: Reader, job: TenantJob): Promise<TenantVerdict> {
-  const installation = await findInstallationByGithubId(db, job.githubInstallationId);
+async function verdictFor({ db }: Reader, subject: TenantSubject): Promise<TenantVerdict> {
+  const installation = await findInstallationByGithubId(db, subject.githubInstallationId);
   const verdict = judgeInstallation(
-    job,
+    subject,
     installation === null
       ? null
       : {
@@ -70,15 +71,15 @@ async function verdictFor({ db }: Reader, job: TenantJob): Promise<TenantVerdict
   const heldByAnotherInstallation = await isActiveRepositoryOfAnotherInstallation(
     db,
     installation.id,
-    job.githubRepoId,
+    subject.githubRepoId,
   );
-  return judgeRepository(job, { heldByAnotherInstallation });
+  return judgeRepository(subject, { heldByAnotherInstallation });
 }
 
 /** The WARN of a delivery that is not acted on: numeric ids and a constant, as the caller's limit allows. */
-function warnOf(log: TenantLog, job: TenantJob, verdict: Exclude<TenantVerdict, { kind: 'served' }>): void {
+function warnOf(log: TenantLog, subject: TenantSubject, verdict: Exclude<TenantVerdict, { kind: 'served' }>): void {
   log.warn(
-    { githubInstallationId: job.githubInstallationId, githubRepoId: job.githubRepoId, reason: verdict.reason },
+    { githubInstallationId: subject.githubInstallationId, githubRepoId: subject.githubRepoId, reason: verdict.reason },
     verdict.kind === 'ignored' ? 'webhook.tenant_refused' : 'webhook.tenant_redirected',
   );
 }
@@ -91,15 +92,16 @@ export function createTenantFilter(options: TenantFilterOptions): TenantFilter {
   });
   return {
     async admit(routing, log) {
-      if (routing.kind !== 'job' || !isTenantJob(routing.job)) {
+      const subject = tenantSubjectOf(routing);
+      if (subject === undefined) {
         return routing;
       }
-      const verdict = await verdictFor(options, routing.job);
+      const verdict = await verdictFor(options, subject);
       if (verdict.kind === 'served') {
         return routing;
       }
-      if (logLimiter.allow(routing.job.githubInstallationId)) {
-        warnOf(log, routing.job, verdict);
+      if (logLimiter.allow(subject.githubInstallationId)) {
+        warnOf(log, subject, verdict);
       }
       return verdict;
     },

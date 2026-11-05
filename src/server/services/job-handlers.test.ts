@@ -30,7 +30,14 @@ import { sweepWorld } from './sweep/test-support.ts';
 // E07-S06, E07-S07) wired to their code, the scheduled sweep (E07-S08) and the sweep of a repository (E07-S09); a handler whose
 // consumer is not available fails its jobs.
 
-const DELIVERY_DRIVEN = ['evaluate-pr', 'evaluate-head-sha', 'close-pr', 'recheck-comment', 'sync-installation'];
+const DELIVERY_DRIVEN = [
+  'evaluate-pr',
+  'evaluate-head-sha',
+  'close-pr',
+  'recheck-comment',
+  'evaluate-merge-group',
+  'sync-installation',
+];
 const SYNCED: SyncOutcome = {
   status: 'synced',
   changed: true,
@@ -45,7 +52,7 @@ function registered(
   return registry;
 }
 
-test('the registry binds the five delivery-driven handlers, the two of the scheduler, sweep-repository and the two finalise jobs, all of them job types of the catalogue', () => {
+test('the registry binds the six delivery-driven handlers, the two of the scheduler, sweep-repository and the two finalise jobs, all of them job types of the catalogue', () => {
   const types = registered().types();
   expect(types).toEqual(expect.arrayContaining(DELIVERY_DRIVEN));
   expect(types).toEqual([
@@ -53,6 +60,7 @@ test('the registry binds the five delivery-driven handlers, the two of the sched
     'evaluate-head-sha',
     'close-pr',
     'recheck-comment',
+    'evaluate-merge-group',
     'sync-installation',
     'sweep',
     'sweep-installation',

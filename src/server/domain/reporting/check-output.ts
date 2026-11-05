@@ -3,6 +3,7 @@
 import { CHECK_RUN_NAME } from '../../../shared/check.ts';
 import type { CheckConclusion, CheckOutput, CheckView, CoverageCounts } from './check-view.ts';
 import { InvalidIdError, renderId, shortSha } from './encode.ts';
+import { mergeGroupOutput } from './merge-group-output.ts';
 import { renderParts } from './output-parts.ts';
 
 // E09-S02: what the Check Run of a head SHA says, as plain data. `renderCheckOutput` is pure: the view in, the `status`,
@@ -117,5 +118,7 @@ export function renderCheckOutput(view: CheckView): CheckOutput {
       return completed('neutral', TITLES.enforcement_disabled, ENFORCEMENT_DISABLED_SUMMARY);
     case 'evaluation_failed':
       return completed('failure', TITLES.evaluation_failed, EVALUATION_FAILED_SUMMARY);
+    case 'merge_group':
+      return mergeGroupOutput(view.headSha, view.result);
   }
 }

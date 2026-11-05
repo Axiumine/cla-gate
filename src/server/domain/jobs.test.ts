@@ -99,10 +99,11 @@ test('a job that is not an object is refused', () => {
   }
 });
 
-test('the catalogue has the six jobs a webhook can start, and the type names the queue', () => {
+test('the catalogue has the seven jobs a webhook can start, and the type names the queue', () => {
   expect(sorted(ALL.map((job) => job.type))).toEqual([
     'close-pr',
     'evaluate-head-sha',
+    'evaluate-merge-group',
     'evaluate-pr',
     'recheck-comment',
     'revoke-user-sessions',

@@ -109,7 +109,13 @@ const STATES = [
   },
 ] as const;
 
-const TENANT_EVENTS: readonly WebhookEvent[] = ['pull_request', 'check_run', 'check_suite', 'issue_comment'];
+const TENANT_EVENTS: readonly WebhookEvent[] = [
+  'pull_request',
+  'check_run',
+  'check_suite',
+  'issue_comment',
+  'merge_group',
+];
 
 const ROWS = TENANT_EVENTS.flatMap((event) => STATES.map((state) => ({ event, ...state })));
 

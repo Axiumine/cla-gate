@@ -74,35 +74,56 @@ function keptCommits(fetched: readonly GitHubCommit[], shas: readonly string[]):
   ];
 }
 
-async function repoWalk(scope: ListingScope, pr: GitHubPullRequest): Promise<Attempt> {
+/**
+ * What reading the history behind a head SHA found (E08-S07, and E22-S01 for the commits of a merge group): the SHAs between the
+ * merge base and the head with every commit fetched (`complete`), a history above the limits of the walk (`exceeded`, which carries
+ * the state of the listing and no commit), or a history that does not add up (`mismatch`).
+ */
+export type History =
+  | {
+      readonly kind: 'complete';
+      readonly shas: readonly string[];
+      readonly fetched: readonly GitHubCommit[];
+      readonly listing: ListingState;
+    }
+  | { readonly kind: 'exceeded'; readonly listing: ListingState }
+  | { readonly kind: 'mismatch' };
+
+/** The commits that `headSha` reaches and `mergeBaseSha` does not, read page by page from the repository's commit list. */
+export async function readHistory(scope: ListingScope, headSha: string, mergeBaseSha: string): Promise<History> {
   const { github, githubInstallationId, fullName } = scope;
-  const { mergeBaseSha } = await github.compareCommits(githubInstallationId, fullName, pr.baseSha, pr.headSha);
   const fetched: GitHubCommit[] = [];
   for (let pagesFetched = 1; ; pagesFetched += 1) {
-    const page = await github.listRepositoryCommits(githubInstallationId, fullName, pr.headSha, pagesFetched);
+    const page = await github.listRepositoryCommits(githubInstallationId, fullName, headSha, pagesFetched);
     fetched.push(...page.commits);
-    const walk = collectRepoWalk({
-      headSha: pr.headSha,
-      mergeBaseSha,
-      commits: fetched,
-      pagesFetched,
-      exhausted: page.last,
-    });
+    const walk = collectRepoWalk({ headSha, mergeBaseSha, commits: fetched, pagesFetched, exhausted: page.last });
     const listing = listingStateOf(walk);
     if (walk.status === 'need_next_page') {
       continue;
     }
     // `inconsistent` is the one result that settles nothing and asks for nothing: it is a listing that does not add up.
     if (walk.status === 'inconsistent' || listing === null) {
-      return 'mismatch';
+      return { kind: 'mismatch' };
     }
-    if (walk.status === 'exceeded') {
-      return { listing, commits: [] };
-    }
-    return verifyListing(pr.commitCount, walk.shas) === 'ok'
-      ? { listing, commits: keptCommits(fetched, walk.shas) }
-      : 'mismatch';
+    return walk.status === 'exceeded'
+      ? { kind: 'exceeded', listing }
+      : { kind: 'complete', shas: walk.shas, fetched, listing };
   }
+}
+
+async function repoWalk(scope: ListingScope, pr: GitHubPullRequest): Promise<Attempt> {
+  const { github, githubInstallationId, fullName } = scope;
+  const { mergeBaseSha } = await github.compareCommits(githubInstallationId, fullName, pr.baseSha, pr.headSha);
+  const history = await readHistory(scope, pr.headSha, mergeBaseSha);
+  if (history.kind === 'mismatch') {
+    return 'mismatch';
+  }
+  if (history.kind === 'exceeded') {
+    return { listing: history.listing, commits: [] };
+  }
+  return verifyListing(pr.commitCount, history.shas) === 'ok'
+    ? { listing: history.listing, commits: keptCommits(history.fetched, history.shas) }
+    : 'mismatch';
 }
 
 /** One try at listing the commits of `pr`, the way `planCommitListing` says. */

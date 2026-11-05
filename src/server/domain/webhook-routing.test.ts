@@ -2,7 +2,19 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { jobSchema } from './jobs.ts';
-import { CONTEXT, JOBS, payloadOf, type SubscribedEvent, sorted } from './test-support.ts';
+import {
+  CONTEXT,
+  DELIVERY_ID,
+  GROUP_BASE_SHA,
+  GROUP_SHA,
+  GROUP_TIP_NUMBER,
+  IDS,
+  JOBS,
+  payloadOf,
+  type SubscribedEvent,
+  sorted,
+  withValue,
+} from './test-support.ts';
 import { ROUTED_EVENTS, routeWebhook, SUBSCRIBED_EVENTS } from './webhook-routing.ts';
 import type { Routing } from './webhook-routing-types.ts';
 
@@ -17,6 +29,17 @@ const EVALUATE_PR = jobOf(JOBS.evaluatePr);
 const CLOSE_PR = jobOf(JOBS.closePr);
 const EVALUATE_HEAD_SHA = jobOf(JOBS.evaluateHeadSha);
 const RECHECK_COMMENT = jobOf(JOBS.recheckComment);
+const EVALUATE_MERGE_GROUP = jobOf(JOBS.evaluateMergeGroup);
+const DESTROYED_GROUP = {
+  kind: 'destroyed',
+  group: {
+    githubInstallationId: IDS.installation,
+    githubRepoId: IDS.repository,
+    headSha: GROUP_SHA,
+    baseSha: GROUP_BASE_SHA,
+    deliveryId: DELIVERY_ID,
+  },
+};
 const SYNC_INSTALLATION = jobOf(JOBS.syncInstallation);
 const REVOKE_USER_SESSIONS = jobOf(JOBS.revokeUserSessions);
 const UNSUPPORTED_ACTION = { kind: 'ignored', reason: 'unsupported_action' };
@@ -59,6 +82,13 @@ const PAIRS: readonly (readonly [event: SubscribedEvent, action: string | undefi
   ['issue_comment', 'deleted', UNSUPPORTED_ACTION],
   ['issue_comment', 'Created', UNSUPPORTED_ACTION],
   ['issue_comment', undefined, UNSUPPORTED_ACTION],
+  ['merge_group', 'checks_requested', EVALUATE_MERGE_GROUP],
+  ['merge_group', 'destroyed', DESTROYED_GROUP],
+  ['merge_group', 'Checks_Requested', UNSUPPORTED_ACTION],
+  ['merge_group', 'Destroyed', UNSUPPORTED_ACTION],
+  ['merge_group', 'an_action_github_adds_later', UNSUPPORTED_ACTION],
+  ['merge_group', '', UNSUPPORTED_ACTION],
+  ['merge_group', undefined, UNSUPPORTED_ACTION],
   ['installation', 'created', SYNC_INSTALLATION],
   ['installation', 'deleted', SYNC_INSTALLATION],
   ['installation', 'suspend', SYNC_INSTALLATION],
@@ -86,7 +116,6 @@ const UNROUTED: readonly (readonly [event: string, expected: Expected])[] = [
   ['ping', PONG],
   ['push', UNSUPPORTED_EVENT],
   ['repository', UNSUPPORTED_EVENT],
-  ['merge_group', UNSUPPORTED_EVENT],
   ['issues', UNSUPPORTED_EVENT],
   ['release', UNSUPPORTED_EVENT],
   ['workflow_run', UNSUPPORTED_EVENT],
@@ -156,4 +185,38 @@ test('every job of the table is a job of the catalogue that carries the delivery
     expect(jobSchema.parse(job)).toEqual(job);
     expect(job.deliveryId).toBe(CONTEXT.deliveryId);
   }
+});
+
+/** The job of a group's `checks_requested` delivery whose branch is named `headRef`. */
+function groupJob(headRef: string) {
+  const payload = withValue(payloadOf('merge_group'), 'merge_group.head_ref', headRef);
+  return jobOfRouting(routeWebhook('merge_group', 'checks_requested', payload, CONTEXT));
+}
+
+test('the job of a merge group carries the ids, both SHAs and the number of the last pull request, and nothing the delivery wrote', () => {
+  const job = groupJob(`refs/heads/gh-readonly-queue/main/pr-${GROUP_TIP_NUMBER}-${GROUP_SHA}`);
+  expect(job).toEqual(JOBS.evaluateMergeGroup);
+  expect(JSON.stringify(job)).not.toContain('CANARY');
+  expect(job).toMatchObject({ headSha: GROUP_SHA, baseSha: GROUP_BASE_SHA });
+});
+
+test.each([
+  ['a branch that is not a merge queue branch', 'refs/heads/feature/pr-41'],
+  ['a number with a leading zero', `refs/heads/gh-readonly-queue/main/pr-041-${GROUP_SHA}`],
+  ['a number of eleven digits', `refs/heads/gh-readonly-queue/main/pr-12345678901-${GROUP_SHA}`],
+  ['a number of zero', `refs/heads/gh-readonly-queue/main/pr-0-${GROUP_SHA}`],
+  ['a SHA that is not forty digits', 'refs/heads/gh-readonly-queue/main/pr-41-abc123'],
+  ['a name with text after the SHA', `refs/heads/gh-readonly-queue/main/pr-41-${GROUP_SHA}-x`],
+  ['no base branch', `refs/heads/gh-readonly-queue/pr-41-${GROUP_SHA}`],
+  ['an empty name', ''],
+])('the job of a group whose branch is %s names no pull request, so the job fails closed', (_name, headRef) => {
+  const job = groupJob(headRef);
+  expect(job).toBeDefined();
+  expect(job).not.toHaveProperty('tipPrNumber');
+  expect(job).toMatchObject({ type: 'evaluate-merge-group', headSha: GROUP_SHA });
+});
+
+test('a base branch with slashes still gives the number of the last pull request', () => {
+  const job = groupJob(`refs/heads/gh-readonly-queue/release/2026/pr-9-${GROUP_SHA}`);
+  expect(job).toMatchObject({ tipPrNumber: 9 });
 });

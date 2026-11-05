@@ -21,6 +21,7 @@ const KEYS: ReadonlyMap<string, string> = new Map([
   ['Repository: Pull requests', 'pull_requests'],
   ['Repository: Checks', 'checks'],
   ['Repository: Issues', 'issues'],
+  ['Repository: Merge queues', 'merge_queues'],
   ['Organization: Members', 'members'],
   ['Account: Email addresses', 'emails'],
 ]);
@@ -73,7 +74,7 @@ test('the permissions of the manifest are the permission rows of the table in do
 });
 
 test('the events of the manifest are the events the Events row subscribes to', () => {
-  expect(documentedEvents()).toEqual(['pull_request', 'check_run', 'check_suite', 'issue_comment']);
+  expect(documentedEvents()).toEqual(['pull_request', 'check_run', 'check_suite', 'issue_comment', 'merge_group']);
   expect(manifest.default_events).toEqual(documentedEvents());
   expect(manifest.default_events).toEqual([...APP_EVENTS]);
 });

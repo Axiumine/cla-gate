@@ -26,6 +26,10 @@ export type QueuePolicy = 'standard' | 'singleton' | 'exclusive';
  * `singleton`, and why not the other policies of the pg-boss documentation, is decided by `serialisation-real.test.ts`
  * and `serialisation-interleavings.test.ts`.
  *
+ * `evaluate-merge-group` is `singleton` too (E22-S01): one run per (repository, head SHA) at a time, so two deliveries of one
+ * group (a redelivery, a `checks_requested` sent twice) never write the Check Run at once. The key is the repository and the head
+ * SHA, never the pull request: a group has no pull request of its own.
+ *
  * `finalise-repository` and `finalise-check` are `singleton` as well (E07-S09), with the same kind of key: one run per
  * repository, and one per (repository, pull request) as for `evaluate-pr`, so two finalisations of one pull request never
  * overlap. The policy holds within one queue only, so a finalisation does not wait for an `evaluate-pr` that is in
@@ -42,6 +46,7 @@ export type QueuePolicy = 'standard' | 'singleton' | 'exclusive';
 export const QUEUE_DEFINITIONS = [
   { name: 'evaluate-pr', policy: 'singleton' },
   { name: 'evaluate-head-sha', policy: 'standard' },
+  { name: 'evaluate-merge-group', policy: 'singleton' },
   { name: 'close-pr', policy: 'standard' },
   { name: 'recheck-comment', policy: 'standard' },
   { name: 'sync-installation', policy: 'standard' },

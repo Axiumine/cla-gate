@@ -24,11 +24,22 @@ export const INSTALLATION_PERMISSIONS = {
 /** What the login reads about the person, not about an installation: verified email addresses, with the user's own token. */
 const ACCOUNT_PERMISSIONS = { emails: 'read' } as const;
 
+/**
+ * What the merge queue support needs (E22-S01): `merge_group` events arrive only once an organisation owner has accepted this
+ * permission. It is not in {@link INSTALLATION_PERMISSIONS} on purpose: an installation without it works for pull requests, so the
+ * sync must not warn about its absence.
+ */
+const MERGE_QUEUE_PERMISSIONS = { merge_queues: 'read' } as const;
+
 /** Every permission the App is created with: the `default_permissions` of the manifest. */
-export const APP_PERMISSIONS = { ...INSTALLATION_PERMISSIONS, ...ACCOUNT_PERMISSIONS } as const;
+export const APP_PERMISSIONS = {
+  ...INSTALLATION_PERMISSIONS,
+  ...MERGE_QUEUE_PERMISSIONS,
+  ...ACCOUNT_PERMISSIONS,
+} as const;
 
 /**
  * The events the App subscribes to: the `default_events` of the manifest. `installation`, `installation_repositories` and
  * `github_app_authorization` always arrive and are not subscribed to, so they are not here (the webhook router lists them too).
  */
-export const APP_EVENTS = ['pull_request', 'check_run', 'check_suite', 'issue_comment'] as const;
+export const APP_EVENTS = ['pull_request', 'check_run', 'check_suite', 'issue_comment', 'merge_group'] as const;

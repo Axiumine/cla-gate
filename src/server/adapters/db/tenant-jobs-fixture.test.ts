@@ -44,5 +44,7 @@ test('only the writes that can be turned away name a refusal', () => {
     'services/evaluate-pr/evaluation-rows.ts startEvaluation',
     'services/evaluate-pr/evaluation-rows.ts finishEvaluation',
     'services/evaluate-pr/evaluation-rows.ts failEvaluation',
+    'services/merge-group/merge-group-rows.ts startGroupEvaluation',
+    'services/merge-group/merge-group-rows.ts failGroupEvaluation',
   ]);
 });

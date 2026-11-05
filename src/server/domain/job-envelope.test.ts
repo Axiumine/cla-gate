@@ -18,12 +18,13 @@ const FINALISE_CHECK = { type: 'finalise-check', ...REPOSITORY_IDS, prNumber: ID
 const REPOSITORY_JOBS = [SWEEP_REPOSITORY, FINALISE_REPOSITORY, FINALISE_CHECK];
 const ALL = [...Object.values(JOBS), SWEEP, SWEEP_INSTALLATION, ...REPOSITORY_JOBS, RETENTION_SWEEP];
 
-test('the envelope has the twelve jobs a worker can receive, in the order of the schema', () => {
+test('the envelope has the thirteen jobs a worker can receive, in the order of the schema', () => {
   expect(JOB_TYPES).toEqual([
     'evaluate-pr',
     'evaluate-head-sha',
     'close-pr',
     'recheck-comment',
+    'evaluate-merge-group',
     'sync-installation',
     'revoke-user-sessions',
     'sweep',

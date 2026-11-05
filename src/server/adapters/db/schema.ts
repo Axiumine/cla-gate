@@ -163,6 +163,21 @@ interface PrEvaluationsTable {
   updated_at: Generated<Date>;
 }
 
+/** The evaluation of a merge queue's group (migration 018, E22-S01): one row per head SHA of a repository, `destroyed_at` set when GitHub took the group down. */
+interface MergeGroupEvaluationsTable {
+  id: Generated<number>;
+  installation_id: number;
+  repository_id: number;
+  head_sha: string;
+  base_sha: string;
+  result: Generated<'in_progress' | 'success' | 'failure'>;
+  details: JsonObject<true>;
+  check_run_id: number | null;
+  destroyed_at: Date | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 interface WebhookDeliveriesTable {
   delivery_id: string;
   event: string;
@@ -212,6 +227,7 @@ export interface Database {
   commit_overrides: CommitOverridesTable;
   allowlist_entries: AllowlistEntriesTable;
   pr_evaluations: PrEvaluationsTable;
+  merge_group_evaluations: MergeGroupEvaluationsTable;
   webhook_deliveries: WebhookDeliveriesTable;
   audit_log: AuditLogTable;
   installation_admin_seen: InstallationAdminSeenTable;

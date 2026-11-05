@@ -4,6 +4,8 @@ import type { Kysely, Transaction } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import type { Job } from '../domain/jobs.ts';
 import { deliveryRateLimit } from '../domain/recheck.ts';
+import type { DestroyedGroup } from '../domain/webhook-routing-types.ts';
+import { markGroupDestroyed } from './merge-group/merge-group-rows.ts';
 import type { JobEnqueuer } from './ports/jobs.ts';
 import { type DeliverySubject, insertDelivery, isProcessed, markDeliveryProcessed } from './webhook-delivery-rows.ts';
 
@@ -31,6 +33,13 @@ export interface WebhookDeliveries {
    * statement or send starts and the transaction is rolled back, as soon as the one in flight has returned.
    */
   record(subject: DeliverySubject, job: Job, signal?: AbortSignal): Promise<DeliveryOutcome>;
+  /**
+   * Records the delivery of a merge group taken down (E22-S01) and ends the evaluation of the group, in one transaction, with no
+   * job: inserts the delivery (`on conflict (delivery_id) do nothing`), answers `duplicate` when it was recorded and finished
+   * before, sets `destroyed_at` of the evaluation of the group (when it has one) and marks the delivery processed, since no job will.
+   * A failed statement rolls everything back and is thrown, so a redelivery works; `signal` stops it as it stops `record`.
+   */
+  recordDestroyed(subject: DeliverySubject, group: DestroyedGroup, signal?: AbortSignal): Promise<DeliveryOutcome>;
   /** `markDeliveryProcessed` on this database, for the job layer (E07-S03) to call when the delivery's job completes. */
   markDeliveryProcessed(deliveryId: string): Promise<void>;
 }
@@ -77,11 +86,28 @@ async function recordInTransaction(
   return isNew ? 'accepted' : 'duplicate';
 }
 
+async function destroyInTransaction(
+  trx: Transaction<Database>,
+  subject: DeliverySubject,
+  group: { readonly destroyed: DestroyedGroup; readonly signal: AbortSignal | undefined },
+): Promise<DeliveryOutcome> {
+  const { destroyed, signal } = group;
+  const isNew = await step(signal, () => insertDelivery(trx, subject));
+  if (!isNew && (await step(signal, () => isProcessed(trx, subject.deliveryId)))) {
+    return 'duplicate';
+  }
+  await step(signal, () => markGroupDestroyed(trx, destroyed));
+  await step(signal, () => markDeliveryProcessed(trx, subject.deliveryId));
+  return 'accepted';
+}
+
 export function createWebhookDeliveries(options: WebhookDeliveriesOptions): WebhookDeliveries {
   const { db, enqueuer } = options;
   return {
     record: (subject, job, signal) =>
       db.transaction().execute((trx) => recordInTransaction(trx, subject, job, { enqueuer, signal })),
+    recordDestroyed: (subject, destroyed, signal) =>
+      db.transaction().execute((trx) => destroyInTransaction(trx, subject, { destroyed, signal })),
     markDeliveryProcessed: (deliveryId) => markDeliveryProcessed(db, deliveryId),
   };
 }

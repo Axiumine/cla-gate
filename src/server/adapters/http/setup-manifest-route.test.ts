@@ -40,9 +40,10 @@ test("a personal App: the address is GitHub's page for a user and the manifest i
       checks: 'write',
       issues: 'read',
       members: 'read',
+      merge_queues: 'read',
       emails: 'read',
     },
-    default_events: ['pull_request', 'check_run', 'check_suite', 'issue_comment'],
+    default_events: ['pull_request', 'check_run', 'check_suite', 'issue_comment', 'merge_group'],
   });
 });
 

@@ -56,6 +56,7 @@ test('every job type of the catalogue has a queue of the same name', () => {
   expect(types.toSorted((a, b) => a.localeCompare(b))).toEqual([
     'close-pr',
     'evaluate-head-sha',
+    'evaluate-merge-group',
     'evaluate-pr',
     'recheck-comment',
     'revoke-user-sessions',

@@ -237,6 +237,7 @@ export function interleaved(
     failed: (target, code) => inner.failed(target, code),
     cancelled: (target) => inner.cancelled(target),
     enforcementDisabled: (target) => inner.enforcementDisabled(target),
+    mergeGroup: (target, result) => inner.mergeGroup(target, result),
   };
 }
 

@@ -20,9 +20,10 @@ test('the queues are the names of the definitions, in their order, each once', (
   expect(new Set(QUEUES).size).toBe(QUEUES.length);
 });
 
-test('evaluate-pr and the two finalise queues are singleton (any number wait, one per key runs) and sweep and retention-sweep (E22-S04) are the exclusive queues (E07-S08, E07-S09). The others are standard', () => {
+test('evaluate-pr, evaluate-merge-group (E22-S01) and the two finalise queues are singleton (any number wait, one per key runs) and sweep and retention-sweep (E22-S04) are the exclusive queues (E07-S08, E07-S09). The others are standard', () => {
   expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'singleton')).toEqual([
     { name: 'evaluate-pr', policy: 'singleton' },
+    { name: 'evaluate-merge-group', policy: 'singleton' },
     { name: 'finalise-repository', policy: 'singleton' },
     { name: 'finalise-check', policy: 'singleton' },
   ]);
@@ -30,7 +31,7 @@ test('evaluate-pr and the two finalise queues are singleton (any number wait, on
     { name: 'sweep', policy: 'exclusive' },
     { name: 'retention-sweep', policy: 'exclusive' },
   ]);
-  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 5);
+  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 6);
 });
 
 test("pg-boss's queue of scheduled occurrences is not one of ours: no entry of QUEUES, the bounds of the others and no dead-letter queue (E07-S08)", () => {
