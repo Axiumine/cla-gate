@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { seedSignatures } from '../../services/export/export-fixture/test-support.ts';
+import { RATE_LIMITS } from './rate-limit.ts';
 import { pageOf, searchWorld } from './signature-search-fixture/test-support.ts';
 
 // The pages of `GET /api/installations/:installationId/signatures` (E15-S02): newest signature first, ties broken by the larger id,
-// and a keyset cursor that holds the place of the next row.
+// and a keyset cursor that holds the place of the next row. The clock stands still unless a test moves it, and the walk of all the pages
+// moves it a minute whenever it has spent the budget of the search (see signature-search-rate.test.ts), as a person would wait.
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 /** 120 signatures of the installation document that share seven instants, so that most rows have a tie on `signed_at`. */
 async function worldWithTies() {
@@ -35,6 +45,9 @@ async function pagesOf(world: Awaited<ReturnType<typeof worldWithTies>>, limit: 
     const page = pageOf(await world.search('admin1', world.t1.installationId, pageQuery(limit, cursor)));
     pages.push(page.items.map((item) => item.id));
     cursor = page.nextCursor;
+    if (pages.length % RATE_LIMITS.signatureSearch === 0) {
+      vi.advanceTimersByTime(60_000);
+    }
   } while (cursor !== null);
   return pages;
 }

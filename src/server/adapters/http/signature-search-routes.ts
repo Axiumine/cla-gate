@@ -7,6 +7,7 @@ import { requireAuth } from './auth-request.ts';
 import { AppError } from './errors.ts';
 import type { InstallationRoutesOptions } from './installation-routes.ts';
 import { setNoStore } from './no-store.ts';
+import { RATE_LIMITS, userRateLimit } from './rate-limit.ts';
 import { parseInput } from './request-body.ts';
 import { readSignatureCursor } from './signature-search-cursor.ts';
 import { presentSignaturePage } from './signature-search-presenter.ts';
@@ -20,7 +21,8 @@ import { byInstallationParam } from './tenant-resolvers.ts';
  * passes (`any_role`), so a person with no role gets the uniform `404`; the documents the person may read are then decided by
  * the scope of each document: an org admin reads every document, a repository admin the ones scoped to a repository they administer.
  * A `documentId` outside that set is the same `404`. The route reads only: it records no audit row (the export is the audited read,
- * E16-S03), and the answer is told not to be cached. The query is read in the handler after the guard, so a stranger learns nothing
+ * E16-S03), and the answer is told not to be cached. Each person may ask thirty times a minute, counted after the guard, so the search
+ * is not a way round the six a minute of the export. The query is read in the handler after the guard, so a stranger learns nothing
  * of how it is read.
  */
 export const signatureSearchRoutes: FastifyPluginCallbackZod<InstallationRoutesOptions> = (app, options, done) => {
@@ -30,7 +32,12 @@ export const signatureSearchRoutes: FastifyPluginCallbackZod<InstallationRoutesO
     {
       // Stryker disable next-line ObjectLiteral: the response schema restates what the handler returns, so dropping it changes no response
       schema: { response: { 200: signatureSearchPageSchema } },
-      config: { access: tenantAccess({ mode: 'read', resolve: byInstallationParam(db, 'any_role') }) },
+      // A HEAD twin would have a budget of its own and double the person's.
+      exposeHeadRoute: false,
+      config: {
+        access: tenantAccess({ mode: 'read', resolve: byInstallationParam(db, 'any_role') }),
+        rateLimit: userRateLimit(RATE_LIMITS.signatureSearch),
+      },
     },
     async (request, reply) => {
       const tenant = requireTenant(request);
