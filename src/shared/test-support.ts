@@ -218,6 +218,13 @@ export const MARKER_RUNS: readonly (readonly [label: string, build: (bytes: numb
 /** A clock in milliseconds from any starting point: `performance.now` in a test of the code, a counter in the test of `slowdownOf`. */
 export type Clock = () => number;
 
+/**
+ * The size of the large text of the linear-time tests, 64 KiB (the small ones are a sixteenth of it, 4 KiB). Large enough that a
+ * scan that reads every line again for every line is sixteen times slower on it (by seconds), small enough that the measure
+ * stays under the test timeout in the sandbox of the mutation gate, where a pass over 200 KiB took 3 seconds on the slow runner.
+ */
+export const TIMED_BYTES = 65_536;
+
 /** How many times larger the large text of `slowdownOf` is than each of the small ones, which are as many as that. */
 export const SIZE_RATIO = 16;
 
@@ -230,8 +237,17 @@ export const SIZE_RATIO = 16;
  */
 export const MOST_LINEAR_SLOWDOWN = 6;
 
-/** Timed runs of each side: the fastest of them is kept, so a pause of the process (the garbage collector, other work on the machine) in one run costs nothing. */
+/** Timed runs of each side at most: the fastest of them is kept, so a pause of the process (the garbage collector, other work on the machine) in one run costs nothing. */
 const TIMED_RUNS = 7;
+
+/**
+ * Timed runs of each side at least. After this many, a ratio under the limit ends the measurement: in the sandbox of the mutation
+ * gate every executed line of the code under test also records which test ran it, a pass over 200 KiB takes seconds there, and
+ * the seven runs of the measure took the whole test timeout of 30 s (the dry run of the `shared` shard, 2026-11-05). Two runs
+ * keep the protection against one pause: a quadratic scan, 16 here, reads under the limit of 6 only when the small texts were
+ * slowed by a factor of 2.7 in both runs and the large one in neither.
+ */
+const LEAST_RUNS = 2;
 
 /** The least time, in milliseconds, that is taken as measured: a run below it (a scan that stops on the first line) is within the noise of the clock and would make the ratio of two noises. */
 const CLOCK_FLOOR_MS = 0.05;
@@ -250,8 +266,8 @@ function timeOf(task: () => void, now: Clock): number {
  * proves nothing on a fast one, and the ratio of two single runs of different lengths is biased by the load: the scheduler cuts a
  * long run more often than a short one, and the fastest of several short runs is nearly free of it (a run of the large text over
  * the run of one small text read 80 where linear is 16, at a load average of 140). Two sides that last about as long are cut
- * alike, so the ratio holds on a busy machine. Each side is timed `TIMED_RUNS` times, one after the other, and the fastest of each
- * is compared.
+ * alike, so the ratio holds on a busy machine. Each side is timed one after the other and the fastest of each is compared: at
+ * least `LEAST_RUNS` times, and up to `TIMED_RUNS` times while the ratio is not under `MOST_LINEAR_SLOWDOWN`.
  * @param work The code under test.
  * @param build The text of the given size in bytes.
  * @param bytes The size of the large text.
@@ -268,7 +284,8 @@ export function slowdownOf(
   const large = build(bytes);
   let fastestSmall = Number.POSITIVE_INFINITY;
   let fastestLarge = Number.POSITIVE_INFINITY;
-  for (let run = 0; run < TIMED_RUNS; run += 1) {
+  let slowdown = Number.POSITIVE_INFINITY;
+  for (let run = 1; run <= TIMED_RUNS && (run <= LEAST_RUNS || slowdown >= MOST_LINEAR_SLOWDOWN); run += 1) {
     const smalls = timeOf(() => {
       for (let copy = 0; copy < SIZE_RATIO; copy += 1) {
         work(small);
@@ -279,6 +296,7 @@ export function slowdownOf(
       fastestLarge,
       timeOf(() => work(large), now),
     );
+    slowdown = fastestLarge / Math.max(fastestSmall, CLOCK_FLOOR_MS);
   }
-  return fastestLarge / Math.max(fastestSmall, CLOCK_FLOOR_MS);
+  return slowdown;
 }

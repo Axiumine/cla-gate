@@ -12,6 +12,7 @@ import {
   nestedEmphasis,
   nestedQuotes,
   slowdownOf,
+  TIMED_BYTES,
 } from './test-support.ts';
 
 // The depth rule of the CLA text (E12-S07): how the nesting of a text is measured in a tree, the line that the rendering refuses before
@@ -128,7 +129,7 @@ test.each(MARKER_RUNS)(
   'a text of 100 KiB of %s as container markers is refused in time linear in its size',
   (_label, build) => {
     expect(isNestedTooDeeply(build(102_400))).toBe(true);
-    expect(slowdownOf(isNestedTooDeeply, build, 102_400)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
+    expect(slowdownOf(isNestedTooDeeply, build, TIMED_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
   },
 );
 

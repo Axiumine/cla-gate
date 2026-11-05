@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { containerDepth } from './cla-markdown-containers.ts';
 import { nestingOf } from './cla-markdown-nesting.ts';
 import { documentProcessor } from './cla-markdown-parse.ts';
-import { generatedMarkdown, MARKER_RUNS, MOST_LINEAR_SLOWDOWN, slowdownOf } from './test-support.ts';
+import { generatedMarkdown, MARKER_RUNS, MOST_LINEAR_SLOWDOWN, slowdownOf, TIMED_BYTES } from './test-support.ts';
 
 // The line scan that measures how deep the quotes and lists of a CLA text nest (E12-S07) in time linear in the size of the text. Each
 // row has the depth CommonMark gives the text, and the scan and the parser of the rendering must both give it.
@@ -106,6 +106,6 @@ test.each(MARKER_RUNS)(
   'a text of 100 KiB of %s as container markers is read in time linear in its size',
   (_label, build) => {
     expect(containerDepth(build(102_400), LIMIT)).toBe(LIMIT + 1);
-    expect(slowdownOf((text) => containerDepth(text, LIMIT), build, 102_400)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
+    expect(slowdownOf((text) => containerDepth(text, LIMIT), build, TIMED_BYTES)).toBeLessThan(MOST_LINEAR_SLOWDOWN);
   },
 );
