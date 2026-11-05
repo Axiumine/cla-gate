@@ -48,6 +48,7 @@ test('a query that meets another tenant by design says why and names the test th
     Object.entries(queries).flatMap(([name, query]) => (query.kind === 'by_design' ? [{ file, name, query }] : [])),
   );
   expect(byDesign.map(({ name }) => name).toSorted((a, b) => a.localeCompare(b))).toEqual([
+    'eraseInInstallation',
     'findPublicRepository',
     'findSignRepository',
     'installationOfRepository',
@@ -57,6 +58,7 @@ test('a query that meets another tenant by design says why and names the test th
     'ownAuditEntries',
     'ownSignatureRows',
     'ownSignatures',
+    'readSignerFootprint',
     'releaseTransferred',
   ]);
   for (const { name, query } of byDesign) {

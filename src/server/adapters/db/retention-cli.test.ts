@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import process from 'node:process';
-import type { Kysely } from 'kysely';
-import { expect, onTestFinished, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import {
   at,
   DAY,
@@ -12,8 +11,8 @@ import {
   retentionWorld,
 } from '../../services/retention/test-support.ts';
 import { FakeClock } from '../../services/test-support.ts';
+import { brokenDatabase, closable } from './cli-fixture/test-support.ts';
 import { type RetentionCliOptions, runRetentionCli } from './retention-cli.ts';
-import type { Database } from './schema.ts';
 
 // `node src/server/retention.ts [--dry-run]` (E22-S04): the arguments, the exit codes, what it prints, and that it prints counts
 // and names of tables and nothing a row holds.
@@ -24,18 +23,6 @@ const ENV = { DATABASE_URL: URL_WITH_PASSWORD };
 const USAGE = 'usage: node src/server/retention.ts [--dry-run]';
 
 type Connect = NonNullable<RetentionCliOptions['connect']>;
-
-/**
- * `db` as the command is given it: every call goes to the shared test database, except `destroy`, which the command makes at the
- * end of a run and which must not close the database the test goes on reading. `destroy` is the spy that sees it.
- */
-function closable(db: Kysely<Database>) {
-  const destroy = vi.spyOn(db, 'destroy').mockImplementation(() => Promise.resolve());
-  onTestFinished(() => {
-    destroy.mockRestore();
-  });
-  return { handle: db, destroy };
-}
 
 /** Capturing sinks, and a connection to a database that is the given one. */
 async function scene(settings: Record<string, string> = {}) {
@@ -138,21 +125,6 @@ test('without a database url it exits 1 and names DATABASE_URL, never a value', 
   expect(await runRetentionCli(options([], { env: {} }))).toBe(1);
   expect(err).toEqual([expect.stringMatching(/^retention failed: DATABASE_URL: must be a postgres/)]);
 });
-
-/** A database that fails every statement with a PostgreSQL error that quotes a row, and counts how often it is closed. */
-function brokenDatabase(world: Kysely<Database>) {
-  const failure = Object.assign(new Error('duplicate key value (zzzz-row) violates the constraint'), {
-    name: 'error',
-    code: '23505',
-    detail: 'Key (delivery_id)=(zzzz-row) already exists.',
-  });
-  return world.withPlugin({
-    transformQuery: () => {
-      throw failure;
-    },
-    transformResult: (args) => Promise.resolve(args.result),
-  });
-}
 
 test('a failure exits 1 and prints the name and the code of the error, never its message or the row it quotes', async () => {
   const { world, out, err, options } = await scene();

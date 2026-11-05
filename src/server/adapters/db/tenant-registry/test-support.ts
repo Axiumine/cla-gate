@@ -5,7 +5,6 @@ import { parseGithubId } from '../../../../shared/github-id.ts';
 import { forgetAdminSeen, recordAdminSeen, wasAdminSeenSince } from '../../../services/admin-ledger-queries.ts';
 import { auditLogRows, listAuditLog } from '../../../services/audit-log-queries.ts';
 import { findDocumentPlacement, findSignaturePlacement } from '../../../services/document-placement.ts';
-import { listInstallationsForOperator } from '../../../services/installation-operator.ts';
 import { listRepoAdminCandidates } from '../../../services/repo-admin-candidates.ts';
 import {
   findActiveRepositoryByGithubId,
@@ -46,6 +45,7 @@ import { DOCUMENT_READS, DOCUMENT_WRITES } from '../tenant-registry-documents/te
 import { DRAFT_READS, DRAFT_WRITES } from '../tenant-registry-drafts/test-support.ts';
 import { ENABLED_WRITES } from '../tenant-registry-enabled/test-support.ts';
 import { COUNT_READS, LISTING_READS } from '../tenant-registry-listing/test-support.ts';
+import { OPERATOR_TENANT_QUERIES } from '../tenant-registry-operator/test-support.ts';
 import { PUBLIC_TENANT_QUERIES } from '../tenant-registry-public/test-support.ts';
 import { SCOPE_QUERIES } from '../tenant-registry-scope/test-support.ts';
 import {
@@ -93,6 +93,7 @@ export const TENANT_MODULES = [
   'services/failing-evaluation-queries.ts',
   'services/finalise/finalise-rows.ts',
   'services/installation-operator.ts',
+  'services/operator-erasure-queries.ts',
   'services/own-signatures-queries.ts',
   'services/public-verification-queries.ts',
   'services/repo-admin-candidates.ts',
@@ -276,19 +277,6 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       },
     }),
   },
-  'services/installation-operator.ts': {
-    listInstallationsForOperator: {
-      kind: 'by_design',
-      reason:
-        "the operator sees every installation of the instance, with counts of its repositories and no person (E05-S07); it reads across tenants on purpose and grants no access to a tenant's data (E11-S08)",
-      pinnedBy: 'services/installation-operator.test.ts',
-      run: async (db) => (await listInstallationsForOperator(db)).map((row) => row.githubInstallationId),
-      answers: (own, other) => {
-        const both = [own.githubInstallationId, other.githubInstallationId];
-        return { own: both, foreign: both };
-      },
-    },
-  },
   'services/repo-admin-candidates.ts': {
     listRepoAdminCandidates: scoped({
       takesIds: false,
@@ -471,8 +459,9 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   ...LINK_TENANT_QUERIES,
   ...SIGN_TENANT_QUERIES,
   ...ALLOWLIST_TENANT_QUERIES,
-  // The statements of the public signature check (E22-S02).
+  // The statements of the public signature check (E22-S02), and those of the instance operator (E05-S07, E22-S05).
   ...PUBLIC_TENANT_QUERIES,
+  ...OPERATOR_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */
