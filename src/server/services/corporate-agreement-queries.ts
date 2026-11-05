@@ -2,8 +2,10 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
 import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
+import type { InstallationRowId } from '../adapters/db/installation-row-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
+import { insertManagerApproval } from './corporate-approval-write-queries.ts';
 import { whenPresent } from './when-present.ts';
 
 // The statements behind corporate signing (E21-S02) over the tables of migration 020. The writes are called inside the one transaction
@@ -39,6 +41,8 @@ function agreementRows(db: Kysely<Database>) {
       'd.name as documentName',
       'u.github_id as signatoryGithubId',
       'sp.login as signatoryLogin',
+      'i.id as installationId',
+      'i.github_installation_id as githubInstallationId',
       'i.account_login as accountLogin',
       'i.admission_status as admissionStatus',
       'i.suspended_at as suspendedAt',
@@ -72,6 +76,9 @@ export interface AgreementRow {
   readonly signatoryGithubId: GithubId;
   /** The login snapshot of the signatory; `null` once erased. */
   readonly signatoryLogin: string | null;
+  /** The tenant (`installations.id`) and the id GitHub gave its installation, which a call to GitHub for this agreement is made with. */
+  readonly installationId: InstallationRowId;
+  readonly githubInstallationId: GithubId;
   readonly accountLogin: string;
   readonly admissionStatus: 'admitted' | 'rejected';
   readonly suspendedAt: Date | null;
@@ -103,6 +110,7 @@ async function pageOf(
   return rows.map((row) => ({
     ...row,
     signatoryGithubId: parseGithubId(row.signatoryGithubId),
+    githubInstallationId: parseGithubId(row.githubInstallationId),
     activeApprovals: Number(row.activeApprovals),
   }));
 }
@@ -204,35 +212,18 @@ export interface SignatoryApproval {
 
 /**
  * Approves the signatory personally under the agreement of the tenant: a `user` approval of source `manager`, approved by the
- * signatory, with the login snapshot in its own table. The approval row is selected from the agreement with the installation id in
- * the WHERE clause.
+ * signatory, with the login snapshot in its own table (`insertManagerApproval`).
  * @returns the id of the approval.
  * @throws NoResultError when the tenant has no such agreement (the caller has just written it, so this is a defect).
  */
-export async function insertSignatoryApproval(
+export function insertSignatoryApproval(
   db: Kysely<Database>,
   scope: TenantScope,
   approval: SignatoryApproval,
 ): Promise<number> {
-  const row = await db
-    .insertInto('corporate_approvals')
-    .columns(['installation_id', 'agreement_id', 'kind', 'subject_github_id', 'source', 'approved_by'])
-    .expression((eb) =>
-      eb
-        .selectFrom('corporate_agreements as a')
-        .select([
-          'a.installation_id',
-          'a.id as agreement_id',
-          eb.cast<'user'>(eb.val('user'), 'text').as('kind'),
-          eb.cast<number>(eb.val(approval.githubId), 'bigint').as('subject_github_id'),
-          eb.cast<'manager'>(eb.val('manager'), 'text').as('source'),
-          eb.cast<number>(eb.val(approval.userId), 'bigint').as('approved_by'),
-        ])
-        .where('a.installation_id', '=', scope.installationId)
-        .where('a.id', '=', approval.agreementId),
-    )
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  await db.insertInto('corporate_approval_pii').values({ approval_id: row.id, login: approval.login }).execute();
-  return row.id;
+  return insertManagerApproval(db, scope, {
+    agreementId: approval.agreementId,
+    approvedBy: approval.userId,
+    subject: { kind: 'user', githubId: approval.githubId, login: approval.login },
+  });
 }

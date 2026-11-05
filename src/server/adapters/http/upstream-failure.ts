@@ -10,7 +10,7 @@ import { RoleLookupThrottledError } from '../../services/role-lookup-budget.ts';
 // `AppError` from this description and sets the `retry-after` header.
 
 /** The longest wait a client is told to sit out, whatever GitHub asked for: a longer one is a reason to come back later, not to hold a page. */
-const MAX_RETRY_AFTER_SECONDS = 300;
+export const MAX_RETRY_AFTER_SECONDS = 300;
 
 export interface UpstreamFailure {
   readonly status: 429 | 502 | 503;

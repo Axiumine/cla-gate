@@ -70,7 +70,6 @@ export async function readOwnAgreement(
  * be its signatory, the tenant must be served, and the agreement must not be revoked. Authority is "signatory of an unrevoked
  * agreement", so a revoked agreement makes every manager mutation a `409 agreement_revoked` and a suspended tenant a
  * `409 installation_suspended`.
- * @internal Exported for the mutations of E21-S03 and for the tests (Knip ignores `@internal` exports in production mode).
  * @throws CorporateRuleError `not_found` (not the caller's, or a tenant that is rejected or uninstalled), `installation_suspended`,
  * `agreement_revoked`.
  */

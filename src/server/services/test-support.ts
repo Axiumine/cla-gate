@@ -31,7 +31,7 @@ import {
 export type { GitHubMethod, RecordedCall };
 
 import { findCommit } from './fake-commits/test-support.ts';
-import { userAccountOf } from './fake-user-accounts/test-support.ts';
+import { orgAccountOf, userAccountOf } from './fake-user-accounts/test-support.ts';
 import type { Clock } from './ports/clock.ts';
 import type {
   CheckRunWrite,
@@ -206,6 +206,10 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     return this.#serveInstallation('getUserAccount', id, () => userAccountOf(this.state.userAccounts, login));
   }
 
+  getOrganizationAccount(id: GithubId, login: string): Promise<GitHubUserAccount | null> {
+    return this.#serveInstallation('getOrganizationAccount', id, () => orgAccountOf(this.state.userAccounts, login));
+  }
+
   probeMembersPermission(id: GithubId): Promise<boolean> {
     return this.#serveInstallation('probeMembersPermission', id, (entry) => membersProbeOf(this.state, entry));
   }
@@ -293,36 +297,25 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
   }
 
   listIssueComments(
-    githubInstallationId: GithubId,
+    id: GithubId,
     fullName: string,
     issueNumber: number,
     page: number,
   ): Promise<GitHubIssueCommentPage> {
-    return this.#serveInstallation('listIssueComments', githubInstallationId, (entry) =>
+    return this.#serveInstallation('listIssueComments', id, (entry) =>
       commentsPage(this.state, { entry, fullName, issueNumber }, page),
     );
   }
 
-  createIssueComment(
-    githubInstallationId: GithubId,
-    fullName: string,
-    issueNumber: number,
-    body: string,
-  ): Promise<GitHubIssueComment> {
-    return this.#serveInstallation('createIssueComment', githubInstallationId, (entry) =>
+  createIssueComment(id: GithubId, fullName: string, issueNumber: number, body: string): Promise<GitHubIssueComment> {
+    return this.#serveInstallation('createIssueComment', id, (entry) =>
       postComment(this.state, { entry, fullName, issueNumber }, body),
     );
   }
 
-  listPullRequestsForCommit(
-    githubInstallationId: GithubId,
-    fullName: string,
-    headSha: string,
-  ): Promise<GitHubPullRequestRef[]> {
-    return this.#serveInstallation('listPullRequestsForCommit', githubInstallationId, () => [
-      ...(COMMIT_SHA.test(headSha)
-        ? (this.state.commitPulls.get(commitKey(githubInstallationId, fullName, headSha)) ?? [])
-        : []),
+  listPullRequestsForCommit(id: GithubId, fullName: string, headSha: string): Promise<GitHubPullRequestRef[]> {
+    return this.#serveInstallation('listPullRequestsForCommit', id, () => [
+      ...(COMMIT_SHA.test(headSha) ? (this.state.commitPulls.get(commitKey(id, fullName, headSha)) ?? []) : []),
     ]);
   }
 

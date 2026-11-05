@@ -26,7 +26,6 @@ export const CORPORATE_AGREEMENTS_PATH = '/api/corporate/agreements';
 
 /**
  * `GET`: one agreement of the signed-in person. Any agreement that is not theirs is a `404`, the same as an id that names nothing.
- * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export const CORPORATE_AGREEMENT_PATH = `${CORPORATE_AGREEMENTS_PATH}/:agreementId`;
 
@@ -65,7 +64,11 @@ const sha256 = z.string().regex(/^[0-9a-f]{64}$/u);
  * `agreement_revoked` is a manager action on an agreement whose signature was revoked; `installation_suspended` a write for a
  * suspended tenant; `document_not_corporate` is the one answer for every document a repository may not take as its corporate CLA
  * (unknown, another tenant's, another repository's, or of another kind); `not_found` is the one answer for an agreement that is not
- * the caller's, whoever's it is.
+ * the caller's, whoever's it is. The rest are the rules of the approvals of E21-S03: `github_user_not_found` and `github_org_not_found`
+ * are a login GitHub has no such account or organisation for, `not_a_user` an account that is not a person, `domain_not_allowed` a
+ * free-mail domain, `approval_limit` an agreement that has its 500 approvals in force, `approval_exists` a subject that has one in
+ * force, `already_revoked` an approval that was revoked, and `upstream_unavailable` GitHub failing (a rate limit, a refusal, an
+ * outage) with nothing written; a rate limit tells its wait in the `retry-after` header.
  */
 export const CORPORATE_RULE_STATUS = {
   not_found: 404,
@@ -77,6 +80,14 @@ export const CORPORATE_RULE_STATUS = {
   agreement_revoked: 409,
   installation_suspended: 409,
   document_not_corporate: 422,
+  github_user_not_found: 422,
+  github_org_not_found: 422,
+  not_a_user: 422,
+  domain_not_allowed: 422,
+  approval_limit: 422,
+  approval_exists: 409,
+  already_revoked: 409,
+  upstream_unavailable: 503,
 } as const;
 
 export type CorporateRule = keyof typeof CORPORATE_RULE_STATUS;

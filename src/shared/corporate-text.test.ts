@@ -4,11 +4,12 @@ import { expect, test } from 'vitest';
 import {
   COMPANY_NAME_MAX_CODE_POINTS,
   cleanCompanyName,
+  cleanRevokeReason,
   cleanSignatoryTitle,
   SIGNATORY_TITLE_MAX_CODE_POINTS,
 } from './corporate-text.ts';
 
-// The two free texts of a corporate agreement (E21-S02): one cleaning, two limits.
+// The two free texts of a corporate agreement (E21-S02): one cleaning, two limits. The reason of a revocation (E21-S03) has the same cleaning, a third limit and no `@`.
 
 /** U+202E, the right-to-left override. */
 const RLO = String.fromCodePoint(0x202e);
@@ -51,3 +52,25 @@ test('a company name has 200 code points at most, and a title 100', () => {
   expect(cleanCompanyName('\u{1f600}'.repeat(200))).toBe('\u{1f600}'.repeat(200));
   expect(cleanSignatoryTitle('\u{1f600}'.repeat(101))).toBeNull();
 });
+
+test('a revocation reason is composed, trimmed and kept as typed otherwise, with 500 code points at most', () => {
+  expect(cleanRevokeReason('  Café  left the company ')).toBe('Café left the company');
+  expect(cleanRevokeReason('x'.repeat(500))).toBe('x'.repeat(500));
+  expect(cleanRevokeReason('x'.repeat(501))).toBeNull();
+  expect(cleanRevokeReason('\u{1f600}'.repeat(500))).toBe('\u{1f600}'.repeat(500));
+  expect(cleanRevokeReason('\u{1f600}'.repeat(501))).toBeNull();
+});
+
+test.each(['', '   ', 'a\tb', 'a\nb', `exe.${RLO}live`, '\uD800'])(
+  'a revocation reason of %j is refused, as the other texts are',
+  (raw) => {
+    expect(cleanRevokeReason(raw)).toBeNull();
+  },
+);
+
+test.each(['write to ada@example.org', '@everyone', 'a@b', '@'])(
+  'a revocation reason with an @ in it (%s) is refused: it is kept for good and an address is personal data',
+  (raw) => {
+    expect(cleanRevokeReason(raw)).toBeNull();
+  },
+);

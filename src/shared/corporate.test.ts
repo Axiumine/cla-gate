@@ -76,6 +76,14 @@ test('every rule has the status the story gives it', () => {
     agreement_revoked: 409,
     installation_suspended: 409,
     document_not_corporate: 422,
+    github_user_not_found: 422,
+    github_org_not_found: 422,
+    not_a_user: 422,
+    domain_not_allowed: 422,
+    approval_limit: 422,
+    approval_exists: 409,
+    already_revoked: 409,
+    upstream_unavailable: 503,
   });
 });
 

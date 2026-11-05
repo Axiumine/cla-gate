@@ -147,13 +147,15 @@ test('the route declared webhook is exactly POST /webhooks/github', async () => 
   expect(declared).toEqual(['POST /webhooks/github']);
 });
 
-test('the authenticated routes are the session read, the logout, the export of the own data, the list of the installations the person administers, the sign context and the sign request, and the four of corporate signing, and none has a tenant parameter', async () => {
+test('the authenticated routes are the session read, the logout, the export of the own data, the list of the installations the person administers, the sign context and the sign request, the four of corporate signing, and the four of the approvals of an agreement, and none has a tenant parameter', async () => {
   const { table } = await tableOfTheApp();
   const authenticated = table.filter((entry) => entry.access === 'authenticated');
   expect(sorted(authenticated.map(nameOf))).toEqual([
+    'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
     'GET /api/auth/session',
     'GET /api/corporate/agreements',
     'GET /api/corporate/agreements/:agreementId',
+    'GET /api/corporate/agreements/:agreementId/approvals',
     'GET /api/corporate/repositories/:githubRepoId/document',
     'GET /api/installations',
     'GET /api/me/export',
@@ -161,6 +163,8 @@ test('the authenticated routes are the session read, the logout, the export of t
     'GET /api/sign/:githubRepoId',
     'POST /api/auth/logout',
     'POST /api/corporate/agreements',
+    'POST /api/corporate/agreements/:agreementId/approvals',
+    'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
     'POST /api/sign',
   ]);
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);

@@ -66,6 +66,11 @@ export const AUDIT_ACTIONS = [
   // title, the name or an address), and a maintainer chose or removed the corporate CLA document of a repository (ids only).
   'corporate_agreement.signed',
   'repository.corporate_document_set',
+  // Added by E21-S03: the CLA manager of a corporate agreement approved an employee, a domain or an organisation, or revoked an approval
+  // (one row for each approval that was revoked with it). The subject is the approval; the metadata holds the kind, the numeric GitHub
+  // id, the signature of the agreement and a code, never a login, an address, a domain or the reason of a revocation.
+  'corporate_approval.added',
+  'corporate_approval.revoked',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

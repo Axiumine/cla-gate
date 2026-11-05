@@ -75,6 +75,17 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
       'repository.corporate_document_set',
     ),
   ),
+  registered(audited('POST /api/corporate/agreements/:agreementId/approvals', 'E21-S03', 'corporate_approval.added')),
+  registered(
+    audited(
+      'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
+      'E21-S03',
+      'corporate_approval.revoked',
+    ),
+  ),
+  registered(
+    audited('POST /api/corporate/agreements/:agreementId/approvals/carry-over', 'E21-S03', 'corporate_approval.added'),
+  ),
   exempt('POST /api/setup/unlock', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/manifest', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/convert', 'E19-S11', 'setup', true),

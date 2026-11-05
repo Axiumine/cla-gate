@@ -153,6 +153,16 @@ const SCOPED_QUERY_NAMES = [
   'services/corporate-repository-queries.ts lockCorporateRepository',
   'services/corporate-repository-queries.ts findCorporateChoice',
   'services/corporate-repository-queries.ts setCorporateDocument',
+  'services/corporate-approval-queries.ts approvalPageRows',
+  'services/corporate-approval-queries.ts findApprovalRow',
+  'services/corporate-approval-queries.ts getApprovalRow',
+  'services/corporate-approval-queries.ts activeApprovalRows',
+  'services/corporate-approval-coverage-queries.ts countActiveApprovals',
+  'services/corporate-approval-coverage-queries.ts domainApprovals',
+  'services/corporate-approval-write-queries.ts insertManagerApproval',
+  'services/corporate-approval-lock-queries.ts lockAgreementSignature',
+  'services/corporate-approval-revoke-queries.ts revokeApprovalRow',
+  'services/corporate-approval-revoke-queries.ts revokeDerivedRows',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

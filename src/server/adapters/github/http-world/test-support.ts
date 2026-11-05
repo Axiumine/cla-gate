@@ -42,7 +42,7 @@ import { guardPublicMembers } from '../public-members-guard/test-support.ts';
 import { type Stall, stallNext } from '../stall-fixture/test-support.ts';
 import { startGitHubApp } from '../start.ts';
 import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-support.ts';
-import { userAccountRoute } from '../user-account-fixture/test-support.ts';
+import { organizationAccountRoute, userAccountRoute } from '../user-account-fixture/test-support.ts';
 
 // A GitHub at the HTTP boundary that behaves like the real one for the routes of the client port (E05-S04): MSW answers
 // what the Octokit adapter sends, from state a test scripts through the same GitHubWorld the fake implements. Installation
@@ -345,6 +345,7 @@ function conversationRoutes(state: State) {
 
 /** Starts MSW with these routes until the test ends; every request is noted in `state.requests`. */
 function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
+  const heldToken = (request: Request): boolean => installationOf(state, request) !== undefined;
   const server = setupServer(
     http.all('*', ({ request }) => {
       const url = new URL(request.url);
@@ -358,7 +359,8 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
       answers: state.membersProbes,
       reached: (request) => installationOf(state, request)?.installation,
     }),
-    userAccountRoute({ accounts: state.userAccounts, known: (req) => installationOf(state, req) !== undefined }),
+    userAccountRoute({ accounts: state.userAccounts, known: heldToken }),
+    organizationAccountRoute({ accounts: state.userAccounts, known: heldToken }),
     ...pullRoutes(state),
     commitRoute({
       scripted: state,

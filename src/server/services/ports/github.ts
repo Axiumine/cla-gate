@@ -275,6 +275,15 @@ export interface GitHubClient {
   getUserAccount(githubInstallationId: GithubId, login: string): Promise<GitHubUserAccount | null>;
 
   /**
+   * `GET /orgs/{org}` with the installation's token, the login URL-encoded (E21-S03): the organisation a login names, which a corporate
+   * approval stores by its numeric id. Resolves the account with the type `Organization`, null when GitHub has no such organisation (404;
+   * the login of a person is one) and for a login that cannot be an organisation's (the shape of `GITHUB_ORG_LOGIN_PATTERN`; no request is
+   * sent for it, the installation is checked first all the same).
+   * @throws GitHubResponseError when the answer's id is not a positive integer or its login is not the shape of a login.
+   */
+  getOrganizationAccount(githubInstallationId: GithubId, login: string): Promise<GitHubUserAccount | null>;
+
+  /**
    * `GET /repos/{owner}/{repo}/collaborators/{username}/permission` with the installation's token (Metadata: read).
    * Resolves null when GitHub has no such repository for this installation or no such person (404) and for a name
    * GitHub cannot hold (no request is sent for it; the installation is checked first all the same). The repository

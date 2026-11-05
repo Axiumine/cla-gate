@@ -192,3 +192,17 @@ export function userAccountRoute({ accounts, known }: UserAccountRouteOptions) {
       : HttpResponse.json({ message: 'Bad credentials' }, { status: 401 }),
   );
 }
+
+/**
+ * `GET /orgs/{org}` (E21-S03) as GitHub answers it to an installation token: a 401 for a token nobody holds, a 404 for a login nobody
+ * has and for one that belongs to a person or a bot, and for an organisation the account (or failure) scripted for the login.
+ */
+export function organizationAccountRoute({ accounts, known }: UserAccountRouteOptions) {
+  return http.get(`${GITHUB_API_ORIGIN}/orgs/:org`, ({ request, params }) => {
+    if (!known(request)) {
+      return HttpResponse.json({ message: 'Bad credentials' }, { status: 401 });
+    }
+    const answer = accounts.get(String(params['org']).toLowerCase());
+    return responseFor(typeof answer === 'object' && answer.type !== 'Organization' ? undefined : answer);
+  });
+}

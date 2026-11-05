@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { ALLOWLIST_LOGIN_PATTERN } from '../../../shared/allowlist.ts';
+import { GITHUB_ORG_LOGIN_PATTERN } from '../../../shared/corporate-approvals.ts';
 import type { GitHubUserAccount } from '../ports/github.ts';
 import { GitHubRateLimitedError, GitHubResponseError, GitHubUnavailableError } from '../ports/github-errors.ts';
 
@@ -46,4 +47,18 @@ export function userAccountOf(accounts: UserAccounts, login: string): GitHubUser
     default:
       return answer;
   }
+}
+
+/**
+ * What `GET /orgs/{org}` (E21-S03) answers for `login`, from the same accounts: the account when it is an organisation, null for a login
+ * that cannot be an organisation's, for one nobody has and for one that belongs to a person or a bot, which is a 404 on that route. A login
+ * scripted to fail fails here too, since GitHub limits and breaks the one namespace of logins.
+ * @throws GitHubRateLimitedError, GitHubUnavailableError, GitHubResponseError for a login scripted to fail.
+ */
+export function orgAccountOf(accounts: UserAccounts, login: string): GitHubUserAccount | null {
+  if (!GITHUB_ORG_LOGIN_PATTERN.test(login)) {
+    return null;
+  }
+  const account = userAccountOf(accounts, login);
+  return account?.type === 'Organization' ? account : null;
 }

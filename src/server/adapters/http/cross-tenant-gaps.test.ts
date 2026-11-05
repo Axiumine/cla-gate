@@ -149,6 +149,7 @@ const ISOLATION_ROUTES: readonly string[] = [
   'GET /api/corporate/repositories/:githubRepoId/document',
   'GET /api/corporate/agreements',
   'GET /api/corporate/agreements/:agreementId',
+  'GET /api/corporate/agreements/:agreementId/approvals',
 ];
 
 test('the tables of the application hold the cases of the routes the stories added, and the authenticated routes that return no tenant data say why', () => {
@@ -158,6 +159,9 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/auth/session',
     'POST /api/auth/logout',
     'POST /api/corporate/agreements',
+    'POST /api/corporate/agreements/:agreementId/approvals',
+    'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
+    'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
   ]);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
 });

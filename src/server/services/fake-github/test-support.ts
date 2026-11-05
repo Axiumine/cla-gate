@@ -207,6 +207,7 @@ export type GitHubMethod =
   | 'getRepositoryPermission'
   | 'probeMembersPermission'
   | 'getUserAccount'
+  | 'getOrganizationAccount'
   | 'getPullRequest'
   | 'getCommit'
   | 'listPullRequestCommits'

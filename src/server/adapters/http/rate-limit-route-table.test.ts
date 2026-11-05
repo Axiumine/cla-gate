@@ -65,7 +65,7 @@ test('every route of the table that switches the limit off is on the RATE_LIMIT_
 /** `expect.any` is typed `any`; as `unknown` it can sit in an object literal. */
 const anyFunction: unknown = expect.any(Function);
 
-/** A budget of `max` a minute counted after the guard and keyed on the person (E21-S02: 10 corporate signings, not on the address). */
+/** A budget of `max` a minute counted after the guard and keyed on the person (E21-S02: 10 corporate signings; E21-S03: 60 approval changes; not on the address). */
 const perPerson = (max: number): unknown => ({
   max,
   timeWindow: 60_000,
@@ -74,11 +74,19 @@ const perPerson = (max: number): unknown => ({
   keyGenerator: anyFunction,
 });
 
+/** E21-S03: the three routes that change the approvals of an agreement, 60 changes a minute for each person, counted after the guard and kept for each route. */
+const APPROVAL_ROUTES = [
+  'POST /api/corporate/agreements/:agreementId/approvals',
+  'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
+  'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
+] as const;
+const APPROVAL_BUDGETS = Object.fromEntries(APPROVAL_ROUTES.map((name) => [name, perPerson(60)]));
+
 const csv = `GET ${SIGNATURES_CSV_PATH}`;
 const mine = `GET ${DATA_EXPORT_PATH}`;
 const search = `GET ${SIGNATURES_PATH}`;
 
-test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the corporate signing, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
+test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the corporate signing, the three changes of the approvals of an agreement, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
   const own = table.filter((route) => typeof limitOf(route) === 'object');
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
@@ -89,6 +97,7 @@ test('the routes with a budget of their own are the four of the login, the save 
       'GET /api/auth/session',
       'POST /api/auth/logout',
       'POST /api/corporate/agreements',
+      ...APPROVAL_ROUTES,
       'POST /api/sign',
       'PUT /api/installations/:installationId/documents/:documentId/draft',
       csv,
@@ -112,6 +121,7 @@ test('the routes with a budget of their own are the four of the login, the save 
     // E13-S04: 10 sign requests a minute for each person, counted after the guard and keyed on the person, not on the address.
     'POST /api/sign': { max: 10, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
     'POST /api/corporate/agreements': perPerson(10),
+    ...APPROVAL_BUDGETS,
     // E15-S02: 30 searches of signatures a minute for each person, counted after the guard and keyed on the person.
     [search]: { max: 30, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
   });

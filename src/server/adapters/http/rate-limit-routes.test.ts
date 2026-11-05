@@ -38,6 +38,7 @@ test('the budgets are the ones of the story, spelled out here on purpose', () =>
     sign: 10,
     signatureSearch: 30,
     corporateSign: 10,
+    corporateApproval: 60,
   });
 });
 
