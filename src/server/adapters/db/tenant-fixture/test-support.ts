@@ -55,6 +55,20 @@ export const TENANT_TABLES = [
 
 export type TenantTable = (typeof TENANT_TABLES)[number];
 
+/**
+ * The tables of the corporate CLA (migration 020, E21-S01), which are tenant tables too: `corporate_agreements` carries the
+ * installation, `corporate_approvals` carries it through its agreement, and the two pii tables belong to it through their
+ * parent. They are not in `TENANT_TABLES` because no route reads them yet and the two tenants of `twoTenants` hold no corporate
+ * rows; the source scan already holds every statement over them to the registry, so the story that adds the first query adds the
+ * module, its cross-tenant check and the rows to the fixture.
+ */
+export const CORPORATE_TABLES = [
+  'corporate_agreements',
+  'corporate_agreement_pii',
+  'corporate_approvals',
+  'corporate_approval_pii',
+] as const;
+
 /** The text of the draft the repo-scoped document of tenant `n` holds, so a response that leaks it can be told by its words. */
 export const draftTextOf = (n: number): string => `Draft of the repository terms of tenant ${n}\n`;
 

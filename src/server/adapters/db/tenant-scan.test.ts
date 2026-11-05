@@ -36,6 +36,22 @@ test.each([
     "db.selectFrom('users').where((eb) => eb.exists(eb.selectFrom('signatures').select('id')))",
     [use('signatures', 'selectFrom')],
   ],
+  [
+    'a corporate table: a select',
+    "db.selectFrom('corporate_agreements').selectAll()",
+    [use('corporate_agreements', 'selectFrom')],
+  ],
+  [
+    'a corporate table: an insert',
+    "trx.insertInto('corporate_approvals').values(row)",
+    [use('corporate_approvals', 'insertInto')],
+  ],
+  [
+    'a corporate table: a join',
+    "q.innerJoin('corporate_approval_pii', 'a', 'b')",
+    [use('corporate_approval_pii', 'innerJoin')],
+  ],
+  ['a corporate table: raw sql', 'sql`select 1 from corporate_agreement_pii`', [use('corporate_agreement_pii', 'sql')]],
   ['a table that is not a tenant table', "db.selectFrom('users').selectAll()", []],
   ['a table named by a variable', 'db.selectFrom(name)', [use('?', 'selectFrom')]],
   ['a table named by a template with a part to fill in', `db.deleteFrom(\`${HOLE}\`)`, [use('?', 'deleteFrom')]],

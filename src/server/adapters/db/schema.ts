@@ -67,6 +67,8 @@ interface RepositoriesTable {
   /** Whether the maintainers opted in to the public signature check (migration 019, E22-S02); off until an admin turns it on. */
   public_verification: Generated<boolean>;
   cla_document_id: number | null;
+  /** The corporate CLA document of the repository (migration 020, E21-S01); null means individual signatures only. */
+  corporate_document_id: number | null;
   /** Set when GitHub no longer lists the repository for the installation; the row itself stays (E05-S06). */
   removed_at: Date | null;
   created_at: Generated<Date>;
@@ -219,6 +221,54 @@ interface ClaDraftsTable {
   updated_at: Generated<Date>;
 }
 
+/** One signed corporate CLA (migration 020, E21-S01): the consent of the signatory is the `signatures` row it points at. Insert-only. */
+interface CorporateAgreementsTable {
+  id: Generated<number>;
+  installation_id: number;
+  signature_id: number;
+  document_id: number;
+  major: number;
+  created_at: Generated<Date>;
+}
+
+/** The erasable text of an agreement (migration 020, E21-S01): the company and the signatory's title. Deleted by `erase_signer_pii` only. */
+interface CorporateAgreementPiiTable {
+  agreement_id: number;
+  company_name: string;
+  signatory_title: string;
+}
+
+/** Who a corporate agreement covers (migration 020, E21-S01): a user or a GitHub org by numeric id, or an email domain. Only the `revoked_*` columns ever change. */
+interface CorporateApprovalsTable {
+  id: Generated<number>;
+  installation_id: number;
+  agreement_id: number;
+  kind: 'user' | 'email_domain' | 'github_org';
+  /** The numeric id of the user or org; null for an `email_domain`. */
+  subject_github_id: number | null;
+  /** The lower-case domain of an `email_domain`; null for the other kinds. */
+  subject_domain: string | null;
+  /** `manager` is the decision of the CLA manager; `rule` is a user approval derived from a domain or org approval. */
+  source: 'manager' | 'rule';
+  /** The manager (`users.id`) who approved; required exactly when `source` is `manager`. */
+  approved_by: number | null;
+  /** The domain or org approval a `rule` approval derives from; required exactly when `source` is `rule`. */
+  derived_from_approval_id: number | null;
+  approved_at: Generated<Date>;
+  /** When a `rule` approval stops covering; required exactly when `source` is `rule`. */
+  expires_at: Date | null;
+  revoked_at: Date | null;
+  revoked_by: number | null;
+  /** Free text of at most 500 characters that is not erasable: never personal data. */
+  revoke_reason: string | null;
+}
+
+/** The erasable login snapshot of an approved user or org (migration 020, E21-S01); display only. */
+interface CorporateApprovalPiiTable {
+  approval_id: number;
+  login: string;
+}
+
 /** Every table created by the migrations except schema_migrations, which only the runner touches. */
 export interface Database {
   users: UsersTable;
@@ -237,4 +287,8 @@ export interface Database {
   audit_log: AuditLogTable;
   installation_admin_seen: InstallationAdminSeenTable;
   cla_drafts: ClaDraftsTable;
+  corporate_agreements: CorporateAgreementsTable;
+  corporate_agreement_pii: CorporateAgreementPiiTable;
+  corporate_approvals: CorporateApprovalsTable;
+  corporate_approval_pii: CorporateApprovalPiiTable;
 }
