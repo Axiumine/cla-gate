@@ -36,7 +36,8 @@ export type QueuePolicy = 'standard' | 'singleton' | 'exclusive';
  *
  * `sweep` is `exclusive` (E07-S08): at most one job in `created`, `retry` or `active` at a time, so a sweep that is still
  * running (or waiting to be retried) when the scheduler's next tick comes makes that tick send nothing, and two sweeps never
- * reconcile the installations at once. A job that ended (completed, failed, cancelled) no longer counts.
+ * reconcile the installations at once. A job that ended (completed, failed, cancelled) no longer counts. `retention-sweep`
+ * (E22-S04) is `exclusive` for the same reason: one purge at a time, and a tick that finds the last run still going sends nothing.
  */
 export const QUEUE_DEFINITIONS = [
   { name: 'evaluate-pr', policy: 'singleton' },
@@ -50,6 +51,7 @@ export const QUEUE_DEFINITIONS = [
   { name: 'sweep-repository', policy: 'standard' },
   { name: 'finalise-repository', policy: 'singleton' },
   { name: 'finalise-check', policy: 'singleton' },
+  { name: 'retention-sweep', policy: 'exclusive' },
   { name: 'job-dead-letter', policy: 'standard' },
 ] as const satisfies readonly { readonly name: string; readonly policy: QueuePolicy }[];
 

@@ -20,7 +20,7 @@ test('the queues are the names of the definitions, in their order, each once', (
   expect(new Set(QUEUES).size).toBe(QUEUES.length);
 });
 
-test('evaluate-pr and the two finalise queues are singleton (any number wait, one per key runs) and sweep is the one exclusive queue (E07-S08, E07-S09). The others are standard', () => {
+test('evaluate-pr and the two finalise queues are singleton (any number wait, one per key runs) and sweep and retention-sweep (E22-S04) are the exclusive queues (E07-S08, E07-S09). The others are standard', () => {
   expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'singleton')).toEqual([
     { name: 'evaluate-pr', policy: 'singleton' },
     { name: 'finalise-repository', policy: 'singleton' },
@@ -28,8 +28,9 @@ test('evaluate-pr and the two finalise queues are singleton (any number wait, on
   ]);
   expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'exclusive')).toEqual([
     { name: 'sweep', policy: 'exclusive' },
+    { name: 'retention-sweep', policy: 'exclusive' },
   ]);
-  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 4);
+  expect(QUEUE_DEFINITIONS.filter(({ policy }) => policy === 'standard')).toHaveLength(QUEUES.length - 5);
 });
 
 test("pg-boss's queue of scheduled occurrences is not one of ours: no entry of QUEUES, the bounds of the others and no dead-letter queue (E07-S08)", () => {
@@ -86,4 +87,15 @@ test('the repository-level jobs have their queues, the bounds of the others and 
       deadLetter: 'job-dead-letter',
     });
   }
+});
+
+test('the retention sweep has its queue (E22-S04): exclusive, so one purge at a time, with the bounded retries of the others and job-dead-letter as its dead-letter queue', () => {
+  const definition = QUEUE_DEFINITIONS.find(({ name }) => name === 'retention-sweep');
+  expect(definition).toEqual({ name: 'retention-sweep', policy: 'exclusive' });
+  expect(definition && queueSettings(definition)).toEqual({
+    policy: 'exclusive',
+    ...EXPECTED_BOUNDS,
+    deadLetter: 'job-dead-letter',
+  });
+  expect(EXPECTED_BOUNDS.retryLimit).toBe(RETRY_LIMIT);
 });

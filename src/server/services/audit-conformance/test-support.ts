@@ -195,6 +195,10 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
     { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 0 } },
     { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 3 } },
   ],
+  'services/retention/retention-sweep.ts#retention.swept': [
+    { action: 'retention.swept', metadata: { webhook_deliveries: 5000, sessions: 0 } },
+    { action: 'retention.swept', metadata: { webhook_deliveries: 0, sessions: 12 } },
+  ],
   'services/installation-sync-checks.ts#installation.suspended|installation.unsuspended': [
     { action: 'installation.suspended', subject: { type: 'installation', id: 77 }, metadata: ORGANISATION },
     { action: 'installation.unsuspended', subject: { type: 'installation', id: 77 }, metadata: ORGANISATION },

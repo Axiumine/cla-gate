@@ -27,15 +27,19 @@ export async function insertDelivery(trx: Transaction<Database>, subject: Delive
   return inserted !== undefined;
 }
 
-/** Whether a job already finished the recorded delivery. The row is locked, so two requests for one delivery take turns. */
+/**
+ * Whether a job already finished the recorded delivery. The row is locked, so two requests for one delivery take turns. A row
+ * that is gone is not processed: the retention sweep (E22-S04) may have deleted an old one between the insert that met it and
+ * this read, and the delivery is then handled as the new one it has become.
+ */
 export async function isProcessed(trx: Transaction<Database>, deliveryId: DeliveryId): Promise<boolean> {
   const row = await trx
     .selectFrom('webhook_deliveries')
     .select('processed_at')
     .where('delivery_id', '=', deliveryId)
     .forUpdate()
-    .executeTakeFirstOrThrow();
-  return row.processed_at !== null;
+    .executeTakeFirst();
+  return row !== undefined && row.processed_at !== null;
 }
 
 /**

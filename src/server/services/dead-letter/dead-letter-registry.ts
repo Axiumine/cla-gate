@@ -42,8 +42,9 @@ function failurePortsFor(ports: DeadLetterPorts, clock: Clock): FailurePortsFor 
 /**
  * The dead-letter table: `evaluate-pr` and `evaluate-head-sha` complete their Check Run as `failure` (and set the row),
  * `sync-installation` leaves an audit row, and `recheck-comment`, `close-pr`, `sweep`, `sweep-installation`,
- * `revoke-user-sessions` and (E07-S09) `sweep-repository`, `finalise-repository` and `finalise-check` are only logged at
- * error: the next `/recheck`, close, sweep, revocation, re-enabling or disabling repeats the work.
+ * `revoke-user-sessions`, (E07-S09) `sweep-repository`, `finalise-repository` and `finalise-check`, and (E22-S04) `retention-sweep`
+ * are only logged at error: the next `/recheck`, close, sweep, revocation, re-enabling or disabling repeats the work, and
+ * tomorrow's retention sweep finds the rows today's left.
  */
 export function deadLetterRegistry(ports: DeadLetterPorts, clock: Clock): HandlerRegistry {
   const registry = new HandlerRegistry();
@@ -59,5 +60,6 @@ export function deadLetterRegistry(ports: DeadLetterPorts, clock: Clock): Handle
   registry.register('sweep-repository', loggedOnly);
   registry.register('finalise-repository', loggedOnly);
   registry.register('finalise-check', loggedOnly);
+  registry.register('retention-sweep', loggedOnly);
   return registry;
 }

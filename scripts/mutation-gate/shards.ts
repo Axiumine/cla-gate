@@ -97,8 +97,8 @@ export const SERVER_SHARDS: readonly Shard[] = [
       'src/server/services/recheck/**/*.ts',
     ],
   },
-  // The scheduled reconciliation sweep (E07-S08).
-  { name: 'sweep', mutate: ['src/server/services/sweep/**/*.ts'] },
+  // The scheduled reconciliation sweep (E07-S08) and the retention sweep of operational data (E22-S04).
+  { name: 'sweep', mutate: ['src/server/services/sweep/**/*.ts', 'src/server/services/retention/**/*.ts'] },
 ];
 
 /** The scripts scope (E20-S05, the caps tool) is a shard of its own, selected by STRYKER_SCOPE=scripts and not by STRYKER_SHARD. */

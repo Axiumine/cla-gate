@@ -25,6 +25,7 @@ test('the missing queues come back in the order of the constant', async () => {
     'sweep-repository',
     'finalise-repository',
     'finalise-check',
+    'retention-sweep',
     'job-dead-letter',
   ]);
 });

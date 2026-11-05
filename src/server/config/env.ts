@@ -46,6 +46,8 @@ export interface AppConfig {
   readonly networkMetadataRetentionDays: number;
   /** Whether the sign request stores the client address and the user agent (E13-S05). Off unless `RECORD_NETWORK_METADATA=true`. */
   readonly recordNetworkMetadata: boolean;
+  /** The retention sweep of the operational rows (E22-S04): the days a processed webhook delivery is kept (7 to 3650) and the rows one batch deletes. */
+  readonly retention: { readonly webhookDeliveriesDays: number; readonly batchSize: number };
 }
 
 /** The mode, with the token only where it is used and a note when it is dropped. */
@@ -77,6 +79,7 @@ function toAppConfig(env: ValidEnv): AppConfig {
     source: { url: env.SOURCE_URL, commit: env.SOURCE_COMMIT },
     networkMetadataRetentionDays: env.NETWORK_METADATA_RETENTION_DAYS,
     recordNetworkMetadata: env.RECORD_NETWORK_METADATA,
+    retention: { webhookDeliveriesDays: env.RETENTION_WEBHOOK_DELIVERIES_DAYS, batchSize: env.RETENTION_BATCH_SIZE },
   };
 }
 

@@ -7,7 +7,8 @@ import { SWEEP_REPOSITORY_REASONS } from './repository-jobs.ts';
 
 // The envelope of every job on the queue (E07-S03): what a worker validates before a handler sees the data. It is the
 // catalogue of the jobs a webhook can start (`jobs.ts`, E06-S04) plus the two jobs the scheduler starts, `sweep` and
-// `sweep-installation` (E07-S08) and the three repository-level jobs of E07-S09, which have no delivery. Every schema is
+// `sweep-installation` (E07-S08), the three repository-level jobs of E07-S09 and the daily `retention-sweep` (E22-S04), which
+// have no delivery. Every schema is
 // strict and holds numeric ids only (a delivery id is a UUID), so the data of a job never carries a login, an email or a
 // text somebody chose. A later epic that adds a job adds its schema here, in the change that adds its queue
 // (`QUEUE_DEFINITIONS`).
@@ -21,7 +22,8 @@ const repositoryIds = { githubInstallationId: githubIdSchema, githubRepoId: gith
  * `sweep-installation` per admitted installation, which re-evaluates the pull requests of one installation that missed a
  * delivery. The last three are started by a change of policy (E07-S09): `sweep-repository` evaluates the open pull requests
  * of a repository again, for a `reason` of a closed set; `finalise-repository` completes the pending checks of a repository
- * whose enforcement was turned off, by sending a `finalise-check` for each pull request.
+ * whose enforcement was turned off, by sending a `finalise-check` for each pull request. `retention-sweep` (E22-S04) is started
+ * by the scheduler once a day and carries no data: it purges the operational rows that have no evidentiary value.
  */
 export const jobEnvelopeSchema = z.discriminatedUnion('type', [
   ...jobSchema.options,
@@ -30,6 +32,7 @@ export const jobEnvelopeSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('sweep-repository'), ...repositoryIds, reason: z.enum(SWEEP_REPOSITORY_REASONS) }),
   z.strictObject({ type: z.literal('finalise-repository'), ...repositoryIds }),
   z.strictObject({ type: z.literal('finalise-check'), ...repositoryIds, ...prNumberField }),
+  z.strictObject({ type: z.literal('retention-sweep') }),
 ]);
 
 /** The data of one job, as a handler receives it once it is validated. */

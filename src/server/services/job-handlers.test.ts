@@ -59,6 +59,7 @@ test('the registry binds the five delivery-driven handlers, the two of the sched
     'sweep-repository',
     'finalise-repository',
     'finalise-check',
+    'retention-sweep',
   ]);
   for (const type of types) {
     expect(JOB_TYPES).toContain(type);
@@ -338,6 +339,7 @@ const SWEEP_JOBS = [
     { type: 'finalise-check', githubInstallationId: IDS.installation, githubRepoId: IDS.repository, prNumber: 7 },
     'no GitHub App or no evaluation reporter (E09) is configured',
   ],
+  ['retention-sweep', { type: 'retention-sweep' }, 'the retention settings are not wired'],
 ] as const;
 
 test.each(SWEEP_JOBS)(

@@ -22,13 +22,14 @@ test('a queue of the wrong policy is a mismatch that says what it is and what it
   ]);
 });
 
-test('a queue that pg-boss reports with no policy is a standard one: that is a mismatch for the queues that are not standard (E07-S09 adds two singleton ones)', () => {
+test('a queue that pg-boss reports with no policy is a standard one: that is a mismatch for the queues that are not standard (E07-S09 adds two singleton ones, E22-S04 an exclusive one)', () => {
   const existing = EXISTING.map(({ name }) => ({ name }));
   expect(policyMismatches(existing)).toEqual([
     { queue: 'evaluate-pr', found: 'standard', expected: 'singleton' },
     { queue: 'sweep', found: 'standard', expected: 'exclusive' },
     { queue: 'finalise-repository', found: 'standard', expected: 'singleton' },
     { queue: 'finalise-check', found: 'standard', expected: 'singleton' },
+    { queue: 'retention-sweep', found: 'standard', expected: 'exclusive' },
   ]);
 });
 
