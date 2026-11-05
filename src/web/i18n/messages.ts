@@ -161,6 +161,17 @@ export const messages = {
   'setup.unlock.submit': 'Unlock',
   'setup.unlock.title': 'Unlock the setup',
   'setup.unlock.token': 'Setup token',
+  'sign.blocked.check': 'Check again',
+  'sign.blocked.message':
+    'GitHub reported no verified email address for your account when you logged in. A signature is recorded with one of your verified addresses, and there is no way to type one here.',
+  'sign.blocked.relogin': 'Log in again',
+  'sign.blocked.settings': 'Open your GitHub email settings (new tab)',
+  'sign.blocked.steps':
+    'Add and verify an email address in your GitHub settings. GitHub tells this site your addresses when you log in, so log in again afterwards. If you already did that in another tab, press Check again.',
+  'sign.blocked.still': 'Checked again: nothing has changed yet.',
+  'sign.blocked.title': 'You need a verified email address to sign',
+  'sign.cannot.message': 'This page cannot offer the signing form at the moment. Check again in a moment.',
+  'sign.cannot.title': 'You cannot sign right now',
   'sign.consent.required': 'You must agree before you can sign.',
   'sign.done.existing':
     'You had already signed this version in another window. That signature stands, and the name you typed here was not stored.',
@@ -181,13 +192,40 @@ export const messages = {
   'sign.fingerprint.label': 'Text fingerprint',
   'sign.fingerprint.show': 'Show the full fingerprint',
   'sign.form.title': 'Your signature',
+  'sign.login.after': 'The agreement is shown after you log in, and you come back to this page.',
+  'sign.login.intro':
+    'Signing records your agreement to this Contributor License Agreement against your GitHub account. Here is what happens.',
+  'sign.login.step.account': 'You log in with GitHub. Your verified email addresses are read once, at login.',
+  'sign.login.step.read':
+    'You read the agreement, type your full name and choose one of your verified email addresses.',
+  'sign.login.step.visible':
+    'The maintainers of the organisation can see the name you typed, your GitHub login and the email address you chose.',
+  'sign.login.title': 'Log in to sign the CLA',
   'sign.name.help': 'Type your full name as it should appear in the record: 1 to 200 characters.',
   'sign.name.invalid':
     'Enter your full name: 1 to 200 characters, with no control characters and no characters that change the text direction.',
   'sign.name.label': 'Full name',
+  'sign.noCla.message':
+    'This repository has no Contributor License Agreement in force at the moment. If you expected one, ask the maintainers of the repository.',
+  'sign.noCla.title': 'There is nothing to sign here',
   'sign.published': 'Published',
   'sign.rationale': 'What changed in this version',
   'sign.repository': 'Repository',
+  'sign.resign.message':
+    'You signed major version {signed}. The agreement is now at version {current}, which needs your signature again.',
+  'sign.resign.messageNew': 'The agreement is now at version {current}, which needs your signature again.',
+  'sign.resign.title': 'You need to sign the new version',
+  'sign.revoked.message':
+    'A revocation applies to future pull requests only: pull requests that were already checked keep their result. Sign below to be covered again.',
+  'sign.revoked.on': 'Revoked',
+  'sign.revoked.title': 'Your earlier signature was revoked',
+  'sign.signed.mine': 'See your signatures',
+  'sign.signed.noAction': 'No action needed.',
+  'sign.signed.title': 'You have already signed',
+  'sign.stale.message':
+    'Nothing was recorded and your consent was cleared. Review the new version, then give your consent again.',
+  'sign.stale.review': 'Review the new version',
+  'sign.stale.title': 'The CLA changed while you were reading',
   'sign.submit': 'Sign the CLA',
   'sign.text.label': 'Text of the Contributor License Agreement',
   'sign.title': 'Sign the CLA',

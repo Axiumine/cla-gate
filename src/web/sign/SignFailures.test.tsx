@@ -102,11 +102,10 @@ test.each([
 });
 
 test.each([
-  [409, 'stale_version'],
-  [409, 'no_active_cla'],
   [422, 'hash_mismatch'],
+  [409, 'unsupported_document_kind'],
 ])(
-  '%i %s has no message of its own yet (E18-S02 gives the first two theirs): the error state says so in general terms',
+  '%i %s has no state of its own: the error state says so in general terms, and the typed values stay',
   async (status, code) => {
     await sendOnce({ sign: failure(status, code) });
     const alert = await screen.findByRole('alert');

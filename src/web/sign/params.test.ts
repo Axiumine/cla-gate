@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { parseGithubRepoId, signSearchSchema } from './params.ts';
+import { parseGithubRepoId, signReturnTo, signSearchSchema } from './params.ts';
 
 // E18-S01: what the address of the sign page may hold.
 
@@ -57,4 +57,15 @@ test.each([
 
 test('a search that is not an object is no search at all', () => {
   expect(signSearchSchema.safeParse('pr=4').success).toBe(false);
+});
+
+// E18-S02: where a login ends.
+
+test.each([
+  [123, 45, '/sign/123?pr=45'],
+  [1, 2147483647, '/sign/1?pr=2147483647'],
+  [123, undefined, '/sign/123'],
+  [9007199254740991, undefined, '/sign/9007199254740991'],
+])('the login of the sign page of repository %i with the pull request %s ends at %s', (id, pr, expected) => {
+  expect(signReturnTo(id, pr)).toBe(expected);
 });

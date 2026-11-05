@@ -133,6 +133,13 @@ export function failure(status: number, code: string, headers: Record<string, st
   return envelope(status, code, headers);
 }
 
+/** The context request, from now on, is answered when the test says so: `release` sends the answer. */
+export function serveHeldContext(): { readonly release: (response: Response) => void } {
+  const { promise: held, resolve: release } = Promise.withResolvers<Response>();
+  server.use(http.get(signContextRoute.path, async () => (await held).clone()));
+  return { release };
+}
+
 /** A sign request that is answered when the test says so: `release` sends the answer, and `received` lists what arrived. */
 export function serveHeldSign(): { readonly received: Seen[]; readonly release: (response: Response) => void } {
   const received: Seen[] = [];
@@ -160,6 +167,41 @@ const SIGN_ROUTE = '/sign/123?pr=45';
 /** The app at `route`, signed in as the test user. */
 export function renderSign(route = SIGN_ROUTE) {
   return renderWithProviders(createElement(AppRouter), { route, session: ALICE });
+}
+
+/** The app at `route` with nobody logged in: the session endpoint answers 401. */
+export function renderSignAnonymous(route = SIGN_ROUTE) {
+  return renderWithProviders(createElement(AppRouter), { route });
+}
+
+/** The main region of the page: the shell has live regions and links of its own, so a state is looked for here. */
+export const pageMain = () => screen.getByRole('main');
+
+/** The signature a person made under major version 1: what the context holds for someone who must sign major 2. */
+export const EARLIER_SIGNATURE = { id: 5, major: 1, minor: 0, signedAt: '2026-01-01T00:00:00.000Z' } as const;
+
+/** The context of a person who must sign the new major version again. */
+export function resignContext(overrides: Partial<ContextInput> = {}): Response {
+  return contextResponse({ state: 'resign_required', signature: EARLIER_SIGNATURE, ...overrides });
+}
+
+/** The context of a person whose verified addresses GitHub did not report: they cannot sign yet. */
+export function blockedContext(overrides: Partial<ContextInput> = {}): Response {
+  return contextResponse({ emails: [], canSign: false, blockedReason: 'no_verified_email', ...overrides });
+}
+
+/** The SHA-256 of the text of the newer version: not `SHA`, so a request can be told apart by the hash it carries. */
+export const NEWER_SHA = 'f'.repeat(64);
+
+/** The version the CLA moves on to while a person reads: 2.2, with another text and hash. */
+export function newerVersion(): SignContextResponse['version'] {
+  return {
+    ...contextOf().version,
+    id: 32,
+    minor: 2,
+    contentSha256: NEWER_SHA,
+    contentMd: '# Individual Contributor Agreement\n\nThe newer text.',
+  };
 }
 
 /** The app on the sign page, signed in as the test user, waiting for the document name. */

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
 import { prNumberSchema, signContextParamsSchema } from '../../shared/sign-context.ts';
+import { signPath } from '../../shared/sign-link.ts';
 
 // What the address of the sign page holds (E18-S01): `/sign/$githubRepoId?pr=<n>`, the link of the pull request comment (E09).
 
@@ -26,3 +27,12 @@ export function parseGithubRepoId(raw: string): number | undefined {
  * dropped instead of being sent on, so the page still loads the CLA of the repository.
  */
 export const signSearchSchema = z.object({ pr: prNumberSchema.optional().catch(undefined) });
+
+/**
+ * The address of the sign page for a repository and, when the person came from one, a pull request: where a login ends
+ * (E18-S02), so the person comes back to the same page with the same search. Built from the parsed values, so a `?pr=` that was
+ * dropped stays dropped.
+ */
+export function signReturnTo(githubRepoId: number, pr: number | undefined): string {
+  return pr === undefined ? `/sign/${githubRepoId}` : signPath(githubRepoId, pr);
+}

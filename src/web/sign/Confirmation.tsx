@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { useEffect, useRef } from 'react';
 import type { SignResponse } from '../../shared/sign.ts';
 import { Timestamp, useT } from '../i18n/index.ts';
 import { Heading } from '../ui/Heading.tsx';
 import { UserText } from '../ui/UserText.tsx';
+import { PullRequestLink } from './PullRequestLink.tsx';
+import { useFocusOnMount } from './use-focus.ts';
 
 /** What the confirmation is about: the answer of the server and the name that was sent. */
 export interface Signed {
@@ -19,9 +20,6 @@ export interface ConfirmationProps {
   readonly prUrl: string | null;
 }
 
-/** Only an address on github.com is linked: the context builds it, and this is the second look. */
-const GITHUB_PREFIX = 'https://github.com/';
-
 /**
  * What replaces the form once the signature is recorded (E18-S01): a heading that takes focus, when and which version, the
  * name that was typed (as text), the way back to the pull request when there is one, and what happens next. When the server
@@ -30,10 +28,7 @@ const GITHUB_PREFIX = 'https://github.com/';
  */
 export function Confirmation({ signed, prUrl }: ConfirmationProps) {
   const t = useT();
-  const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    heading.current?.focus();
-  }, []);
+  const heading = useFocusOnMount<HTMLHeadingElement>();
   const { signature, created } = signed.response;
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
@@ -55,11 +50,7 @@ export function Confirmation({ signed, prUrl }: ConfirmationProps) {
         </dd>
       </dl>
       {created ? null : <p>{t('sign.done.existing')}</p>}
-      {prUrl?.startsWith(GITHUB_PREFIX) === true ? (
-        <a href={prUrl} rel="noopener noreferrer" className="underline underline-offset-2">
-          {t('sign.done.pullRequest')}
-        </a>
-      ) : null}
+      <PullRequestLink prUrl={prUrl} />
       <p>{t('sign.done.update')}</p>
     </section>
   );

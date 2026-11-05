@@ -163,7 +163,6 @@ test('the page passes axe, with one address and with several', async () => {
 test.each([
   [500, 'internal_server_error'],
   [404, 'not_found'],
-  [409, 'no_active_cla'],
   [429, 'too_many_requests'],
 ])('a %i answer is an error state with the request id and no form', async (status, code) => {
   serveSign({ context: failure(status, code) });

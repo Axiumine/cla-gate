@@ -21,7 +21,7 @@ export interface HeadingProps {
   /** The title: text from the catalog, or through `UserText` when it holds user text. */
   readonly children: ReactNode;
   /** The element, for a script that moves focus to the heading of a result that replaced a form (E18-S01). */
-  readonly ref?: Ref<HTMLHeadingElement>;
+  readonly ref?: Ref<HTMLHeadingElement> | undefined;
   /** `tabindex="-1"`: a script can focus the heading, and it stays out of the tab order. */
   readonly focusable?: boolean;
 }

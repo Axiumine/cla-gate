@@ -33,8 +33,6 @@ function requireRepositoryId(githubRepoId: number): void {
  * The path of the sign page of a pull request: `/sign/{githubRepoId}?pr={prNumber}`.
  * @throws InvalidSignLinkError when `githubRepoId` is not a positive safe integer or `prNumber` is not an integer from 1 to
  * {@link MAX_PR_NUMBER}; both are checked before anything is formatted.
- *
- * @internal
  */
 export function signPath(githubRepoId: number, prNumber: number): string {
   requireRepositoryId(githubRepoId);
