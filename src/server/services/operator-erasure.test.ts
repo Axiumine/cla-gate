@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test, vi } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
-import { columnsHolding } from '../adapters/db/erasure-fixture/test-support.ts';
+import { columnsHolding, listAccount, snapshots } from '../adapters/db/erasure-fixture/test-support.ts';
 import { runOperatorErasure } from './operator-erasure.ts';
 import {
   ACTOR,
@@ -52,8 +52,8 @@ test('a dry run reports the footprint and changes nothing', async () => {
       known: true,
       scrubbed: false,
       installations: [
-        { installationId: t1.installationId, signatures: 1, signerPiiRows: 1 },
-        { installationId: t2.installationId, signatures: 1, signerPiiRows: 1 },
+        { installationId: t1.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
+        { installationId: t2.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
       ],
     },
   });
@@ -166,6 +166,57 @@ test('a person who signed nowhere cannot be scrubbed: the real run finds the sna
   expect(await erasureAudit(db)).toEqual([]);
 });
 
+test('the login of the person on the allowlist of an installation where they signed nothing is cleared too, and the audit row counts no signer_pii row there', async () => {
+  const { db, t1, t2, t3 } = await erasureWorld();
+  await listAccount(db, t3, TARGET, 'zzzz-target-login');
+  await listAccount(db, t3, BYSTANDER, 'zzzz-bystander-login');
+  const outcome = await runOperatorErasure(db, REAL);
+  expect(outcome).toMatchObject({
+    kind: 'erased',
+    erased: [
+      { installationId: t1.installationId, deleted: 1 },
+      { installationId: t2.installationId, deleted: 1 },
+      { installationId: t3.installationId, deleted: 0 },
+    ],
+  });
+  expect(await snapshots(db)).toEqual([
+    { installation_id: t3.installationId, github_id: TARGET, login_snapshot: null },
+    { installation_id: t3.installationId, github_id: BYSTANDER, login_snapshot: 'zzzz-bystander-login' },
+  ]);
+  expect((await erasureAudit(db)).map((row) => [row.installation_id, row.metadata])).toEqual([
+    [t1.installationId, { signer_pii_rows: 1 }],
+    [t2.installationId, { signer_pii_rows: 1 }],
+    [t3.installationId, { signer_pii_rows: 0 }],
+  ]);
+  expect(await runOperatorErasure(db, REAL)).toEqual({ kind: 'nothing' });
+});
+
+test('a dry run counts the login on an allowlist and a real run is not "nothing" while one is left, though no signer_pii row is', async () => {
+  const { db, t1, t2, t3 } = await erasureWorld();
+  await eraseInInstallation(db, { githubId: target, actor: operator }, t1.installationId);
+  await eraseInInstallation(db, { githubId: target, actor: operator }, t2.installationId);
+  await listAccount(db, t3, TARGET, 'zzzz-target-login');
+  expect(await runOperatorErasure(db, DRY)).toMatchObject({
+    kind: 'dry_run',
+    before: {
+      installations: expect.arrayContaining([
+        { installationId: t3.installationId, signatures: 0, signerPiiRows: 0, loginSnapshots: 1 },
+      ]) as unknown,
+    },
+  });
+  expect(await runOperatorErasure(db, REAL)).toMatchObject({ kind: 'erased' });
+  expect(await snapshots(db)).toEqual([
+    { installation_id: t3.installationId, github_id: TARGET, login_snapshot: null },
+  ]);
+});
+
+test('a function that leaves the login on an allowlist is caught by the check after the loop', async () => {
+  const { db, t3 } = await erasureWorld();
+  await listAccount(db, t3, TARGET, 'zzzz-target-login');
+  await replaceWithNoOp(db);
+  expect(await runOperatorErasure(db, REAL)).toMatchObject({ kind: 'mismatch' });
+});
+
 test('a call that fails stops the loop, names the installations done and pending, and leaves the done ones done', async () => {
   const { db, t1, t2 } = await erasureWorld();
   const failure = Object.assign(new Error('connection lost'), { code: '08006' });
@@ -240,8 +291,8 @@ test('a function that erases nothing is caught by the check after the loop: the 
     after: {
       scrubbed: false,
       installations: [
-        { installationId: t1.installationId, signatures: 1, signerPiiRows: 1 },
-        { installationId: t2.installationId, signatures: 1, signerPiiRows: 1 },
+        { installationId: t1.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
+        { installationId: t2.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
       ],
     },
   });

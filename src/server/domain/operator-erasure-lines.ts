@@ -8,7 +8,9 @@ import {
   rowsOf,
   sameSignatures,
   signaturesOf,
+  snapshotsOf,
   withRows,
+  withSnapshots,
 } from './operator-erasure.ts';
 
 // The wording of the operator's erasure command (E22-S05). Every line the command prints is built here from numbers and fixed
@@ -16,18 +18,18 @@ import {
 
 /** The one line per installation that a dry run and a report print. */
 const installationLine = (installation: InstallationFootprint): string =>
-  `installation ${installation.installationId}: ${installation.signerPiiRows} signer_pii rows, ${installation.signatures} signature cores`;
+  `installation ${installation.installationId}: ${installation.signerPiiRows} signer_pii rows, ${installation.loginSnapshots} allowlist logins, ${installation.signatures} signature cores`;
 
 /** What a dry run prints: the totals, the counts per installation, and that nothing was changed. */
 export function dryRunLines(githubId: GithubId, before: Footprint): string[] {
   const scrubbed = before.scrubbed ? 'yes' : 'no';
   const lines = [
-    `erase dry run for GitHub id ${githubId}: ${rowsOf(before)} signer_pii rows in ${before.installations.length} installations, ${signaturesOf(before)} signature cores would be kept, users snapshot scrubbed: ${scrubbed}`,
+    `erase dry run for GitHub id ${githubId}: ${rowsOf(before)} signer_pii rows and ${snapshotsOf(before)} allowlist logins in ${before.installations.length} installations, ${signaturesOf(before)} signature cores would be kept, users snapshot scrubbed: ${scrubbed}`,
     ...before.installations.map(installationLine),
   ];
   if (before.installations.length === 0) {
     lines.push(
-      'no installation holds a signature of this person, so the erasure function has no installation to run in: --execute would leave the users snapshot as it is and exit 3',
+      'no installation holds a signature or an allowlisted login of this person, so the erasure function has no installation to run in: --execute would leave the users snapshot as it is and exit 3',
     );
   }
   return [...lines, 'nothing was changed; add --execute to erase'];
@@ -37,7 +39,7 @@ export function dryRunLines(githubId: GithubId, before: Footprint): string[] {
 export function erasedLines(githubId: GithubId, before: Footprint, erased: readonly ErasedInstallation[]): string[] {
   const deleted = erased.reduce((total, installation) => total + installation.deleted, 0);
   return [
-    `erased GitHub id ${githubId}: ${deleted} signer_pii rows deleted in ${erased.length} installations, ${signaturesOf(before)} signature cores kept, users snapshot scrubbed`,
+    `erased GitHub id ${githubId}: ${deleted} signer_pii rows deleted and ${snapshotsOf(before)} allowlist logins cleared in ${erased.length} installations, ${signaturesOf(before)} signature cores kept, users snapshot scrubbed`,
     ...erased.map(
       (installation) => `installation ${installation.installationId}: ${installation.deleted} signer_pii rows deleted`,
     ),
@@ -54,6 +56,16 @@ export function mismatchLines(githubId: GithubId, before: Footprint, after: Foot
       ...left.map(
         (installation) =>
           `installation ${installation.installationId}: ${installation.signerPiiRows} signer_pii rows left`,
+      ),
+    );
+  }
+  const listed = withSnapshots(after);
+  if (listed.length > 0) {
+    lines.push(
+      `allowlist logins left: ${snapshotsOf(after)}`,
+      ...listed.map(
+        (installation) =>
+          `installation ${installation.installationId}: ${installation.loginSnapshots} allowlist logins left`,
       ),
     );
   }

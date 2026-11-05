@@ -3,6 +3,7 @@
 import { sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { parseGithubId } from '../../shared/github-id.ts';
+import { listAccount } from '../adapters/db/erasure-fixture/test-support.ts';
 import {
   BYSTANDER,
   erasureAudit,
@@ -30,8 +31,8 @@ test('the footprint of a person who signed in two tenants lists each with its si
     known: true,
     scrubbed: false,
     installations: [
-      { installationId: t1.installationId, signatures: 1, signerPiiRows: 1 },
-      { installationId: t2.installationId, signatures: 1, signerPiiRows: 1 },
+      { installationId: t1.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
+      { installationId: t2.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
     ],
   });
 });
@@ -41,7 +42,7 @@ test('the footprint of a person who signed in one tenant lists that tenant only'
   expect(await readSignerFootprint(db, id(STRANGER))).toEqual({
     known: true,
     scrubbed: false,
-    installations: [{ installationId: t3.installationId, signatures: 1, signerPiiRows: 1 }],
+    installations: [{ installationId: t3.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 }],
   });
 });
 
@@ -60,8 +61,30 @@ test('a signature without personal data counts as a core and not as a row, and a
   expect(await readSignerFootprint(db, id(7777))).toEqual({
     known: true,
     scrubbed: false,
-    installations: [{ installationId: t3.installationId, signatures: 1, signerPiiRows: 0 }],
+    installations: [{ installationId: t3.installationId, signatures: 1, signerPiiRows: 0, loginSnapshots: 0 }],
   });
+});
+
+test('an allowlist entry that shows the login of a person who signed elsewhere lists its installation, with no signature and no row', async () => {
+  const { db, t1, t2, t3 } = await erasureWorld();
+  await listAccount(db, t3, TARGET, 'zzzz-target-login');
+  await listAccount(db, t1, TARGET, 'zzzz-target-login');
+  await listAccount(db, t2, TARGET, null);
+  expect(await readSignerFootprint(db, target)).toEqual({
+    known: true,
+    scrubbed: false,
+    installations: [
+      { installationId: t1.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 1 },
+      { installationId: t2.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
+      { installationId: t3.installationId, signatures: 0, signerPiiRows: 0, loginSnapshots: 1 },
+    ],
+  });
+});
+
+test('the logins of other people on the allowlists are not the footprint of this one', async () => {
+  const { db, t3 } = await erasureWorld();
+  await listAccount(db, t3, BYSTANDER, 'zzzz-bystander-login');
+  expect((await readSignerFootprint(db, target)).installations.map((entry) => entry.loginSnapshots)).toEqual([0, 0]);
 });
 
 test('a person with a users row and no signature is known, has no installation, and is not scrubbed', async () => {
@@ -92,8 +115,8 @@ test('the snapshot counts as scrubbed only when the login is exactly erased-<git
 test('the footprint of one person is not changed by the rows of another in the same tenants', async () => {
   const { db, t1, t2 } = await erasureWorld();
   expect((await readSignerFootprint(db, id(BYSTANDER))).installations).toEqual([
-    { installationId: t1.installationId, signatures: 1, signerPiiRows: 1 },
-    { installationId: t2.installationId, signatures: 1, signerPiiRows: 1 },
+    { installationId: t1.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
+    { installationId: t2.installationId, signatures: 1, signerPiiRows: 1, loginSnapshots: 0 },
   ]);
 });
 

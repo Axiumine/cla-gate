@@ -48,9 +48,9 @@ test('without --execute it is a dry run: the counts per installation on stdout, 
   const { t1, t2 } = world;
   expect(await run(ARGS)).toBe(0);
   expect(out).toEqual([
-    'erase dry run for GitHub id 4242: 2 signer_pii rows in 2 installations, 2 signature cores would be kept, users snapshot scrubbed: no',
-    `installation ${t1.installationId}: 1 signer_pii rows, 1 signature cores`,
-    `installation ${t2.installationId}: 1 signer_pii rows, 1 signature cores`,
+    'erase dry run for GitHub id 4242: 2 signer_pii rows and 0 allowlist logins in 2 installations, 2 signature cores would be kept, users snapshot scrubbed: no',
+    `installation ${t1.installationId}: 1 signer_pii rows, 0 allowlist logins, 1 signature cores`,
+    `installation ${t2.installationId}: 1 signer_pii rows, 0 allowlist logins, 1 signature cores`,
     'nothing was changed; add --execute to erase',
   ]);
   expect(err).toEqual([]);
@@ -64,7 +64,7 @@ test('--execute erases through the function, prints the rows deleted per install
   const { t1, t2 } = world;
   expect(await run(EXECUTE)).toBe(0);
   expect(out).toEqual([
-    'erased GitHub id 4242: 2 signer_pii rows deleted in 2 installations, 2 signature cores kept, users snapshot scrubbed',
+    'erased GitHub id 4242: 2 signer_pii rows deleted and 0 allowlist logins cleared in 2 installations, 2 signature cores kept, users snapshot scrubbed',
     `installation ${t1.installationId}: 1 signer_pii rows deleted`,
     `installation ${t2.installationId}: 1 signer_pii rows deleted`,
   ]);
@@ -81,8 +81,8 @@ test('a dry run and the real run that follows it agree on the counts', async () 
   const { out, run } = await scene();
   await run(ARGS);
   await run(EXECUTE);
-  expect(out[0]).toContain('2 signer_pii rows in 2 installations');
-  expect(out[4]).toContain('2 signer_pii rows deleted in 2 installations');
+  expect(out[0]).toContain('2 signer_pii rows and 0 allowlist logins in 2 installations');
+  expect(out[4]).toContain('2 signer_pii rows deleted and 0 allowlist logins cleared in 2 installations');
 });
 
 test('a person who is erased already prints "nothing to erase" and exits 0, for a repeat and for a dry run, and writes no audit row', async () => {
@@ -184,7 +184,7 @@ test('a call that fails part-way exits 4 with the installations done and pending
   err.length = 0;
   expect(await run(EXECUTE)).toBe(0);
   expect(out[0]).toBe(
-    'erased GitHub id 4242: 1 signer_pii rows deleted in 2 installations, 2 signature cores kept, users snapshot scrubbed',
+    'erased GitHub id 4242: 1 signer_pii rows deleted and 0 allowlist logins cleared in 2 installations, 2 signature cores kept, users snapshot scrubbed',
   );
   expect(await rowsOf(world.db, TARGET)).toEqual([]);
 });
@@ -255,7 +255,7 @@ test('without sinks it writes to stdout and stderr', async () => {
   const connect = vi.fn<Connect>(() => closable(world.db).handle);
   expect(await runEraseCli({ argv: ARGS, env: ENV, connect })).toBe(0);
   expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
-    'erase dry run for GitHub id 4242: 2 signer_pii rows in 2 installations',
+    'erase dry run for GitHub id 4242: 2 signer_pii rows and 0 allowlist logins in 2 installations',
   );
   expect(await runEraseCli({ argv: ['--bad'], env: ENV, connect })).toBe(2);
   expect(stderr.mock.calls).toEqual([[`${USAGE}\n`]]);

@@ -7,7 +7,8 @@ import { type ErasedInstallation, type ErasureOutcome, erasureHolds, isErased } 
 import { eraseInInstallation, readSignerFootprint } from './operator-erasure-queries.ts';
 
 // The operator's erasure of a person's personal data (E22-S05), over every installation of the server. The erasure itself is the
-// SQL function of E16-S04, called once per installation in which the person has signatures, each call in its own transaction;
+// SQL function of E16-S04, called once per installation in which the person has signatures or an allowlist entry that shows their
+// login (the function clears that login for the installation it is called with), each call in its own transaction;
 // this module decides whether to call it, in what order, and whether the result is what an erasure must leave. It contains no
 // statement that changes a row.
 

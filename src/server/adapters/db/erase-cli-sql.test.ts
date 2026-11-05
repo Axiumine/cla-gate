@@ -81,11 +81,12 @@ test.each(FILES)('%s calls no Kysely builder that writes', (file) => {
   expect(writingCallsIn(parse(file))).toEqual([]);
 });
 
-test('the only SQL of the command is two counts, the comparison of the snapshot, and the call of erase_signer_pii', () => {
+test('the only SQL of the command is three counts, the comparison of the snapshot, and the call of erase_signer_pii', () => {
   expect(FILES.flatMap((file) => sqlTemplatesIn(parse(file)))).toEqual([
     "login = 'erased-' || github_id::text",
     'count(*)',
     'count(p.signature_id)',
+    'count(*)',
     'erase_signer_pii($, $, $)',
   ]);
 });

@@ -14,6 +14,12 @@ export interface InstallationFootprint {
   readonly signatures: number;
   /** The `signer_pii` rows: name, email and login, one per signature that has them. */
   readonly signerPiiRows: number;
+  /**
+   * The allowlist entries of the person that still show their login (`allowlist_entries.login_snapshot`, migration 012). The
+   * erasure function clears them for the installation it is called with, so an installation that holds one is called too, even
+   * where the person signed nothing.
+   */
+  readonly loginSnapshots: number;
 }
 
 /** What the server holds about a person, read from the tables of the runtime role. */
@@ -22,7 +28,7 @@ export interface Footprint {
   readonly known: boolean;
   /** True when `users.login` is `erased-<github id>`, which is what the erasure function leaves. */
   readonly scrubbed: boolean;
-  /** One entry per installation in which the person has signatures, in ascending order of `installationId`. */
+  /** One entry per installation in which the person has signatures or an allowlist entry that shows their login, in ascending order of `installationId`. */
   readonly installations: readonly InstallationFootprint[];
 }
 
@@ -64,30 +70,47 @@ export const rowsOf = (footprint: Footprint): number =>
 export const signaturesOf = (footprint: Footprint): number =>
   footprint.installations.reduce((total, installation) => total + installation.signatures, 0);
 
-/** True for a person with no personal data left to erase: no `signer_pii` row anywhere and the snapshot already scrubbed. */
-export const isErased = (footprint: Footprint): boolean => rowsOf(footprint) === 0 && footprint.scrubbed;
+/** The allowlist entries of the person that show their login, in all installations. */
+export const snapshotsOf = (footprint: Footprint): number =>
+  footprint.installations.reduce((total, installation) => total + installation.loginSnapshots, 0);
+
+/** True for a person with no personal data left to erase: no `signer_pii` row and no login on an allowlist anywhere, and the snapshot already scrubbed. */
+export const isErased = (footprint: Footprint): boolean =>
+  rowsOf(footprint) === 0 && snapshotsOf(footprint) === 0 && footprint.scrubbed;
 
 /** The installations that still hold rows of personal data of the person. */
 export const withRows = (footprint: Footprint): readonly InstallationFootprint[] =>
   footprint.installations.filter((installation) => installation.signerPiiRows > 0);
 
-/** True when both footprints have the same installations with the same signature counts: erasure is not revocation, so the cores must be untouched. */
+/** The installations whose allowlist still shows the login of the person. */
+export const withSnapshots = (footprint: Footprint): readonly InstallationFootprint[] =>
+  footprint.installations.filter((installation) => installation.loginSnapshots > 0);
+
+/**
+ * True when both footprints have the same installations with signatures and the same signature counts in each: erasure is not
+ * revocation, so the cores must be untouched. An installation that holds only a login on its allowlist has no core and leaves the
+ * footprint once that login is cleared, so it takes no part in the comparison.
+ */
 export function sameSignatures(before: Footprint, after: Footprint): boolean {
+  const cores = (footprint: Footprint) => footprint.installations.filter((installation) => installation.signatures > 0);
+  const kept = cores(after);
   return (
-    before.installations.length === after.installations.length &&
-    before.installations.every((installation, index) => {
-      const other = after.installations.at(index);
+    cores(before).length === kept.length &&
+    cores(before).every((installation, index) => {
+      const other = kept.at(index);
       return other?.installationId === installation.installationId && other.signatures === installation.signatures;
     })
   );
 }
 
 /**
- * The post-conditions of an erasure, checked once after the loop: no `signer_pii` row of the person in any installation, the
- * snapshot scrubbed, and the signature cores exactly as they were.
+ * The post-conditions of an erasure, checked once after the loop: no `signer_pii` row of the person in any installation, no
+ * login of the person on any allowlist, the snapshot scrubbed, and the signature cores exactly as they were.
  */
 export function erasureHolds(before: Footprint, after: Footprint): boolean {
-  return withRows(after).length === 0 && after.scrubbed && sameSignatures(before, after);
+  return (
+    withRows(after).length === 0 && withSnapshots(after).length === 0 && after.scrubbed && sameSignatures(before, after)
+  );
 }
 
 /** The exit code of an outcome: 0 when it ran (or had nothing to do), 1 for an unknown person, 3 for a check that did not hold, 4 for a call that failed. */
