@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
 import { AUDIT_ACTIONS } from '../../../shared/audit.ts';
-import { AUDIT_LOG_DEFAULT_LIMIT, AUDIT_LOG_MAX_LIMIT } from '../../../shared/audit-log.ts';
+import { AUDIT_LOG_DEFAULT_LIMIT, AUDIT_LOG_MAX_LIMIT, AUDIT_SUBJECT_TYPE_PATTERN } from '../../../shared/audit-log.ts';
 import { auditCursorSchema } from '../../domain/audit-cursor.ts';
 import { idText, instantText } from './query-values.ts';
 
@@ -18,7 +18,7 @@ const limitText = z
   .default(AUDIT_LOG_DEFAULT_LIMIT);
 
 /** The kind of the row an audit entry is about: the shape the writer accepts for `subject.type`. */
-const subjectType = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/);
+const subjectType = z.string().regex(AUDIT_SUBJECT_TYPE_PATTERN);
 
 /**
  * The query string of `GET …/audit-log`. `action` is a member of `AUDIT_ACTIONS`; `from` is inclusive and `to` exclusive;

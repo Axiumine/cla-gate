@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { allowlistMessages } from './messages-allowlist.ts';
+import { auditMessages } from './messages-audit.ts';
 import { documentMessages } from './messages-documents.ts';
 import { pendingMessages } from './messages-pending.ts';
 import { signatureMessages } from './messages-signatures.ts';
@@ -66,6 +67,7 @@ export const messages = {
   'errors.unsupported_media_type': 'The server does not accept that kind of content.',
   'errors.uri_too_long': 'The address of the request was too long.',
   ...allowlistMessages,
+  ...auditMessages,
   ...documentMessages,
   ...pendingMessages,
   ...signatureMessages,

@@ -12,7 +12,8 @@ export type TenantTo =
   | '/installations/$installationId/documents'
   | '/installations/$installationId/allowlist'
   | '/installations/$installationId/signatures'
-  | '/installations/$installationId/pending';
+  | '/installations/$installationId/pending'
+  | '/installations/$installationId/audit';
 
 /** One screen below an installation and the roles that can open it. */
 export interface TenantSection<To extends string> {
@@ -32,7 +33,7 @@ export const TENANT_START: TenantTo = '/installations/$installationId';
  * repository screen). The allowlist is for both roles (E18-S06): an org admin manages the whole installation and every repository, a repo
  * admin the repositories they administer. The signatures are for both roles too (E18-S07): an org admin reads every document, a repo admin the
  * documents of their repositories. The pending pull requests and overrides are for both roles too (E18-S08): the server decides which
- * repositories each may read.
+ * repositories each may read. The audit log is for an org admin only (E18-S09; the server answers a repo admin with a `403`).
  */
 export const TENANT_SECTIONS: readonly TenantSection<TenantTo>[] = [
   { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
@@ -40,6 +41,7 @@ export const TENANT_SECTIONS: readonly TenantSection<TenantTo>[] = [
   { to: '/installations/$installationId/allowlist', roles: ['org_admin', 'repo_admin'] },
   { to: '/installations/$installationId/signatures', roles: ['org_admin', 'repo_admin'] },
   { to: '/installations/$installationId/pending', roles: ['org_admin', 'repo_admin'] },
+  { to: '/installations/$installationId/audit', roles: ['org_admin'] },
 ];
 
 /**
@@ -58,6 +60,8 @@ export function sectionLabel(to: TenantTo): PlainMessageKey {
       return 'tenant.nav.signatures';
     case '/installations/$installationId/pending':
       return 'tenant.nav.pending';
+    case '/installations/$installationId/audit':
+      return 'tenant.nav.audit';
   }
 }
 

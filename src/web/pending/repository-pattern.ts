@@ -10,5 +10,6 @@ const REPOSITORY_NAME = /^[A-Za-z0-9-]{1,39}\/(?!\.{1,2}$)[A-Za-z0-9._-]{1,100}$
 
 /** Where the pull request `number` of `fullName` is on GitHub, or `undefined` when `fullName` does not have the shape of a repository name. */
 export function pullRequestUrl(fullName: string, number: number): string | undefined {
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos -- anchored, with bounded counts and no nested quantifier (linear time)
   return REPOSITORY_NAME.test(fullName) ? `https://github.com/${fullName}/pull/${String(number)}` : undefined;
 }

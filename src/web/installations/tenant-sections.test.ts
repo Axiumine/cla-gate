@@ -49,13 +49,14 @@ test('a bare slash is the root, not an empty path', () => {
   expect(switchTarget([{ to: '/', roles: ['org_admin'] }], START, '/', 'org_admin')).toBe('/');
 });
 
-test('the screens of the app are the overview, the allowlist, the signatures and the pending pull requests, for both roles, and the documents, for an org admin; a tenant starts on the overview', () => {
+test('the screens of the app are the overview, the allowlist, the signatures and the pending pull requests, for both roles, and the documents and the audit log, for an org admin; a tenant starts on the overview', () => {
   expect(TENANT_SECTIONS).toEqual([
     { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
     { to: '/installations/$installationId/documents', roles: ['org_admin'] },
     { to: '/installations/$installationId/allowlist', roles: ['org_admin', 'repo_admin'] },
     { to: '/installations/$installationId/signatures', roles: ['org_admin', 'repo_admin'] },
     { to: '/installations/$installationId/pending', roles: ['org_admin', 'repo_admin'] },
+    { to: '/installations/$installationId/audit', roles: ['org_admin'] },
   ]);
   expect(TENANT_START).toBe('/installations/$installationId');
 });
@@ -87,6 +88,15 @@ test('a repo admin keeps the pending pull requests when the other installation h
   );
 });
 
+test('a repo admin is taken from the audit log to the start of the other installation, because only an org admin opens it', () => {
+  expect(switchTarget(TENANT_SECTIONS, TENANT_START, '/installations/$installationId/audit', 'repo_admin')).toBe(
+    TENANT_START,
+  );
+  expect(switchTarget(TENANT_SECTIONS, TENANT_START, '/installations/$installationId/audit', 'org_admin')).toBe(
+    '/installations/$installationId/audit',
+  );
+});
+
 test('every screen has its words in the navigation', () => {
   expect(TENANT_SECTIONS.map((section) => sectionLabel(section.to))).toEqual([
     'tenant.nav.overview',
@@ -94,5 +104,6 @@ test('every screen has its words in the navigation', () => {
     'tenant.nav.allowlist',
     'tenant.nav.signatures',
     'tenant.nav.pending',
+    'tenant.nav.audit',
   ]);
 });

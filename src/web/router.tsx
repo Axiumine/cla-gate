@@ -8,6 +8,8 @@ import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
 import { allowlistSearchSchema } from './allowlist/allowlist-search.ts';
 import { AllowlistRoute } from './allowlist/route-components.tsx';
+import { auditSearchSchema } from './audit/audit-search.ts';
+import { AuditRoute } from './audit/route-components.tsx';
 import { documentRouteParams } from './documents/document-params.ts';
 import { DocumentRoute, DocumentsRoute } from './documents/route-components.tsx';
 import { InstallationsPage } from './installations/InstallationsPage.tsx';
@@ -222,6 +224,16 @@ const pendingRoute = createRoute({
   component: PendingRoute,
 });
 
+// The audit log of a tenant (E18-S09), read-only: `?action=&actorGithubId=&subjectType=&subjectId=&from=&to=&cursor=`, so a filtered view is shared
+// by its address. Only an org admin reads it: the server decides on every request, and a repo admin gets the forbidden state.
+const auditRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: 'audit',
+  ...tenantPage('audit.title'),
+  validateSearch: auditSearchSchema,
+  component: AuditRoute,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -239,6 +251,7 @@ const routeTree = rootRoute.addChildren([
     allowlistRoute,
     signaturesRoute,
     pendingRoute,
+    auditRoute,
   ]),
 ]);
 
