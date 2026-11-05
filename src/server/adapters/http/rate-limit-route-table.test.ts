@@ -65,10 +65,10 @@ test('every route of the table that switches the limit off is on the RATE_LIMIT_
 /** `expect.any` is typed `any`; as `unknown` it can sit in an object literal. */
 const anyFunction: unknown = expect.any(Function);
 
-/** A budget of `max` a minute counted after the guard and keyed on the person (E21-S02: 10 corporate signings; E21-S03: 60 approval changes; not on the address). */
-const perPerson = (max: number): unknown => ({
+/** A budget of `max` in `timeWindow` ms counted after the guard and keyed on the person (E21-S02: 10 corporate signings a minute; E21-S03: 60 approval changes a minute; E21-S04: 10 claims an hour; not on the address). */
+const perPerson = (max: number, timeWindow = 60_000): unknown => ({
   max,
-  timeWindow: 60_000,
+  timeWindow,
   cache: 10_000,
   hook: 'preHandler',
   keyGenerator: anyFunction,
@@ -82,11 +82,17 @@ const APPROVAL_ROUTES = [
 ] as const;
 const APPROVAL_BUDGETS = Object.fromEntries(APPROVAL_ROUTES.map((name) => [name, perPerson(60)]));
 
+/** E21-S04: the claim of an employee, 10 an hour for each person, counted after the guard like the other corporate routes. */
+const CLAIM_ROUTE = 'POST /api/corporate/repositories/:githubRepoId/claims';
+/** The routes of the corporate flow that follow the approvals, with the budget of each. */
+const CORPORATE_ROUTES = [...APPROVAL_ROUTES, CLAIM_ROUTE] as const;
+const CORPORATE_BUDGETS = { ...APPROVAL_BUDGETS, [CLAIM_ROUTE]: perPerson(10, 3_600_000) };
+
 const csv = `GET ${SIGNATURES_CSV_PATH}`;
 const mine = `GET ${DATA_EXPORT_PATH}`;
 const search = `GET ${SIGNATURES_PATH}`;
 
-test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the corporate signing, the three changes of the approvals of an agreement, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
+test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the corporate signing, the three changes of the approvals of an agreement, the claim of an employee, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
   const own = table.filter((route) => typeof limitOf(route) === 'object');
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
@@ -97,7 +103,7 @@ test('the routes with a budget of their own are the four of the login, the save 
       'GET /api/auth/session',
       'POST /api/auth/logout',
       'POST /api/corporate/agreements',
-      ...APPROVAL_ROUTES,
+      ...CORPORATE_ROUTES,
       'POST /api/sign',
       'PUT /api/installations/:installationId/documents/:documentId/draft',
       csv,
@@ -121,7 +127,7 @@ test('the routes with a budget of their own are the four of the login, the save 
     // E13-S04: 10 sign requests a minute for each person, counted after the guard and keyed on the person, not on the address.
     'POST /api/sign': { max: 10, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
     'POST /api/corporate/agreements': perPerson(10),
-    ...APPROVAL_BUDGETS,
+    ...CORPORATE_BUDGETS,
     // E15-S02: 30 searches of signatures a minute for each person, counted after the guard and keyed on the person.
     [search]: { max: 30, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
   });

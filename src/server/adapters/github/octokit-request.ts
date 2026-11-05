@@ -93,6 +93,26 @@ export async function readOrNull<T>(
 }
 
 /**
+ * Whether `request` was answered: true for an answer that `schema` reads (nothing of it is kept), false for a 404. A rate limit and every
+ * other failure still throw, as does an answer the schema refuses.
+ */
+export async function answeredOrNotFound(
+  channel: Channel,
+  route: string,
+  request: RawRequest,
+  schema: z.ZodType,
+): Promise<boolean> {
+  const found = await nullWhen(
+    () => channel.send(route, request),
+    (error) => error instanceof GitHubNotFoundError,
+  );
+  if (found !== null) {
+    parseOne(route, schema, found.data);
+  }
+  return found !== null;
+}
+
+/**
  * Like {@link readOrNull}, and a 403 that is a refusal is null too: a repository that is gone and one the installation
  * cannot see look the same from here. A rate limit is not a refusal (see `failureOf`) and still throws.
  */

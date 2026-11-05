@@ -92,7 +92,7 @@ export function arrangeTo(stage: Stage): NonNullable<ScopedQuery['arrange']> {
 }
 
 /** Gives each tenant a corporate agreement of its own signer with the text and an approval of every kind. */
-async function arrangeFull(db: Kysely<Database>, tenants: readonly TenantWorld[]): Promise<void> {
+export async function arrangeFull(db: Kysely<Database>, tenants: readonly TenantWorld[]): Promise<void> {
   for (const tenant of tenants) {
     await corporateTenant(db, tenant, tenant.signer.githubId);
   }
@@ -110,7 +110,7 @@ export function corporateDocumentOf(db: Kysely<Database>, ids: TenantWorld) {
 }
 
 /** The installation that owns each agreement with these row ids. */
-async function ownersOfAgreements(db: Kysely<Database>, agreementIds: readonly number[]): Promise<number[]> {
+export async function ownersOfAgreements(db: Kysely<Database>, agreementIds: readonly number[]): Promise<number[]> {
   const rows = await db
     .selectFrom('corporate_agreements')
     .select('installation_id')
@@ -120,7 +120,7 @@ async function ownersOfAgreements(db: Kysely<Database>, agreementIds: readonly n
 }
 
 /** The id of the agreement of the tenant that has no text yet, or no approval yet, as `arrangeTo` stored it. */
-async function agreementOf(db: Kysely<Database>, ids: TenantWorld): Promise<number> {
+export async function agreementOf(db: Kysely<Database>, ids: TenantWorld): Promise<number> {
   const row = await db
     .selectFrom('corporate_agreements')
     .select('id')
@@ -147,7 +147,7 @@ async function ownersOfSignatures(db: Kysely<Database>, signatureIds: readonly n
 }
 
 /** The installation that owns each approval with these row ids. */
-async function ownersOfApprovals(db: Kysely<Database>, approvalIds: readonly number[]): Promise<number[]> {
+export async function ownersOfApprovals(db: Kysely<Database>, approvalIds: readonly number[]): Promise<number[]> {
   if (approvalIds.length === 0) {
     return [];
   }
@@ -160,7 +160,7 @@ async function ownersOfApprovals(db: Kysely<Database>, approvalIds: readonly num
 }
 
 /** The id of the domain approval of the tenant that {@link DOMAIN} is: the one other approvals derive from. */
-async function domainApprovalOf(db: Kysely<Database>, ids: TenantWorld): Promise<number> {
+export async function domainApprovalOf(db: Kysely<Database>, ids: TenantWorld): Promise<number> {
   const row = await db
     .selectFrom('corporate_approvals')
     .select('id')
@@ -187,7 +187,7 @@ async function approvalIdsOf(db: Kysely<Database>, ids: TenantWorld) {
 }
 
 /** A function that takes the tenant and the ids of a resource and answers with the rows of that tenant it read or changed. */
-const scoped = (
+export const scoped = (
   options: Pick<ScopedQuery, 'run' | 'arrange' | 'refusal' | 'takesIds' | 'activeOnly'>,
 ): ScopedQuery => ({
   kind: 'scoped',

@@ -18,6 +18,7 @@ import {
   CORPORATE_APPROVALS_PATH,
   CORPORATE_CARRY_OVER_PATH,
 } from '../../../../shared/corporate-approvals.ts';
+import { CORPORATE_AVAILABILITY_PATH, CORPORATE_CLAIMS_PATH } from '../../../../shared/corporate-claims.ts';
 import {
   approve,
   personWithId,
@@ -221,4 +222,8 @@ export const CORPORATE_NO_TENANT_DATA: Readonly<Record<string, string>> = {
     'it revokes one approval of the agreement of the caller and answers with that approval; a second call is the 409 already_revoked, so the matrix, which repeats every call, cannot hold it, and its cross-tenant cases are corporate-approval-tenants.test.ts and corporate-approval-revoke.test.ts (E21-S03)',
   [`POST ${CORPORATE_CARRY_OVER_PATH}`]:
     'it copies approvals between two agreements of the caller and answers with two counts, which a second call changes (everything is skipped), and the matrix, which repeats every call, cannot hold it; its cross-tenant cases are corporate-approval-tenants.test.ts and corporate-approval-carry-over.test.ts (E21-S03)',
+  [`GET ${CORPORATE_AVAILABILITY_PATH}`]:
+    'it answers one boolean for the repository the path names, true only when a corporate document and a valid agreement exist, and no row of any table, so there is no tenant row to show another tenant; its cross-tenant cases are corporate-claim-availability.test.ts (E21-S04)',
+  [`POST ${CORPORATE_CLAIMS_PATH}`]:
+    'it writes one derived approval for the caller in the tenant of the repository the path names and answers with a status word and no row; a second call is the 200 already_covered, so the matrix, which repeats every call, cannot hold it, and its cross-tenant cases are corporate-claim-rules.test.ts (E21-S04)',
 };

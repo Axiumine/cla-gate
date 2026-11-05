@@ -162,6 +162,8 @@ test('the tables of the application hold the cases of the routes the stories add
     'POST /api/corporate/agreements/:agreementId/approvals',
     'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
     'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
+    'GET /api/corporate/repositories/:githubRepoId/availability',
+    'POST /api/corporate/repositories/:githubRepoId/claims',
   ]);
   expect(Object.values(NO_TENANT_DATA).every((reason) => reason.length > 20)).toBe(true);
 });

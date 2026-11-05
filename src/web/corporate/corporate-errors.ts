@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { ApiError } from '../api/index.ts';
 
-// The words for what can go wrong when a company signs (E21-S02). The codes are those of the corporate rules and of the name and the
+// The words for what can go wrong when a company signs (E21-S02) and when an employee claims coverage (E21-S04). The codes are those of the corporate rules and of the name and the
 // address of the signer; the web's shared catalog of error codes does not list them, so this screen reads them itself and every
 // other failure goes through the generic states.
 
@@ -15,7 +15,9 @@ const CORPORATE_CODES = [
   'hash_mismatch',
   'installation_suspended',
   'invalid_name',
+  'no_matching_approval',
   'no_verified_email',
+  'upstream_unavailable',
   'validation_failed',
   'version_outdated',
 ] as const;

@@ -5,6 +5,7 @@ import { HttpResponse, http } from 'msw';
 import { expect, test } from 'vitest';
 import { sessionRoute } from '../shared/auth-contract.ts';
 import { CORPORATE_AGREEMENTS_PAGE_PATH, CORPORATE_SIGN_PAGE_PATH } from '../shared/corporate.ts';
+import { CORPORATE_CLAIM_PAGE_PATH } from '../shared/corporate-claims.ts';
 import { createQueryClient } from './api/index.ts';
 import { messages } from './i18n/index.ts';
 import type { RouterContext } from './route-access.ts';
@@ -33,7 +34,7 @@ test('every route of the tree names its page title, and it is a key of the catal
   expect(routeTitleProblems(routerFor().tree, messages)).toEqual([]);
 });
 
-test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07) and the not-found route, all public, and the settings screen of a repository (E22-S03) and the two pages of corporate signing (E21-S02), which need a login', () => {
+test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07) and the not-found route, all public, and the settings screen of a repository (E22-S03), and the pages of corporate signing (E21-S02) and of the claim of an employee (E21-S04), which need a login', () => {
   expect(accessById(routerFor().tree)).toEqual({
     __root__: 'public',
     '/': 'public',
@@ -42,13 +43,15 @@ test('the routes are the front page, the failed-login page, the two pages of the
     '/setup/callback': 'public',
     '/installations/$installationId/repositories/$repositoryId/settings': 'authenticated',
     '/corporate/sign/$githubRepoId': 'authenticated',
+    '/corporate/claim/$githubRepoId': 'authenticated',
     '/corporate/agreements': 'authenticated',
   });
 });
 
-test('the two corporate pages are at the addresses the shared contract names, the parameter spelled the way the router spells it', () => {
+test('the corporate pages are at the addresses the shared contract names, the parameter spelled the way the router spells it', () => {
   const ids = Object.keys(accessById(routerFor().tree));
   expect(ids).toContain(CORPORATE_SIGN_PAGE_PATH.replace(':githubRepoId', '$githubRepoId'));
+  expect(ids).toContain(CORPORATE_CLAIM_PAGE_PATH.replace(':githubRepoId', '$githubRepoId'));
   expect(ids).toContain(CORPORATE_AGREEMENTS_PAGE_PATH);
 });
 

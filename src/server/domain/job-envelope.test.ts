@@ -101,11 +101,12 @@ test.each(['signature_revoked', 'signatures_invalidated', 'override_changed'])(
   },
 );
 
-test('the reasons of sweep-repository are exactly the seven of the story, each once', () => {
+test('the reasons of sweep-repository are exactly the seven of the story and the one of E21-S04, each once', () => {
   expect([...SWEEP_REPOSITORY_REASONS].toSorted((a, b) => a.localeCompare(b))).toEqual([
     'allowlist_changed',
     'cla_document_changed',
     'cla_version_published',
+    'corporate_claim',
     'override_changed',
     'repository_enabled',
     'signature_revoked',

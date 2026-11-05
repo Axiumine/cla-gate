@@ -154,10 +154,17 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { document_id: 12, version_id: 21, signature_id: 31, major: 1, source_repository_id: 9 },
     },
   ],
-  'services/corporate-approval-audit.ts#corporate_approval.added|corporate_approval.revoked': [
-    ...approvalFixtures('corporate_approval.added'),
-    ...approvalFixtures('corporate_approval.revoked'),
-  ],
+  'services/corporate-approval-audit.ts#corporate_approval.added|corporate_approval.derived|corporate_approval.revoked':
+    [
+      ...approvalFixtures('corporate_approval.added'),
+      ...approvalFixtures('corporate_approval.revoked'),
+      // E21-S04: the approval derived for an employee who claimed coverage is always a person's, and carries no cause.
+      {
+        action: 'corporate_approval.derived',
+        subject: { type: 'corporate_approval', id: 51 },
+        metadata: { kind: 'user', github_id: 4711, signature_id: 31, reason_code: null },
+      },
+    ],
   'services/repository-corporate-document.ts#repository.corporate_document_set': [
     {
       action: 'repository.corporate_document_set',

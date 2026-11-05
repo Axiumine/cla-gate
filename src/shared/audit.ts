@@ -71,6 +71,10 @@ export const AUDIT_ACTIONS = [
   // id, the signature of the agreement and a code, never a login, an address, a domain or the reason of a revocation.
   'corporate_approval.added',
   'corporate_approval.revoked',
+  // Added by E21-S04: an employee claimed coverage under an employer's agreement and a rule (an e-mail domain or an organisation the CLA
+  // manager approved) matched, so a `user` approval was derived for them. The subject is the new approval; the metadata holds `kind`
+  // `user`, the numeric GitHub id of the employee, the signature of the agreement and no login, address, domain or company.
+  'corporate_approval.derived',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

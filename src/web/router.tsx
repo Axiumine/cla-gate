@@ -8,6 +8,8 @@ import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
 import { CorporateAgreementsPage } from './corporate/CorporateAgreementsPage.tsx';
 import { CorporateSignPage } from './corporate/CorporateSignPage.tsx';
+import { EmployerClaimRoute } from './corporate/EmployerClaimRoute.tsx';
+import { REPOSITORY_ID_IN_PATH } from './corporate/repository-id.ts';
 import { AppShell } from './layout/AppShell.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
@@ -93,9 +95,6 @@ const repositorySettingsRoute = createRoute({
 // signed. Both need a login. The paths are those of CORPORATE_SIGN_PAGE_PATH and CORPORATE_AGREEMENTS_PAGE_PATH in the shared contract
 // (TanStack spells a parameter `$name`; router.test.tsx holds the two spellings together).
 
-/** GitHub's id of a repository in an address: digits only, no leading zero, small enough to be an exact number. */
-const REPOSITORY_ID_IN_PATH = /^[1-9]\d{0,14}$/u;
-
 const corporateSignRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/corporate/sign/$githubRepoId',
@@ -108,6 +107,15 @@ const corporateSignRoute = createRoute({
       <NotFoundPage />
     );
   },
+});
+
+// The claim of an employee (E21-S04): a page of its own at CORPORATE_CLAIM_PAGE_PATH, for a signed-in person, until the page where a contributor
+// signs embeds the entry.
+const corporateClaimRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/corporate/claim/$githubRepoId',
+  ...withAccess('authenticated', { title: 'corporate.claim.pageTitle' }),
+  component: EmployerClaimRoute,
 });
 
 /** `?cursor=` of the list: the opaque cursor of the page on screen, else the first page. The raw value goes no further. */
@@ -140,6 +148,7 @@ const routeTree = rootRoute.addChildren([
   setupCallbackRoute,
   repositorySettingsRoute,
   corporateSignRoute,
+  corporateClaimRoute,
   corporateAgreementsRoute,
 ]);
 

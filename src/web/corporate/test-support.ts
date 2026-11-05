@@ -8,6 +8,7 @@ import {
   type CorporateAgreementPage,
   type CorporateDocumentResponse,
 } from '../../shared/corporate.ts';
+import { CORPORATE_AVAILABILITY_PATH, CORPORATE_CLAIMS_PATH } from '../../shared/corporate-claims.ts';
 import { server } from '../test-support/server.ts';
 
 // Made-up answers and handlers for the tests of the two corporate pages (E21-S02). Nothing here is a real company or person.
@@ -101,6 +102,41 @@ export function answerSigning(failure?: { status: number; code: string }): Poste
             { error: { code: failure.code, message: 'x', requestId: 'req-sign' } },
             { status: failure.status },
           );
+    }),
+  );
+  return posted;
+}
+
+/** The answer of the availability route for the path of the test: whether the repository offers the claim, or a failure with this status and code. */
+export function answerAvailability(answer: boolean | { status: number; code: string }): void {
+  server.use(
+    http.get(CORPORATE_AVAILABILITY_PATH, () =>
+      typeof answer === 'boolean'
+        ? HttpResponse.json({ corporateAvailable: answer })
+        : HttpResponse.json(
+            { error: { code: answer.code, message: 'x', requestId: 'req-availability' } },
+            { status: answer.status },
+          ),
+    ),
+  );
+}
+
+/** What the claim route answers: a status of the success (`201 covered`, `200 already_covered`), or a failure with this status and code. */
+export type ClaimAnswer = 'covered' | 'already_covered' | { status: number; code: string };
+
+/** The answer of the claim route; the requests it receives are recorded in the returned list, with the CSRF token each carried. */
+export function answerClaim(answer: ClaimAnswer): Posted[] {
+  const posted: Posted[] = [];
+  server.use(
+    http.post(CORPORATE_CLAIMS_PATH, async ({ request }) => {
+      posted.push({ csrf: request.headers.get('x-csrf-token'), body: await request.json() });
+      if (typeof answer === 'string') {
+        return HttpResponse.json({ status: answer }, { status: answer === 'covered' ? 201 : 200 });
+      }
+      return HttpResponse.json(
+        { error: { code: answer.code, message: 'x', requestId: 'req-claim' } },
+        { status: answer.status },
+      );
     }),
   );
   return posted;

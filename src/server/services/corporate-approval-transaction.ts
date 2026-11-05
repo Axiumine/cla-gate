@@ -35,7 +35,7 @@ export interface AgreementWork {
  */
 export function inLockedAgreement<T>(
   db: Kysely<Database>,
-  change: { readonly agreement: AgreementRow; readonly actor: ApprovalActor },
+  change: { readonly agreement: Pick<AgreementRow, 'installationId' | 'signatureId'>; readonly actor: ApprovalActor },
   work: (locked: AgreementWork) => Promise<T>,
 ): Promise<T> {
   const { agreement, actor } = change;

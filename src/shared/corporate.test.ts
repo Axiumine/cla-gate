@@ -83,6 +83,7 @@ test('every rule has the status the story gives it', () => {
     approval_limit: 422,
     approval_exists: 409,
     already_revoked: 409,
+    no_matching_approval: 409,
     upstream_unavailable: 503,
   });
 });

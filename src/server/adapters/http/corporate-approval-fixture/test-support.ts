@@ -15,6 +15,7 @@ import {
 import { parseGithubId } from '../../../../shared/github-id.ts';
 import type { GitHubUserAccount } from '../../../services/ports/github.ts';
 import { FakeGitHub } from '../../../services/test-support.ts';
+import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
   type CorporateWorld,
@@ -44,10 +45,13 @@ const ACME_ORG = account(9100, 'Acme-Org', 'Organization');
 /** An automation. */
 export const A_BOT = account(49_699_333, 'dependabot[bot]', 'Bot');
 
-/** The world of the approvals: both tenants with a signed agreement, and the fake GitHub both installations are known to. */
-export async function approvalWorld() {
+/**
+ * The world of the approvals: both tenants with a signed agreement, and the fake GitHub both installations are known to. `app` adds the
+ * options a test sets besides that GitHub (the queue a claim re-evaluates through, E21-S04).
+ */
+export async function approvalWorld(app: Pick<TestAppOptions, 'enqueuer'> = {}) {
   const github = new FakeGitHub();
-  const world = await corporateWorld({}, { corporateGitHub: github });
+  const world = await corporateWorld({}, { corporateGitHub: github, ...app });
   for (const { githubInstallationId, accountId, accountLogin } of [world.t1, world.t2]) {
     const owner = { id: accountId, login: accountLogin, type: 'Organization' } as const;
     github.addInstallation({ id: githubInstallationId, account: owner, suspendedAt: null, permissions: {} });

@@ -68,7 +68,9 @@ const sha256 = z.string().regex(/^[0-9a-f]{64}$/u);
  * are a login GitHub has no such account or organisation for, `not_a_user` an account that is not a person, `domain_not_allowed` a
  * free-mail domain, `approval_limit` an agreement that has its 500 approvals in force, `approval_exists` a subject that has one in
  * force, `already_revoked` an approval that was revoked, and `upstream_unavailable` GitHub failing (a rate limit, a refusal, an
- * outage) with nothing written; a rate limit tells its wait in the `retry-after` header.
+ * outage) with nothing written; a rate limit tells its wait in the `retry-after` header. The claim of an employee (E21-S04) has one
+ * rule of its own: `no_matching_approval` is a person no agreement of the repository's tenant covers by an approval of their own, by
+ * the domain of a verified address or by an organisation they show a membership of; it names no company.
  */
 export const CORPORATE_RULE_STATUS = {
   not_found: 404,
@@ -88,6 +90,7 @@ export const CORPORATE_RULE_STATUS = {
   approval_exists: 409,
   already_revoked: 409,
   upstream_unavailable: 503,
+  no_matching_approval: 409,
 } as const;
 
 export type CorporateRule = keyof typeof CORPORATE_RULE_STATUS;

@@ -16,6 +16,7 @@ test.each([
   ['a route with a query', '/signatures?page=2&q=a.b'],
   ['a route with a trailing slash', '/signatures/'],
   ['the sign page of a corporate CLA (E21-S02)', '/corporate/sign/9000'],
+  ['the page of the claim of an employee (E21-S04)', '/corporate/claim/9000'],
   ['the list of corporate agreements (E21-S02)', '/corporate/agreements?cursor=abc'],
   ['a route with a dot in a folder name... of the query only', '/search?file=a.json'],
   ['a route with an encoded character', '/orgs/ac%20me'],

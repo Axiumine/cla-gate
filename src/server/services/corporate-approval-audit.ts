@@ -14,8 +14,11 @@ import { githubIdOf } from './corporate-approval-subject.ts';
 // domain, which is not written at all: the approval says it) and the signature of the agreement. Never a login, an address, a domain, a
 // company name or the reason of a revocation.
 
-/** Why a row was written, besides the manager's own decision: the approval was copied from an earlier major, or revoked with its parent. */
-type Cause = 'carried_over' | 'parent_revoked';
+/**
+ * Why a row was written, besides the manager's own decision: the approval was copied from an earlier major, revoked with its parent, or
+ * (E21-S04) revoked because it had expired when its person claimed again.
+ */
+type Cause = 'carried_over' | 'parent_revoked' | 'expired';
 
 /** The approval a row is about. */
 export interface AuditedApproval {
@@ -40,7 +43,7 @@ export interface ApprovalAuditContext {
 /** One audit row about an approval, in the caller's transaction. */
 function appendApprovalAudit(
   trx: Transaction<Database>,
-  action: 'corporate_approval.added' | 'corporate_approval.revoked',
+  action: 'corporate_approval.added' | 'corporate_approval.revoked' | 'corporate_approval.derived',
   context: ApprovalAuditContext,
   approval: AuditedApproval,
 ): Promise<void> {
@@ -74,4 +77,16 @@ export function auditApprovalRevoked(
   approval: AuditedApproval,
 ): Promise<void> {
   return appendApprovalAudit(trx, 'corporate_approval.revoked', context, approval);
+}
+
+/**
+ * An approval was derived for an employee who claimed coverage (E21-S04): the actor is the employee, the approval is theirs and the cause is
+ * none, since the rule that matched is the manager's decision and the derivation says which approval it came from through the row itself.
+ */
+export function auditApprovalDerived(
+  trx: Transaction<Database>,
+  context: ApprovalAuditContext,
+  approval: AuditedApproval,
+): Promise<void> {
+  return appendApprovalAudit(trx, 'corporate_approval.derived', context, approval);
 }

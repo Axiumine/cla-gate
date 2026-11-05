@@ -5,7 +5,6 @@ import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
 import { lacksConclusion, type StoredCheckRun } from './fake-check-runs/test-support.ts';
 import {
-  abortable,
   COMMIT_SHA,
   commentKey,
   commentsPage,
@@ -25,13 +24,13 @@ import {
   reachable,
   repositoryKey,
   rewriteComment,
-  takeFirst,
 } from './fake-github/test-support.ts';
 
 export type { GitHubMethod, RecordedCall };
 
+import { abortable, takeFirst } from './fake-abortable/test-support.ts';
 import { findCommit } from './fake-commits/test-support.ts';
-import { orgAccountOf, userAccountOf } from './fake-user-accounts/test-support.ts';
+import { orgAccountOf, publicMemberOf, userAccountOf } from './fake-user-accounts/test-support.ts';
 import type { Clock } from './ports/clock.ts';
 import type {
   CheckRunWrite,
@@ -208,6 +207,12 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
 
   getOrganizationAccount(id: GithubId, login: string): Promise<GitHubUserAccount | null> {
     return this.#serveInstallation('getOrganizationAccount', id, () => orgAccountOf(this.state.userAccounts, login));
+  }
+
+  isPublicOrgMember(id: GithubId, org: string, login: string): Promise<boolean> {
+    return this.#serveInstallation('isPublicOrgMember', id, () =>
+      publicMemberOf(this.state.publicMembers, { org, login }),
+    );
   }
 
   probeMembersPermission(id: GithubId): Promise<boolean> {

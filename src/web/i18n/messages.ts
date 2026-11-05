@@ -32,6 +32,16 @@ export const messages = {
   'corporate.agreements.status': 'Status',
   'corporate.agreements.title': 'Corporate agreements',
   'corporate.agreements.titleColumn': 'Your title',
+  'corporate.claim.confirm': 'I contribute to this repository on behalf of my employer.',
+  'corporate.claim.confirmRequired': 'Confirm that you contribute on behalf of your employer.',
+  'corporate.claim.done': 'Covered by a corporate CLA',
+  'corporate.claim.doneDetail': 'Your open pull requests are checked again. You do not need to sign for yourself.',
+  'corporate.claim.intro':
+    'If your employer signed a corporate CLA and its CLA manager approved you, you are covered without signing for yourself.',
+  'corporate.claim.pageTitle': 'Claim coverage under your employer’s CLA',
+  'corporate.claim.submit': 'Check my coverage',
+  'corporate.claim.title': 'Contributing for an employer?',
+  'corporate.claim.unavailable': 'This repository does not offer coverage under an employer’s corporate CLA.',
   'corporate.error.agreement_exists':
     'You already signed this corporate CLA version. Your agreement is listed under your corporate agreements.',
   'corporate.error.agreement_revoked': 'This agreement was revoked, so it can no longer be changed.',
@@ -43,7 +53,10 @@ export const messages = {
     'The organisation of this repository is suspended on GitHub, so nothing can be signed for it now.',
   'corporate.error.invalid_name':
     'The name you typed was not accepted. Type your full name, with no control characters.',
+  'corporate.error.no_matching_approval':
+    'No agreement covers you yet. Ask your employer’s CLA manager to approve your GitHub account, your e-mail domain or your GitHub organisation, then try again.',
   'corporate.error.no_verified_email': 'GitHub reports no verified email address for you. Verify one on GitHub first.',
+  'corporate.error.upstream_unavailable': 'GitHub could not be asked just now. Try again in a moment.',
   'corporate.error.validation_failed':
     'The company name, your title or the confirmation was not accepted. Check them and remove control characters.',
   'corporate.error.version_outdated': 'A newer version of the corporate CLA was published. Load the current text.',

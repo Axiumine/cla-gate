@@ -28,7 +28,6 @@ export async function countActiveApprovals(
 
 /**
  * The approval in force that covers a domain: which, under which agreement. Never a name.
- * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export interface DomainApproval {
   readonly approvalId: number;
@@ -39,7 +38,6 @@ export interface DomainApproval {
  * The approvals in force of the tenant for exactly `domain` (the stored form), under agreements whose signature is not revoked. The
  * tenant is in the WHERE clause: a domain approved in one tenant covers nobody in another, and neither is a domain that only contains or
  * ends with the approved one. This is the read side of the claim of E21-S04 and of the coverage of E21-S05.
- * @internal Exported for the tests and for E21-S04 (Knip ignores `@internal` exports in production mode).
  */
 export function domainApprovals(db: Kysely<Database>, scope: TenantScope, domain: string): Promise<DomainApproval[]> {
   return db

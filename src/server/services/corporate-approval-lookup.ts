@@ -5,15 +5,15 @@ import type { ApprovalSubject } from '../domain/corporate-approval-request.ts';
 import type { StoredSubject } from './corporate-approval-subject.ts';
 import { CorporateRuleError } from './corporate-rule-error.ts';
 import { withGitHubDeadline } from './github-deadline.ts';
-import type { GitHubClient, GitHubUserAccount } from './ports/github.ts';
+import type { GitHubClient } from './ports/github.ts';
 import { GitHubRateLimitedError, GitHubUnavailableError } from './ports/github-errors.ts';
 
 // Which account, organisation or domain an approval is for (E21-S03). A login is looked up on GitHub with the installation's token and the
 // approval stores the numeric id GitHub answers with, never the typed text; a domain needs no call. The call is made before the
 // transaction of the approval opens, so no connection waits on GitHub and nothing is written when GitHub fails.
 
-/** The two calls of the GitHub client port that an approval needs. */
-export type CorporateGitHub = Pick<GitHubClient, 'getUserAccount' | 'getOrganizationAccount'>;
+/** The calls of the GitHub client port that an approval needs (E21-S03) and the claim of an employee after it (E21-S04, the membership check). */
+export type CorporateGitHub = Pick<GitHubClient, 'getUserAccount' | 'getOrganizationAccount' | 'isPublicOrgMember'>;
 
 /** A GitHub the lookups cannot be made on, for a server built with no GitHub App: every call fails as an outage, so `503 upstream_unavailable`. */
 export const corporateGitHubNotWired: CorporateGitHub = {
@@ -21,6 +21,8 @@ export const corporateGitHubNotWired: CorporateGitHub = {
     Promise.reject(new GitHubUnavailableError('no GitHub App is configured: accounts cannot be looked up')),
   getOrganizationAccount: () =>
     Promise.reject(new GitHubUnavailableError('no GitHub App is configured: organisations cannot be looked up')),
+  isPublicOrgMember: () =>
+    Promise.reject(new GitHubUnavailableError('no GitHub App is configured: memberships cannot be checked')),
 };
 
 /**
@@ -44,10 +46,11 @@ function failedLookup(error: unknown): never {
 }
 
 /**
- * The account GitHub answers for the lookup `work` starts, within 5 seconds.
+ * What GitHub answers to the call `work` starts, within 5 seconds: an account for a lookup, whether a person is a member for the check of a
+ * membership (E21-S04).
  * @throws CorporateRuleError `upstream_unavailable` (see {@link failedLookup}).
  */
-async function lookedUp(work: () => Promise<GitHubUserAccount | null>): Promise<GitHubUserAccount | null> {
+export async function lookedUp<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await withGitHubDeadline(work, { ms: APPROVAL_LOOKUP_TIMEOUT_MS, what: 'an approval lookup' });
   } catch (error) {

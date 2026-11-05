@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Insertable, type Kysely, sql, type Transaction } from 'kysely';
+import { domainsOfEmails } from '../../domain/corporate-domain.ts';
 import { newTimes, type SessionLimits } from '../../domain/session.ts';
 import type { Database } from './schema.ts';
 import {
@@ -86,6 +87,7 @@ export async function createSession(
     idle_expires_at: idleExpiresAt,
     absolute_expires_at: absoluteExpiresAt,
     verified_emails: JSON.stringify(input.verifiedEmails ?? []),
+    verified_email_domains: domainsOfEmails(input.verifiedEmails ?? []),
   };
   const { id: rowId } = await withTransaction(db, async (trx) => {
     await lockUserSessions(trx, input.userId);

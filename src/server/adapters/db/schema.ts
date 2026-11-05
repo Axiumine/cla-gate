@@ -38,6 +38,8 @@ interface SessionsTable {
   absolute_expires_at: Date;
   /** The verified addresses of the person at login, `[{ email, primary }]`, at most 20; personal data, gone with the row (migration 005, E10-S01). */
   verified_emails: JsonArray;
+  /** The distinct domains of those addresses in the stored form (lower case, punycode), never an address; gone with the row (migration 021, E21-S04). */
+  verified_email_domains: ColumnType<string[], string[] | undefined, string[]>;
 }
 
 interface InstallationsTable {

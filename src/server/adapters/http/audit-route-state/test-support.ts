@@ -86,6 +86,7 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
   registered(
     audited('POST /api/corporate/agreements/:agreementId/approvals/carry-over', 'E21-S03', 'corporate_approval.added'),
   ),
+  registered(audited('POST /api/corporate/repositories/:githubRepoId/claims', 'E21-S04', 'corporate_approval.derived')),
   exempt('POST /api/setup/unlock', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/manifest', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/convert', 'E19-S11', 'setup', true),

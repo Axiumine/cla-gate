@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { decodesAsPunycode } from './punycode.ts';
+
 // The e-mail domain of a corporate approval (E21-S03), pure. A manager types a domain and the platform stores one form of it: lower case,
 // in punycode, a dotted hostname. An address is covered by the approval when the part after its `@` is that very domain: exact
 // equality and nothing implicit, so `acme.com` covers `ada@acme.com` and neither `ada@mail.acme.com` nor `ada@acme.com.evil.test`.
@@ -45,6 +47,13 @@ function isStoredHostname(name: string): boolean {
   );
 }
 
+/**
+ * Whether every label of `ascii` that starts with `xn--` is punycode that decodes (see {@link decodesAsPunycode}). Some URL parsers keep a
+ * label that does not decode as it was typed (`xn--a`), which would store a name no registry can hold.
+ */
+const hasDecodablePunycode = (ascii: string): boolean =>
+  ascii.split('.').every((label) => !label.startsWith('xn--') || decodesAsPunycode(label.slice(4)));
+
 /** The host of `typed` as a URL parser converts it (lower case, an internationalised name as its punycode form), or `null` when it cannot be converted. */
 function hostOf(typed: string): string | null {
   try {
@@ -67,7 +76,7 @@ export function normaliseDomain(raw: string): string | null {
     return null;
   }
   const ascii = hostOf(typed);
-  return ascii !== null && isStoredHostname(ascii) ? ascii : null;
+  return ascii !== null && isStoredHostname(ascii) && hasDecodablePunycode(ascii) ? ascii : null;
 }
 
 /**
@@ -87,4 +96,13 @@ export function domainOfEmail(email: string): string | null {
  */
 export function emailMatchesDomain(email: string, approvedDomain: string): boolean {
   return domainOfEmail(email) === approvedDomain;
+}
+
+/**
+ * The distinct domains of the verified addresses `emails`, in the stored form and in the order they are first met: what a session keeps
+ * of its person's addresses for the claim of E21-S04 (the domains and never an address). An address whose domain cannot be one is left
+ * out, and two addresses at one domain give it once, whatever the case it was typed in.
+ */
+export function domainsOfEmails(emails: readonly { readonly email: string }[]): string[] {
+  return [...new Set(emails.flatMap(({ email }) => domainOfEmail(email) ?? []))];
 }

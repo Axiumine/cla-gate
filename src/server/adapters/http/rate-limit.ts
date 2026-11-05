@@ -25,7 +25,8 @@ export const HOUR_MS = 3_600_000;
  * signature CSV (E16-S03) per minute, and `dataExport` the budget for their own data (E16-S06) per hour, both taken through
  * {@link userRateLimit}; `sign` is the budget of each signed-in person for the sign request (E13-S04) per minute, taken the same way,
  * `corporateSign` the same budget for the signing of a corporate agreement (E21-S02), `corporateApproval` the budget of 60 for each of the
- * three routes that change the approvals of an agreement (E21-S03), and `signatureSearch` the budget for the search of signatures (E15-S02), which shows the personal data of up to 100 signers a page and
+ * three routes that change the approvals of an agreement (E21-S03), `corporateClaim` the budget of 10 per hour for the claim of an employee under an
+ * employer's agreement (E21-S04), taken through {@link userRateLimit} with {@link HOUR_MS}, and `signatureSearch` the budget for the search of signatures (E15-S02), which shows the personal data of up to 100 signers a page and
  * writes no audit row, so a person cannot read all of it faster than the audited export would give it.
  */
 export const RATE_LIMITS = {
@@ -39,6 +40,7 @@ export const RATE_LIMITS = {
   sign: 10,
   corporateSign: 10,
   corporateApproval: 60,
+  corporateClaim: 10,
   signatureSearch: 30,
 } as const;
 

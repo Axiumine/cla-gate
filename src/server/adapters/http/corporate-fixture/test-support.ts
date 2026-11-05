@@ -15,6 +15,7 @@ import {
 } from '../../../../shared/corporate.ts';
 import { errorResponseSchema } from '../../../../shared/errors.ts';
 import type { VerifiedEmail } from '../../../../shared/verified-email.ts';
+import { domainsOfEmails } from '../../../domain/corporate-domain.ts';
 import { type CorporateDocument, publishCorporateDocument } from '../../db/corporate-fixture/test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import { CORPORATE_TABLES, type TenantWorld } from '../../db/tenant-fixture/test-support.ts';
@@ -68,7 +69,10 @@ export async function corporateWorld(
 
 export type CorporateWorld = Awaited<ReturnType<typeof corporateWorld>>;
 
-/** Logs `githubId` in with the verified addresses GitHub would have reported at login (the default is {@link ADA_EMAIL}). */
+/**
+ * Logs `githubId` in with the verified addresses GitHub would have reported at login (the default is {@link ADA_EMAIL}); the session keeps
+ * their domains too, as the login callback does (E21-S04).
+ */
 export async function signerWith(
   world: Pick<CorporateWorld, 'login' | 'db'>,
   githubId: number,
@@ -77,7 +81,7 @@ export async function signerWith(
   const session = await world.login(githubId);
   await world.db
     .updateTable('sessions')
-    .set({ verified_emails: JSON.stringify(emails) })
+    .set({ verified_emails: JSON.stringify(emails), verified_email_domains: domainsOfEmails(emails) })
     .where('id', '=', session.sessionId)
     .execute();
   return session;

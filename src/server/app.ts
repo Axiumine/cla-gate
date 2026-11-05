@@ -110,8 +110,9 @@ export interface AppOptions {
    */
   readonly commitGitHub?: CommitGitHub | undefined;
   /**
-   * Where a corporate approval looks up the account or organisation it names (E21-S03): the GitHub client port, by numeric id. Defaults to
-   * one that fails every call as an outage, so a server with no GitHub App answers `503 upstream_unavailable` and never stores a login unchecked.
+   * Where a corporate approval looks up the account or organisation it names (E21-S03), and the claim of an employee checks who they are and
+   * whether they show a membership (E21-S04): the GitHub client port, by numeric id. Defaults to one that fails every call as an outage, so a
+   * server with no GitHub App answers `503 upstream_unavailable` and never stores a login unchecked.
    */
   readonly corporateGitHub?: CorporateGitHub | undefined;
   /**
@@ -225,7 +226,7 @@ async function registerRoutes(
   await app.register(signContextRoutes, { db });
   await app.register(signRoutes, { db, enqueuer, recordNetworkMetadata: config.recordNetworkMetadata });
   await app.register(ownSignaturesRoutes, { db });
-  await app.register(corporateRoutes, { db, github: options.corporateGitHub ?? corporateGitHubNotWired });
+  await app.register(corporateRoutes, { db, github: options.corporateGitHub ?? corporateGitHubNotWired, enqueuer });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

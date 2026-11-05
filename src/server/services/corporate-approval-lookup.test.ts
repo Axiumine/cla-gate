@@ -6,6 +6,7 @@ import {
   APPROVAL_LOOKUP_TIMEOUT_MS,
   type CorporateGitHub,
   corporateGitHubNotWired,
+  lookedUp,
   resolveSubject,
 } from './corporate-approval-lookup.ts';
 import { CorporateRuleError } from './corporate-rule-error.ts';
@@ -50,6 +51,10 @@ function githubThat(answer: () => Promise<GitHubUserAccount | null>) {
     getOrganizationAccount: (...args) => {
       calls.push(['org', ...args]);
       return answer();
+    },
+    isPublicOrgMember: (...args) => {
+      calls.push(['member', ...args]);
+      return Promise.reject(new Error('not asked by an approval'));
     },
   };
   return { github, calls };
@@ -168,4 +173,31 @@ test('a server with no GitHub App cannot look an account up: every call is an ou
   expect(String(direct)).toBe('GitHubUnavailableError: no GitHub App is configured: accounts cannot be looked up');
   const org = await outcomeOf(corporateGitHubNotWired.getOrganizationAccount(INSTALLATION, 'acme'));
   expect(String(org)).toBe('GitHubUnavailableError: no GitHub App is configured: organisations cannot be looked up');
+});
+
+test('a server with no GitHub App cannot check a membership either, and says so in words that name neither person nor organisation', async () => {
+  const direct = await outcomeOf(corporateGitHubNotWired.isPublicOrgMember(INSTALLATION, 'acme', 'ada'));
+  expect(String(direct)).toBe('GitHubUnavailableError: no GitHub App is configured: memberships cannot be checked');
+  expect(
+    await outcomeOf(lookedUp(() => corporateGitHubNotWired.isPublicOrgMember(INSTALLATION, 'acme', 'ada'))),
+  ).toMatchObject({
+    rule: 'upstream_unavailable',
+  });
+});
+
+test.each([true, false])(
+  'a membership check that answers %s in time is that answer, the answer of a claim (E21-S04)',
+  async (answer) => {
+    expect(await lookedUp(() => Promise.resolve(answer))).toBe(answer);
+    expect(vi.getTimerCount()).toBe(0);
+  },
+);
+
+test('a failed membership check is upstream_unavailable with the wait GitHub asked for, and one that does not answer is one at 5 s (E21-S04)', async () => {
+  const limited = await outcomeOf(lookedUp(() => Promise.reject(new GitHubRateLimitedError(45, 'secondary'))));
+  expect(limited).toMatchObject({ rule: 'upstream_unavailable', retryAfterSeconds: 45 });
+  const silent = outcomeOf(lookedUp(() => new Promise<boolean>(() => undefined)));
+  await vi.advanceTimersByTimeAsync(APPROVAL_LOOKUP_TIMEOUT_MS);
+  expect(await silent).toMatchObject({ rule: 'upstream_unavailable' });
+  expect(vi.getTimerCount()).toBe(0);
 });

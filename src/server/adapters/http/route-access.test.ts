@@ -274,6 +274,8 @@ const REGISTERED_ROUTES: readonly string[] = [
   'POST /api/corporate/agreements/:agreementId/approvals',
   'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
   'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
+  'GET /api/corporate/repositories/:githubRepoId/availability',
+  'POST /api/corporate/repositories/:githubRepoId/claims',
   'PUT /api/installations/:installationId/repositories/:repositoryId/corporate-document',
   'GET /api/installations/:installationId/corporate-agreements',
   'POST /webhooks/github',

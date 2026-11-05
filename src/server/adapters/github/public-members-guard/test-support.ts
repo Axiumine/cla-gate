@@ -3,10 +3,12 @@
 import { HttpResponse, http } from 'msw';
 import { expect, onTestFinished } from 'vitest';
 
-// The public-members endpoints are never used (E07-S10). `GET /orgs/{org}/public_members/{username}` answers for the people
-// who chose to show their membership, so it says "not a member" for a member who did not: a verdict taken from it would
-// deny exempt people. Every mocked GitHub of the adapter tests carries this handler, so a request to one of the endpoints
-// is answered with a network error and, whatever the code under test does with that, fails the test when it ends.
+// The public-members endpoints are not used to decide who is exempt (E07-S10). `GET /orgs/{org}/public_members/{username}` answers for the
+// people who chose to show their membership, so it says "not a member" for a member who did not: a verdict taken from it would deny exempt
+// people. The one use is the claim under a corporate agreement (E21-S04), where a person asks to be covered through a `github_org` rule
+// and a "no" only means "ask the employer's CLA manager"; it is served by the contract worlds and by the test of that check, which answer
+// it before this handler. Every mocked GitHub of the adapter tests carries this handler, so any other request to one of the endpoints is
+// answered with a network error and, whatever the code under test does with that, fails the test when it ends.
 
 /** The path of both endpoints: the list and the check of one person. */
 const PUBLIC_MEMBERS = /\/orgs\/[^/]+\/public_members(?:\/|$)/;

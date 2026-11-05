@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { domainOfEmail, emailMatchesDomain, normaliseDomain } from './corporate-domain.ts';
+import { domainOfEmail, domainsOfEmails, emailMatchesDomain, normaliseDomain } from './corporate-domain.ts';
 
 // The form of an approved e-mail domain (E21-S03): lower case, punycode, a dotted hostname, and a comparison that is an equality.
 
@@ -96,4 +96,26 @@ test.each([
   ['an address with no domain', 'ada@', 'acme.com', false],
 ])('%s: the address %s against the approval of %s is %s, by equality only', (_label, email, approved, covered) => {
   expect(emailMatchesDomain(email, approved)).toBe(covered);
+});
+
+test.each([
+  ['no address', [], []],
+  ['one address', ['ada@acme.com'], ['acme.com']],
+  ['two addresses at one domain, once, whatever the case', ['ada@acme.com', 'Grace@ACME.com'], ['acme.com']],
+  [
+    'two domains, in the order they were met',
+    ['ada@b.example', 'ada@a.example', 'x@b.example'],
+    ['b.example', 'a.example'],
+  ],
+  ['an internationalised domain as its punycode form', ['ada@bücher.example'], ['xn--bcher-kva.example']],
+  ['an address that has no domain, which is left out', ['ada@localhost', 'ada@', 'ada@acme.com'], ['acme.com']],
+  [
+    'the domain of a lookalike, kept apart from the real one',
+    ['ada@acme.com', 'ada@evilacme.com'],
+    ['acme.com', 'evilacme.com'],
+  ],
+])('the domains of %s are listed once each and never as an address', (_label, addresses, domains) => {
+  const listed = domainsOfEmails(addresses.map((email) => ({ email, primary: false })));
+  expect(listed).toEqual(domains);
+  expect(listed.filter((domain) => domain.includes('@'))).toEqual([]);
 });

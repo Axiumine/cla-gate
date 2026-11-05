@@ -7,8 +7,8 @@ import { corporateErrorKey, isReloadable } from './corporate-errors.ts';
 
 export interface CorporateFailureProps {
   readonly error: unknown;
-  /** Loads the current text of the corporate CLA: offered where the text has moved on. */
-  readonly onReload: () => void;
+  /** Loads the current text of the corporate CLA: offered where the text has moved on. A page with no text to load (the claim of E21-S04) gives none. */
+  readonly onReload?: () => void;
 }
 
 /** The failure of a corporate request (E21-S02): the words of the corporate codes, with a way to load the current text, or the generic state. */
@@ -24,7 +24,9 @@ export function CorporateFailure({ error, onReload }: CorporateFailureProps) {
       className="flex flex-col items-start gap-2 rounded-md border border-transparent bg-danger-bg px-3 py-2 text-danger-fg"
     >
       <p>{t(key)}</p>
-      {isReloadable(error) ? <Button onClick={onReload}>{t('corporate.sign.reload')}</Button> : null}
+      {isReloadable(error) && onReload !== undefined ? (
+        <Button onClick={onReload}>{t('corporate.sign.reload')}</Button>
+      ) : null}
     </div>
   );
 }

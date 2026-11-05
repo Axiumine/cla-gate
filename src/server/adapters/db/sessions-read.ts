@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Kysely } from 'kysely';
+import { z } from 'zod';
 import { type VerifiedEmail, verifiedEmailsSchema } from '../../../shared/verified-email.ts';
 import { isLive } from '../../domain/session.ts';
 import type { Database } from './schema.ts';
@@ -27,4 +28,14 @@ export async function findLiveSession(db: Kysely<Database>, id: string, now: Dat
 export async function readVerifiedEmails(db: Kysely<Database>, rowId: number): Promise<readonly VerifiedEmail[]> {
   const row = await db.selectFrom('sessions').select('verified_emails').where('id', '=', rowId).executeTakeFirst();
   return verifiedEmailsSchema.parse(row?.verified_emails ?? []);
+}
+
+/** The domains of the verified addresses stored with a session (E21-S04), in the stored form; none for a session that is gone. */
+export async function readVerifiedEmailDomains(db: Kysely<Database>, rowId: number): Promise<readonly string[]> {
+  const row = await db
+    .selectFrom('sessions')
+    .select('verified_email_domains')
+    .where('id', '=', rowId)
+    .executeTakeFirst();
+  return z.array(z.string()).parse(row?.verified_email_domains ?? []);
 }

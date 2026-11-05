@@ -39,6 +39,8 @@ const INVENTORY_PENDING: Readonly<Record<string, string>> = {
   'corporate_agreement_pii.company_name': 'E21-S01 (migration 020): the company a signatory signed a corporate CLA for',
   'corporate_approval_pii.login':
     'E21-S01 (migration 020): login snapshot of a user or org a corporate agreement covers',
+  'sessions.verified_email_domains':
+    'E21-S04 (migration 021): the domains of the verified addresses of a session, kept for the claim under an employer agreement, gone with the session row',
 };
 
 /** The columns the story names; the document may list more, never fewer. */
