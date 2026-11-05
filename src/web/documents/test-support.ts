@@ -105,7 +105,7 @@ export const resignRequired = (signatures: number): Response =>
 export const noContent = (): Response => new Response(null, { status: 204 });
 
 /** What the server answers for one call: a response, or a function that makes one (it may wait). */
-type Answer = Response | (() => Response | Promise<Response>);
+export type Answer = Response | (() => Response | Promise<Response>);
 
 /** What a test says the server answers; each list is the answers to the 1st, 2nd, ... request, and the last one repeats. */
 export interface Serve {
@@ -175,8 +175,8 @@ function defaultAnswers() {
   };
 }
 
-/** A handler that records each request in `seen` and answers it with the answer for its turn. */
-function endpoint(seen: Seen[], answers: readonly Answer[]) {
+/** A handler that records each request in `seen` and answers it with the answer for its turn (the allowlist screen's server uses it too). */
+export function endpoint(seen: Seen[], answers: readonly Answer[]) {
   return async ({ request }: { readonly request: Request }) => {
     seen.push(await record(request));
     return await nth(answers, seen.length);

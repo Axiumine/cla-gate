@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { allowlistMessages } from './messages-allowlist.ts';
 import { documentMessages } from './messages-documents.ts';
 
 /**
@@ -62,6 +63,7 @@ export const messages = {
   'errors.unprocessable_entity': 'What you entered could not be processed. Check it and try again.',
   'errors.unsupported_media_type': 'The server does not accept that kind of content.',
   'errors.uri_too_long': 'The address of the request was too long.',
+  ...allowlistMessages,
   ...documentMessages,
   'footer.licence': 'Licensed under {licence}',
   'footer.sourceCode': 'Source code',

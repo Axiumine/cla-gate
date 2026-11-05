@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
+import { allowlistSearchSchema } from './allowlist/allowlist-search.ts';
+import { AllowlistRoute } from './allowlist/route-components.tsx';
 import { documentRouteParams } from './documents/document-params.ts';
 import { DocumentRoute, DocumentsRoute } from './documents/route-components.tsx';
 import { InstallationsPage } from './installations/InstallationsPage.tsx';
@@ -185,6 +187,16 @@ const documentRoute = createRoute({
   component: DocumentRoute,
 });
 
+// The allowlist of a tenant (E18-S06): the accounts exempt from signing, in the scope of `?repository=` (the whole installation without it). An
+// org admin manages the whole installation and any repository, a repo admin the repositories they administer: the server decides on every request.
+const allowlistRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: 'allowlist',
+  ...tenantPage('allowlist.title'),
+  validateSearch: allowlistSearchSchema,
+  component: AllowlistRoute,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -195,7 +207,7 @@ const routeTree = rootRoute.addChildren([
   signRoute,
   mySignaturesRoute,
   installationsRoute,
-  installationRoute.addChildren([installationHomeRoute, documentsRoute, documentRoute]),
+  installationRoute.addChildren([installationHomeRoute, documentsRoute, documentRoute, allowlistRoute]),
 ]);
 
 /**
