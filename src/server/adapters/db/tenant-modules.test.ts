@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'vitest';
+import { sourceTree } from '../../source-tree/test-support.ts';
 import { TENANT_MODULES, TENANT_QUERIES } from './tenant-registry/test-support.ts';
 import { queryGaps, scanProblems, serverSources, tenantTableUses } from './tenant-scan/test-support.ts';
 
@@ -10,7 +11,7 @@ import { queryGaps, scanProblems, serverSources, tenantTableUses } from './tenan
 // in TENANT_MODULES, and every function a listed file exports is in TENANT_QUERIES, which the generated test of
 // tenant-queries-matrix.test.ts calls for two tenants. A query cannot be added without the cross-tenant check.
 
-const SERVER = path.resolve(import.meta.dirname, '../..');
+const SERVER = sourceTree(path.resolve(import.meta.dirname, '../..'));
 
 function read(file: string): string {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- test: `file` comes from the listing of the server's own source directory

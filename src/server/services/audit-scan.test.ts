@@ -3,6 +3,7 @@
 import path from 'node:path';
 import { expect, test } from 'vitest';
 import { AUDIT_ACTIONS, AUDIT_METADATA_KEYS } from '../../shared/audit.ts';
+import { sourceTree } from '../source-tree/test-support.ts';
 import { type AuditFixture, entryOf, fixtureProblems, siteId } from './audit-conformance/test-support.ts';
 import type { AuditEntry } from './audit-entry.ts';
 import { auditCallSites, auditInsertions, catalogueProblems, usageProblems } from './audit-scan/test-support.ts';
@@ -11,7 +12,7 @@ import { ACTOR } from './test-support.ts';
 // The source scan itself (E16-S01): what it finds in a piece of source, shown on made-up sources. What it finds in the
 // server is audit-catalogue.test.ts, audit-conformance.test.ts and audit-single-writer.test.ts.
 
-const SERVER = path.resolve(import.meta.dirname, '..');
+const SERVER = sourceTree(path.resolve(import.meta.dirname, '..'));
 
 const HEADER = [
   "import type { Transaction } from 'kysely';",

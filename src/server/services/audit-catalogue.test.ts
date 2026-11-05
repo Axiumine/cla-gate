@@ -7,6 +7,7 @@ import { AUDIT_ACTIONS, AUDIT_METADATA_KEYS, type AuditAction } from '../../shar
 import { auditMetadataSchema } from '../../shared/audit-metadata.ts';
 import { serverSources } from '../adapters/db/tenant-scan/test-support.ts';
 import { migratedTestDatabase, seedTenant } from '../adapters/db/test-support.ts';
+import { sourceTree } from '../source-tree/test-support.ts';
 import { appendAudit } from './audit.ts';
 import { entryOf, fixtureProblems, SITE_FIXTURES } from './audit-conformance/test-support.ts';
 import { auditCallSites, catalogueProblems, usageProblems } from './audit-scan/test-support.ts';
@@ -15,7 +16,7 @@ import { auditCallSites, catalogueProblems, usageProblems } from './audit-scan/t
 // are E04-S09; this file proves the set is complete once the mutation epics have landed, that nothing hides in it, and
 // that what each call site writes passes both checks on metadata. The scan runs once per file: it builds a program.
 
-const SERVER = path.resolve(import.meta.dirname, '..');
+const SERVER = sourceTree(path.resolve(import.meta.dirname, '..'));
 
 /**
  * The actions the mutation epics document for their audit rows. A name an epic needs but `AUDIT_ACTIONS` lacks fails the

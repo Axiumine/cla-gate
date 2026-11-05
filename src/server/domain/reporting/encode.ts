@@ -40,8 +40,14 @@ const TAG_BLOCK = /\uDB40[\uDC00-\uDC7F]/g;
 /** `text` without the characters of {@link UNSAFE} and of {@link TAG_BLOCK}. */
 const withoutUnsafe = (text: string): string => text.replace(UNSAFE, '').replace(TAG_BLOCK, '');
 
-/** Every kind of line break: CRLF counts once. */
-const LINE_BREAK = /\r\n|[\n\v\f\r\u0085\p{Zl}\p{Zp}]/gu;
+/**
+ * Every kind of line break: CRLF counts once. The vertical tab (U+000B) is written `\cK` and not as the usual `\v` escape: the
+ * mutation tool rewrites `\v` to `\V`, which the `u` flag rejects when the module loads, and the instrumented module holds every
+ * mutant of its file, so the dry run of the `root-domain-ports` shard failed on it (2026-11-04). `\u000B` and `\x0B` are
+ * flagged by `no-control-regex`. Another regular expression with a mutant that does not compile fails
+ * scripts/mutation-gate/instrumented-regex.test.ts.
+ */
+const LINE_BREAK = /\r\n|[\n\cK\f\r\u0085\p{Zl}\p{Zp}]/gu;
 
 /** A full commit SHA: 40 hex digits (SHA-1) or 64 (SHA-256), lower case. */
 const COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
