@@ -117,6 +117,9 @@ test('the routes declared public are exactly PUBLIC_ROUTES, so a new public rout
     'GET /api/auth/callback',
     'GET /api/auth/login',
     'GET /api/meta',
+    'GET /api/public/repos/:githubRepoId/badge.svg',
+    'GET /api/public/repos/:githubRepoId/signers/:login',
+    'GET /api/public/repos/:githubRepoId/signers/:login/badge.svg',
     'GET /api/setup/status',
     'GET /healthz',
     'GET /readyz',
@@ -159,7 +162,7 @@ test('the authenticated routes are the session read, the logout, the export of t
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the search for signatures, the revocation of one and the invalidation of a major of a document with its preview, the list of the pending pull requests, the choice of the CLA of a repository, the two switches of its enforcement, and the adds, the two lists and the removal of an allowlist entry, and the record, the list and the removal of a per-commit override', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the search for signatures, the revocation of one and the invalidation of a major of a document with its preview, the list of the pending pull requests, the choice of the CLA of a repository, the two switches of its enforcement, and the adds, the two lists and the removal of an allowlist entry, and the record, the list and the removal of a per-commit override, and the opt-in of a repository to the public signature check with the snippet of its badge', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
   expect(sorted(table.filter((entry) => typeof entry.access === 'object').map(nameOf))).toEqual(
@@ -196,6 +199,8 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'POST /api/repositories/:repositoryId/commit-overrides',
       'GET /api/repositories/:repositoryId/commit-overrides',
       'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
+      'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
+      'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
     ]),
   );
 });

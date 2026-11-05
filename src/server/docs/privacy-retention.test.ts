@@ -61,7 +61,11 @@ test.each([
   expect(row).toEqual({ data, fallback: kept, limit: 'none', setting: 'none' });
 });
 
-test('the only retention setting in the environment schema is the network metadata one', () => {
+test('the only retention settings in the environment schema are the network metadata one and the two of the operational rows (E22-S04)', () => {
   const retention = Object.keys(envSchema.shape).filter((name) => /RETENTION|PURGE|AUDIT|SIGNATURE/.test(name));
-  expect(retention).toEqual(['NETWORK_METADATA_RETENTION_DAYS']);
+  expect(retention.toSorted((a, b) => a.localeCompare(b))).toEqual([
+    'NETWORK_METADATA_RETENTION_DAYS',
+    'RETENTION_BATCH_SIZE',
+    'RETENTION_WEBHOOK_DELIVERIES_DAYS',
+  ]);
 });

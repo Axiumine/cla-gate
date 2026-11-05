@@ -110,13 +110,14 @@ async function scene() {
 
 type Scene = Awaited<ReturnType<typeof scene>>;
 
+/** The schedule of the reconciliation sweep; the retention sweep (E22-S04) has its own, which retention-real.test.ts checks. */
 const schedules = async (owner: Kysely<Database>) =>
   (
     await sql<{
       name: string;
       cron: string;
       data: unknown;
-    }>`select name, cron, data from pgboss.schedule order by name`.execute(owner)
+    }>`select name, cron, data from pgboss.schedule where name = 'sweep' order by name`.execute(owner)
   ).rows;
 
 const jobsOf = async (owner: Kysely<Database>, queue: string) =>

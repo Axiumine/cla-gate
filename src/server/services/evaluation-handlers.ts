@@ -4,6 +4,7 @@ import { closePr } from './close-pr/close-pr.ts';
 import { evaluatePr } from './evaluate-pr/evaluate-pr.ts';
 import type { EvaluatePrPorts } from './evaluate-pr/evaluate-pr-ports.ts';
 import type { JobHandler } from './job-registry.ts';
+import { evaluateMergeGroup } from './merge-group/evaluate-merge-group.ts';
 import { recheckComment } from './recheck/recheck-comment.ts';
 import { rerunHeadSha } from './recheck/rerun-head-sha.ts';
 
@@ -32,4 +33,9 @@ export function recheckCommentHandler(ports: EvaluationPorts): JobHandler<'reche
 /** `evaluate-head-sha`: the open pull requests of the head SHA are asked of GitHub, and each is evaluated again (E07-S07). */
 export function evaluateHeadShaHandler(ports: EvaluationPorts): JobHandler<'evaluate-head-sha'> {
   return (job, { signal, logger, enqueuer, jobId }) => rerunHeadSha(ports(signal), job, { logger, enqueuer, jobId });
+}
+
+/** `evaluate-merge-group`: the group's pull requests are found and evaluated now, and the Check Run goes on the head SHA of the group (E22-S01). */
+export function evaluateMergeGroupHandler(ports: EvaluationPorts): JobHandler<'evaluate-merge-group'> {
+  return (job, { signal, logger }) => evaluateMergeGroup(ports(signal), job, { logger });
 }

@@ -45,7 +45,7 @@ export async function readSituation(db: Kysely<Database>, target: RunTarget): Pr
 }
 
 /** Where the Check Run of the target's SHA is, with no id: the listing of the commit decides which of its runs is the newest. */
-export function locationOf(target: RunTarget): RunLocator {
+export function locationOf(target: Pick<RunTarget, 'githubInstallationId' | 'fullName' | 'headSha'>): RunLocator {
   const [owner = '', repo = ''] = target.fullName.split('/');
   return { githubInstallationId: target.githubInstallationId, owner, repo, headSha: target.headSha };
 }

@@ -22,6 +22,13 @@ export class InvalidSignLinkError extends Error {
   }
 }
 
+/** @throws InvalidSignLinkError when `githubRepoId` is not a positive safe integer. */
+function requireRepositoryId(githubRepoId: number): void {
+  if (!Number.isSafeInteger(githubRepoId) || githubRepoId < 1) {
+    throw new InvalidSignLinkError('repository id');
+  }
+}
+
 /**
  * The path of the sign page of a pull request: `/sign/{githubRepoId}?pr={prNumber}`.
  * @throws InvalidSignLinkError when `githubRepoId` is not a positive safe integer or `prNumber` is not an integer from 1 to
@@ -30,9 +37,7 @@ export class InvalidSignLinkError extends Error {
  * @internal
  */
 export function signPath(githubRepoId: number, prNumber: number): string {
-  if (!Number.isSafeInteger(githubRepoId) || githubRepoId < 1) {
-    throw new InvalidSignLinkError('repository id');
-  }
+  requireRepositoryId(githubRepoId);
   if (!Number.isSafeInteger(prNumber) || prNumber < 1 || prNumber > MAX_PR_NUMBER) {
     throw new InvalidSignLinkError('pull request number');
   }
@@ -57,6 +62,13 @@ export function isHttpOrigin(text: string): boolean {
   );
 }
 
+/** @throws InvalidSignLinkError when `publicBaseUrl` is not an http or https origin in its canonical form. */
+function requireOrigin(publicBaseUrl: string): void {
+  if (!isHttpOrigin(publicBaseUrl)) {
+    throw new InvalidSignLinkError('base URL');
+  }
+}
+
 /**
  * The address of the sign page: `publicBaseUrl` (the configured origin of this deployment) followed by {@link signPath}.
  * @throws InvalidSignLinkError for the cases of `signPath`, and when `publicBaseUrl` is not an http or https origin in its
@@ -64,8 +76,19 @@ export function isHttpOrigin(text: string): boolean {
  */
 export function signUrl(publicBaseUrl: string, githubRepoId: number, prNumber: number): string {
   const path = signPath(githubRepoId, prNumber);
-  if (!isHttpOrigin(publicBaseUrl)) {
-    throw new InvalidSignLinkError('base URL');
-  }
+  requireOrigin(publicBaseUrl);
   return `${publicBaseUrl}${path}`;
+}
+
+/**
+ * The address of the sign page of a repository, with no pull request in it: `publicBaseUrl` followed by `/sign/{githubRepoId}`
+ * (E22-S03, where the README badge of a project links to). The context endpoint takes `?pr=` as an option (E13-S02), so the page
+ * is the same one without it.
+ * @throws InvalidSignLinkError when `githubRepoId` is not a positive safe integer, and when `publicBaseUrl` is not an http or
+ * https origin in its canonical form (see {@link signUrl}).
+ */
+export function repositorySignUrl(publicBaseUrl: string, githubRepoId: number): string {
+  requireRepositoryId(githubRepoId);
+  requireOrigin(publicBaseUrl);
+  return `${publicBaseUrl}/sign/${githubRepoId}`;
 }

@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { GithubId } from '../../../shared/github-id.ts';
-import {
-  collectRepoWalk,
-  type ListingState,
-  listingStateOf,
-  planCommitListing,
-  verifyListing,
-} from '../../domain/evaluation/index.ts';
-import type { GitHubClient, GitHubCommit, GitHubPullRequest } from '../ports/github.ts';
+import { type ListingState, listingStateOf, planCommitListing, verifyListing } from '../../domain/evaluation/index.ts';
+import type { GitHubCommit, GitHubPullRequest } from '../ports/github.ts';
+import { type ListingScope, readHistory } from './commit-history.ts';
 
 // The commits of a pull request, read from GitHub (E07-S04). The loop holds no rule of its own: `planCommitListing` says how
 // to list, `collectRepoWalk` says what a walk has found and whether to fetch more, `verifyListing` checks a listing against
@@ -27,14 +21,6 @@ export class CommitListingMismatchError extends Error {
   constructor() {
     super('The commits of the pull request do not add up to the count GitHub reports');
   }
-}
-
-/** Where the commits are read: one pull request of one repository of one installation. */
-export interface ListingScope {
-  readonly github: GitHubClient;
-  readonly githubInstallationId: GithubId;
-  /** `owner/name`, as GitHub showed the repository at the start of the job. */
-  readonly fullName: string;
 }
 
 /** The commits the engine reads, and the state of the listing. An `exceeded` listing carries none. */
@@ -77,32 +63,16 @@ function keptCommits(fetched: readonly GitHubCommit[], shas: readonly string[]):
 async function repoWalk(scope: ListingScope, pr: GitHubPullRequest): Promise<Attempt> {
   const { github, githubInstallationId, fullName } = scope;
   const { mergeBaseSha } = await github.compareCommits(githubInstallationId, fullName, pr.baseSha, pr.headSha);
-  const fetched: GitHubCommit[] = [];
-  for (let pagesFetched = 1; ; pagesFetched += 1) {
-    const page = await github.listRepositoryCommits(githubInstallationId, fullName, pr.headSha, pagesFetched);
-    fetched.push(...page.commits);
-    const walk = collectRepoWalk({
-      headSha: pr.headSha,
-      mergeBaseSha,
-      commits: fetched,
-      pagesFetched,
-      exhausted: page.last,
-    });
-    const listing = listingStateOf(walk);
-    if (walk.status === 'need_next_page') {
-      continue;
-    }
-    // `inconsistent` is the one result that settles nothing and asks for nothing: it is a listing that does not add up.
-    if (walk.status === 'inconsistent' || listing === null) {
-      return 'mismatch';
-    }
-    if (walk.status === 'exceeded') {
-      return { listing, commits: [] };
-    }
-    return verifyListing(pr.commitCount, walk.shas) === 'ok'
-      ? { listing, commits: keptCommits(fetched, walk.shas) }
-      : 'mismatch';
+  const history = await readHistory(scope, pr.headSha, mergeBaseSha);
+  if (history.kind === 'mismatch') {
+    return 'mismatch';
   }
+  if (history.kind === 'exceeded') {
+    return { listing: history.listing, commits: [] };
+  }
+  return verifyListing(pr.commitCount, history.shas) === 'ok'
+    ? { listing: history.listing, commits: keptCommits(history.fetched, history.shas) }
+    : 'mismatch';
 }
 
 /** One try at listing the commits of `pr`, the way `planCommitListing` says. */

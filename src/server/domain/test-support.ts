@@ -45,6 +45,11 @@ export const DELIVERY_ID = '5b8f2c1e-3d4a-4f6b-9a7c-0e1d2f3a4b5c';
 
 export const SHA = '3f9a1c0b7d2e4a65b8c1d0e9f7a6b5c4d3e2f1a0';
 
+/** The head SHA and the base SHA of the merge group of the payloads (E22-S01), and the number its branch name gives. */
+export const GROUP_SHA = '9b8a7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d';
+export const GROUP_BASE_SHA = 'c0ffee1c0ffee1c0ffee1c0ffee1c0ffee1c0ffe';
+export const GROUP_TIP_NUMBER = 41;
+
 /** The context of a delivery for this App. */
 export const CONTEXT: RoutingContext = { appId: String(IDS.app), deliveryId: DELIVERY_ID };
 
@@ -97,6 +102,18 @@ const PAYLOADS: Readonly<Record<SubscribedEvent, Record<string, unknown>>> = {
     comment: { id: IDS.comment, body: `${CANARY} /recheck`, user: sender },
     sender,
     repository,
+    installation,
+  },
+  merge_group: {
+    action: 'checks_requested',
+    merge_group: {
+      head_sha: GROUP_SHA,
+      head_ref: `refs/heads/gh-readonly-queue/main/pr-${GROUP_TIP_NUMBER}-${GROUP_SHA}`,
+      base_sha: GROUP_BASE_SHA,
+      head_commit: { id: GROUP_SHA, message: CANARY, author: { name: CANARY, email: `${CANARY}@example.invalid` } },
+    },
+    repository,
+    sender,
     installation,
   },
   installation: {
@@ -194,6 +211,15 @@ export const JOBS = {
   syncInstallation: {
     type: 'sync-installation',
     githubInstallationId: IDS.installation,
+    deliveryId: DELIVERY_ID,
+  },
+  evaluateMergeGroup: {
+    type: 'evaluate-merge-group',
+    githubInstallationId: IDS.installation,
+    githubRepoId: IDS.repository,
+    headSha: GROUP_SHA,
+    baseSha: GROUP_BASE_SHA,
+    tipPrNumber: GROUP_TIP_NUMBER,
     deliveryId: DELIVERY_ID,
   },
   revokeUserSessions: { type: 'revoke-user-sessions', githubUserId: IDS.sender, deliveryId: DELIVERY_ID },

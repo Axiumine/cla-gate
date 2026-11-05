@@ -24,11 +24,13 @@ import { metaRoutes } from './adapters/http/meta-routes.ts';
 import { operatorRoutes } from './adapters/http/operator-routes.ts';
 import { ownSignaturesRoutes } from './adapters/http/own-signatures-routes.ts';
 import { pendingPrsRoutes } from './adapters/http/pending-prs-routes.ts';
+import { publicVerificationRoutes } from './adapters/http/public-verification-routes.ts';
 import { registerRateLimit } from './adapters/http/rate-limit.ts';
 import { repositoryDisableRoutes } from './adapters/http/repository-disable-routes.ts';
 import { repositoryDocumentRoutes } from './adapters/http/repository-document-routes.ts';
 import { repositoryEnableRoutes } from './adapters/http/repository-enable-routes.ts';
 import { repositoryListRoutes } from './adapters/http/repository-list-routes.ts';
+import { repositoryPublicVerificationRoutes } from './adapters/http/repository-public-verification-routes.ts';
 import { registerRequestGuards } from './adapters/http/request-guards.ts';
 import { generateRequestId, REQUEST_ID_HEADER } from './adapters/http/request-id.ts';
 import { registerRoleCache } from './adapters/http/role-cache-slot.ts';
@@ -56,6 +58,7 @@ import { createOperatorPolicies, type OperatorPolicies } from './services/operat
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { JobEnqueuer, JobQueue } from './services/ports/jobs.ts';
 import type { ManifestConversion } from './services/ports/manifest-conversion.ts';
+import { type PublicGitHub, publicGitHubNotWired } from './services/public-verification.ts';
 import { RoleCache } from './services/role-cache.ts';
 import { createTenantAuthorization, type TenantAuthorizationDeps } from './services/tenant-authorization.ts';
 import { createTenantAuthorizationDeps, type RoleGitHub, roleGitHubNotWired } from './services/tenant-authorizer.ts';
@@ -93,6 +96,12 @@ export interface AppOptions {
    * fails every call as an outage, so a server with no GitHub App answers `502 github_unavailable` and never stores a login unchecked.
    */
   readonly allowlistGitHub?: AllowlistGitHub | undefined;
+  /**
+   * Where the public signature check turns a login into GitHub's numeric id (E22-S02): the GitHub client port, with the token of the
+   * installation that holds the repository. Defaults to one that fails every call as an outage, so a server with no GitHub App
+   * answers `503 upstream_unavailable` and never guesses.
+   */
+  readonly publicGitHub?: PublicGitHub | undefined;
   /**
    * Where a per-commit override looks up the commit it is for (E15-S05): the GitHub client port, by numeric id. Defaults to one that
    * fails every call as an outage, so a server with no GitHub App answers `502 github_unavailable` and never stores a commit unchecked.
@@ -171,8 +180,9 @@ function closeQueueThenDatabase(app: FastifyInstance, db: Kysely<Database>, queu
  * The routes of the API in the order they are registered, and the files of the single-page app after them (E17-S03): the
  * probes, the operator's list (E11-S08), the documents (E12), the lists of what a person administers (E14-S01), the CLA a
  * repository enforces (E14-S02), the enforcement switch (E14-S03, E14-S04), the allowlist (E14-S06) and the per-commit overrides
- * (E15-S05), the public `GET /api/meta` (E17-S09), the first-run setup (E19-S06, whose unlock and manifest exist in setup mode only) and the
- * webhook (E06). The app's files answer every path that no route above does, so they are registered last.
+ * (E15-S05), the public `GET /api/meta` (E17-S09), the public signature check (E22-S02), the first-run setup (E19-S06, whose
+ * unlock and manifest exist in setup mode only) and the webhook (E06). The app's files answer every path that no route above
+ * does, so they are registered last.
  */
 async function registerRoutes(
   app: FastifyInstance,
@@ -194,6 +204,7 @@ async function registerRoutes(
   await registerSignatureRoutes(app, { db, roles, enqueuer });
   await registerRepositoryRoutes(app, options, enqueuer);
   await app.register(metaRoutes, { source: config.source, appSlug: () => options.appIdentity?.current()?.slug });
+  await app.register(publicVerificationRoutes, { db, github: options.publicGitHub ?? publicGitHubNotWired, clock });
   await app.register(setupRoutes, {
     config,
     clock,
@@ -202,7 +213,7 @@ async function registerRoutes(
     githubTimeoutMs: options.githubTimeoutMs,
     conversion: options.manifestConversion,
   });
-  await registerTenantRoutes(app, db, clock);
+  await registerTenantRoutes(app, { db, clock, publicBaseUrl: config.publicBaseUrl });
   await app.register(dataExportRoutes, { db, clock });
   await app.register(signContextRoutes, { db });
   await app.register(signRoutes, { db, enqueuer, recordNetworkMetadata: config.recordNetworkMetadata });
@@ -256,11 +267,21 @@ async function registerSignatureRoutes(
 }
 
 /**
- * The routes of a tenant that need no wiring beyond the database (E16): the audit log, the signature export and the erasure
- * of a signer. They are registered in this order, which the route tables of the tests spell out: the erasure comes last,
- * because the cross-tenant matrix erases the signer of tenant 1 and so ends that person's session (E16-S04).
+ * The routes of a tenant that need no wiring beyond the database: the opt-in of a repository to the public signature check
+ * (E22-S02) and the snippet of its README badge (E22-S03, which also needs the public address), and the audit log, the
+ * signature export and the erasure of a signer (E16). They are registered in this order, which the route tables of the tests
+ * spell out: the erasure comes last, because the cross-tenant matrix erases the signer of tenant 1 and so ends that person's
+ * session (E16-S04).
  */
-async function registerTenantRoutes(app: FastifyInstance, db: Kysely<Database>, clock: Clock): Promise<void> {
+async function registerTenantRoutes(
+  app: FastifyInstance,
+  {
+    db,
+    clock,
+    publicBaseUrl,
+  }: { readonly db: Kysely<Database>; readonly clock: Clock; readonly publicBaseUrl: string },
+): Promise<void> {
+  await app.register(repositoryPublicVerificationRoutes, { db, publicBaseUrl });
   await app.register(auditLogRoutes, { db });
   await app.register(signatureCsvRoutes, { db, clock });
   await app.register(erasureRoutes, { db });

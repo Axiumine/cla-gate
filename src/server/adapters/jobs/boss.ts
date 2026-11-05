@@ -91,9 +91,10 @@ export interface Boss {
   /**
    * Puts the recurring job `name` on the cron expression `cron` (UTC), to be sent with `data` at every occurrence (E07-S08). A
    * second call for the same name replaces the schedule, so calling it at every start is safe. The occurrences are sent by
-   * the timekeeper of a pg-boss that was started with `schedule: true`.
+   * the timekeeper of a pg-boss that was started with `schedule: true`. The expression is read in the time zone `tz` of
+   * `options` (an IANA name); pg-boss reads it as UTC when none is given (E22-S04 names it).
    */
-  schedule(name: string, cron: string, data: object): Promise<void>;
+  schedule(name: string, cron: string, data: object, options?: { readonly tz: string }): Promise<void>;
   /** Removes the schedule of `name` (E07-S08); there is no error when it has none. */
   unschedule(name: string): Promise<void>;
 }
@@ -105,8 +106,9 @@ const BOSS_POOL_SIZE = 10;
  * How the application runs pg-boss, as the runtime role `cla_app` which owns nothing: the schema is neither created nor
  * migrated (the check at start fails when it is missing or out of date) and the index rebuild is off (`REINDEX` needs the
  * table owner). The maintenance that expires stuck jobs and deletes old ones is plain DML and stays on. The cron
- * timekeeper is on only when `scheduler` says so, which is when a sweep is scheduled (E07-S08): it reads and writes the
- * `schedule` table and the queue of scheduled occurrences, which are rows, and creates nothing (the migrate step created the queue).
+ * timekeeper is on only when `scheduler` says so, which is when the workers run and so the sweep and the retention sweep are
+ * scheduled (E07-S08, E22-S04): it reads and writes the `schedule` table and the queue of scheduled occurrences, which are
+ * rows, and creates nothing (the migrate step created the queue).
  */
 export function runtimeBossOptions(connectionString: string, scheduler = false): ConstructorOptions {
   return {

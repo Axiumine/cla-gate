@@ -57,13 +57,19 @@ export const AUDIT_ACTIONS = [
   'repository.cla_document_attached',
   'repository.cla_document_detached',
   'signer_pii.erased',
+  // Added by E22-S02: a repository turned the public signature check on or off (metadata the repository id and the new flag).
+  'repository.public_verification_changed',
+  // Added by E22-S04: a run of the retention sweep deleted webhook deliveries or expired sessions (metadata the two counts, numbers
+  // only). Instance-wide and written by a schedule, so it has neither an installation nor an actor.
+  'retention.swept',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /**
  * Actions that scheduled work or a webhook performs, so no person is the actor and `actorGithubId` may be `null`.
- * The installation lifecycle and the repository sync of E05 are driven by webhooks; the metadata purge is a schedule.
+ * The installation lifecycle and the repository sync of E05 are driven by webhooks; the metadata purge and the retention sweep
+ * (E22-S04) are schedules.
  */
 export const SYSTEM_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>([
   'installation.rejected',
@@ -77,12 +83,14 @@ export const SYSTEM_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>([
   'repository.removed',
   'repository.renamed',
   'network_metadata.purged',
+  'retention.swept',
 ]);
 
 /** Actions that belong to the whole instance and not to one tenant, so `installationId` may be `null`. */
 export const INSTANCE_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>([
   'data_export.created',
   'network_metadata.purged',
+  'retention.swept',
 ]);
 
 /**

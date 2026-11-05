@@ -39,14 +39,18 @@ const EVALUATE_TRIGGERS = [
 ] as const;
 
 /** A 40-digit lower-case commit id, the form GitHub writes. */
-const headShaField = { headSha: z.string().regex(/^[0-9a-f]{40}$/) };
+const commitSha = z.string().regex(/^[0-9a-f]{40}$/);
+
+const headShaField = { headSha: commitSha };
 
 /**
  * Every job a webhook delivery can start, keyed by `type` (the queue name). One schema per job:
  * `evaluate-pr` evaluates one pull request; `evaluate-head-sha` resolves a head SHA to its open pull requests (a check
  * re-run names none for a fork); `close-pr` prunes the pending work of a closed pull request; `recheck-comment`
  * re-reads a comment that may be a `/recheck`; `sync-installation` re-reads an installation and its repositories;
- * `revoke-user-sessions` ends the sessions of a user who revoked the App's authorisation.
+ * `revoke-user-sessions` ends the sessions of a user who revoked the App's authorisation; `evaluate-merge-group` (E22-S01)
+ * evaluates the pull requests of a merge queue's group and reports on its head SHA. It carries the base SHA and, when the name
+ * of the group's branch gave one, the number of the last pull request of the group: a merge group cannot be read back from GitHub.
  * The router builds typed {@link Job}s; the envelope of E07-S03 (`job-envelope.ts`) validates the data of a job against it.
  */
 export const jobSchema = z.discriminatedUnion('type', [
@@ -63,6 +67,13 @@ export const jobSchema = z.discriminatedUnion('type', [
     ...repositoryFields,
     ...prNumberField,
     commentId: githubIdSchema,
+  }),
+  z.strictObject({
+    type: z.literal('evaluate-merge-group'),
+    ...repositoryFields,
+    ...headShaField,
+    baseSha: commitSha,
+    tipPrNumber: prNumberField.prNumber.optional(),
   }),
   z.strictObject({ type: z.literal('sync-installation'), ...installationField }),
   z.strictObject({ type: z.literal('revoke-user-sessions'), githubUserId: githubIdSchema, ...deliveryIdField }),

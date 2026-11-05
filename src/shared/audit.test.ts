@@ -94,12 +94,13 @@ test('system actions are those performed by webhooks and schedules, and are all 
     'repository.removed',
     'repository.renamed',
     'network_metadata.purged',
+    'retention.swept',
   ]);
   expect([...SYSTEM_ACTIONS].every((action) => AUDIT_ACTIONS.includes(action))).toBe(true);
 });
 
-test('instance actions are the two that belong to no tenant, and are all audit actions', () => {
-  expect([...INSTANCE_ACTIONS]).toEqual(['data_export.created', 'network_metadata.purged']);
+test('instance actions are the three that belong to no tenant, and are all audit actions', () => {
+  expect([...INSTANCE_ACTIONS]).toEqual(['data_export.created', 'network_metadata.purged', 'retention.swept']);
   expect([...INSTANCE_ACTIONS].every((action) => AUDIT_ACTIONS.includes(action))).toBe(true);
 });
 

@@ -57,7 +57,13 @@ function payloadFor(event: WebhookEvent, ids: Ids) {
   );
 }
 
-const TENANT_EVENTS: readonly WebhookEvent[] = ['pull_request', 'check_run', 'check_suite', 'issue_comment'];
+const TENANT_EVENTS: readonly WebhookEvent[] = [
+  'pull_request',
+  'check_run',
+  'check_suite',
+  'issue_comment',
+  'merge_group',
+];
 
 const TURNED_AWAY = [
   ['rejected', TENANT.rejected, 'installation_not_admitted'],

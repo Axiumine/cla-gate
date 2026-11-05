@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 import { z } from 'zod';
 import { recordAdminSeen } from '../../../services/admin-ledger-queries.ts';
 import { StubRoleLookup } from '../../../services/role-table-fixture/test-support.ts';
-import { FakeGitHub } from '../../../services/test-support.ts';
+import { FakeGitHub, lookupPorts } from '../../../services/test-support.ts';
 import type { TestAppOptions } from '../../../test-support.ts';
 import type { Database } from '../../db/schema.ts';
 import {
@@ -79,7 +79,7 @@ export async function matrixWorld(
 ) {
   const roles = new StubRoleLookup();
   const fakeGitHub = new FakeGitHub();
-  const world = await authWorld(env, { github: roles, allowlistGitHub: fakeGitHub, commitGitHub: fakeGitHub, ...app });
+  const world = await authWorld(env, { github: roles, ...lookupPorts(fakeGitHub), ...app });
   const seeded = await twoTenants(world.db, roles);
   // The GitHub of the allowlist (E14-S06) knows both organisations, and the one of the overrides (E15-S05) the commit of the override case.
   for (const { githubInstallationId, accountId, accountLogin } of [seeded.t1, seeded.t2]) {

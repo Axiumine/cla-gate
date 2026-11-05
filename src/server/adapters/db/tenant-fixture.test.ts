@@ -41,6 +41,7 @@ const ROWS_OF: readonly (readonly [TenantTable, (installationId: number) => RawB
     (id) => sql`select user_github_id from installation_admin_seen where installation_id = ${id}`,
   ],
   ['cla_drafts', (id) => sql`select document_id from cla_drafts where installation_id = ${id}`],
+  ['merge_group_evaluations', (id) => sql`select id from merge_group_evaluations where installation_id = ${id}`],
 ];
 
 test('the table of queries names every tenant table', () => {

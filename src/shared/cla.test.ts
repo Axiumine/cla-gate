@@ -92,6 +92,7 @@ test('the limits and the status of each rule are the ones the story names', () =
     commit_not_found: 422,
     override_exists: 409,
     repository_disabled: 409,
+    public_verification_disabled: 409,
   });
 });
 

@@ -57,5 +57,15 @@ test('the other reports go through to the inner reporter untouched', async () =>
   await reporter.failed(TARGET, 'evaluation_failed');
   await reporter.cancelled(RUN);
   await reporter.enforcementDisabled(RUN);
-  expect(inner.timeline).toEqual(['reporter.failed', 'reporter.cancelled', 'reporter.enforcement_disabled']);
+  await reporter.mergeGroup(
+    { githubInstallationId: INSTALLATION, githubRepoId: REPOSITORY, fullName: FULL_NAME, headSha: RUN.headSha },
+    { state: 'passed', pullRequests: 1 },
+  );
+  expect(inner.timeline).toEqual([
+    'reporter.failed',
+    'reporter.cancelled',
+    'reporter.enforcement_disabled',
+    'reporter.merge_group',
+  ]);
+  expect(inner.groups.map((group) => group.result)).toEqual([{ state: 'passed', pullRequests: 1 }]);
 });

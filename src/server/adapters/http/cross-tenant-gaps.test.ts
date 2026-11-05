@@ -131,6 +131,8 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/allowlist-entries',
     'GET /api/repositories/:repositoryId/allowlist-entries',
     'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
+    'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
+    'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
     'GET /api/installations/:installationId/erasure-preview',
     'POST /api/installations/:installationId/erasures',
   ]);

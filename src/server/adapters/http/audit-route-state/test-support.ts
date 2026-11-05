@@ -70,6 +70,13 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
   exempt('POST /api/setup/unlock', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/manifest', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/convert', 'E19-S11', 'setup', true),
+  registered(
+    audited(
+      `PUT ${INSTALLATION}/repositories/:repositoryId/public-verification`,
+      'E22-S02',
+      'repository.public_verification_changed',
+    ),
+  ),
 ];
 
 /** A mutating route of the application as registered, with the audit declaration of its config. */

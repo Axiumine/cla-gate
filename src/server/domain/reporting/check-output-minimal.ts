@@ -23,7 +23,7 @@ function failureNote(view: Extract<CheckView, { kind: 'failure' }>): string {
 
 /**
  * The output of `view` with a summary that holds the counts and the `/recheck` hint and nothing a person wrote. A view that
- * names no one already (in progress, cancelled, disabled, could not complete) keeps its fixed summary.
+ * names no one already (in progress, cancelled, disabled, could not complete, a merge group, E22-S01) keeps its fixed summary.
  * @throws InvalidShaError and InvalidIdError as {@link renderCheckOutput} does.
  */
 export function minimalCheckOutput(view: CheckView): CheckOutput {
@@ -36,6 +36,7 @@ export function minimalCheckOutput(view: CheckView): CheckOutput {
     case 'cancelled':
     case 'enforcement_disabled':
     case 'evaluation_failed':
+    case 'merge_group':
       return renderCheckOutput(view);
   }
 }

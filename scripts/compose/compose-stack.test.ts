@@ -173,6 +173,8 @@ test('no variable is interpolated that the stack does not document, and no liter
       'PORT',
       'PUBLIC_BASE_URL',
       'RECORD_NETWORK_METADATA',
+      'RETENTION_BATCH_SIZE',
+      'RETENTION_WEBHOOK_DELIVERIES_DAYS',
       'SESSION_ABSOLUTE_SECONDS',
       'SESSION_IDLE_SECONDS',
       'SOURCE_COMMIT',

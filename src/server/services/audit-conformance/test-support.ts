@@ -190,6 +190,18 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
   ],
   'services/commit-override-record.ts#commit_override.created': overrideFixtures('commit_override.created'),
   'services/commit-override-remove.ts#commit_override.deleted': overrideFixtures('commit_override.deleted'),
+  'services/repository-public-verification.ts#repository.public_verification_changed': [
+    {
+      action: 'repository.public_verification_changed',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, enabled: true },
+    },
+    {
+      action: 'repository.public_verification_changed',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, enabled: false },
+    },
+  ],
   'services/allowlist-entry-create.ts#allowlist_entry.created': allowlistFixtures('allowlist_entry.created'),
   'services/allowlist-entry-remove.ts#allowlist_entry.deleted': allowlistFixtures('allowlist_entry.deleted'),
   'services/repository-audit.ts#repository.added|repository.removed|repository.renamed': [
@@ -220,6 +232,10 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
   'services/export/own-data.ts#data_export.created': [
     { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 0 } },
     { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 3 } },
+  ],
+  'services/retention/retention-sweep.ts#retention.swept': [
+    { action: 'retention.swept', metadata: { webhook_deliveries: 5000, sessions: 0 } },
+    { action: 'retention.swept', metadata: { webhook_deliveries: 0, sessions: 12 } },
   ],
   'services/installation-sync-checks.ts#installation.suspended|installation.unsuspended': [
     { action: 'installation.suspended', subject: { type: 'installation', id: 77 }, metadata: ORGANISATION },

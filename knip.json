@@ -8,6 +8,8 @@
     "scripts/dev/*.ts",
     "src/server/main.ts!",
     "src/server/migrate.ts!",
+    "src/server/retention.ts!",
+    "src/server/erase.ts!",
     "src/server/healthcheck.ts!",
     "src/web/i18n/index.ts!",
     "src/web/api/index.ts!",

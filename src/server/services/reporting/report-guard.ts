@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Logger } from 'pino';
+import { MergeGroupDestroyedError } from '../merge-group/merge-group-rows.ts';
 import { GitHubForbiddenError, GitHubNotFoundError } from '../ports/github-errors.ts';
 import { isInstallationUnavailable } from '../ports/installation-unavailable.ts';
-import { type ReportOutcome, ReportRejectedError, type ReportSkipReason, type RunTarget } from '../ports/reporter.ts';
-import { reportIds } from './report-record.ts';
+import { type ReportOutcome, ReportRejectedError, type ReportSkipReason } from '../ports/reporter.ts';
+import { type LoggedRun, reportIds } from './report-record.ts';
 
 // What becomes of what GitHub answers to a report (E09-S06). A rate limit, an outage and a refused credential leave as they
 // are, for the queue to retry; a repository GitHub no longer has and an installation that is not served end the report as a
@@ -19,17 +20,21 @@ function skipReason(error: unknown): ReportSkipReason | undefined {
   if (error instanceof GitHubNotFoundError) {
     return 'repository_gone';
   }
+  if (error instanceof MergeGroupDestroyedError) {
+    return 'merge_group_destroyed';
+  }
   return isInstallationUnavailable(error) ? 'installation_unavailable' : undefined;
 }
 
 /**
  * Runs `work`, the report of `target`, and says how it ended.
- * @returns `reported`, or `skipped` with the reason for a repository GitHub no longer has and for an installation that is not served.
+ * @returns `reported`, or `skipped` with the reason for a repository GitHub no longer has, for an installation that is not served
+ * and for a merge group GitHub took down (E22-S01).
  * @throws ReportRejectedError (`checks_permission_missing`) when GitHub answers 403 to a Check Run call; everything else is rethrown unchanged.
  */
 export async function guardReport(
   logger: Logger,
-  target: RunTarget,
+  target: LoggedRun,
   work: () => Promise<void>,
 ): Promise<ReportOutcome> {
   try {

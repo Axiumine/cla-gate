@@ -76,6 +76,8 @@ export const PAGE_SIZE = { default: 50, max: 100 } as const;
  * characters) and a reason that is empty once trimmed, too long or not text the database can hold; `commit_not_found` is a commit GitHub
  * does not have in the repository, `override_exists` the same commit overridden already, and `repository_disabled` a repository that
  * enforces nothing, which takes no new override.
+ * `public_verification_disabled` (E22-S03) is asking for the README snippet of a repository whose maintainers have not opted in to the
+ * public signature check: there is no badge to show until they do.
  */
 export const CLA_RULE_STATUS = {
   invalid_name: 422,
@@ -105,6 +107,7 @@ export const CLA_RULE_STATUS = {
   no_organization: 422,
   members_permission_missing: 422,
   allowlist_entry_exists: 409,
+  public_verification_disabled: 409,
   already_revoked: 409,
   count_changed: 409,
   nothing_to_invalidate: 409,

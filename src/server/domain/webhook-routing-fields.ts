@@ -23,5 +23,9 @@ export const issueCommentFields = z.object({
   sender: z.object({ type: z.string() }),
   ...tenant,
 });
+export const mergeGroupFields = z.object({
+  merge_group: z.object({ head_sha: headSha, base_sha: headSha, head_ref: z.string() }),
+  ...tenant,
+});
 export const installationFields = z.object({ installation: idOnly });
 export const appAuthorizationFields = z.object({ sender: idOnly });

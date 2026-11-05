@@ -432,3 +432,10 @@ function refuseWithoutConclusion(route: string, write: CheckRunWrite): void {
 }
 
 const OPEN_GATE: InstallationGate = { assertAdmitted: () => Promise.resolve() };
+
+/** The ports of the app that look something up on GitHub (the allowlist E14-S06, the per-commit overrides E15-S05, the public check E22-S02), all answered by one fake. */
+export const lookupPorts = (github: FakeGitHub) => ({
+  allowlistGitHub: github,
+  commitGitHub: github,
+  publicGitHub: github,
+});

@@ -200,7 +200,7 @@ test('with no GITHUB_APP_ID configured no check is ours, and the other events ar
   expect((await deliver(app, 'pull_request', webhookFixture('pull_request'))).json()).toEqual(ACCEPTED);
 });
 
-test.each(['push', 'repository', 'merge_group', 'issues', 'workflow_run', 'constructor', '__proto__'])(
+test.each(['push', 'repository', 'issues', 'workflow_run', 'constructor', '__proto__'])(
   'the event %s, which the App is not subscribed to, is a 202 unsupported_event',
   async (event) => {
     const { app } = await webhookTestApp({ env: ENV });

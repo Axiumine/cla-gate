@@ -3,6 +3,7 @@
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { Evaluation } from '../../domain/evaluation/index.ts';
 import type { JobEnvelope } from '../../domain/job-envelope.ts';
+import type { MergeGroupResult } from '../../domain/reporting/check-view.ts';
 import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 
 // What the evaluation job (E07-S04) needs of the code that writes the Check Run and the pull request comment. The reporter
@@ -37,10 +38,17 @@ export interface ReportTarget {
 export type RunTarget = Omit<ReportTarget, 'trigger'>;
 
 /**
- * Why a report was not made and will not be: GitHub no longer has the repository (`repository_gone`), or the instance does not
- * serve the installation (`installation_unavailable`: uninstalled, suspended or not admitted). Retrying cannot help either.
+ * The merge group a report is about (E22-S01): the head SHA of the group, whose Check Run is the one a merge queue waits for. A
+ * group has no pull request and no `pr_evaluations` row, so the target has neither; the row of the group is found by the ids.
  */
-export type ReportSkipReason = 'repository_gone' | 'installation_unavailable';
+export type MergeGroupTarget = Pick<RunTarget, 'githubInstallationId' | 'githubRepoId' | 'fullName' | 'headSha'>;
+
+/**
+ * Why a report was not made and will not be: GitHub no longer has the repository (`repository_gone`), the instance does not
+ * serve the installation (`installation_unavailable`: uninstalled, suspended or not admitted), or GitHub took the merge group
+ * down (`merge_group_destroyed`, E22-S01). Retrying cannot help any of them.
+ */
+export type ReportSkipReason = 'repository_gone' | 'installation_unavailable' | 'merge_group_destroyed';
 
 /** What a report came to (E09-S06): written, or skipped for a reason that retrying cannot repair. A skip is an answer, never a throw. */
 export type ReportOutcome =
@@ -105,4 +113,13 @@ export interface EvaluationReporter {
    * must be idempotent.
    */
   enforcementDisabled(target: RunTarget): Promise<ReportOutcome>;
+
+  /**
+   * The verdict on a merge group (E22-S01): its Check Run on `target.headSha` ends `success` for a group whose every pull request
+   * is covered and `failure` for any other result (the output is numbers and fixed sentences only, see `result`). The run is the
+   * one the row of the group records, or the newest of this App on the SHA, and a missing one is created already completed.
+   * The id of the run is recorded on the row of the group. Called again when the job is retried, and by the dead-letter handler, so it must be
+   * idempotent.
+   */
+  mergeGroup(target: MergeGroupTarget, result: MergeGroupResult): Promise<ReportOutcome>;
 }

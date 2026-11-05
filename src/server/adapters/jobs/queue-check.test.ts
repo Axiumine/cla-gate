@@ -17,6 +17,7 @@ test('the missing queues come back in the order of the constant', async () => {
   boss.getQueues.mockResolvedValueOnce([{ name: 'sweep' }, { name: 'evaluate-pr' }, { name: 'not-ours' }]);
   expect(await missingQueues(boss)).toEqual([
     'evaluate-head-sha',
+    'evaluate-merge-group',
     'close-pr',
     'recheck-comment',
     'sync-installation',
@@ -25,6 +26,7 @@ test('the missing queues come back in the order of the constant', async () => {
     'sweep-repository',
     'finalise-repository',
     'finalise-check',
+    'retention-sweep',
     'job-dead-letter',
   ]);
 });

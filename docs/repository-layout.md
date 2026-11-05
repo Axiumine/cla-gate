@@ -10,6 +10,9 @@ Items marked (planned) do not exist yet.
 │   ├── main.ts  migrate.ts  healthcheck.ts
 │   │                            process entries (kept logic-free; covered by boot tests); healthcheck.ts is the container's HEALTHCHECK over
 │   │                            adapters/http/health-probe.ts; boot-database.ts is the start-up database check (E19-S02)
+│   ├── retention.ts  erase.ts   the operator commands of E22 (also `node dist/server/retention.js` and `erase.js`), logic-free like the entries above:
+│   │                            `retention.ts [--dry-run]` runs the retention sweep by hand (E22-S04), `erase.ts --github-id <n> --actor-github-id <n> [--execute]`
+│   │                            erases a person's personal data in every installation through `erase_signer_pii` (E22-S05); both are Knip entries
 │   ├── boot.ts  app.ts          start-up and signals; the Fastify instance (buildApp); shutdown.ts and its test
 │   ├── boot-app.ts  boot-config.ts  boot-installations.ts  boot-reconcile.ts  boot-services.ts
 │   │                            the parts of start-up: logging the configuration, binding the gate once the policies
@@ -30,7 +33,9 @@ Items marked (planned) do not exist yet.
 │   │                            (what `yarn db:migrate` needs; apart from env.ts to keep that file under the FTA score cap); E19-S02:
 │   │                            secret-files.ts (the `*_FILE` resolver and `SECRET_VARIABLES`), mode.ts and mode-log.ts (setup or normal), env-rules.ts,
 │   │                            config-error.ts and config-issue.ts (one `VARIABLE: rule` line per problem)
-│   ├── adapters/db/             Kysely over node-postgres, hand-written schema types, migration runner and CLI,
+│   ├── adapters/db/             Kysely over node-postgres, hand-written schema types, migration runner and CLI, E22: cli-database.ts (what the operator commands
+│   │                            share: options, the two sinks, the connection as the runtime role, the failure lines), retention-cli.ts and erase-cli.ts, with
+│   │                            cli-fixture/ (test only),
 │   │                            transaction and advisory-lock helpers, the branded installation row id,
 │   │                            PGlite dialect and test helpers (test only, outside the build; the independent
 │   │                            connections of the real-Postgres tests are in real-postgres/test-support.ts and
@@ -100,6 +105,9 @@ Items marked (planned) do not exist yet.
 │   │                            cursor), request-body.ts (`parseInput`), cla-rule-errors.ts; E13: sign-context-routes.ts, sign-routes.ts, sign-rule-errors.ts, own-signatures-routes.ts and own-signature-presenters.ts, with the fixtures sign-context-fixture/, sign-fixture/, sign-network-fixture/ and own-signatures-fixture/ (test only); document-fixture/ is test only;
 │   │                            test-support.ts, webhook-table-fixture/, auth-fixture/, login-fixture/, callback-fixture/,
 │   │                            tenant-guard-fixture/, cross-tenant-fixture/, cross-tenant-runner/ and cross-tenant-canary/ are test only;
+│   │                            E22: public-verification-routes.ts and public-badge-routes.ts (the public signature check and the badges), with public-answers.ts,
+│   │                            public-headers.ts and public-rate-limit.ts, repository-public-verification-routes.ts (the opt-in) and badge-snippet-route.ts;
+│   │                            public-verification-fixture/, repository-public-verification-fixture/ and cross-tenant-public-fixture/ are test only;
 │   │                            E16: audit-log-routes.ts (with audit-log-query.ts), signature-csv-routes.ts (with signature-csv-query.ts and
 │   │                            signature-csv-log.ts), erasure-routes.ts (with erasure-request.ts) and data-export-routes.ts; the
 │   │                            api-snapshots/ directory (the JSON of the own-data export) and the fixtures audit-route-state/,
@@ -111,7 +119,8 @@ Items marked (planned) do not exist yet.
 │   │                            allowlist-entry-cursor.ts; installation-list-fixture/, repository-document-fixture/, repository-enable-fixture/,
 │   │                            repository-disable-fixture/, repository-flow-fixture/, allowlist-entry-fixture/, allowlist-list-fixture/ and
 │   │                            cross-tenant-prepare/ are test only
-│   ├── domain/                  admission.ts (who is served, pure), eligibility.ts (when an installation or repository
+│   ├── domain/                  E22: badge-svg.ts (the three fixed badges) and badge-snippet.ts (the README snippet), retention.ts (the cutoffs of the sweep), erase-arguments.ts,
+│   │                            operator-erasure.ts and operator-erasure-lines.ts (the judgement and the printed lines of the erasure command); admission.ts (who is served, pure), eligibility.ts (when an installation or repository
 │   │                            is evaluated), permissions.ts (the missing-permission check), jobs.ts (the job
 │   │                            catalogue), delivery-id.ts, webhook-routing*.ts (the routing table: delivery to job or
 │   │                            ignore), webhook-tenant.ts (the tenant and admission verdict), session.ts (session
@@ -159,6 +168,9 @@ Items marked (planned) do not exist yet.
 │                                tenant-authorization.ts and tenant-authorizer.ts (the guard's reads and decision), admin-ledger.ts and
 │                                admin-ledger-queries.ts (the ledger of org admins), document-placement.ts, operator-policies.ts;
 │                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only;
+│                                E22: merge-group/ (the `evaluate-merge-group` job), retention/ (the sweep, its handler and statements), public-verification.ts with
+│                                public-verification-queries.ts, public-login-cache.ts and public-lookup-budget.ts (the public signature check), repository-public-verification.ts
+│                                (the opt-in), repository-badge-snippet.ts, operator-erasure.ts and operator-erasure-queries.ts (the erasure command; operator-erasure-fixture/ is test only);
 │                                E16: audit-log-queries.ts, signer-erasure.ts (with signer-erasure-errors.ts and signer-erasure-counts.ts), network-metadata-purge.ts (the
 │                                handler of the daily purge) and export/ (signature-export*.ts, signature-queries.ts, signature-stream.ts,
 │                                signature-rows.ts, signature-filter.ts, own-data*.ts, own-signatures-query.ts and signer-network-columns.ts;
@@ -199,7 +211,7 @@ Items marked (planned) do not exist yet.
 │                                cla-markdown-nesting.ts and the line scan cla-markdown-containers.ts, -items.ts, -leaf.ts and -lines.ts,
 │                                snapshots/ (the rendered files); the route
 │                                descriptors the SPA calls (`defineRoute`): contract.ts, auth-contract.ts, meta.ts (`GET /api/meta`); error-codes.ts
-│                                (the codes the SPA can see); hostile-names.ts (the hostile-name corpus, test only); E16: audit-log.ts,
+│                                (the codes the SPA can see); E22: public-verification.ts (the public paths, the opt-in and snippet descriptors and answers); hostile-names.ts (the hostile-name corpus, test only); E16: audit-log.ts,
 │                                signature-export.ts, erasure.ts and data-export.ts (paths, shapes and limits of the compliance routes); E14: installations.ts,
 │                                repository-document.ts, repository-enabled.ts and allowlist.ts (paths, queries and answers))
 │                                E15: signature-search.ts, signature-revoke.ts, signature-invalidate.ts, commit-override.ts and pending-prs.ts (paths, queries, bodies, pages)
@@ -235,7 +247,7 @@ Items marked (planned) do not exist yet.
 │   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
 │                                theme.ts, tailwind.ts and vitest.setup.ts
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; 16: `pr_evaluations.pr_state`; 17: the index `signer_pii_login_lower_idx`; the numbers 006 and later go to the epics in order of merge)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; 16: `pr_evaluations.pr_state`; 17: the index `signer_pii_login_lower_idx`; 18: the table `merge_group_evaluations`; 19: `repositories.public_verification`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           the operator stack (E19-S04): postgres, a one-shot migrate and app, and caddy in the profile `tls`; `docker compose up --build`

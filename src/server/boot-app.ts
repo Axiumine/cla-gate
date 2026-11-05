@@ -56,6 +56,7 @@ export async function buildBootApp(options: BootAppOptions): Promise<FastifyInst
     github: github?.client,
     allowlistGitHub: github?.client,
     commitGitHub: github?.client,
+    publicGitHub: github?.client,
     appIdentity: github?.identity,
     operators: wiring.operators,
     jobQueue: failExitOnAbortedStop(queue, logger, signals),

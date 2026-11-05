@@ -7,10 +7,10 @@ import type { WorkerWiring } from './adapters/jobs/workers.ts';
 import type { InstallationWiring } from './boot-installations.ts';
 import type { AppConfig } from './config/env.ts';
 import { evaluatePullRequest } from './domain/evaluation/index.ts';
-import { registerHandlers } from './services/job-handlers.ts';
+import { type HandlerDeps, registerHandlers } from './services/job-handlers.ts';
 import { HandlerRegistry } from './services/job-registry.ts';
 import { createOrgMembership } from './services/org-membership.ts';
-import { createOrgMembershipCache } from './services/org-membership-cache.ts';
+import { createOrgMembershipCache, type OrgMembershipCache } from './services/org-membership-cache.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
 import type { GitHubClient } from './services/ports/github.ts';
 import type { EvaluationReporter } from './services/ports/reporter.ts';
@@ -43,9 +43,31 @@ export interface JobWorkersOptions {
   readonly register?: ((registry: HandlerRegistry) => void) | undefined;
 }
 
+/** What one `evaluate-pr` run works on, with its GitHub requests bound to the signal of that run; undefined without a GitHub App or a reporter. */
+function evaluatePrPorts(
+  { db, logger, evaluation }: JobWorkersOptions,
+  clock: Clock,
+  cache: OrgMembershipCache,
+): HandlerDeps['evaluatePr'] {
+  if (evaluation === undefined) {
+    return undefined;
+  }
+  return (signal) => {
+    const github = evaluation.github.withSignal(signal);
+    return {
+      db,
+      github,
+      clock,
+      orgMembership: createOrgMembership({ db, github, logger, cache }),
+      reporter: evaluation.reporter,
+      evaluate: evaluatePullRequest,
+    };
+  };
+}
+
 /** The handlers of the application, in a registry, and what runs them. */
 export function jobWorkers(options: JobWorkersOptions): WorkerWiring {
-  const { db, config, logger, syncFor, evaluation } = options;
+  const { db, config, syncFor, evaluation } = options;
   const clock = options.clock ?? systemClock;
   // One memory of the membership lookup for the whole process: every run builds its own service (its GitHub client is bound
   // to the signal of the run), and they all read and fill this one (E07-S10).
@@ -56,24 +78,13 @@ export function jobWorkers(options: JobWorkersOptions): WorkerWiring {
       syncFor === undefined
         ? undefined
         : (githubInstallationId, signal) => syncFor(signal).syncInstallation(githubInstallationId),
-    evaluatePr:
-      evaluation === undefined
-        ? undefined
-        : (signal) => {
-            const github = evaluation.github.withSignal(signal);
-            return {
-              db,
-              github,
-              clock,
-              orgMembership: createOrgMembership({ db, github, logger, cache: membershipCache }),
-              reporter: evaluation.reporter,
-              evaluate: evaluatePullRequest,
-            };
-          },
+    evaluatePr: evaluatePrPorts(options, clock, membershipCache),
     sweep:
       syncFor === undefined
         ? undefined
         : { db, reconcileInstallations: (signal) => syncFor(signal).reconcileInstallations() },
+    // The retention sweep needs the database only (E22-S04), so it runs in every mode, with or without a GitHub App.
+    retention: { db, clock, settings: config.retention },
   });
   options.register?.(registry);
   return {

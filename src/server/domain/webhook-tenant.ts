@@ -20,14 +20,35 @@ type SyncInstallationJob = Extract<Job, { readonly type: 'sync-installation' }>;
 /**
  * The jobs that are about a tenant's repository, the ones the filter applies to: the pull request, check and comment
  * events. `sync-installation` and `revoke-user-sessions` are how installations and revocations are learned, so they bypass it.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export type TenantJob = Exclude<Job, { readonly type: 'sync-installation' | 'revoke-user-sessions' }>;
 
+/**
+ * What the filter judges: the installation and the repository a delivery names, and the delivery that said so. A tenant job has
+ * all three, and so does a merge group taken down (E22-S01), which is no job but is as much a tenant's as one.
+ */
+export type TenantSubject = Pick<TenantJob, 'githubInstallationId' | 'githubRepoId' | 'deliveryId'>;
+
 const BYPASSING_JOBS: ReadonlySet<Job['type']> = new Set(['sync-installation', 'revoke-user-sessions']);
 
-/** Whether the filter applies to `job`. `installation`, `installation_repositories` and `github_app_authorization` do not pass through it. */
+/**
+ * Whether the filter applies to `job`. `installation`, `installation_repositories` and `github_app_authorization` do not pass through it.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
+ */
 export function isTenantJob(job: Job): job is TenantJob {
   return !BYPASSING_JOBS.has(job.type);
+}
+
+/**
+ * The tenant a routed delivery is about, or `undefined` when the filter does not apply (`ping`, an ignored delivery, the sync and
+ * revocation jobs). A tenant job and a merge group taken down are about one.
+ */
+export function tenantSubjectOf(routing: Routing): TenantSubject | undefined {
+  if (routing.kind === 'destroyed') {
+    return routing.group;
+  }
+  return routing.kind === 'job' && isTenantJob(routing.job) ? routing.job : undefined;
 }
 
 /**
@@ -59,12 +80,16 @@ const IGNORE_BY_ELIGIBILITY = {
   installation_suspended: 'installation_suspended',
 } as const satisfies Readonly<Record<string, TenantIgnoreReason>>;
 
-/** Replaces the delivery of `job` by the sync of the installation it names, carrying the same delivery id. */
-function redirect(job: TenantJob, reason: RedirectReason): Redirected {
+/** Replaces the delivery of `subject` by the sync of the installation it names, carrying the same delivery id. */
+function redirect(subject: TenantSubject, reason: RedirectReason): Redirected {
   return {
     kind: 'redirected',
     reason,
-    job: { type: 'sync-installation', githubInstallationId: job.githubInstallationId, deliveryId: job.deliveryId },
+    job: {
+      type: 'sync-installation',
+      githubInstallationId: subject.githubInstallationId,
+      deliveryId: subject.deliveryId,
+    },
   };
 }
 
@@ -75,9 +100,9 @@ function redirect(job: TenantJob, reason: RedirectReason): Redirected {
  * so the instance stops an installation for the same reason everywhere. The row says what the last sync decided; nothing
  * here asks GitHub, or the policy, which could.
  */
-export function judgeInstallation(job: TenantJob, installation: InstallationState | null): TenantVerdict {
+export function judgeInstallation(subject: TenantSubject, installation: InstallationState | null): TenantVerdict {
   if (installation === null) {
-    return redirect(job, 'installation_unknown');
+    return redirect(subject, 'installation_unknown');
   }
   const served = installationEligibility(installation);
   return served.eligible ? SERVED : { kind: 'ignored', reason: IGNORE_BY_ELIGIBILITY[served.reason] };
@@ -95,6 +120,6 @@ export interface RepositoryFacts {
  * payload's installation is synced. A repository that is not stored at all is served: the job re-checks eligibility when
  * it runs (E05-S06), and an event that arrives before the repository row exists is not lost.
  */
-export function judgeRepository(job: TenantJob, facts: RepositoryFacts): TenantVerdict {
-  return facts.heldByAnotherInstallation ? redirect(job, 'repository_installation_mismatch') : SERVED;
+export function judgeRepository(subject: TenantSubject, facts: RepositoryFacts): TenantVerdict {
+  return facts.heldByAnotherInstallation ? redirect(subject, 'repository_installation_mismatch') : SERVED;
 }

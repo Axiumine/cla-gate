@@ -24,6 +24,17 @@ function evaluation(overrides: Partial<Extract<QueuedJob, { type: 'evaluate-pr' 
   };
 }
 
+/** The job of a merge queue's group (E22-S01) in repository `githubRepoId` at head SHA `headSha`. */
+function groupJob(githubRepoId = 9001, headSha = SHA): Extract<QueuedJob, { type: 'evaluate-merge-group' }> {
+  return {
+    type: 'evaluate-merge-group',
+    githubInstallationId: INSTALLATION,
+    githubRepoId: parseGithubId(githubRepoId),
+    headSha,
+    baseSha: 'b'.repeat(40),
+  };
+}
+
 /** One job of every type of the catalogue. */
 const SAMPLES: readonly QueuedJob[] = [
   evaluation(),
@@ -36,6 +47,7 @@ const SAMPLES: readonly QueuedJob[] = [
     prNumber: 42,
     commentId: parseGithubId(555),
   },
+  groupJob(),
   { type: 'sync-installation', githubInstallationId: INSTALLATION },
   { type: 'revoke-user-sessions', githubUserId: parseGithubId(31_337) },
   { type: 'sweep-installation', githubInstallationId: INSTALLATION },
@@ -96,8 +108,15 @@ test('a finalise-repository has the key of its repository: another repository is
   expect(serialisationKey(finalise(9002))).toBe('9002');
 });
 
+test('a merge group has the key of its repository and head SHA: the pull request is no part of it, and two groups never share one (E22-S01)', () => {
+  expect(serialisationKey(groupJob())).toBe(`9001:${SHA}`);
+  expect(serialisationKey(groupJob(9002))).toBe(`9002:${SHA}`);
+  expect(serialisationKey(groupJob(9001, 'c'.repeat(40)))).toBe(`9001:${'c'.repeat(40)}`);
+  expect(serialisationKey({ ...groupJob(), tipPrNumber: 7 })).toBe(serialisationKey(groupJob()));
+});
+
 test('a job of a type that is not serialised has no key', () => {
-  const serialised = new Set(['evaluate-pr', 'finalise-check', 'finalise-repository']);
+  const serialised = new Set(['evaluate-pr', 'evaluate-merge-group', 'finalise-check', 'finalise-repository']);
   const others = SAMPLES.filter((job) => !serialised.has(job.type));
   expect(others.map(({ type }) => type)).toEqual([
     'evaluate-head-sha',

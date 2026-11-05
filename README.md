@@ -2,18 +2,18 @@
 
 Contributor License Agreements for GitHub projects. Maintainers publish a CLA, contributors sign it once with their GitHub account, and every pull request gets an automatic `license/cla` check.
 
-> **Status: server foundation built, product not built.** Toolchain, configuration, health routes and the database schema are green; the job queue, signing and web UI are not built yet, while the GitHub App core, the webhook intake and the login are ([details](docs/development.md#status)). Versions, flags and config keys verified 2026-11-01. This is not legal advice: have counsel review any CLA text you publish.
+> **Status: server foundation built, product not built.** Toolchain, schema, GitHub App core, webhook intake, login, job queue, signing routes and the E22 features are built; the product screens are not ([details](docs/development.md#status)). This is not legal advice: have counsel review any CLA text you publish.
 
 ## Why another CLA tool
 
-As of 2026-11 CLA Assistant is near-dormant, `contributor-assistant/github-action` is archived and EasyCLA is a heavyweight platform for Linux Foundation projects ([evidence](docs/decisions.md#why-another-cla-tool)). What it does differently:
+As of 2026-11 CLA Assistant is near-dormant, `contributor-assistant/github-action` is archived and EasyCLA is heavyweight, for Linux Foundation projects ([evidence](docs/decisions.md#why-another-cla-tool)). What it does differently:
 
 - Signatures are **append-only Postgres rows** keyed on the immutable GitHub numeric user id, with the CLA version and the SHA-256 of the exact text shown.
 - **Immutable CLA versions**. Only a major bump forces re-signing; typo fixes do not.
 - Prospective **revocation and admin invalidate / re-sign**.
 - A **GitHub App** (Check Runs, least-privilege), not broad OAuth scopes.
 - Org-member exemption that works for **private** membership.
-- Clear guidance and an admin override for the top real-world failure: **commits whose email is not linked to a GitHub account**.
+- Guidance and an admin override for the top real-world failure: **commits whose email is not linked to a GitHub account**.
 
 ## Scope
 
@@ -28,16 +28,19 @@ As of 2026-11 CLA Assistant is near-dormant, `contributor-assistant/github-actio
 - `/recheck` comment and the Check Run "Re-run" button.
 - Dashboard: repos, signatures, pending PRs, CSV export, revoke, audit log.
 
+### After the MVP (built, epic E22)
+
+- Merge queue support: `license/cla` on the head SHA of a merge group.
+- Opt-in public signature check (signed or not, nothing else) and README badges.
+- A daily retention sweep and the operator's erasure command (GDPR).
+
 ### Later
 
 - Corporate CLA: a signatory becomes CLA manager and approves employees by GitHub username, verified email domain, or GitHub org (EasyCLA-style ICLA / CCLA / employee flow).
-- Merge queue support (`merge_group.checks_requested`).
-- Public signature-verification endpoint and badge.
-- Retention and erasure tooling (GDPR).
 
 ### Non-goals
 
-- Shipping legal text. Reuse terms of the Apache ICLA text were not confirmed; Harmony v1.0 (2011) is CC BY 3.0 and dated. Admins upload their own.
+- Shipping legal text: admins upload their own (the Apache ICLA's reuse terms were not confirmed; Harmony v1.0 is CC BY 3.0 and dated).
 - Non-GitHub forges (GitLab, Gitea) in v1.
 - Storing GitHub user tokens. The user token is used once at login to read identity and verified emails, then discarded.
 
@@ -48,13 +51,23 @@ As of 2026-11 CLA Assistant is near-dormant, `contributor-assistant/github-actio
 3. The worker (pg-boss) re-fetches the PR and resolves the opener and every non-exempt commit author and committer to numeric GitHub ids.
 4. It checks signatures, allowlist and approvals, then upserts the `license/cla` Check Run and one PR comment with a sign link.
 5. The contributor logs in with GitHub and consents to the current CLA version; the API appends an immutable signature.
-6. Their open PRs are re-evaluated and the check turns `success`; `/recheck` forces another pass.
+6. Their open PRs are re-evaluated and the check turns `success`; `/recheck` forces a pass.
 
 Rules and sequence diagram: [`docs/architecture.md`](docs/architecture.md#how-a-pull-request-is-checked).
 
+## Badge
+
+A maintainer opts a repository in to the public check (off by default) and pastes this into the README, with the deployment's `PUBLIC_BASE_URL` and the repository's GitHub id:
+
+```md
+[![CLA: required](<PUBLIC_BASE_URL>/api/public/repos/<githubRepoId>/badge.svg)](<PUBLIC_BASE_URL>/sign/<githubRepoId>)
+```
+
+HTML: `<a href="<PUBLIC_BASE_URL>/sign/<githubRepoId>"><img src="<PUBLIC_BASE_URL>/api/public/repos/<githubRepoId>/badge.svg" alt="CLA: required"></a>`. Model and limits: [`docs/security.md`](docs/security.md).
+
 ## Quick start
 
-Prerequisites: Node 26.13 ([mise](https://mise.jdx.dev) or `.nvmrc`), Corepack (`npm install -g corepack && corepack enable`; Node 26 no longer bundles it) and Docker.
+Prerequisites: Node 26.13 ([mise](https://mise.jdx.dev) or `.nvmrc`), Corepack (`npm install -g corepack && corepack enable`) and Docker.
 
 Operators build and start the stack from a checkout, with no registry and nothing published ([install guide](docs/operations/install.md)):
 
@@ -74,27 +87,32 @@ yarn db:migrate            # applies migrations/ as the owner role, then install
 yarn dev                   # server with --watch; prints its address (try /readyz)
 ```
 
+Operator commands ([`docs/operations.md`](docs/operations.md)):
+
+```sh
+node src/server/retention.ts [--dry-run]   # the retention sweep by hand (daily at 03:17 UTC)
+node src/server/erase.ts --github-id <n> --actor-github-id <n> [--execute]   # a dry run unless --execute
+```
+
 More: [`docs/development.md`](docs/development.md) (setup, scripts) and [`docs/configuration.md`](docs/configuration.md) (environment variables).
 
 ## Architecture
 
 - One Node 26 service: Fastify serves the API and the built React SPA from one origin.
 - PostgreSQL 18 (Kysely, forward-only migrations) holds the data and the pg-boss job queue; there is no Redis.
-- GitHub reaches it through one GitHub App; webhooks are verified by HMAC and never trusted for state.
-- Layers, enforced by ESLint: `src/server/domain` is pure decision logic with no I/O, `services` orchestrate, `adapters` are the only place with I/O, `src/web` is the SPA, `src/shared` holds the zod schemas both sides use.
+- GitHub reaches it through one GitHub App; webhooks are HMAC-verified and never trusted for state.
+- Layers, enforced by ESLint: `src/server/domain` is pure logic, `services` orchestrate, `adapters` are the only place with I/O, `src/web` is the SPA, `src/shared` holds the zod schemas both sides use.
 - Stack table, layering and rules: [`docs/architecture.md`](docs/architecture.md). Schema: [`docs/data-model.md`](docs/data-model.md). Tree: [`docs/repository-layout.md`](docs/repository-layout.md).
 
 ## GitHub App
 
-A least-privilege App: Pull requests read and write, Checks write; Issues, Members and Metadata read; Email addresses read at login only. It subscribes to `pull_request`, `check_run`, `check_suite` and `issue_comment`. The check name is the constant `license/cla`. Permissions, events, rules: [`docs/github-app.md`](docs/github-app.md).
+A least-privilege App: Pull requests read and write, Checks write; Issues, Members and Metadata read; Email addresses read at login only. It subscribes to `pull_request`, `check_run`, `check_suite`, `issue_comment` and `merge_group` (Merge queues read, optional). The check name is the constant `license/cla`. Permissions, events, rules: [`docs/github-app.md`](docs/github-app.md).
 
 ## Quality gates
 
-Everything is strict by default: 100% coverage and type coverage, zero lint findings, no unused code, ratcheted structural caps. Hooks give fast feedback, CI is authoritative, and `yarn gate` runs its `static` and `coverage` jobs locally. Thresholds: [`docs/quality-gates.md`](docs/quality-gates.md). Tools, hooks, CI jobs: [`docs/toolchain.md`](docs/toolchain.md).
+Everything is strict by default: 100% coverage and type coverage, zero lint findings, no unused code, ratcheted structural caps. CI is authoritative; `yarn gate` runs its `static` and `coverage` jobs locally. Thresholds: [`docs/quality-gates.md`](docs/quality-gates.md). Tools, hooks, CI jobs: [`docs/toolchain.md`](docs/toolchain.md).
 
 ## Documentation map
-
-This README and the documents below are the source of truth for scope, stack and quality gates.
 
 | Document | What it holds |
 |---|---|
@@ -111,8 +129,8 @@ This README and the documents below are the source of truth for scope, stack and
 | [docs/github-app.md](docs/github-app.md) | Permissions, events, check name, rules |
 | [docs/legacy-status-coexistence.md](docs/legacy-status-coexistence.md) | Moving a repository from another CLA tool |
 | [docs/operations.md](docs/operations.md) | Key rotation, backups, poison jobs |
-| [docs/operations/](docs/operations/install.md) | Operator guides: install, reverse proxy, upgrade, backup, key rotation, troubleshooting, uninstall, data protection |
-| [docs/development/test-database.md](docs/development/test-database.md) | Running the tests against a PostgreSQL server, the test-database guard |
+| [docs/operations/](docs/operations/install.md) | Operator guides: install, proxy, upgrade, backup, keys, uninstall, data protection |
+| [docs/development/test-database.md](docs/development/test-database.md) | Tests against a PostgreSQL server, the guard |
 | [docs/quality-gates.md](docs/quality-gates.md) | Thresholds, TypeScript, testing |
 | [docs/toolchain.md](docs/toolchain.md) | Tools, hook pipeline, CI jobs |
 | [docs/tooling-gotchas.md](docs/tooling-gotchas.md) | Tool traps, open verifications |
@@ -123,12 +141,12 @@ This README and the documents below are the source of truth for scope, stack and
 
 ## Roadmap
 
-1. **Scaffold**: toolchain, hooks and CI passing every gate at 100% (done), and the server foundation: configuration, logging, security headers, health routes, the schema and its migration runner, Postgres 18 in the tests (done). Semgrep, Trivy, Stryker, Playwright, memlab and Qodana are wired with their CI jobs (Qodana waits for a licence and token).
+1. **Scaffold** (done): toolchain, hooks and CI passing every gate at 100%, the server foundation, and the extended gates (Semgrep, Trivy, Stryker, Playwright, memlab, Qodana).
 2. **Core**: GitHub App, webhook intake, PR evaluation, Check Run and comment.
 3. **Signing**: login, CLA versions, consent flow, signature storage.
 4. **Dashboard**: repos, signatures, CSV export, revoke, audit log.
 5. **Hardening**: promote the stable CI jobs to required checks, raise the mutation floor, e2e and visual baselines for every screen, memlab nightly, Qodana once licensed.
-6. **Corporate CLA** and merge queue support.
+6. **Corporate CLA**.
 
 ## License
 

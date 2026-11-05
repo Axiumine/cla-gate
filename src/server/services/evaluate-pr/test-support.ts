@@ -18,6 +18,7 @@ import {
 import { createLogger } from '../../adapters/http/logger.ts';
 import { type Evaluation, type EvaluationInput, evaluatePullRequest } from '../../domain/evaluation/index.ts';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
+import type { MergeGroupResult } from '../../domain/reporting/check-view.ts';
 import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import { captureLogs, type LogCapture } from '../../test-support.ts';
 import { account, commit, pullRequest } from '../github-pull-contract/test-support.ts';
@@ -25,7 +26,7 @@ import type { JobOutcome } from '../job-registry.ts';
 import { createOrgMembership } from '../org-membership.ts';
 import { createOrgMembershipCache } from '../org-membership-cache.ts';
 import type { EnqueueOptions, EnqueueOutcome, JobEnqueuer, QueuedJob } from '../ports/jobs.ts';
-import type { EvaluationReporter, ReportOutcome, ReportTarget } from '../ports/reporter.ts';
+import type { EvaluationReporter, MergeGroupTarget, ReportOutcome, ReportTarget } from '../ports/reporter.ts';
 import { FakeClock, FakeGate, FakeGitHub } from '../test-support.ts';
 import { evaluatePr } from './evaluate-pr.ts';
 import type { EvaluatePrContext, EvaluatePrPorts } from './evaluate-pr-ports.ts';
@@ -102,6 +103,7 @@ export interface ReporterHooks {
   failed?: ((target: ReportTarget, code: ReportFailureCode) => Promise<void>) | undefined;
   cancelled?: ((target: CancelTarget) => Promise<void>) | undefined;
   enforcementDisabled?: ((target: CancelTarget) => Promise<void>) | undefined;
+  mergeGroup?: ((target: MergeGroupTarget, result: MergeGroupResult) => Promise<void>) | undefined;
 }
 
 /** The reporter in memory: every report it was given, in order, and an optional behaviour for each method (E07-S04). */
@@ -118,6 +120,8 @@ export class FakeReporter implements EvaluationReporter {
   readonly cancellations: CancelTarget[] = [];
   /** The pull requests whose repository was reported as switched off (E09-S06), in order. */
   readonly disabled: CancelTarget[] = [];
+  /** The verdicts reported on merge groups (E22-S01), in order. */
+  readonly groups: { readonly target: MergeGroupTarget; readonly result: MergeGroupResult }[] = [];
   readonly hooks: ReporterHooks = {};
   /** The events of every fake that was given this list, in order (E07-S05). */
   readonly timeline: string[];
@@ -158,6 +162,13 @@ export class FakeReporter implements EvaluationReporter {
     this.timeline.push('reporter.enforcement_disabled');
     this.disabled.push(target);
     await this.hooks.enforcementDisabled?.(target);
+    return REPORTED;
+  }
+
+  async mergeGroup(target: MergeGroupTarget, result: MergeGroupResult): Promise<ReportOutcome> {
+    this.timeline.push('reporter.merge_group');
+    this.groups.push({ target, result });
+    await this.hooks.mergeGroup?.(target, result);
     return REPORTED;
   }
 }

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, NoResultError } from 'kysely';
+import { parseGithubId } from '../../../../shared/github-id.ts';
 import type { PrEvaluationDetails } from '../../../../shared/pr-evaluation-details.ts';
+import { detailsOfFailure } from '../../../domain/merge-group.ts';
 import { headShasToCancel } from '../../../services/close-pr/close-heads.ts';
 import { cancelEvaluation, evaluationsOfPullRequest } from '../../../services/close-pr/close-rows.ts';
 import { latestEvaluationPerPr } from '../../../services/current-evaluation-queries.ts';
@@ -16,6 +18,14 @@ import {
 import { readAllowlist, readOverrides, readPolicy } from '../../../services/evaluate-pr/policy-facts.ts';
 import { readSignatures } from '../../../services/evaluate-pr/signature-facts.ts';
 import { unfinishedPullRequests } from '../../../services/finalise/finalise-rows.ts';
+import { markGroupDestroyed } from '../../../services/merge-group/merge-group-destroyed.ts';
+import { failGroupEvaluation } from '../../../services/merge-group/merge-group-failure.ts';
+import {
+  finishGroupEvaluation,
+  recordGroupCheckRun,
+  startGroupEvaluation,
+} from '../../../services/merge-group/merge-group-progress.ts';
+import { findGroupRow } from '../../../services/merge-group/merge-group-rows.ts';
 import { evaluationStates, staleEvaluations } from '../../../services/sweep/sweep-rows.ts';
 import { reconcilePullRequestStates } from '../../../services/sweep/sweep-state-rows.ts';
 import type { Database } from '../schema.ts';
@@ -40,6 +50,12 @@ const isNoRow: Refusal = (error) => error instanceof NoResultError;
 const FINISHED = { prNumber: 7, headSha: 'b'.repeat(40) } as const;
 /** A pull request nobody evaluated yet: the writes of the evaluation job create a row for it. */
 const UNSEEN = { prNumber: 901, headSha: 'd'.repeat(40) } as const;
+/** The head SHA of the merge group the fixture stores for each tenant (E22-S01), and the base SHA it was built on. */
+const GROUP = { headSha: '9'.repeat(40), baseSha: '8'.repeat(40) } as const;
+/** A merge group nobody evaluated yet: the writes of the group job create a row for it. */
+const UNSEEN_GROUP = { headSha: 'a'.repeat(40), baseSha: '8'.repeat(40) } as const;
+/** The Check Run id the call that records one writes: no row of the fixture holds it. */
+const RECORDED_CHECK_RUN = 777_777;
 /** An instant after every row of the fixture was touched. */
 const LATER = new Date('2100-01-01T00:00:00Z');
 /** A verdict as the evaluation job stores it. It names no one. */
@@ -94,6 +110,34 @@ async function ownersOfPolicyRows(
   }
   const rows = await db.selectFrom(table).select('installation_id').where('id', 'in', ids).execute();
   return rows.map((row) => row.installation_id);
+}
+
+/** The ids of the rows a call answered, none for the `null` of a group it did not meet. */
+const idsOf = (...rows: readonly ({ readonly id: number } | null)[]): number[] =>
+  rows.filter((row) => row !== null).map((row) => row.id);
+
+/** The installation that owns each merge group row with these row ids. */
+async function ownersOfGroups(db: Kysely<Database>, ids: readonly number[]): Promise<number[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+  const rows = await db
+    .selectFrom('merge_group_evaluations')
+    .select('installation_id')
+    .where('id', 'in', ids)
+    .execute();
+  return rows.map((row) => row.installation_id);
+}
+
+/** The id of the merge group row the fixture stores for the repository of `ids`. */
+async function groupOf(db: Kysely<Database>, ids: TenantWorld): Promise<number> {
+  const row = await db
+    .selectFrom('merge_group_evaluations')
+    .select('id')
+    .where('repository_id', '=', ids.plain.repositoryId)
+    .where('head_sha', '=', GROUP.headSha)
+    .executeTakeFirstOrThrow();
+  return row.id;
 }
 
 /** The id of the evaluation of the repository that is still running: the fixture stores one for each tenant. */
@@ -295,6 +339,98 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
           () => Promise.resolve(false),
         );
         return corrected.closed === 0 ? [] : ownersOfEvaluations(db, await evaluationsOfRepository(db, ids, [7, 8]));
+      },
+    }),
+  },
+  'services/merge-group/merge-group-rows.ts': {
+    findGroupRow: scoped({
+      run: async (db, scope, ids) => {
+        const found = await findGroupRow(db, { ...repositoryOf(scope, ids), headSha: GROUP.headSha });
+        return found === null ? [] : ownersOfGroups(db, [found.id]);
+      },
+    }),
+  },
+  'services/merge-group/merge-group-progress.ts': {
+    startGroupEvaluation: scoped({
+      refusal: isForeignKeyViolation,
+      run: async (db, scope, ids) => {
+        const started = await startGroupEvaluation(
+          db,
+          { ...repositoryOf(scope, ids), headSha: UNSEEN_GROUP.headSha },
+          UNSEEN_GROUP.baseSha,
+        );
+        return ownersOfGroups(db, idsOf(started));
+      },
+    }),
+    finishGroupEvaluation: scoped({
+      run: async (db, scope, ids) => {
+        const id = await groupOf(db, ids);
+        const finished = await finishGroupEvaluation(
+          db,
+          scope.installationId,
+          id,
+          detailsOfFailure('evaluation_failed'),
+        );
+        return finished ? ownersOfGroups(db, [id]) : [];
+      },
+    }),
+    recordGroupCheckRun: scoped({
+      run: async (db, scope, ids) => {
+        const id = await groupOf(db, ids);
+        await recordGroupCheckRun(db, scope.installationId, id, RECORDED_CHECK_RUN);
+        // The call answers nothing, so the row is read again: it is changed exactly when it holds the id that was written.
+        const changed = await db
+          .selectFrom('merge_group_evaluations')
+          .select('id')
+          .where('id', '=', id)
+          .where('check_run_id', '=', RECORDED_CHECK_RUN)
+          .execute();
+        return ownersOfGroups(
+          db,
+          changed.map((row) => row.id),
+        );
+      },
+    }),
+  },
+  'services/merge-group/merge-group-failure.ts': {
+    failGroupEvaluation: scoped({
+      refusal: isForeignKeyViolation,
+      run: async (db, scope, ids) => {
+        const failed = await failGroupEvaluation(
+          db,
+          { ...repositoryOf(scope, ids), headSha: UNSEEN_GROUP.headSha },
+          UNSEEN_GROUP.baseSha,
+        );
+        return ownersOfGroups(db, idsOf(failed));
+      },
+    }),
+  },
+  'services/merge-group/merge-group-destroyed.ts': {
+    markGroupDestroyed: scoped({
+      run: async (db, scope, ids) => {
+        const id = await groupOf(db, ids);
+        const installation = await db
+          .selectFrom('installations')
+          .select('github_installation_id')
+          .where('id', '=', scope.installationId)
+          .executeTakeFirstOrThrow();
+        await markGroupDestroyed(db, {
+          githubInstallationId: parseGithubId(installation.github_installation_id),
+          githubRepoId: ids.plain.githubRepoId,
+          headSha: GROUP.headSha,
+          baseSha: GROUP.baseSha,
+        });
+        // The call answers nothing, so the row is read again: it is changed exactly when it is destroyed now.
+        const changed = await db
+          .selectFrom('merge_group_evaluations')
+          .select('id')
+          .where('id', '=', id)
+          .where('destroyed_at', 'is not', null)
+          .execute();
+        return ownersOfGroups(
+          db,
+          changed.map((row) => row.id),
+        );
       },
     }),
   },

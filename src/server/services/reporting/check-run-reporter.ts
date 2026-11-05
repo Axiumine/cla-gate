@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Evaluation } from '../../domain/evaluation/index.ts';
+import type { MergeGroupResult } from '../../domain/reporting/check-view.ts';
 import type { DisplayNames } from '../../domain/reporting/display-names.ts';
 import type {
   EvaluationReporter,
+  MergeGroupTarget,
   ReportFailureCode,
   ReportOutcome,
   ReportTarget,
   RunTarget,
 } from '../ports/reporter.ts';
+import { reportMergeGroup } from './merge-group-report.ts';
 import { guardReport } from './report-guard.ts';
 import type { CheckRunReporterOptions } from './report-options.ts';
 import { reportCancelled, reportEnforcementDisabled, reportFailed } from './run-endings.ts';
@@ -81,5 +84,15 @@ export class CheckRunReporter implements EvaluationReporter {
    */
   enforcementDisabled(target: RunTarget): Promise<ReportOutcome> {
     return guardReport(this.#options.logger, target, () => reportEnforcementDisabled(this.#options, target));
+  }
+
+  /**
+   * The verdict on a merge group (E22-S01): the run of the group's head SHA is written through the same upsert, completed with the
+   * conclusion `result` gives, and the id of the run is recorded on the row of the group.
+   * @throws TenantMismatchError, GroupRowMissingError, ReportRejectedError, and what the GitHub port throws other than a missing
+   * repository or installation.
+   */
+  mergeGroup(target: MergeGroupTarget, result: MergeGroupResult): Promise<ReportOutcome> {
+    return guardReport(this.#options.logger, target, () => reportMergeGroup(this.#options, target, result));
   }
 }

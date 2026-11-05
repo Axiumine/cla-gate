@@ -4,6 +4,7 @@ import { APP_EVENTS } from '../../shared/github-app.ts';
 import { routeCheckRun, routeCheckSuite } from './webhook-routing-checks.ts';
 import { routeIssueComment } from './webhook-routing-comments.ts';
 import { appAuthorizationFields, installationFields } from './webhook-routing-fields.ts';
+import { routeMergeGroup } from './webhook-routing-merge-groups.ts';
 import { routePullRequest } from './webhook-routing-pull-requests.ts';
 import {
   type Delivery,
@@ -22,7 +23,7 @@ import {
  * The events the App is subscribed to, the ones in the `Events` row of `docs/github-app.md`. The router has exactly one
  * row for each (the type of `ROUTES` makes the compiler check it, and a test checks the document). `installation`,
  * `installation_repositories` and `github_app_authorization` always arrive, whatever the App subscribes to. The App manifest
- * (E19-S06) subscribes to the first four, `APP_EVENTS` of `src/shared/github-app.ts`, which this list starts with.
+ * (E19-S06) subscribes to the first five, `APP_EVENTS` of `src/shared/github-app.ts`, which this list starts with.
  * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export const SUBSCRIBED_EVENTS = [
@@ -57,6 +58,7 @@ const ROUTES: Readonly<Record<SubscribedEvent, Router>> = {
   check_run: routeCheckRun,
   check_suite: routeCheckSuite,
   issue_comment: routeIssueComment,
+  merge_group: routeMergeGroup,
   installation: routeInstallation,
   installation_repositories: routeInstallation,
   github_app_authorization: routeAppAuthorization,
@@ -77,7 +79,8 @@ export const ROUTED_EVENTS: readonly string[] = [...ROUTERS.keys()];
  *
  * - `ping` is answered (`pong`) and nothing is recorded.
  * - An event the App is not subscribed to is ignored (`unsupported_event`), whatever its payload.
- * - Every other delivery is exactly one job or ignored with a reason; there is no way to get two jobs.
+ * - Every other delivery is exactly one job or ignored with a reason; there is no way to get two jobs. The one that starts no
+ *   job and is not ignored is a merge group taken down (`destroyed`, E22-S01): it is recorded, and the evaluation it ends is marked.
  *
  * @param event the `X-GitHub-Event` header
  * @param action the `action` of the payload, `undefined` for an event that has none or no schema (`ping`)

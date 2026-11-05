@@ -29,17 +29,22 @@ export async function rememberRun(
   await recordCheckRunId(db, situation.scope, linkKeyOf(target, situation), checkRunId);
 }
 
+/** What a log line of the reporter names of a run: the ids and the head SHA; a merge group (E22-S01) has no pull request number. */
+export type LoggedRun = Pick<RunTarget, 'githubInstallationId' | 'githubRepoId' | 'headSha'> & {
+  readonly prNumber?: number;
+};
+
 /** What every line of the reporter's log names: the numeric ids and the head SHA, nothing a person wrote. */
-export function reportIds(target: RunTarget) {
+export function reportIds(target: LoggedRun) {
   return {
     githubInstallationId: target.githubInstallationId,
     githubRepoId: target.githubRepoId,
-    prNumber: target.prNumber,
+    ...(target.prNumber === undefined ? {} : { prNumber: target.prNumber }),
     headSha: target.headSha,
   };
 }
 
 /** One line per report: the numeric ids, the head SHA and the id of the run, nothing a person wrote. */
-export function logReport(logger: Logger, target: RunTarget, checkRunId: GithubId, event: string): void {
+export function logReport(logger: Logger, target: LoggedRun, checkRunId: GithubId, event: string): void {
   logger.info({ ...reportIds(target), checkRunId }, event);
 }

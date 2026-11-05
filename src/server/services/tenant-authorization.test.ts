@@ -42,6 +42,7 @@ function repositoryOf(n: number, index: number): RepositoryRow {
     full_name,
     enabled: false,
     cla_document_id: null,
+    public_verification: false,
     removed_at,
     created_at: NOW,
     updated_at: NOW,

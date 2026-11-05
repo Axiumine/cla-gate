@@ -5,7 +5,7 @@ import { GitHubUnprocessableError } from '../ports/github-errors.ts';
 import { ReportRejectedError, type RunTarget } from '../ports/reporter.ts';
 import type { UpsertRequest } from './check-run-writer.ts';
 import type { CheckRunReporterOptions } from './report-options.ts';
-import { reportIds } from './report-record.ts';
+import { type LoggedRun, reportIds } from './report-record.ts';
 import { locationOf } from './report-situation.ts';
 
 // The write of a Check Run with the fallback of E09-S06: when GitHub answers 422 to the full output (a body it will not take),
@@ -18,7 +18,7 @@ import { locationOf } from './report-situation.ts';
  */
 export async function writeRun(
   options: CheckRunReporterOptions,
-  target: RunTarget,
+  target: LoggedRun,
   request: UpsertRequest,
 ): Promise<GithubId> {
   const { writer, logger } = options;

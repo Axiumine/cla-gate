@@ -9,20 +9,22 @@ import { CANARY, DELIVERY_ID, IDS, JOBS, SHA } from './test-support.ts';
 // The envelope of every job on the queue (E07-S03): the catalogue of E06-S04 plus the two jobs of the scheduler.
 
 const SWEEP = { type: 'sweep' } as const;
+const RETENTION_SWEEP = { type: 'retention-sweep' } as const;
 const SWEEP_INSTALLATION = { type: 'sweep-installation', githubInstallationId: IDS.installation } as const;
 const REPOSITORY_IDS = { githubInstallationId: IDS.installation, githubRepoId: IDS.repository } as const;
 const SWEEP_REPOSITORY = { type: 'sweep-repository', ...REPOSITORY_IDS, reason: 'allowlist_changed' } as const;
 const FINALISE_REPOSITORY = { type: 'finalise-repository', ...REPOSITORY_IDS } as const;
 const FINALISE_CHECK = { type: 'finalise-check', ...REPOSITORY_IDS, prNumber: IDS.pullRequestNumber } as const;
 const REPOSITORY_JOBS = [SWEEP_REPOSITORY, FINALISE_REPOSITORY, FINALISE_CHECK];
-const ALL = [...Object.values(JOBS), SWEEP, SWEEP_INSTALLATION, ...REPOSITORY_JOBS];
+const ALL = [...Object.values(JOBS), SWEEP, SWEEP_INSTALLATION, ...REPOSITORY_JOBS, RETENTION_SWEEP];
 
-test('the envelope has the eleven jobs a worker can receive, in the order of the schema', () => {
+test('the envelope has the thirteen jobs a worker can receive, in the order of the schema', () => {
   expect(JOB_TYPES).toEqual([
     'evaluate-pr',
     'evaluate-head-sha',
     'close-pr',
     'recheck-comment',
+    'evaluate-merge-group',
     'sync-installation',
     'revoke-user-sessions',
     'sweep',
@@ -30,14 +32,15 @@ test('the envelope has the eleven jobs a worker can receive, in the order of the
     'sweep-repository',
     'finalise-repository',
     'finalise-check',
+    'retention-sweep',
   ]);
 });
 
-test('the envelope is the catalogue of E06-S04 unchanged, plus the two jobs of the scheduler and the three of a change of policy', () => {
+test('the envelope is the catalogue of E06-S04 unchanged, plus the two jobs of the scheduler, the three of a change of policy and the daily retention sweep', () => {
   expect(JOB_TYPES.slice(0, jobSchema.options.length)).toEqual(
     jobSchema.options.map((option) => option.shape.type.value),
   );
-  expect(JOB_TYPES).toHaveLength(jobSchema.options.length + 5);
+  expect(JOB_TYPES).toHaveLength(jobSchema.options.length + 6);
 });
 
 test.each(ALL)('the job $type is valid as its producer builds it', (job) => {
@@ -48,7 +51,7 @@ test.each(ALL)('the job $type refuses a field it does not declare', (job) => {
   expect(jobEnvelopeSchema.safeParse({ ...job, title: CANARY }).success).toBe(false);
 });
 
-test.each([SWEEP, SWEEP_INSTALLATION, ...REPOSITORY_JOBS])(
+test.each([SWEEP, SWEEP_INSTALLATION, ...REPOSITORY_JOBS, RETENTION_SWEEP])(
   'the job $type has no delivery: a delivery id is refused',
   (job) => {
     expect(jobEnvelopeSchema.safeParse({ ...job, deliveryId: DELIVERY_ID }).success).toBe(false);
@@ -205,6 +208,19 @@ test('the log fields of a sweep-repository are its ids and its reason, and those
 
 test('a job that carries no id has no log fields', () => {
   expect(logFieldsOf(parsed(SWEEP))).toEqual({});
+  expect(logFieldsOf(parsed(RETENTION_SWEEP))).toEqual({});
+});
+
+test('retention-sweep carries no data at all: any field is refused, so nothing a job holds can steer the purge', () => {
+  expect(jobEnvelopeSchema.parse({ type: 'retention-sweep' })).toEqual({ type: 'retention-sweep' });
+  for (const field of [
+    { days: 0 },
+    { batchSize: 1 },
+    { cutoff: '2026-01-01T00:00:00Z' },
+    { githubInstallationId: 1 },
+  ]) {
+    expect(jobEnvelopeSchema.safeParse({ ...RETENTION_SWEEP, ...field }).success).toBe(false);
+  }
 });
 
 test('a field of the wrong kind never reaches the log fields', () => {

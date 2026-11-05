@@ -86,19 +86,20 @@ export const SERVER_SHARDS: readonly Shard[] = [
   // The evaluate-pr job (E07-S04): the pull request and commit reads, the policy facts and the evaluation protocol. The Check Run
   // reporter it calls (E09-S05, services/reporting) joins it: it is the other half of that job's protocol.
   { name: 'evaluate-pr', mutate: ['src/server/services/evaluate-pr/**/*.ts', 'src/server/services/reporting/**/*.ts'] },
-  // The job handlers of E07-S05 to S07 and E14-S04: the dead-letter handler, the close-pr job, the finalise jobs that follow turning
-  // enforcement off, and /recheck and Re-run.
+  // The job handlers of E07-S05 to S07, E14-S04 and E22-S01: the dead-letter handler, the close-pr job, the finalise jobs that follow
+  // turning enforcement off, /recheck and Re-run, and the evaluation of a merge queue's group (its rows, member discovery and job).
   {
     name: 'job-handlers',
     mutate: [
       'src/server/services/close-pr/**/*.ts',
       'src/server/services/dead-letter/**/*.ts',
       'src/server/services/finalise/**/*.ts',
+      'src/server/services/merge-group/**/*.ts',
       'src/server/services/recheck/**/*.ts',
     ],
   },
-  // The scheduled reconciliation sweep (E07-S08).
-  { name: 'sweep', mutate: ['src/server/services/sweep/**/*.ts'] },
+  // The scheduled reconciliation sweep (E07-S08) and the retention sweep of operational data (E22-S04).
+  { name: 'sweep', mutate: ['src/server/services/sweep/**/*.ts', 'src/server/services/retention/**/*.ts'] },
 ];
 
 /** The scripts scope (E20-S05, the caps tool) is a shard of its own, selected by STRYKER_SCOPE=scripts and not by STRYKER_SHARD. */
