@@ -5,6 +5,7 @@ import type { Kysely } from 'kysely';
 import { PUBLIC_SIGNER_PATH, publicSignerResponseSchema } from '../../../shared/public-verification.ts';
 import type { Clock } from '../../services/ports/clock.ts';
 import { LoginCache } from '../../services/public-login-cache.ts';
+import { LookupBudget } from '../../services/public-lookup-budget.ts';
 import type { PublicGitHub } from '../../services/public-verification.ts';
 import type { Database } from '../db/schema.ts';
 import { publicRouteOptions, signedByPath } from './public-answers.ts';
@@ -36,7 +37,12 @@ export const publicVerificationRoutes: FastifyPluginCallbackZod<PublicVerificati
   options,
   done,
 ) => {
-  const deps = { db: options.db, github: options.github, logins: new LoginCache(options.clock) };
+  const deps = {
+    db: options.db,
+    github: options.github,
+    logins: new LoginCache(options.clock),
+    budget: new LookupBudget(options.clock),
+  };
   // Made once: the JSON call and the badges draw on the same two buckets (E22-S02, E22-S03).
   const limit = publicRateLimit(app);
   app.addHook('onSend', publicHeaders);

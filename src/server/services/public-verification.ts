@@ -7,6 +7,7 @@ import { tenantState } from '../domain/tenant-state.ts';
 import type { GitHubClient } from './ports/github.ts';
 import { GitHubRateLimitedError, GitHubUnavailableError } from './ports/github-errors.ts';
 import type { LoginAnswer, LoginCache } from './public-login-cache.ts';
+import type { LookupBudget } from './public-lookup-budget.ts';
 import { findPublicRepository, hasCountingSignature, type PublicRepository } from './public-verification-queries.ts';
 
 // The question of the public signature check (E22-S02): does this GitHub login have a valid signature for this repository? One
@@ -53,11 +54,13 @@ export type PublicVerdict = { readonly kind: 'not_found' } | { readonly kind: 'v
 
 const NOT_FOUND: PublicVerdict = { kind: 'not_found' };
 
-/** What the check reads: the database, GitHub, and the memory of the logins it asked GitHub about. */
+/** What the check reads: the database, GitHub, the memory of the logins it asked GitHub about, and what it may still ask. */
 export interface PublicVerificationDeps {
   readonly db: Kysely<Database>;
   readonly github: PublicGitHub;
   readonly logins: LoginCache;
+  /** How many logins each installation may have looked up at GitHub in a minute (a login the memory knows is free). */
+  readonly budget: LookupBudget;
 }
 
 /** Whether the repository may be asked about: its installation is served, enforcement is on, and the maintainers opted in. */
@@ -78,10 +81,20 @@ function lookupFailed(error: unknown): never {
 }
 
 /**
+ * The installation has spent the lookups the public check may make in a minute: GitHub is not asked, and the client is told to wait
+ * until the window ends, as for a lookup GitHub could not answer.
+ * @throws PublicVerificationUnavailableError always.
+ */
+function budgetSpent(waitSeconds: number): never {
+  throw new PublicVerificationUnavailableError(Math.min(waitSeconds, MAX_RETRY_AFTER_SECONDS));
+}
+
+/**
  * The numeric id GitHub gives `login`, or `null` when no account has it, as the cache remembers it or as GitHub says it now. The
  * lookup uses the token of the installation that holds the repository and is remembered, a miss as well as a hit, for ten
- * minutes under the login in lower case. A failure is never remembered.
- * @throws PublicVerificationUnavailableError when GitHub cannot answer.
+ * minutes under the login in lower case. A failure is never remembered. A login the cache does not know spends one lookup of the
+ * budget of the installation, and when that is spent GitHub is not asked.
+ * @throws PublicVerificationUnavailableError when GitHub cannot answer or the budget of the installation is spent.
  */
 async function resolveLogin(
   deps: PublicVerificationDeps,
@@ -91,6 +104,10 @@ async function resolveLogin(
   const known = deps.logins.get(login);
   if (known !== undefined) {
     return known;
+  }
+  const wait = deps.budget.take(githubInstallationId);
+  if (wait > 0) {
+    return budgetSpent(wait);
   }
   let answer: LoginAnswer;
   try {

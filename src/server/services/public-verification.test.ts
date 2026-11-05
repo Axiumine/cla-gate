@@ -6,6 +6,7 @@ import { type TenantWorld, twoTenants } from '../adapters/db/tenant-fixture/test
 import { migratedTestDatabase, publishVersion } from '../adapters/db/test-support.ts';
 import { GitHubRateLimitedError, GitHubUnavailableError } from './ports/github-errors.ts';
 import { LoginCache } from './public-login-cache.ts';
+import { LookupBudget, PUBLIC_LOOKUPS_PER_MINUTE } from './public-lookup-budget.ts';
 import {
   isPublicRepository,
   type PublicVerdict,
@@ -41,7 +42,7 @@ async function world() {
     .where('id', '=', t1.plain.repositoryId)
     .execute();
   const clock = new FakeClock('2026-11-01T10:00:00Z');
-  const deps = { db, github, logins: new LoginCache(clock) };
+  const deps = { db, github, logins: new LoginCache(clock), budget: new LookupBudget(clock) };
   const ask = (login: string, tenant: TenantWorld = t1) =>
     verifySigner(deps, { githubRepoId: tenant.plain.githubRepoId, login });
   return { db, github, clock, deps, ask, ...tenants };
@@ -261,4 +262,29 @@ test('the project badge and the signer check agree on every repository: one is n
   }
   await db.updateTable('repositories').set({ enabled: false }).where('id', '=', t1.plain.repositoryId).execute();
   expect((await ask('octocat')).kind === 'not_found').toBe(!(await isPublicRepository(db, t1.plain.githubRepoId)));
+});
+
+test('the lookups of an installation are limited per minute: past the budget GitHub is not asked, and a login the memory knows still answers', async () => {
+  const { ask, github, clock } = await world();
+  expect(await ask('octocat')).toEqual(SIGNED);
+  for (let n = 1; n < PUBLIC_LOOKUPS_PER_MINUTE; n++) {
+    expect(await ask(`probe-${n}`)).toEqual(UNSIGNED);
+  }
+  expect(await ask('octocat')).toEqual(SIGNED);
+  await expect(ask('probe-over')).rejects.toMatchObject({
+    name: 'PublicVerificationUnavailableError',
+    retryAfterSeconds: 60,
+  });
+  expect(github.calls).toHaveLength(PUBLIC_LOOKUPS_PER_MINUTE);
+  clock.advance(60_000);
+  expect(await ask('probe-over')).toEqual(UNSIGNED);
+});
+
+test("the budget is the installation's: the other tenant's lookups are not spent by it, and a refused repository spends none", async () => {
+  const { ask, github, t2 } = await world();
+  for (let n = 0; n <= PUBLIC_LOOKUPS_PER_MINUTE; n++) {
+    await ask(`probe-${n}`).catch(() => undefined);
+  }
+  expect(await ask('hubot', t2)).toEqual({ kind: 'not_found' });
+  expect(github.calls.filter((call) => call.installationId === t2.githubInstallationId)).toEqual([]);
 });
