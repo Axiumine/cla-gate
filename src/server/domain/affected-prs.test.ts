@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { z } from 'zod';
 import { parseGithubId } from '../../shared/github-id.ts';
 import {
   affectedEvaluationKey,
   affectedSweepKey,
   MAX_AFFECTED_PULL_REQUESTS,
+  OVERRIDDEN_COMMIT_PATH,
+  overriddenCommitVars,
   signatureBasisNeedles,
 } from './affected-prs.ts';
 
@@ -51,4 +54,14 @@ test('the two needles are the actor with the signer id covered by a signature, a
   expect(JSON.parse(bySignature)).toEqual({
     actors: [{ covered: true, basis: { kind: 'signature', signatureId: 31 } }],
   });
+});
+
+test('the path that finds the results resting on an override reads the entries of unlinked by the commit in the variable sha and requires an override id', () => {
+  expect(OVERRIDDEN_COMMIT_PATH).toBe('$.unlinked[*] ? (@.sha == $sha && @.overrideId != null)');
+  expect(JSON.parse(overriddenCommitVars('ab'.repeat(20)))).toEqual({ sha: 'ab'.repeat(20) });
+});
+
+test('the variables hold the commit as a JSON string and nothing else, whatever characters it has, so the path cannot be altered through it', () => {
+  const hostile = `a"}; drop table pr_evaluations;--`;
+  expect(z.record(z.string(), z.string()).parse(JSON.parse(overriddenCommitVars(hostile)))).toEqual({ sha: hostile });
 });

@@ -15,6 +15,8 @@ import type { JobEnqueuer } from '../../services/ports/jobs.ts';
 import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
 import { answerRuleErrors } from './cla-rule-errors.ts';
+import { listOverridesRoute } from './commit-override-list-routes.ts';
+import { removeOverrideRoute } from './commit-override-remove-route.ts';
 import { setNoStore } from './no-store.ts';
 import { parseInput } from './request-body.ts';
 import { requireTenant, tenantAccess } from './tenant-access.ts';
@@ -72,7 +74,8 @@ async function answerRecord(
  * `422 commit_not_found`, a repository that is off `409 repository_disabled`, and a commit overridden already `409 override_exists`.
  * GitHub failing is `502 github_unavailable` or `503 github_rate_limited` with `retry-after`. Audited as `commit_override.created`,
  * in the transaction of the record, which also sends the jobs. An override never implies a signature: nothing of `signatures` or
- * `signer_pii` is touched.
+ * `signer_pii` is touched. The same plugin registers the list of the overrides of a repository (E15-S06, commit-override-list-routes.ts)
+ * and the removal of one (commit-override-remove-route.ts), which share its error handler.
  */
 export const commitOverrideRoutes: FastifyPluginCallbackZod<CommitOverrideRoutesOptions> = (app, options, done) => {
   answerRuleErrors(app);
@@ -88,5 +91,7 @@ export const commitOverrideRoutes: FastifyPluginCallbackZod<CommitOverrideRoutes
     },
     (request, reply) => answerRecord(request, reply, options),
   );
+  listOverridesRoute(app, options.db);
+  removeOverrideRoute(app, options);
   done();
 };

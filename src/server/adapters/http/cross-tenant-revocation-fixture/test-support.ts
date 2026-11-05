@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
-import { COMMIT_OVERRIDES_PATH } from '../../../../shared/commit-override.ts';
+import { COMMIT_OVERRIDE_PATH, COMMIT_OVERRIDES_PATH } from '../../../../shared/commit-override.ts';
 import { INVALIDATION_PREVIEW_PATH, INVALIDATIONS_PATH } from '../../../../shared/signature-invalidate.ts';
 import { SIGNATURE_REVOKE_PATH } from '../../../../shared/signature-revoke.ts';
 import { SIGNATURES_PATH } from '../../../../shared/signature-search.ts';
@@ -11,7 +11,14 @@ import { installationRowIdSchema } from '../../db/installation-row-id.ts';
 import type { Database } from '../../db/schema.ts';
 import type { TenantWorld } from '../../db/tenant-fixture/test-support.ts';
 import type { CrossTenantCase, MatrixTarget } from '../cross-tenant-fixture/test-support.ts';
-import { MATRIX_COMMIT_SHA, overridable, versionOne } from '../cross-tenant-prepare/test-support.ts';
+import {
+  deletable,
+  listable,
+  MATRIX_COMMIT_SHA,
+  newestOverrideId,
+  overridable,
+  versionOne,
+} from '../cross-tenant-prepare/test-support.ts';
 
 // The cases of the routes of epic E15 (revocation, overrides and pending pull requests) for the route matrix (E11-S06). They sit in a
 // file of their own so that the fixture of the matrix stays under the size cap, as the cases of the sign routes do
@@ -118,6 +125,15 @@ async function invalidationBody(db: Kysely<Database>, target: MatrixTarget): Pro
   return { major: 1, reasonCode: 'maintainer_decision', expectedCount: await signaturesInForce(db, target) };
 }
 
+/** The path of the override `overrideId` of the repository `repositoryId`. */
+const overrideUrl = (repositoryId: number, overrideId: number): string =>
+  COMMIT_OVERRIDE_PATH.replace(':repositoryId', String(repositoryId)).replace(':overrideId', String(overrideId));
+
+/** The URL that removes the override {@link deletable} left in the repository of `target`. */
+async function newestOverrideUrl(db: Kysely<Database>, target: MatrixTarget): Promise<string> {
+  return overrideUrl(target.repositoryId, await newestOverrideId(db, target));
+}
+
 const revocationUrl = (installationId: number, signatureId: number): string =>
   SIGNATURE_REVOKE_PATH.replace(':installationId', String(installationId)).replace(':signatureId', String(signatureId));
 
@@ -133,7 +149,9 @@ const revocationUrl = (installationId: number, signatureId: number): string =>
  * signature in force on the document, whoever asks first, and the body names the count of that moment. E15-S05: recording an override
  * is a repository write like the enable (the role its document asks for, which `overridable` gives the repository of the case); the path
  * names the repository alone, so the crossed ids are those of commit-override-tenants.test.ts, and the GitHub of the matrix has the commit
- * (`scriptMatrixCommits`).
+ * (`scriptMatrixCommits`). E15-S06: the list of the overrides and the removal of one follow the role of the record (`listable` gives the
+ * repository the document of the case; `deletable` also puts an override there, whoever asks first, and its URL is read after that); the
+ * ids that cross tenants are those of commit-override-remove-tenants.test.ts and commit-override-list-tenants.test.ts.
  */
 export const REVOCATION_CASES: Readonly<Record<string, CrossTenantCase>> = {
   [`GET ${SIGNATURES_PATH}`]: {
@@ -177,5 +195,22 @@ export const REVOCATION_CASES: Readonly<Record<string, CrossTenantCase>> = {
       url: COMMIT_OVERRIDES_PATH.replace(':repositoryId', String(target.repositoryId)),
       payload: { commitSha: MATRIX_COMMIT_SHA, reason: 'Recorded by the matrix' },
     }),
+  },
+  [`GET ${COMMIT_OVERRIDES_PATH}`]: {
+    endpointClass: 'repository_read',
+    crossable: false,
+    prepare: listable,
+    request: (target) => ({
+      method: 'GET',
+      url: COMMIT_OVERRIDES_PATH.replace(':repositoryId', String(target.repositoryId)),
+    }),
+  },
+  [`DELETE ${COMMIT_OVERRIDE_PATH}`]: {
+    endpointClass: 'repository_write',
+    crossable: false,
+    success: 204,
+    prepare: deletable,
+    urlFor: newestOverrideUrl,
+    request: (target) => ({ method: 'DELETE', url: overrideUrl(target.repositoryId, 987_654) }),
   },
 };

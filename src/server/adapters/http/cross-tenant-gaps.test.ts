@@ -119,6 +119,8 @@ test('the tables of the application hold the cases of the routes the stories add
     'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
     'POST /api/installations/:installationId/documents/:documentId/invalidations',
     'POST /api/repositories/:repositoryId/commit-overrides',
+    'GET /api/repositories/:repositoryId/commit-overrides',
+    'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
     'GET /api/installations/:installationId/repositories',
     'PUT /api/repositories/:repositoryId/cla-document',
     'POST /api/repositories/:repositoryId/enable',

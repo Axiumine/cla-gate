@@ -45,7 +45,6 @@ const REQUIRED_ACTIONS: readonly AuditAction[] = [
  * call site lands: the usage test fails for a reserved name that a call site writes, so the list cannot go stale.
  */
 const RESERVED_ACTIONS: Readonly<Partial<Record<AuditAction, string>>> = {
-  'commit_override.deleted': 'written by the override removal endpoint (E15-S06)',
   'signer_pii.erased': 'written by the SQL function erase_signer_pii, not by a call of appendAudit (E16-S04)',
   'network_metadata.purged':
     'written by the SQL function purge_signer_network_metadata, not by a call of appendAudit (E16-S05)',

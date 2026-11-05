@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { Kysely } from 'kysely';
 import { findAffectedPrs, findAffectedRepositories } from '../../../services/affected-prs-queries.ts';
-import { insertCommitOverride } from '../../../services/commit-override-queries.ts';
+import { listCommitOverrides } from '../../../services/commit-override-list-queries.ts';
+import { deleteCommitOverride, insertCommitOverride } from '../../../services/commit-override-queries.ts';
 import { countActiveSignatures, invalidateActiveSignatures } from '../../../services/signature-invalidate-queries.ts';
 import { findSignatureToRevoke, markSignatureRevoked } from '../../../services/signature-revoke-queries.ts';
+import type { Database } from '../schema.ts';
 import { ownersOfRepositories, ownersOfSignatures } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery, TenantQuery } from '../tenant-registry/test-support.ts';
 import { isForeignKeyViolation } from '../tenant-registry-allowlist/test-support.ts';
 import { SEARCH_TENANT_QUERIES } from '../tenant-search-fixture/test-support.ts';
 
 // The registry entries (E11-S06) of the statements a revocation runs over a tenant table (E15-S03): the signature it reads and sets, and
-// the pull requests it finds to evaluate again; and those of the invalidation of a major (E15-S04): the signatures it counts and revokes; and the one that stores a per-commit override (E15-S05). They sit in a file of their own so that the registry stays under the size cap, as the
-// entries of the search do (`tenant-search-fixture`). `twoTenants` stores, for each tenant, a signature on its installation-wide
+// the pull requests it finds to evaluate again; and those of the invalidation of a major (E15-S04): the signatures it counts and revokes; and the ones that store a per-commit override (E15-S05), list the overrides of a repository and remove one (E15-S06). They sit in a file of
+// their own so that the registry stays under the size cap, as the entries of the search do (`tenant-search-fixture`). `twoTenants` stores, for each tenant, a signature on its installation-wide
 // document and finished evaluations (success) of pull requests 7, 9 and 10 of the plain repository, so a statement that strays has rows to meet.
 
 /** The files of epic E15 that run a statement over a tenant table, which `TENANT_MODULES` spreads in (the file of the registry is at its size cap). */
 export const E15_TENANT_MODULES = [
   'services/affected-prs-queries.ts',
+  'services/commit-override-list-queries.ts',
   'services/commit-override-queries.ts',
   'services/signature-invalidate-queries.ts',
   'services/signature-revoke-queries.ts',
@@ -24,6 +28,16 @@ export const E15_TENANT_MODULES = [
 
 /** A function that takes the tenant and the ids of a resource and answers with the rows of that tenant it read or changed. */
 const scoped = (run: ScopedQuery['run']): ScopedQuery => ({ kind: 'scoped', takesIds: true, activeOnly: false, run });
+
+/** The ids of the overrides of the repository `repositoryId`, in order, with the installation that owns each: the world stores one per plain repository. */
+function overridesOf(db: Kysely<Database>, repositoryId: number) {
+  return db
+    .selectFrom('commit_overrides')
+    .select(['id', 'installation_id'])
+    .where('repository_id', '=', repositoryId)
+    .orderBy('id')
+    .execute();
+}
 
 /** Every function that the modules of the revocation export over a tenant table, by module and name. */
 const REVOCATION_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, TenantQuery>>>> = {
@@ -104,6 +118,32 @@ const REVOCATION_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
         return rows.map((row) => row.installation_id);
       },
     },
+    // The world stores one override in each plain repository: a removal that strayed takes the other tenant's, which the owners read before and after show.
+    deleteCommitOverride: scoped(async (db, scope, ids) => {
+      const before = await overridesOf(db, ids.plain.repositoryId);
+      await db
+        .transaction()
+        .execute((trx) =>
+          Promise.all(
+            before.map(({ id }) =>
+              deleteCommitOverride(trx, scope, { repositoryId: ids.plain.repositoryId, overrideId: id }),
+            ),
+          ),
+        );
+      const after = new Set((await overridesOf(db, ids.plain.repositoryId)).map((row) => row.id));
+      return before.filter((row) => !after.has(row.id)).map((row) => row.installation_id);
+    }),
+  },
+  'services/commit-override-list-queries.ts': {
+    // The page names the installation of the scope, so the override the world stores in the repository of the other tenant is never listed.
+    listCommitOverrides: scoped(async (db, scope, ids) => {
+      const listed = new Set(
+        (await listCommitOverrides(db, scope, ids.plain.repositoryId, { limit: 10, from: null })).map((row) => row.id),
+      );
+      return (await overridesOf(db, ids.plain.repositoryId))
+        .filter((row) => listed.has(row.id))
+        .map((row) => row.installation_id);
+    }),
   },
 };
 

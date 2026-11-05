@@ -2,14 +2,16 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import {
+  COMMIT_OVERRIDE_PATH,
   COMMIT_OVERRIDES_PATH,
+  commitOverridePageSchema,
   commitOverrideRequestSchema,
   commitOverrideResponseSchema,
   normaliseCommitSha,
 } from './commit-override.ts';
 
 // E15-S05: the contract of recording a per-commit override. A commit id is a full one, 40 or 64 hexadecimal characters, and it is
-// stored in lower case.
+// stored in lower case. E15-S06: the contract of the list of the overrides of a repository and of the removal of one.
 
 const SHA_1 = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const SHA_256 = '0123456789abcdef'.repeat(4);
@@ -87,5 +89,41 @@ test('the answer holds the override with its author by numeric id and its instan
   ];
   for (const wrong of refused) {
     expect(commitOverrideResponseSchema.safeParse(wrong).success).toBe(false);
+  }
+});
+
+test('the list is GET on the path of the record and the removal is DELETE on the path of one override', () => {
+  expect(COMMIT_OVERRIDE_PATH).toBe('/api/repositories/:repositoryId/commit-overrides/:overrideId');
+  expect(COMMIT_OVERRIDE_PATH.startsWith(COMMIT_OVERRIDES_PATH)).toBe(true);
+});
+
+const ITEM = {
+  id: 31,
+  commitSha: SHA_1,
+  reason: '<b>reason</b>\n=1+1',
+  createdBy: { githubId: 4711, login: 'maintainer' },
+  createdAt: '2026-11-05T10:00:00.123Z',
+};
+
+test('a page holds the items and the cursor of the next page or null, an item holds the five fields of the story and no repository id', () => {
+  const page = { items: [ITEM, { ...ITEM, id: 30 }], nextCursor: null };
+  expect(commitOverridePageSchema.parse(page)).toEqual(page);
+  expect(commitOverridePageSchema.parse({ items: [], nextCursor: 'opaque' })).toEqual({
+    items: [],
+    nextCursor: 'opaque',
+  });
+  const refused = [
+    { items: [{ ...ITEM, repositoryId: 4 }], nextCursor: null },
+    { items: [{ ...ITEM, extra: 1 }], nextCursor: null },
+    { items: [{ ...ITEM, commitSha: SHA_1.toUpperCase() }], nextCursor: null },
+    { items: [{ ...ITEM, reason: '' }], nextCursor: null },
+    { items: [{ ...ITEM, createdAt: '2026-11-05T10:00:00+01:00' }], nextCursor: null },
+    { items: [{ ...ITEM, createdBy: { githubId: 0, login: 'x' } }], nextCursor: null },
+    { items: [ITEM] },
+    { nextCursor: null },
+    { items: [ITEM], nextCursor: null, extra: 1 },
+  ];
+  for (const wrong of refused) {
+    expect(commitOverridePageSchema.safeParse(wrong).success).toBe(false);
   }
 });

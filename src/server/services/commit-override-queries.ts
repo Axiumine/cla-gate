@@ -4,10 +4,12 @@ import type { Transaction } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 
-// The statement that records a per-commit override (E15-S05). It names the installation of the tenant in the row it writes, and the
-// composite foreign key `(repository_id, installation_id)` of migration 001 refuses a repository of another tenant behind that. The
-// unique key `(repository_id, commit_sha)` is what makes a commit overridden once per repository, so the same commit can carry an
-// override in the repositories of two tenants (or of one) independently.
+// The statements that record a per-commit override (E15-S05) and remove one (E15-S06). The insert names the installation of the tenant in
+// the row it writes, and the composite foreign key `(repository_id, installation_id)` of migration 001 refuses a repository of another
+// tenant behind that. The unique key `(repository_id, commit_sha)` is what makes a commit overridden once per repository, so the same
+// commit can carry an override in the repositories of two tenants (or of one) independently; it holds the rows that exist, not the
+// history (that is the audit log), so a commit whose override was removed can be overridden again. The delete names the installation
+// and the repository next to the id, so an override of another tenant or of another repository is never found.
 
 /** An override to store: the commit is a lower-case full SHA and the reason is already cleaned. */
 export interface NewCommitOverrideRow {
@@ -48,4 +50,31 @@ export async function insertCommitOverride(
     .returning(['id', 'created_at'])
     .executeTakeFirst();
   return stored === undefined ? undefined : { id: stored.id, createdAt: stored.created_at };
+}
+
+/** The override a removal took out, as the audit row and the re-evaluation need it. */
+export interface RemovedCommitOverride {
+  /** The full SHA, in lower case, the override was for. */
+  readonly commitSha: string;
+}
+
+/**
+ * Removes the override `overrideId` of the repository `repositoryId` of the tenant for good (`where id = $1 and repository_id = $2 and
+ * installation_id = $3`; the runtime role holds `DELETE` on the table).
+ * @returns the commit the override was for, or undefined when the repository of the tenant has no such override: another tenant's,
+ * another repository's, an unknown one and one removed already (by a simultaneous call too) are the same answer.
+ */
+export async function deleteCommitOverride(
+  trx: Transaction<Database>,
+  scope: TenantScope,
+  target: { readonly repositoryId: number; readonly overrideId: number },
+): Promise<RemovedCommitOverride | undefined> {
+  const removed = await trx
+    .deleteFrom('commit_overrides')
+    .where('id', '=', target.overrideId)
+    .where('repository_id', '=', target.repositoryId)
+    .where('installation_id', '=', scope.installationId)
+    .returning('commit_sha')
+    .executeTakeFirst();
+  return removed === undefined ? undefined : { commitSha: removed.commit_sha };
 }

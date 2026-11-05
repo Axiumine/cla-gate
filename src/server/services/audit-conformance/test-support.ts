@@ -27,6 +27,17 @@ const REPOSITORY = { type: 'repository', id: 9000 } as const;
 const ALLOWLIST_ENTRY = { type: 'allowlist_entry', id: 31 } as const;
 const COMMIT_OVERRIDE = { type: 'commit_override', id: 31 } as const;
 
+/** The two commits an override call site writes a row for (E15-S05, E15-S06): a SHA-1 id and a SHA-256 one. */
+function overrideFixtures(action: 'commit_override.created' | 'commit_override.deleted'): readonly AuditFixture[] {
+  return ['a1b2c3d4e5f60718293a4b5c6d7e8f9012345678', '0123456789abcdef'.repeat(4)].map(
+    (commitSha): AuditFixture => ({
+      action,
+      subject: COMMIT_OVERRIDE,
+      metadata: { repository_id: 12, commit_sha: commitSha },
+    }),
+  );
+}
+
 /** The three entries an allowlist call site writes a row for (E14-S06, E14-S07): one that covers the installation, one of a repository, and `org_members`. */
 function allowlistFixtures(action: 'allowlist_entry.created' | 'allowlist_entry.deleted'): readonly AuditFixture[] {
   return [
@@ -177,18 +188,8 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
     { action: 'repository.enabled', subject: REPOSITORY, metadata: { repository_id: 12, document_id: null } },
     { action: 'repository.disabled', subject: REPOSITORY, metadata: { repository_id: 12 } },
   ],
-  'services/commit-override-record.ts#commit_override.created': [
-    {
-      action: 'commit_override.created',
-      subject: COMMIT_OVERRIDE,
-      metadata: { repository_id: 12, commit_sha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678' },
-    },
-    {
-      action: 'commit_override.created',
-      subject: COMMIT_OVERRIDE,
-      metadata: { repository_id: 12, commit_sha: '0123456789abcdef'.repeat(4) },
-    },
-  ],
+  'services/commit-override-record.ts#commit_override.created': overrideFixtures('commit_override.created'),
+  'services/commit-override-remove.ts#commit_override.deleted': overrideFixtures('commit_override.deleted'),
   'services/allowlist-entry-create.ts#allowlist_entry.created': allowlistFixtures('allowlist_entry.created'),
   'services/allowlist-entry-remove.ts#allowlist_entry.deleted': allowlistFixtures('allowlist_entry.deleted'),
   'services/repository-audit.ts#repository.added|repository.removed|repository.renamed': [

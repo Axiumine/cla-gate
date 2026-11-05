@@ -7,7 +7,8 @@ import type { SweepRepositoryReason } from './repository-jobs.ts';
 // numbers, the idempotency keys and the question asked of a stored result. The statements are in services/affected-prs-queries.ts
 // and the sends in services/affected-prs.ts. An action that changes what covers a contributor (a revoked signature, an override
 // added or taken away) re-evaluates the open pull requests it can change, one `evaluate-pr` job each, and above this many it sends
-// one `sweep-repository` job for each repository instead, which lists the open pull requests itself (E07-S09).
+// one `sweep-repository` job for each repository instead, which lists the open pull requests itself (E07-S09). The removal of an override
+// (E15-S06) asks which stored results rest on it.
 
 /** The most pull requests one action evaluates one by one; one more and the repositories are swept instead. */
 export const MAX_AFFECTED_PULL_REQUESTS = 100;
@@ -46,4 +47,16 @@ export function signatureBasisNeedles(signatureId: number, githubId: GithubId): 
     JSON.stringify({ actors: [{ githubId, covered: true, basis: { kind: 'signature' } }] }),
     JSON.stringify({ actors: [{ covered: true, basis: { kind: 'signature', signatureId } }] }),
   ];
+}
+
+/**
+ * The SQL/JSON path that keeps the stored results (E08-S01) which list a commit as waived by an override: an entry of `unlinked` whose
+ * `sha` is the variable `$sha` and whose `overrideId` is not null. The override is not named by its id: an entry waived by any
+ * override of the commit stands on a fact the removal of the override takes away. Read with {@link overriddenCommitVars}.
+ */
+export const OVERRIDDEN_COMMIT_PATH = '$.unlinked[*] ? (@.sha == $sha && @.overrideId != null)';
+
+/** The variables of {@link OVERRIDDEN_COMMIT_PATH} as a JSON document: `sha` is the commit, in lower case as the engine stores it. */
+export function overriddenCommitVars(sha: string): string {
+  return JSON.stringify({ sha });
 }

@@ -128,6 +128,8 @@ const SCOPED_QUERY_NAMES = [
   'services/signature-revoke-queries.ts findSignatureToRevoke',
   'services/signature-revoke-queries.ts markSignatureRevoked',
   'services/commit-override-queries.ts insertCommitOverride',
+  'services/commit-override-queries.ts deleteCommitOverride',
+  'services/commit-override-list-queries.ts listCommitOverrides',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

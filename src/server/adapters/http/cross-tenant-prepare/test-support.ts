@@ -114,6 +114,44 @@ export async function overridable(db: Kysely<Database>, target: MatrixTarget): P
     .execute();
 }
 
+/** The number of the last override {@link deletable} made up: the commit of the next one is one more, far from the commits of the worlds. */
+let lastMatrixOverride = 0x7000_0000;
+
+/**
+ * Makes the removal of a commit override succeed whoever asks first (E15-S06): the repository of `target` enforces the document of
+ * `target` (the role the call needs is the one that document asks for) and has an override of a commit made up for the purpose, which the
+ * call before it used up. The override sits under an id the URL of the case cannot know, so the case reads it with {@link newestOverrideId}.
+ * No pull request of the tenant has a result, so the call sends no job (the world has no queue); the jobs are shown by the tests of the
+ * route (commit-override-remove-jobs.test.ts).
+ */
+export async function deletable(db: Kysely<Database>, target: MatrixTarget): Promise<void> {
+  await enforcing(db, target);
+  const person = await db.selectFrom('users').select('id').orderBy('id').limit(1).executeTakeFirstOrThrow();
+  lastMatrixOverride += 1;
+  await db
+    .insertInto('commit_overrides')
+    .values({
+      installation_id: installationRowIdSchema.parse(target.installationId),
+      repository_id: target.repositoryId,
+      commit_sha: lastMatrixOverride.toString(16).padStart(40, '0'),
+      created_by: person.id,
+      reason: 'Made up by the matrix',
+    })
+    .execute();
+}
+
+/** The id of the newest override of the repository of `target`, the one {@link deletable} left. */
+export async function newestOverrideId(db: Kysely<Database>, target: MatrixTarget): Promise<number> {
+  const newest = await db
+    .selectFrom('commit_overrides')
+    .select('id')
+    .where('repository_id', '=', target.repositoryId)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirstOrThrow();
+  return newest.id;
+}
+
 /**
  * Makes the add of an allowlist entry succeed whoever asks first (E14-S06): the add is `org_members`, which exists once per scope, so
  * the `org_members` entries of the tenant that earlier calls left are removed (the entries the world seeds stay: the removal of one is

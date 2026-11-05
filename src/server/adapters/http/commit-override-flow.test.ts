@@ -1,67 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { parseStoredDetails } from '../../../shared/pr-evaluation-details.ts';
 import { evaluatePr } from '../../services/evaluate-pr/evaluate-pr.ts';
 import { account, commit, commitSha, pullRequest } from '../../services/github-pull-contract/test-support.ts';
 import { sentJobs } from '../../services/jobs-fixture/test-support.ts';
 import { overrideOf, recordAs } from './commit-override-fixture/test-support.ts';
+import {
+  type FlowWorld,
+  FULL_NAME,
+  storedEvaluation,
+  summaryOf,
+  unlinkedWorld,
+} from './commit-override-flow-fixture/test-support.ts';
 import { pointAt } from './repository-document-fixture/test-support.ts';
 import { enableAs } from './repository-enable-fixture/test-support.ts';
-import { COVERED, flowWorld, UNCOVERED } from './repository-flow-fixture/test-support.ts';
+import { COVERED, UNCOVERED } from './repository-flow-fixture/test-support.ts';
 
 // Recording an override, from the click to the Check Runs (E15-S05), with GitHub stubbed by MSW behind the real Octokit adapter, the
 // jobs run in-process in the order the queue would, the real engine and the real reporter. The first commit of the pull request COVERED
 // (opened by tenant 1's signer) and of UNCOVERED (opened by someone who signed nothing) has an author whose email GitHub cannot link
 // to an account, so both fail for it; the override waives that identity and nothing else.
-
-type FlowWorld = Awaited<ReturnType<typeof flowWorld>>;
-
-const FULL_NAME = 'org-1/repo';
-
-/** The pull requests of tenant 1 as the scenario needs them: the first commit of each has an author GitHub cannot link. */
-async function unlinkedWorld(): Promise<FlowWorld> {
-  const world = await flowWorld();
-  const { t1, people, github } = world;
-  const signer = account(people.member1.githubId);
-  const stranger = account(people.outsider.githubId);
-  github.setPullRequestCommits(t1.githubInstallationId, FULL_NAME, COVERED, [
-    commit(1, { author: null, committer: signer }),
-    commit(2, { author: signer, committer: signer }),
-  ]);
-  github.setPullRequestCommits(t1.githubInstallationId, FULL_NAME, UNCOVERED, [
-    commit(3, { author: null, committer: stranger }),
-    commit(4, { author: stranger, committer: stranger }),
-  ]);
-  return world;
-}
-
-/** The newest stored evaluation of a pull request: its result and the details the engine stored. */
-async function storedEvaluation(world: FlowWorld, repositoryId: number, prNumber: number) {
-  const row = await world.db
-    .selectFrom('pr_evaluations')
-    .select(['result', 'details'])
-    .where('repository_id', '=', repositoryId)
-    .where('pr_number', '=', prNumber)
-    .orderBy('updated_at', 'desc')
-    .orderBy('id', 'desc')
-    .executeTakeFirstOrThrow();
-  const stored = parseStoredDetails(row.details);
-  if (!stored.ok) {
-    throw new Error(`the details of pull request ${prNumber} are not the stored shape`);
-  }
-  return { result: row.result, details: stored.details };
-}
-
-/** The summary of the last write to the `license/cla` run on the head of the pull request. */
-async function summaryOf(world: FlowWorld, prNumber: number): Promise<string | undefined> {
-  const [run] = await world.github.client.listCheckRunsForRef(
-    world.t1.githubInstallationId,
-    FULL_NAME,
-    String(world.heads.get(prNumber)),
-  );
-  return world.github.checkRunWrites.findLast((record) => record.id === run?.id)?.write.summary;
-}
 
 const signatureCount = async (world: FlowWorld) =>
   (await world.db.selectFrom('signatures').select('id').execute()).length;

@@ -249,6 +249,8 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /api/repositories/:repositoryId/allowlist-entries',
     'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
     'POST /api/repositories/:repositoryId/commit-overrides',
+    'GET /api/repositories/:repositoryId/commit-overrides',
+    'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
     'GET /api/meta',
     'GET /api/setup/status',
     'GET /api/installations/:installationId/audit-log',
