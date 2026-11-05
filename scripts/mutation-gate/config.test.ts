@@ -5,6 +5,7 @@ import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { expect, test } from 'vitest';
 import { z } from 'zod';
+import { sourceTree } from '../../src/server/source-tree/test-support.ts';
 import vitestConfig from '../../vitest.config.ts';
 import { scriptsProject, serverProject, webProject } from '../../vitest.projects.ts';
 import vitestStrykerConfig from '../../vitest.stryker.config.ts';
@@ -64,8 +65,11 @@ const manifest = z
   .object({ scripts: z.record(z.string(), z.string()), devDependencies: z.record(z.string(), z.string()) })
   .parse(JSON.parse(repoText('package.json')));
 // `api` supplies the PartialStrykerOptions type that stryker.config.mjs names in its JSDoc (Knip: an unlisted dependency otherwise).
+// `instrumenter` is what instrumented-regex.test.ts runs over the mutated files; `core` installs the same package, and a
+// different version of it than the one Stryker runs would guard against mutants that are not the ones of the run.
 const PACKAGES = [
   '@stryker-mutator/core',
+  '@stryker-mutator/instrumenter',
   '@stryker-mutator/vitest-runner',
   '@stryker-mutator/typescript-checker',
   '@stryker-mutator/api',
@@ -125,6 +129,10 @@ test('the run is incremental, its file and the temporary directory are git-ignor
   const ignored = repoText('.gitignore').split('\n');
   expect(ignored).toContain('reports/');
   expect(ignored).toContain(`${strykerConfig.tempDirName}/`);
+  // The tests that scan the source find the copy Stryker runs them in by that name and read the repository instead.
+  expect(sourceTree(`/repository/${strykerConfig.tempDirName}/sandbox-AbC123/src/server`)).toBe(
+    '/repository/src/server',
+  );
 });
 
 test('the mutated files are all server and shared code except tests, test-support and global-setup files', () => {

@@ -2,6 +2,13 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { compileFunction } from 'node:vm';
+import type { Mutant } from '@stryker-mutator/api/core';
+import type { Logger } from '@stryker-mutator/api/logging';
+import { Instrumenter } from '@stryker-mutator/instrumenter';
+import { z } from 'zod';
+import { sourceTree } from '../../src/server/source-tree/test-support.ts';
 import type { Env } from '../ci/lib/env.ts';
 import { expression } from '../ci/lib/test-support.ts';
 import { ROOT } from '../semgrep-rules/test-support.ts';
@@ -123,3 +130,92 @@ export function githubOf(runs: readonly unknown[], jobs: Readonly<Record<number,
 /** The condition every step of a mutation leg after `decide` carries, and the form of it that still lets a step run after a failure. */
 export const GATE = expression("steps.decide.outputs.skip != 'true'");
 export const ALWAYS_GATE = expression("always() && steps.decide.outputs.skip != 'true'");
+
+// --------------------------------------------------------------------------- Stryker's instrumenter (the regular expression guard)
+
+const quiet = (): void => undefined;
+const never = (): boolean => false;
+
+/** A logger that says nothing: the instrumenter writes a line for each run otherwise. */
+const SILENT: Logger = {
+  isTraceEnabled: never,
+  isDebugEnabled: never,
+  isInfoEnabled: never,
+  isWarnEnabled: never,
+  isErrorEnabled: never,
+  isFatalEnabled: never,
+  trace: quiet,
+  debug: quiet,
+  info: quiet,
+  warn: quiet,
+  error: quiet,
+  fatal: quiet,
+};
+
+/** A file to instrument: the name it is known by and its text. */
+export interface Source {
+  readonly name: string;
+  readonly content: string;
+}
+
+/** The mutants Stryker's own instrumenter makes of `sources`, with the options of a run: no mutator left out, no plugin. */
+export async function mutantsOf(sources: readonly Source[]): Promise<readonly Mutant[]> {
+  const { mutants } = await new Instrumenter(SILENT).instrument(
+    sources.map(({ name, content }) => ({ name, content, mutate: true })),
+    { plugins: null, excludedMutations: [], ignorers: [] },
+  );
+  return mutants;
+}
+
+/**
+ * The regular expression literals that a mutant turns into a SyntaxError, one line each: file, line, the mutant and the
+ * engine's message. Stryker writes every mutant of a file into the file behind a switch, so the module the tests load holds all
+ * of them whichever one is active, and a literal that does not compile fails the load of the module and with it the initial test
+ * run (`\v` became `\V`, which the `u` flag rejects: the dry run of 2026-11-04). A pattern passed to `new RegExp("...")` as a
+ * string fails only while its mutant is active, which kills that mutant and fails nothing else, so only literals are checked.
+ */
+export function invalidRegexMutants(mutants: readonly Mutant[]): string[] {
+  return mutants.flatMap((mutant) => {
+    if (mutant.mutatorName !== 'Regex' || !mutant.replacement.startsWith('/')) {
+      return [];
+    }
+    try {
+      // Compiled, never run: the engine parses the literal as it does when it loads the module, and the text is a mutant of this
+      // repository's own source.
+      compileFunction(`return ${mutant.replacement};`);
+      return [];
+    } catch (error) {
+      // Stryker counts lines from 0.
+      return [`${mutant.fileName}:${mutant.location.start.line + 1}: ${mutant.replacement}: ${String(error)}`];
+    }
+  });
+}
+
+/**
+ * The text of a file of the repository as it is written. Stryker runs the tests in a copy of the repository in which the mutated
+ * files are already instrumented, and instrumenting that text again would not be the run that the guard stands for, so this reads
+ * the repository itself (`sourceTree`).
+ */
+export function originalText(file: string): string {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- test helper: `file` is a path the test took from the listing of this repository's own folders
+  return fs.readFileSync(path.join(sourceTree(ROOT), file), 'utf8');
+}
+
+/** The mutate globs of one scope of stryker.config.mjs, read from the config itself so that a new glob is guarded at once. */
+async function mutateGlobs(scope: 'server' | 'scripts'): Promise<string[]> {
+  // The config is plain JavaScript outside this project, so a literal import would have no types.
+  // eslint-disable-next-line no-unsanitized/method -- the specifier is built from this repository's own root directory and a fixed file name
+  const loaded: unknown = await import(pathToFileURL(path.join(ROOT, 'stryker.config.mjs')).href);
+  const { strykerOptions } = z
+    .object({ strykerOptions: z.custom<(scope: string) => unknown>((value) => typeof value === 'function') })
+    .parse(loaded);
+  return z.object({ mutate: z.array(z.string()) }).parse(strykerOptions(scope)).mutate;
+}
+
+/** Every file a full run of the gate mutates, relative to the repository root: the server scope (all shards) and the scripts scope. */
+export async function filesTheGateMutates(): Promise<string[]> {
+  return [
+    ...mutated(await mutateGlobs('server'), ['src/server', 'src/shared']),
+    ...mutated(await mutateGlobs('scripts'), ['scripts']),
+  ];
+}
