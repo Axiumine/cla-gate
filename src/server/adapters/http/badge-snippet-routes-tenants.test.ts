@@ -47,7 +47,8 @@ test("an installation id of one tenant with the repository of the other is 404 f
   ];
   expect(crossed.map((answer) => [answer.statusCode, errorCodeOf(answer)])).toEqual(Array(4).fill([404, 'not_found']));
   for (const answer of crossed) {
-    expect(answer.body).not.toContain(String(t2.plain.githubRepoId));
+    // Without the request id: a random UUID can hold any short run of digits, and the id is not what is asked about.
+    expect(withoutRequestId(answer)).not.toContain(String(t2.plain.githubRepoId));
   }
 });
 
