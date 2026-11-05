@@ -49,11 +49,12 @@ test('a bare slash is the root, not an empty path', () => {
   expect(switchTarget([{ to: '/', roles: ['org_admin'] }], START, '/', 'org_admin')).toBe('/');
 });
 
-test('the screens of the app are the overview and the allowlist, for both roles, and the documents, for an org admin; a tenant starts on the overview', () => {
+test('the screens of the app are the overview, the allowlist and the signatures, for both roles, and the documents, for an org admin; a tenant starts on the overview', () => {
   expect(TENANT_SECTIONS).toEqual([
     { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
     { to: '/installations/$installationId/documents', roles: ['org_admin'] },
     { to: '/installations/$installationId/allowlist', roles: ['org_admin', 'repo_admin'] },
+    { to: '/installations/$installationId/signatures', roles: ['org_admin', 'repo_admin'] },
   ]);
   expect(TENANT_START).toBe('/installations/$installationId');
 });
@@ -73,10 +74,17 @@ test('a repo admin keeps the allowlist when the other installation has it for th
   );
 });
 
+test('a repo admin keeps the signatures when the other installation has them for them', () => {
+  expect(switchTarget(TENANT_SECTIONS, TENANT_START, '/installations/$installationId/signatures', 'repo_admin')).toBe(
+    '/installations/$installationId/signatures',
+  );
+});
+
 test('every screen has its words in the navigation', () => {
   expect(TENANT_SECTIONS.map((section) => sectionLabel(section.to))).toEqual([
     'tenant.nav.overview',
     'tenant.nav.documents',
     'tenant.nav.allowlist',
+    'tenant.nav.signatures',
   ]);
 });

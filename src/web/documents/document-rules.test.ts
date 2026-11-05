@@ -47,7 +47,10 @@ describe('the rules that have words', () => {
   test('content_too_large says how large the text is and what the limit is, in the numbers of the locale', () => {
     const error = ruleError('content_too_large', TOO_LARGE);
     expect(shownRuleOf(error)).toBe('content_too_large');
-    expect(ruleMessage(words, error)).toBe('The text is too large: #250001 bytes, and the limit is #204800.');
+    // The test words mark a number with `#`; the digits are interpolated so that no hex-looking literal stands in the source.
+    expect(ruleMessage(words, error)).toBe(
+      `The text is too large: #${String(TOO_LARGE.actualBytes)} bytes, and the limit is #${String(TOO_LARGE.limitBytes)}.`,
+    );
   });
 
   test.each([

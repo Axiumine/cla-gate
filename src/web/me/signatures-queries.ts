@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { ownSignaturesRoute } from '../../shared/own-signatures.ts';
-import { type ApiClient, ApiError } from '../api/index.ts';
+import type { ApiClient } from '../api/index.ts';
 
 // The query of the "my signatures" screen (E18-S03): one page of the signed-in person's own signatures.
 
@@ -11,8 +11,6 @@ import { type ApiClient, ApiError } from '../api/index.ts';
  * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
  */
 export const MY_SIGNATURES_PAGE_SIZE = 25;
-
-const BAD_REQUEST = 400;
 
 /**
  * `GET /api/me/signatures?limit=25&cursor=` (E13-S06). The request names a page and nothing else: the person is the one of the
@@ -28,12 +26,4 @@ export function mySignaturesQueryOptions(client: ApiClient, cursor: string | und
     staleTime: 0,
     placeholderData: keepPreviousData,
   });
-}
-
-/**
- * Whether the server refused the request itself. The only thing the screen varies in it is the cursor (the page size is a
- * constant in range), so a `400` means the cursor in the address is not one the server made.
- */
-export function isRefusedCursor(error: unknown): boolean {
-  return error instanceof ApiError && error.status === BAD_REQUEST;
 }

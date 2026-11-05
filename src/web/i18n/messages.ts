@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { allowlistMessages } from './messages-allowlist.ts';
 import { documentMessages } from './messages-documents.ts';
+import { signatureMessages } from './messages-signatures.ts';
 
 /**
  * The English message catalog (E17-S02): every string the user can read, under a dotted key. A flat `as const` object, so
@@ -65,6 +66,7 @@ export const messages = {
   'errors.uri_too_long': 'The address of the request was too long.',
   ...allowlistMessages,
   ...documentMessages,
+  ...signatureMessages,
   'footer.licence': 'Licensed under {licence}',
   'footer.sourceCode': 'Source code',
   'installation.facts.repositories': 'Repositories',

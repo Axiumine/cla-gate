@@ -10,7 +10,8 @@ import type { PlainMessageKey } from '../i18n/index.ts';
 export type TenantTo =
   | '/installations/$installationId'
   | '/installations/$installationId/documents'
-  | '/installations/$installationId/allowlist';
+  | '/installations/$installationId/allowlist'
+  | '/installations/$installationId/signatures';
 
 /** One screen below an installation and the roles that can open it. */
 export interface TenantSection<To extends string> {
@@ -28,12 +29,14 @@ export const TENANT_START: TenantTo = '/installations/$installationId';
  * The screens below an installation, with the roles that can open each. The overview is for every role in the installation; the list
  * of the documents of the installation is for an org admin (E18-S05: a repo admin reaches the documents of a repository from the
  * repository screen). The allowlist is for both roles (E18-S06): an org admin manages the whole installation and every repository, a repo
- * admin the repositories they administer.
+ * admin the repositories they administer. The signatures are for both roles too (E18-S07): an org admin reads every document, a repo admin the
+ * documents of their repositories.
  */
 export const TENANT_SECTIONS: readonly TenantSection<TenantTo>[] = [
   { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
   { to: '/installations/$installationId/documents', roles: ['org_admin'] },
   { to: '/installations/$installationId/allowlist', roles: ['org_admin', 'repo_admin'] },
+  { to: '/installations/$installationId/signatures', roles: ['org_admin', 'repo_admin'] },
 ];
 
 /**
@@ -48,6 +51,8 @@ export function sectionLabel(to: TenantTo): PlainMessageKey {
       return 'tenant.nav.documents';
     case '/installations/$installationId/allowlist':
       return 'tenant.nav.allowlist';
+    case '/installations/$installationId/signatures':
+      return 'tenant.nav.signatures';
   }
 }
 

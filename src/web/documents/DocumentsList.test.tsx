@@ -169,7 +169,7 @@ test('the list, with a draft badge and an unpublished document, passes axe', asy
   await expectNoA11yViolations(container);
 });
 
-test('the navigation of the tenant has the documents for an org admin, and a repo admin has the overview and the allowlist only', async () => {
+test('the navigation of the tenant has the documents for an org admin, and a repo admin has the overview, the allowlist and the signatures only', async () => {
   serveDocuments({ tenants: [tenantOf(globex(), 'globex/api')] });
   renderDocuments('/installations/6');
   await screen.findByRole('heading', { level: 1, name: 'globex' });
@@ -178,7 +178,7 @@ test('the navigation of the tenant has the documents for an org admin, and a rep
     within(nav)
       .getAllByRole('link')
       .map((link) => link.textContent),
-  ).toEqual([messages['tenant.nav.overview'], messages['tenant.nav.allowlist']]);
+  ).toEqual([messages['tenant.nav.overview'], messages['tenant.nav.allowlist'], messages['tenant.nav.signatures']]);
 });
 
 test('the navigation takes an org admin from the overview to the documents', async () => {

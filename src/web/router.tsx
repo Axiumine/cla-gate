@@ -25,6 +25,8 @@ import { SetupCallbackPage } from './setup/SetupCallbackPage.tsx';
 import { SetupPage } from './setup/SetupPage.tsx';
 import { parseGithubRepoId, signSearchSchema } from './sign/params.ts';
 import { SignPage } from './sign/SignPage.tsx';
+import { SignaturesRoute } from './signatures/route-components.tsx';
+import { signaturesSearchSchema } from './signatures/signatures-search.ts';
 import { NotFoundPage, RouterErrorComponent } from './states/index.ts';
 
 // The route tree of the app (E17-S08), written in code: no generator, no generated file. Every route spreads
@@ -197,6 +199,16 @@ const allowlistRoute = createRoute({
   component: AllowlistRoute,
 });
 
+// The signatures of a tenant (E18-S07): the search and the page of `?q=&state=&document=&cursor=`, so a filtered view is shared by its address.
+// An org admin reads every document, a repo admin the documents of their repositories: the server decides on every request.
+const signaturesRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: 'signatures',
+  ...tenantPage('signatures.title'),
+  validateSearch: signaturesSearchSchema,
+  component: SignaturesRoute,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -207,7 +219,13 @@ const routeTree = rootRoute.addChildren([
   signRoute,
   mySignaturesRoute,
   installationsRoute,
-  installationRoute.addChildren([installationHomeRoute, documentsRoute, documentRoute, allowlistRoute]),
+  installationRoute.addChildren([
+    installationHomeRoute,
+    documentsRoute,
+    documentRoute,
+    allowlistRoute,
+    signaturesRoute,
+  ]),
 ]);
 
 /**
