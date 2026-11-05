@@ -63,6 +63,7 @@ const DETAIL_CODES = ['pull_requests_not_determined', 'evaluation_failed'] as co
  * What `merge_group_evaluations.details` holds (version 1, strict): the outcome, the code of a failure that has no verdict on the
  * pull requests, and the pull requests that were evaluated with their outcome and failure codes. Numeric ids and words of a closed
  * set only: no login, name, email or text of a delivery. At most {@link MAX_MERGE_GROUP_PULL_REQUESTS} entries.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export const mergeGroupDetailsSchema = z.strictObject({
   version: z.literal(1),

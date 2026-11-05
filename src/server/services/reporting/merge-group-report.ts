@@ -4,12 +4,8 @@ import { parseGithubId } from '../../../shared/github-id.ts';
 import { TenantMismatchError } from '../../adapters/db/tenant-scope.ts';
 import type { MergeGroupResult } from '../../domain/reporting/check-view.ts';
 import { findInstallationByGithubId } from '../installation-queries.ts';
-import {
-  findGroupRow,
-  GroupRowMissingError,
-  MergeGroupDestroyedError,
-  recordGroupCheckRun,
-} from '../merge-group/merge-group-rows.ts';
+import { recordGroupCheckRun } from '../merge-group/merge-group-progress.ts';
+import { findGroupRow, GroupRowMissingError, MergeGroupDestroyedError } from '../merge-group/merge-group-rows.ts';
 import type { MergeGroupTarget } from '../ports/reporter.ts';
 import { findRepositoryByGithubId } from '../repository-queries.ts';
 import type { RunLocator } from './check-run-writer.ts';

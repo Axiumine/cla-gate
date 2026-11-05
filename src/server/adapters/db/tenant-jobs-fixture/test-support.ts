@@ -16,14 +16,14 @@ import {
 import { readAllowlist, readOverrides, readPolicy } from '../../../services/evaluate-pr/policy-facts.ts';
 import { readSignatures } from '../../../services/evaluate-pr/signature-facts.ts';
 import { unfinishedPullRequests } from '../../../services/finalise/finalise-rows.ts';
+import { markGroupDestroyed } from '../../../services/merge-group/merge-group-destroyed.ts';
+import { failGroupEvaluation } from '../../../services/merge-group/merge-group-failure.ts';
 import {
-  failGroupEvaluation,
-  findGroupRow,
   finishGroupEvaluation,
-  markGroupDestroyed,
   recordGroupCheckRun,
   startGroupEvaluation,
-} from '../../../services/merge-group/merge-group-rows.ts';
+} from '../../../services/merge-group/merge-group-progress.ts';
+import { findGroupRow } from '../../../services/merge-group/merge-group-rows.ts';
 import { evaluationStates, staleEvaluations } from '../../../services/sweep/sweep-rows.ts';
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
@@ -307,6 +307,8 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
         return found === null ? [] : ownersOfGroups(db, [found.id]);
       },
     }),
+  },
+  'services/merge-group/merge-group-progress.ts': {
     startGroupEvaluation: scoped({
       refusal: isForeignKeyViolation,
       run: async (db, scope, ids) => {
@@ -347,6 +349,8 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
         );
       },
     }),
+  },
+  'services/merge-group/merge-group-failure.ts': {
     failGroupEvaluation: scoped({
       refusal: isForeignKeyViolation,
       run: async (db, scope, ids) => {
@@ -358,6 +362,8 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
         return ownersOfGroups(db, idsOf(failed));
       },
     }),
+  },
+  'services/merge-group/merge-group-destroyed.ts': {
     markGroupDestroyed: scoped({
       run: async (db, scope, ids) => {
         const id = await groupOf(db, ids);

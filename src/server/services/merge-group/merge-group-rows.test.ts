@@ -3,15 +3,10 @@
 import { expect, test } from 'vitest';
 import { migratedTestDatabase, seedTenant } from '../../adapters/db/test-support.ts';
 import { detailsOfFailure, detailsOfMembers } from '../../domain/merge-group.ts';
-import {
-  failGroupEvaluation,
-  findGroupRow,
-  finishGroupEvaluation,
-  type GroupKey,
-  markGroupDestroyed,
-  recordGroupCheckRun,
-  startGroupEvaluation,
-} from './merge-group-rows.ts';
+import { markGroupDestroyed } from './merge-group-destroyed.ts';
+import { failGroupEvaluation } from './merge-group-failure.ts';
+import { finishGroupEvaluation, recordGroupCheckRun, startGroupEvaluation } from './merge-group-progress.ts';
+import { findGroupRow, type GroupKey } from './merge-group-rows.ts';
 
 // The rows of `merge_group_evaluations` (E22-S01): one per head SHA of a repository, written by the job and by the dead-letter
 // handler, never again once the group is destroyed. The cross-tenant checks of every function are in the tenant registry.

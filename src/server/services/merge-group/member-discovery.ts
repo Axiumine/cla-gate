@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { MAX_MERGE_GROUP_COMMITS, MAX_MERGE_GROUP_PULL_REQUESTS } from '../../domain/merge-group.ts';
-import { type ListingScope, readHistory } from '../evaluate-pr/commit-listing.ts';
+import { type ListingScope, readHistory } from '../evaluate-pr/commit-history.ts';
 import { mapConcurrently } from '../map-concurrently.ts';
 
 // Which pull requests a merge queue's group holds (E22-S01). A merge group cannot be read back from GitHub: the webhook gives its

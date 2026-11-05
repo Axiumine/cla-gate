@@ -20,6 +20,7 @@ type SyncInstallationJob = Extract<Job, { readonly type: 'sync-installation' }>;
 /**
  * The jobs that are about a tenant's repository, the ones the filter applies to: the pull request, check and comment
  * events. `sync-installation` and `revoke-user-sessions` are how installations and revocations are learned, so they bypass it.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export type TenantJob = Exclude<Job, { readonly type: 'sync-installation' | 'revoke-user-sessions' }>;
 
@@ -31,7 +32,10 @@ export type TenantSubject = Pick<TenantJob, 'githubInstallationId' | 'githubRepo
 
 const BYPASSING_JOBS: ReadonlySet<Job['type']> = new Set(['sync-installation', 'revoke-user-sessions']);
 
-/** Whether the filter applies to `job`. `installation`, `installation_repositories` and `github_app_authorization` do not pass through it. */
+/**
+ * Whether the filter applies to `job`. `installation`, `installation_repositories` and `github_app_authorization` do not pass through it.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
+ */
 export function isTenantJob(job: Job): job is TenantJob {
   return !BYPASSING_JOBS.has(job.type);
 }

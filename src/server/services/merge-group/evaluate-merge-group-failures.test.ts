@@ -7,8 +7,8 @@ import { evaluateWorld, FULL_NAME, INSTALLATION } from '../evaluate-pr/test-supp
 import { commit, pullRequest } from '../github-pull-contract/test-support.ts';
 import { GitHubRateLimitedError, GitHubResponseError, GitHubUnavailableError } from '../ports/github-errors.ts';
 import { ReportRejectedError } from '../ports/reporter.ts';
-import { MergeGroupMemberMovedError } from './evaluate-merge-group.ts';
-import { markGroupDestroyed } from './merge-group-rows.ts';
+import { MergeGroupMemberMovedError } from './judge-merge-group.ts';
+import { markGroupDestroyed } from './merge-group-destroyed.ts';
 import { addGroup, destroyGroup, groupJob, groupRows, prHead, runGroup } from './test-support.ts';
 
 // What goes wrong in the `evaluate-merge-group` job (E22-S01): nothing that GitHub, the database or the reporter fail at ever

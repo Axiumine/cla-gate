@@ -4,7 +4,7 @@ import type { Logger } from 'pino';
 import type { EnvelopeOf } from '../../domain/job-envelope.ts';
 import { loadTenant, resolveRepository } from '../evaluate-pr/evaluation-tenant.ts';
 import type { JobHandler, JobOutcome } from '../job-registry.ts';
-import { failGroupEvaluation } from '../merge-group/merge-group-rows.ts';
+import { failGroupEvaluation } from '../merge-group/merge-group-failure.ts';
 import { skipped, unlessUnavailable } from './dead-letter-failure.ts';
 import type { FailurePorts, FailurePortsFor } from './dead-letter-ports.ts';
 

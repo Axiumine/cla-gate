@@ -5,7 +5,7 @@ import { parseGithubId } from '../../../shared/github-id.ts';
 import { seedTenant } from '../../adapters/db/test-support.ts';
 import { FULL_NAME, INSTALLATION, REPOSITORY } from '../evaluate-pr/test-support.ts';
 import { commitSha } from '../github-pull-contract/test-support.ts';
-import { startGroupEvaluation } from '../merge-group/merge-group-rows.ts';
+import { startGroupEvaluation } from '../merge-group/merge-group-progress.ts';
 import { GitHubUnavailableError } from '../ports/github-errors.ts';
 import { type DeadWorld, deadWorld } from './test-support.ts';
 

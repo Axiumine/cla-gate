@@ -10,10 +10,16 @@ import { renderParts } from './output-parts.ts';
 // mention of that pull request. No login, name or email is ever read here, so the output is the same whoever the contributors are
 // and it is short enough to be its own minimal output (a 422 cannot be answered with less).
 
-/** The summary of a group whose pull requests could not be determined: the one fixed sentence the story names. */
+/**
+ * The summary of a group whose pull requests could not be determined: the one fixed sentence the story names.
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
+ */
 export const UNDETERMINED_SUMMARY = 'Could not determine the pull requests in this merge group';
 
-/** What a contributor does about a group that cannot be checked: the queue cannot be told to try again (`/recheck` cannot be typed on a group). */
+/**
+ * What a contributor does about a group that cannot be checked: the queue cannot be told to try again (`/recheck` cannot be typed on a group).
+ * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
+ */
 export const REMOVE_AND_ADD_HINT = 'Remove the pull request from the merge queue and add it again';
 
 /** The summary of a group whose evaluation died. */

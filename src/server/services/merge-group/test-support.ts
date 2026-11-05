@@ -35,7 +35,7 @@ export interface Home {
 }
 
 /** The repository of the world of the evaluate-pr tests: tenant 1, installation 5000. */
-export const HOME: Home = { installation: INSTALLATION, repository: REPOSITORY, fullName: FULL_NAME };
+const HOME: Home = { installation: INSTALLATION, repository: REPOSITORY, fullName: FULL_NAME };
 
 /** What a scene is: the group GitHub built, as the webhook names it. */
 export interface Scene extends Home {

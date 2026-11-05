@@ -5,7 +5,7 @@ import type { Database } from '../adapters/db/schema.ts';
 import type { Job } from '../domain/jobs.ts';
 import { deliveryRateLimit } from '../domain/recheck.ts';
 import type { DestroyedGroup } from '../domain/webhook-routing-types.ts';
-import { markGroupDestroyed } from './merge-group/merge-group-rows.ts';
+import { markGroupDestroyed } from './merge-group/merge-group-destroyed.ts';
 import type { JobEnqueuer } from './ports/jobs.ts';
 import { type DeliverySubject, insertDelivery, isProcessed, markDeliveryProcessed } from './webhook-delivery-rows.ts';
 
