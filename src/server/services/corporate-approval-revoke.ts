@@ -6,14 +6,23 @@ import type { Database } from '../adapters/db/schema.ts';
 import { requireManagedAgreement } from './corporate-agreements.ts';
 import { auditApprovalRevoked, auditedOf } from './corporate-approval-audit.ts';
 import { findApprovalRow, getApprovalRow } from './corporate-approval-queries.ts';
+import { reevaluateAfterApprovalRevocation } from './corporate-approval-reevaluate.ts';
 import { revokeApprovalRow, revokeDerivedRows } from './corporate-approval-revoke-queries.ts';
 import type { ApprovalRow } from './corporate-approval-row.ts';
 import { type ApprovalActor, inLockedAgreement } from './corporate-approval-transaction.ts';
 import { CorporateRuleError } from './corporate-rule-error.ts';
+import type { JobEnqueuer } from './ports/jobs.ts';
 
 // Revoking an approval (E21-S03). The revocation is prospective: the approval stays as evidence, marked with when, by whom and why, and
 // stops covering from now on. Revoking a domain or an organisation approval revokes, in the same transaction, every approval of a person
-// that was derived from it by a rule (E21-S04), with one audit row each, so no employee stays covered by a rule that was withdrawn.
+// that was derived from it by a rule (E21-S04), with one audit row each, so no employee stays covered by a rule that was withdrawn. The open pull
+// requests that rested on what was revoked are evaluated again, in the same transaction (E21-S05).
+
+/** What a revocation needs of the world: the database, and the queue the evaluations of the pull requests it changes are sent to. */
+export interface RevokeApprovalDeps {
+  readonly db: Kysely<Database>;
+  readonly enqueuer: JobEnqueuer;
+}
 
 /** What the revocation of an approval did: the approval as it now stands and how many approvals derived from it were revoked with it. */
 export interface RevokedApproval {
@@ -35,18 +44,18 @@ function reasonOf(typed: string | undefined): string | null {
 
 /**
  * Revokes the approval `approvalId` of the manager's agreement `agreementId`, with the reason the manager typed (1 to 500 characters, no
- * address: it is kept for good).
+ * address: it is kept for good), and sends the jobs that evaluate again the open pull requests that rested on it (E21-S05).
  * @throws CorporateRuleError `not_found` (the agreement is not the caller's, or has no such approval: the same answer), `installation_suspended`,
- * `agreement_revoked`, `validation_failed` (the reason) and `already_revoked`.
+ * `agreement_revoked`, `validation_failed` (the reason) and `already_revoked`. Whatever the enqueuer rejects with: the revocation is rolled back.
  */
 export async function revokeApproval(
-  db: Kysely<Database>,
+  deps: RevokeApprovalDeps,
   actor: ApprovalActor,
   at: { readonly agreementId: number; readonly approvalId: number; readonly reason: string | undefined },
 ): Promise<RevokedApproval> {
-  const agreement = await requireManagedAgreement(db, actor.userId, at.agreementId);
+  const agreement = await requireManagedAgreement(deps.db, actor.userId, at.agreementId);
   const reason = reasonOf(at.reason);
-  return inLockedAgreement(db, { agreement, actor }, async ({ trx, scope, audit }) => {
+  return inLockedAgreement(deps.db, { agreement, actor }, async ({ trx, scope, audit }) => {
     const target = { agreementId: agreement.id, approvalId: at.approvalId };
     const approval = await findApprovalRow(trx, scope, target);
     if (approval === null) {
@@ -72,6 +81,13 @@ export async function revokeApproval(
         githubId: revoked.githubId,
       });
     }
+    await reevaluateAfterApprovalRevocation(trx, deps.enqueuer, scope, {
+      documentId: agreement.documentId,
+      agreementId: agreement.id,
+      approvalId: approval.id,
+      kind: approval.kind,
+      derivedRevoked: derived.length,
+    });
     return { approval: await getApprovalRow(trx, scope, target), derivedRevoked: derived.length };
   });
 }

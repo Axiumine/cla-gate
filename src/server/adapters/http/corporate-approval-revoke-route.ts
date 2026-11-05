@@ -23,7 +23,7 @@ export function revokeRoute(app: Routes, deps: Deps): void {
       const body = request.body === undefined ? {} : parseInput(approvalRevokeRequestSchema, request.body);
       const { user } = requireAuth(request);
       const revoked = await revokeApproval(
-        deps.db,
+        { db: deps.db, enqueuer: deps.enqueuer },
         { userId: user.id, githubId: user.githubId },
         { ...ids, reason: body.reason },
       );

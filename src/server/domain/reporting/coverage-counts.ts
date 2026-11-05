@@ -30,7 +30,7 @@ function overriddenCommits(findings: readonly FindingOverride[]): ReadonlySet<st
 
 /**
  * How many contributors each covering basis accounts for. An actor is counted once, under the basis that covers it (a
- * signature or an allowlist rule). A maintainer override waives the unlinked identity of a commit, and such an identity has
+ * signature, an allowlist rule or an approval of a corporate CLA, which is counted and never named). A maintainer override waives the unlinked identity of a commit, and such an identity has
  * no account to count, so `override` counts the commits that have at least one waived identity, each commit once however
  * many of its identities are waived.
  */
@@ -39,6 +39,7 @@ export function coverageCounts(evaluation: CountedEvaluation): CoverageCounts {
   return {
     signature: coveredBy('signature'),
     allowlist: coveredBy('allowlist'),
+    corporate: coveredBy('corporate_approval'),
     override: overriddenCommits(evaluation.findings).size,
   };
 }

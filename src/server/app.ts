@@ -226,7 +226,12 @@ async function registerRoutes(
   await app.register(signContextRoutes, { db });
   await app.register(signRoutes, { db, enqueuer, recordNetworkMetadata: config.recordNetworkMetadata });
   await app.register(ownSignaturesRoutes, { db });
-  await app.register(corporateRoutes, { db, github: options.corporateGitHub ?? corporateGitHubNotWired, enqueuer });
+  await app.register(corporateRoutes, {
+    db,
+    github: options.corporateGitHub ?? corporateGitHubNotWired,
+    enqueuer,
+    clock,
+  });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

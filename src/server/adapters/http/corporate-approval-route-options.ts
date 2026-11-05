@@ -5,6 +5,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { approvalParamsSchema, approvalsParamsSchema } from '../../../shared/corporate-approvals.ts';
 import type { CorporateGitHub } from '../../services/corporate-approval-lookup.ts';
+import type { JobEnqueuer } from '../../services/ports/jobs.ts';
 import type { Database } from '../db/schema.ts';
 import { SIGN_BODY_LIMIT } from './limits.ts';
 import { idText } from './query-values.ts';
@@ -17,13 +18,15 @@ export interface CorporateApprovalRoutesOptions {
   readonly db: Kysely<Database>;
   /** Where the logins of an approval are looked up (E21-S03): the GitHub client port, by numeric id. */
   readonly github: CorporateGitHub;
+  /** Where the evaluations of the pull requests that rested on a revoked approval are sent (E21-S05). */
+  readonly enqueuer: JobEnqueuer;
 }
 
 /** The instance a route is registered on: Fastify with the zod type provider. */
 export type Routes = Parameters<FastifyPluginCallbackZod>[0];
 
-/** What the routes work with: the database, and the GitHub the logins are looked up on. */
-export type Deps = Pick<CorporateApprovalRoutesOptions, 'db' | 'github'>;
+/** What the routes work with: the database, the GitHub the logins are looked up on, and the queue. */
+export type Deps = Pick<CorporateApprovalRoutesOptions, 'db' | 'github' | 'enqueuer'>;
 
 /** The path as text: plain digits for a positive integer, then the same rule as the descriptor's. Anything else is a `400`. */
 export const agreementText = z.object({ agreementId: idText.pipe(approvalsParamsSchema.shape.agreementId) });

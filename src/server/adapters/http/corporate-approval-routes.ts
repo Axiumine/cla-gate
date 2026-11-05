@@ -27,7 +27,7 @@ export const corporateApprovalRoutes: FastifyPluginCallbackZod<CorporateApproval
   options,
   done,
 ) => {
-  const deps = { db: options.db, github: options.github };
+  const deps = { db: options.db, github: options.github, enqueuer: options.enqueuer };
   answerCorporateErrors(app);
   listRoute(app, deps);
   addRoute(app, deps);

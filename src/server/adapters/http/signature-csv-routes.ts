@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { FastifyReply } from 'fastify';
 import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import type { Kysely } from 'kysely';
 import { SIGNATURES_CSV_PATH } from '../../../shared/signature-export.ts';
@@ -8,6 +7,7 @@ import { ExportChangedError, openSignatureExport } from '../../services/export/s
 import type { Clock } from '../../services/ports/clock.ts';
 import type { Database } from '../db/schema.ts';
 import { requireAuth } from './auth-request.ts';
+import { setAttachment } from './csv-attachment.ts';
 import { AppError } from './errors.ts';
 import { setNoStore } from './no-store.ts';
 import { idText } from './query-values.ts';
@@ -21,15 +21,6 @@ export interface SignatureCsvRoutesOptions {
   readonly db: Kysely<Database>;
   /** Where the date in the file name comes from. */
   readonly clock: Clock;
-}
-
-/**
- * Marks the answer as a CSV download under `fileName`, which the caller builds from ids and a date only. A function of its
- * own, for the reason of {@link setNoStore}: the result of `header` is a thenable and is dropped on purpose.
- */
-function setAttachment(reply: FastifyReply, fileName: string): void {
-  void reply.type('text/csv; charset=utf-8');
-  void reply.header('content-disposition', `attachment; filename="${fileName}"`);
 }
 
 /**

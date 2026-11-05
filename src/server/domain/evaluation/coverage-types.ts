@@ -3,10 +3,13 @@
 import type { ExtractedActor } from './actor-types.ts';
 import type { CoveringBasis, EvaluationInput, FailureCode, FixCode, Outcome } from './types.ts';
 
-// E08-S04: what signature and allowlist coverage hands to the composition (E08-S08).
+// E08-S04: what signature and allowlist coverage hands to the composition (E08-S08); E21-S05 adds the corporate approval.
 
 /** The facts coverage reads. Commits, overrides and listing state are deliberately not among them. */
-export type CoverageFacts = Pick<EvaluationInput, 'policy' | 'signatures' | 'allowlist' | 'orgMembers'>;
+export type CoverageFacts = Pick<
+  EvaluationInput,
+  'policy' | 'signatures' | 'allowlist' | 'orgMembers' | 'corporateCovered' | 'corporateOutdated'
+>;
 
 /** The fixes an uncovered actor gets. The ones about commits and listing belong to later stories (E08-S05, E08-S08). */
 export type ActorFixCode = Extract<FixCode, 'sign_cla' | 'allowlist_bot' | 'allowlist_account'>;
@@ -17,10 +20,16 @@ export interface ActorFix {
   readonly githubId: number;
 }
 
-/** An actor with the answer to "is it covered, and why". `covered` is true exactly when `basis` is not `null`. */
+/**
+ * An actor with the answer to "is it covered, and why". `covered` is true exactly when `basis` is not `null`.
+ * `corporateOutdated` is present, and `true`, only for an uncovered person who holds an approval in force under an
+ * agreement of an earlier major (E21-S05): the report tells the contributors to ask the CLA manager to sign the current
+ * version. It is for the renderer and is never stored.
+ */
 export interface CoveredActor extends ExtractedActor {
   readonly covered: boolean;
   readonly basis: CoveringBasis | null;
+  readonly corporateOutdated?: true;
 }
 
 /**

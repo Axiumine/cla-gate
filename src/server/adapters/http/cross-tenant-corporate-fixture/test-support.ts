@@ -19,6 +19,7 @@ import {
   CORPORATE_CARRY_OVER_PATH,
 } from '../../../../shared/corporate-approvals.ts';
 import { CORPORATE_AVAILABILITY_PATH, CORPORATE_CLAIMS_PATH } from '../../../../shared/corporate-claims.ts';
+import { CORPORATE_AGREEMENTS_CSV_PATH, CORPORATE_APPROVALS_CSV_PATH } from '../../../../shared/corporate-export.ts';
 import {
   approve,
   personWithId,
@@ -78,6 +79,21 @@ export const CORPORATE_CROSS_CASES: Readonly<Record<string, CrossTenantCase>> = 
     request: (target) => ({
       method: 'GET',
       url: INSTALLATION_CORPORATE_AGREEMENTS_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  // The two exports of E21-S05 take the installation of the path and nothing else, so the case is the same read as the list above.
+  [`GET ${CORPORATE_AGREEMENTS_CSV_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: CORPORATE_AGREEMENTS_CSV_PATH.replace(':installationId', String(target.installationId)),
+    }),
+  },
+  [`GET ${CORPORATE_APPROVALS_CSV_PATH}`]: {
+    endpointClass: 'installation_read',
+    request: (target) => ({
+      method: 'GET',
+      url: CORPORATE_APPROVALS_CSV_PATH.replace(':installationId', String(target.installationId)),
     }),
   },
 };

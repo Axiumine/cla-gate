@@ -170,6 +170,10 @@ const SCOPED_QUERY_NAMES = [
   'services/corporate-claim-queries.ts listOrgApprovals',
   'services/corporate-claim-queries.ts insertDerivedApproval',
   'services/corporate-claim-queries.ts listCorporateRepositoryIds',
+  'services/corporate-coverage-queries.ts listCorporateCoverRows',
+  'services/corporate-agreement-of-signature.ts findAgreementOfSignature',
+  'services/export/corporate-export-queries.ts agreementExportBatch',
+  'services/export/corporate-export-queries.ts approvalExportBatch',
 ];
 
 test('the registry holds the scoped queries the story lists, so the matrix below is not empty', () => {

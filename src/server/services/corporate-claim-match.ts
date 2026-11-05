@@ -4,8 +4,8 @@ import type { Kysely } from 'kysely';
 import type { GithubId } from '../../shared/github-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
-import { domainApprovals } from './corporate-approval-coverage-queries.ts';
 import { type CorporateGitHub, lookedUp } from './corporate-approval-lookup.ts';
+import { domainParents } from './corporate-claim-domains.ts';
 import {
   type ClaimAgreement,
   findUserApproval,
@@ -53,23 +53,6 @@ export interface ClaimQuestion {
 export type ClaimMatch =
   | { readonly agreement: ClaimAgreement; readonly via: 'user'; readonly approvalId: number }
   | { readonly agreement: ClaimAgreement; readonly via: 'rule'; readonly parentId: number };
-
-/**
- * For each agreement, the lowest id of the approvals in force of a domain the claimant has a verified address in. The comparison is the
- * exact equality of the stored form, in the tenant's own rows (`domainApprovals`): `evilacme.com` and `acme.com.evil.test` are not `acme.com`.
- */
-async function domainParents(question: ClaimQuestion): Promise<Map<number, number>> {
-  const { db, scope } = question;
-  const found = await Promise.all(question.domains.map((domain) => domainApprovals(db, scope, domain)));
-  const parents = new Map<number, number>();
-  for (const { approvalId, agreementId } of found.flat()) {
-    const known = parents.get(agreementId);
-    if (known === undefined || approvalId < known) {
-      parents.set(agreementId, approvalId);
-    }
-  }
-  return parents;
-}
 
 /**
  * Whether the account GitHub has under the login of the session is the person of the session. A login is a snapshot and may have been
@@ -149,7 +132,7 @@ async function matchAgreement(
  * @throws CorporateRuleError `upstream_unavailable` when a call to GitHub fails; nothing has been written.
  */
 export async function matchClaim(question: ClaimQuestion): Promise<ClaimMatch | null> {
-  const parents = await domainParents(question);
+  const parents = await domainParents(question.db, question.scope, question.domains);
   const organisation = organisationRule(question);
   for (const agreement of question.agreements) {
     const match = await matchAgreement(question, { agreement, parents, organisation });

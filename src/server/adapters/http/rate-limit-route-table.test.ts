@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
+import { CORPORATE_AGREEMENTS_CSV_PATH, CORPORATE_APPROVALS_CSV_PATH } from '../../../shared/corporate-export.ts';
 import { DATA_EXPORT_PATH } from '../../../shared/data-export.ts';
 import { SIGNATURES_CSV_PATH } from '../../../shared/signature-export.ts';
 import { SIGNATURES_PATH } from '../../../shared/signature-search.ts';
@@ -89,12 +90,16 @@ const CORPORATE_ROUTES = [...APPROVAL_ROUTES, CLAIM_ROUTE] as const;
 const CORPORATE_BUDGETS = { ...APPROVAL_BUDGETS, [CLAIM_ROUTE]: perPerson(10, 3_600_000) };
 
 const csv = `GET ${SIGNATURES_CSV_PATH}`;
+/** The two corporate exports (E21-S05), which have the budget of the signature CSV. */
+const corporateCsv = [`GET ${CORPORATE_AGREEMENTS_CSV_PATH}`, `GET ${CORPORATE_APPROVALS_CSV_PATH}`];
 const mine = `GET ${DATA_EXPORT_PATH}`;
+/** True for the routes of the corporate exports, whose budget has a test of its own below. */
+const isCorporateCsv = (route: SeenRoute): boolean => names(route).some((name) => corporateCsv.includes(name));
 const search = `GET ${SIGNATURES_PATH}`;
 
 test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the corporate signing, the three changes of the approvals of an agreement, the claim of an employee, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
-  const own = table.filter((route) => typeof limitOf(route) === 'object');
+  const own = table.filter((route) => typeof limitOf(route) === 'object' && !isCorporateCsv(route));
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
   expect(Object.keys(budgets).toSorted((a, b) => a.localeCompare(b))).toEqual(
     [
@@ -141,4 +146,23 @@ test('the routes with a budget of their own are the four of the login, the save 
     expect.objectContaining({ max: 5, timeWindow: 3_600_000, cache: 10_000, hook: 'preHandler' }),
   ]);
   expect(own.flatMap((route) => names(route)).filter((name) => name.startsWith('HEAD '))).toEqual([]);
+});
+
+test('the two corporate CSV exports (E21-S05) have the budget of the signature CSV, six a minute for each person after the guard, and neither answers HEAD', async () => {
+  const table = await tableOfTheApp();
+  const own = table.filter(isCorporateCsv);
+  expect(own.flatMap(names).toSorted((a, b) => a.localeCompare(b))).toEqual(
+    corporateCsv.toSorted((a, b) => a.localeCompare(b)),
+  );
+  for (const route of own) {
+    expect(limitOf(route)).toEqual(
+      expect.objectContaining({
+        max: 6,
+        timeWindow: 60_000,
+        cache: 10_000,
+        hook: 'preHandler',
+        keyGenerator: anyFunction,
+      }),
+    );
+  }
 });

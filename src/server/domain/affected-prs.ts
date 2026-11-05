@@ -8,7 +8,7 @@ import type { SweepRepositoryReason } from './repository-jobs.ts';
 // and the sends in services/affected-prs.ts. An action that changes what covers a contributor (a revoked signature, an override
 // added or taken away) re-evaluates the open pull requests it can change, one `evaluate-pr` job each, and above this many it sends
 // one `sweep-repository` job for each repository instead, which lists the open pull requests itself (E07-S09). The removal of an override
-// (E15-S06) asks which stored results rest on it.
+// (E15-S06) asks which stored results rest on it. E21-S05 adds the ones that rest on a corporate approval or agreement.
 
 /** The most pull requests one action evaluates one by one; one more and the repositories are swept instead. */
 export const MAX_AFFECTED_PULL_REQUESTS = 100;
@@ -47,6 +47,24 @@ export function signatureBasisNeedles(signatureId: number, githubId: GithubId): 
     JSON.stringify({ actors: [{ githubId, covered: true, basis: { kind: 'signature' } }] }),
     JSON.stringify({ actors: [{ covered: true, basis: { kind: 'signature', signatureId } }] }),
   ];
+}
+
+/**
+ * The JSON document that a stored result holds when the approval `approvalId` of a corporate agreement covers somebody (E21-S05): an actor
+ * with a covering basis of the kind `corporate_approval` that names the approval. The statement keeps the rows whose details contain it
+ * (`details @> needle`): the exact fact the revocation of that one approval takes away. Numeric ids only, never a login or a company.
+ */
+export function approvalBasisNeedle(approvalId: number): string {
+  return JSON.stringify({ actors: [{ covered: true, basis: { kind: 'corporate_approval', approvalId } }] });
+}
+
+/**
+ * The JSON document that a stored result holds when any approval of the corporate agreement `agreementId` covers somebody (E21-S05): the fact
+ * the revocation of the agreement's signature takes away from everyone it covered, and the one the revocation of a domain or organisation approval
+ * takes away from the people covered by approvals derived from it (they are all approvals of the same agreement).
+ */
+export function agreementBasisNeedle(agreementId: number): string {
+  return JSON.stringify({ actors: [{ covered: true, basis: { kind: 'corporate_approval', agreementId } }] });
 }
 
 /**

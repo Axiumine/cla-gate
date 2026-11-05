@@ -4,6 +4,7 @@ import { ROLES } from '../../../shared/pr-evaluation-codes.ts';
 import type { DisplayNames } from './display-names.ts';
 import { renderId, renderName } from './encode.ts';
 import type { ReportedEvaluation, ReportedRole } from './failure-input.ts';
+import { OUTDATED_CORPORATE_NOTE } from './failure-text.ts';
 
 // E09-S03: the people who are not covered, for the `Not signed` section. Each one appears once, keyed by the numeric GitHub id
 // (a login can be recycled, an id cannot), with the login the job saw next to it and the roles the person plays.
@@ -64,6 +65,13 @@ function cannotSignNotes(evaluation: ReportedEvaluation): ReadonlyMap<number, st
   return notes;
 }
 
+/** The accounts an agreement of an earlier version of the corporate CLA names (E21-S05), by numeric id; the engine marks only accounts nothing else covers. */
+function outdatedIds(evaluation: ReportedEvaluation): ReadonlySet<number> {
+  return new Set(
+    evaluation.actors.filter((actor) => actor.corporateOutdated === true).map((actor) => actor.account.id),
+  );
+}
+
 /** ``- `octocat` (GitHub id 583231): opened the PR, commit author``, and the note of an account that cannot sign, in brackets. */
 function entryOf(login: string, id: number, roles: ReadonlySet<ReportedRole>, note: string | undefined): string {
   const phrases = ROLES.filter((role) => roles.has(role)).map(roleWords);
@@ -79,9 +87,12 @@ function entryOf(login: string, id: number, roles: ReadonlySet<ReportedRole>, no
  */
 export function unsignedPeople(evaluation: ReportedEvaluation, names: DisplayNames): UnsignedPeople {
   const notes = cannotSignNotes(evaluation);
+  const outdated = outdatedIds(evaluation);
   const people = [...uncoveredRoles(evaluation)].sort(([a], [b]) => a - b);
+  const noteOf = (id: number): string | undefined =>
+    notes.get(id) ?? (outdated.has(id) ? OUTDATED_CORPORATE_NOTE : undefined);
   return {
-    entries: people.map(([id, roles]) => entryOf(names.logins.get(id) ?? '', id, roles, notes.get(id))),
+    entries: people.map(([id, roles]) => entryOf(names.logins.get(id) ?? '', id, roles, noteOf(id))),
     count: people.length,
     canSign: people.some(([id]) => !notes.has(id)),
   };

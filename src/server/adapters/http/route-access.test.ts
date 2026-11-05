@@ -278,6 +278,8 @@ const REGISTERED_ROUTES: readonly string[] = [
   'POST /api/corporate/repositories/:githubRepoId/claims',
   'PUT /api/installations/:installationId/repositories/:repositoryId/corporate-document',
   'GET /api/installations/:installationId/corporate-agreements',
+  'GET /api/installations/:installationId/corporate-agreements.csv',
+  'GET /api/installations/:installationId/approvals.csv',
   'POST /webhooks/github',
 ];
 

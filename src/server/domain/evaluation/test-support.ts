@@ -12,6 +12,7 @@ import type {
   AllowlistKind,
   AllowlistScope,
   CommitFacts,
+  CorporateCover,
   EvaluationInput,
   RawIdentity,
   Role,
@@ -70,6 +71,13 @@ export function extractedActor(
   return { account: account(id, type), roles, shas };
 }
 
+/** The approvals that cover people (E21-S05): `corporateCover([10, 4, 7])` says user 10 is covered by approval 7 of agreement 4. */
+export function corporateCover(
+  ...covers: readonly (readonly [githubId: number, agreementId: number, approvalId: number])[]
+): ReadonlyMap<number, CorporateCover> {
+  return new Map(covers.map(([githubId, agreementId, approvalId]) => [githubId, { agreementId, approvalId }]));
+}
+
 /** Known organisation members: `membership([500, [10, 11]])` says users 10 and 11 belong to organisation 500. */
 export function membership(
   ...orgs: readonly (readonly [orgId: number, userIds: readonly number[]])[]
@@ -89,6 +97,8 @@ export function evaluationInput(overrides: Partial<EvaluationInput> = {}): Evalu
     allowlist: [],
     orgMembers: new Map(),
     overrides: new Map(),
+    corporateCovered: new Map(),
+    corporateOutdated: new Set(),
     ...overrides,
   };
 }
@@ -276,9 +286,14 @@ function basisLine(basis: StoredDetails['actors'][number]['basis']): string {
   if (basis === null) {
     return 'uncovered';
   }
-  return basis.kind === 'signature'
-    ? `covered by signature ${basis.signatureId} (version ${basis.versionId}, major ${basis.major})`
-    : `covered by allowlist entry ${basis.entryId} (${basis.entryKind}, ${basis.scope})`;
+  switch (basis.kind) {
+    case 'signature':
+      return `covered by signature ${basis.signatureId} (version ${basis.versionId}, major ${basis.major})`;
+    case 'allowlist':
+      return `covered by allowlist entry ${basis.entryId} (${basis.entryKind}, ${basis.scope})`;
+    case 'corporate_approval':
+      return `covered by corporate approval ${basis.approvalId} (agreement ${basis.agreementId})`;
+  }
 }
 
 /**

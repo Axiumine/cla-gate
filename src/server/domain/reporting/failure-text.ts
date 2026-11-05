@@ -67,6 +67,13 @@ export const FAILURE_NOTICES: ReadonlyMap<string, TextPart> = new Map([
   ],
 ]);
 
+/**
+ * What the entry of a person says when the only thing that does not cover them is an agreement of an earlier version of the corporate CLA
+ * (E21-S05). It names no company, no domain and no organisation: the way out is the CLA manager of the company, who knows who that is.
+ */
+export const OUTDATED_CORPORATE_NOTE =
+  'an agreement of an earlier version of the corporate CLA names this account; ask the CLA manager to sign the current version';
+
 /** The line about commits that a maintainer override covers: it names no commit and no person. */
 export function overrideLine(overridden: number): TextPart {
   const [commits, verb] = overridden === 1 ? ['commit', 'is'] : ['commits', 'are'];

@@ -10,7 +10,7 @@ import { HEAD, HOSTILE_ROWS } from './test-support.ts';
 // E09-S06, the output a Check Run is given when GitHub answers 422 to the full one: the status, the conclusion and the title of
 // the view, a summary of at most 500 characters that holds the counts and the `/recheck` hint, no `text`, and no name.
 
-const COVERED = { signature: 2, allowlist: 1, override: 1 };
+const COVERED = { signature: 2, allowlist: 1, corporate: 0, override: 1 };
 
 /** A failed view whose sections carry a hostile name, as the first attempt did. */
 function failureWith(name: string, unsigned: number, unlinked: number): Extract<CheckView, { kind: 'failure' }> {
@@ -87,7 +87,7 @@ test('no summary is longer than 500 characters, even with the largest counts', (
   const most = Number.MAX_SAFE_INTEGER;
   const views: CheckView[] = [
     failureWith('octocat', most, most),
-    { kind: 'success', headSha: HEAD, covered: { signature: most, allowlist: 0, override: 0 } },
+    { kind: 'success', headSha: HEAD, covered: { signature: most, allowlist: 0, corporate: 0, override: 0 } },
     { kind: 'in_progress', headSha: HEAD },
     { kind: 'cancelled' },
     { kind: 'enforcement_disabled' },

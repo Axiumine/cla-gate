@@ -58,6 +58,7 @@ export function runReport(request: RunRequest, others: readonly RowResult[]): Ru
     const { view, signUrl } = failureReport(request);
     return { view, signUrl, comment: { kind: 'failure', summary: view.summary } };
   }
-  const view = sharedView(headSha, others, coverageCounts(evaluation));
-  return { view, signUrl: null, comment: { kind: 'success', headSha } };
+  const covered = coverageCounts(evaluation);
+  const view = sharedView(headSha, others, covered);
+  return { view, signUrl: null, comment: { kind: 'success', headSha, corporate: covered.corporate } };
 }

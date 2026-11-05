@@ -12,7 +12,7 @@ import type { GithubId } from '../../shared/github-id.ts';
  * Why a `sweep-repository` job exists, a closed set. The callers are E14-S03 (`repository_enabled`), E14-S02
  * (`cla_document_changed`), E12-S04 (`cla_version_published`), E14-S06 (`allowlist_changed`) and E15-S03 to S06
  * (`signature_revoked`, `signatures_invalidated`, `override_changed`), and E21-S04 (`corporate_claim`, an employee who claimed coverage
- * under an employer's agreement). The reason is for the log and the audit trail of the caller: the run reads the policy at the time it runs, so it does the same whatever the reason.
+ * under an employer's agreement) and E21-S05 (`corporate_approval_revoked`, an approval of a corporate agreement that a manager revoked). The reason is for the log and the audit trail of the caller: the run reads the policy at the time it runs, so it does the same whatever the reason.
  */
 export const SWEEP_REPOSITORY_REASONS = [
   'repository_enabled',
@@ -23,6 +23,7 @@ export const SWEEP_REPOSITORY_REASONS = [
   'signatures_invalidated',
   'override_changed',
   'corporate_claim',
+  'corporate_approval_revoked',
 ] as const;
 
 export type SweepRepositoryReason = (typeof SWEEP_REPOSITORY_REASONS)[number];

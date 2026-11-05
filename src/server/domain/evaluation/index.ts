@@ -7,6 +7,7 @@ export * from './actors.ts';
 export { type AllowlistSubject, matchAllowlist } from './allowlist.ts';
 export * from './classify.ts';
 export * from './co-authors.ts';
+export * from './corporate-cover.ts';
 export * from './coverage.ts';
 export * from './coverage-types.ts';
 export * from './evaluate.ts';

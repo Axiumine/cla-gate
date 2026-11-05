@@ -1,0 +1,3 @@
+agreement_id,signed_at,major,company_name,signatory_github_id,signatory_login,revoked
+1,<instant>,1,"'=HYPERLINK(""http://x"",""y"")",6001,'@octocat,false
+2,<instant>,1,"Plain & Co, ""Ltd""",6002,plain-login,false

@@ -124,6 +124,8 @@ const CROSS_ROUTES: readonly string[] = [
   'GET /api/installations/:installationId/pending-prs',
   'PUT /api/installations/:installationId/repositories/:repositoryId/corporate-document',
   'GET /api/installations/:installationId/corporate-agreements',
+  'GET /api/installations/:installationId/corporate-agreements.csv',
+  'GET /api/installations/:installationId/approvals.csv',
   'GET /api/installations/:installationId/repositories',
   'PUT /api/repositories/:repositoryId/cla-document',
   'POST /api/repositories/:repositoryId/enable',

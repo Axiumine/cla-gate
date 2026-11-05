@@ -11,11 +11,17 @@ import type { DisplayNames } from './display-names.ts';
 export type ReportedRole = (typeof ROLES)[number];
 export type ReportedUnlinkedRole = (typeof UNLINKED_ROLES)[number];
 
-/** An account that took part in the pull request, and whether a signature or an allowlist entry covers it. */
+/**
+ * An account that took part in the pull request, and whether a signature, an allowlist entry or an approval of a corporate CLA
+ * covers it. `basis` is the kind of what covers it, read to count the people a corporate CLA covers (E21-S05); `corporateOutdated`
+ * is set on an account that is not covered and that an agreement of an earlier version of the corporate CLA names.
+ */
 interface ReportedActor {
   readonly account: { readonly id: number };
   readonly roles: readonly ReportedRole[];
   readonly covered: boolean;
+  readonly basis?: { readonly kind: string } | null;
+  readonly corporateOutdated?: boolean;
 }
 
 /** An author or committer that GitHub could not link to an account, with the override that waives it (`null` for none). */
