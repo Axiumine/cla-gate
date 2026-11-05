@@ -12,10 +12,11 @@ export const REVOKE_DELAY_MS = 1000;
 /**
  * Saves `text` as a file named `name` (E19-S07): a Blob, an object URL, a link with `download` that is clicked once, and the
  * object URL revoked afterwards. Nothing is sent anywhere and the Content-Security-Policy is not involved: the browser
- * downloads the Blob, it does not load it into the page.
+ * downloads the Blob, it does not load it into the page. The Blob is plain text unless `type` names another media type
+ * (the data export of E18-S03 is `application/json`).
  */
-export function saveAsFile(name: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+export function saveAsFile(name: string, text: string, type = 'text/plain'): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = name;

@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
 import { AppShell } from './layout/AppShell.tsx';
+import { MySignaturesPage } from './me/MySignaturesPage.tsx';
+import { mySignaturesSearchSchema } from './me/signatures-search.ts';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
 import { RepositorySettingsPage } from './repository-settings/RepositorySettingsPage.tsx';
@@ -110,6 +112,29 @@ const signRoute = createRoute({
   },
 });
 
+// The person's own signatures (E18-S03): `authenticated`, so a visitor with no session is sent to the login before anything loads.
+// The page of the list is the `cursor` of the address, so a reload and the browser's Back return to it; a page is a history entry.
+const mySignaturesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/me/signatures',
+  ...withAccess('authenticated', { title: 'me.signatures.title' }),
+  validateSearch: mySignaturesSearchSchema,
+  component: function MySignaturesRoute() {
+    const navigate = mySignaturesRoute.useNavigate();
+    return (
+      <MySignaturesPage
+        cursor={mySignaturesRoute.useSearch().cursor}
+        onCursorChange={(cursor) => {
+          void navigate({ search: { cursor } });
+        }}
+        onFirstPage={() => {
+          void navigate({ search: {}, replace: true });
+        }}
+      />
+    );
+  },
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -118,6 +143,7 @@ const routeTree = rootRoute.addChildren([
   setupCallbackRoute,
   repositorySettingsRoute,
   signRoute,
+  mySignaturesRoute,
 ]);
 
 /**

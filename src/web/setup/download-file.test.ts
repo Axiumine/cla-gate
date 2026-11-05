@@ -30,6 +30,12 @@ test('the Blob is plain text and holds the text as it is, line breaks included',
   expect(await blob?.text()).toBe('first\nsecond\n');
 });
 
+test('the media type of the Blob is the one given, for the data export of E18-S03', () => {
+  const downloads = stubDownloads();
+  saveAsFile('data.json', '{}', 'application/json');
+  expect(downloads.create.mock.calls[0]?.[0].type).toBe('application/json');
+});
+
 test('the link is not added to the page, so nothing of the download stays in the document', () => {
   stubDownloads();
   saveAsFile('key', 'value');

@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import { Link } from '@tanstack/react-router';
 import { Timestamp, useT } from '../i18n/index.ts';
 import { Heading } from '../ui/Heading.tsx';
 import type { NoticeProps } from './notice-props.ts';
 import { PullRequestLink } from './PullRequestLink.tsx';
 import { StatePanel } from './StatePanel.tsx';
-
-/** Where the person's signatures are listed: the page of E18-S03, which is a link and not a client route until it exists. */
-const MY_SIGNATURES_PATH = '/me/signatures';
 
 /** `state: already_signed`: which version and when, that nothing is left to do, and the ways on. There is no form. */
 export function AlreadySigned({ notice, context, headingRef }: NoticeProps<'signed'>) {
@@ -33,9 +31,9 @@ export function AlreadySigned({ notice, context, headingRef }: NoticeProps<'sign
       <p>{t('sign.signed.noAction')}</p>
       <div className="flex flex-wrap items-center gap-4">
         <PullRequestLink prUrl={context.prUrl} />
-        <a href={MY_SIGNATURES_PATH} className="underline underline-offset-2">
+        <Link to="/me/signatures" className="underline underline-offset-2">
           {t('sign.signed.mine')}
-        </a>
+        </Link>
       </div>
     </StatePanel>
   );
