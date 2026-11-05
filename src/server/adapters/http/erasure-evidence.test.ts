@@ -77,6 +77,7 @@ test('the person can sign again after the erasure: the new signature has a fresh
     signatures: 2,
     signerPiiRows: 1,
     allowlistEntries: 0,
+    corporateApprovals: 0,
   });
   const erasedFlags = (await exported(world)).records.map((record) => [record['signature_id'], record['pii_erased']]);
   expect(erasedFlags).toEqual([

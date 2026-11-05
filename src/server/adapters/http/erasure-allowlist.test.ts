@@ -26,6 +26,7 @@ test('the preview of an allowlisted account that never signed counts its entry, 
     signatures: 0,
     signerPiiRows: 0,
     allowlistEntries: 1,
+    corporateApprovals: 0,
   });
 });
 

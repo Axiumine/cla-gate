@@ -33,22 +33,35 @@ test('the counts are the signatures the tenant holds for the person and the rows
   const { db } = await migratedTestDatabase();
   const { t1, t2 } = await sharedSigner(db);
   await seedSignature(db, t1, 222);
-  expect(await erasureCounts(db, t1, PERSON)).toEqual({ signatures: 1, signerPiiRows: 1, allowlistEntries: 0 });
-  expect(await erasureCounts(db, t2, PERSON)).toEqual({ signatures: 1, signerPiiRows: 1, allowlistEntries: 0 });
+  expect(await erasureCounts(db, t1, PERSON)).toEqual({
+    signatures: 1,
+    signerPiiRows: 1,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
+  expect(await erasureCounts(db, t2, PERSON)).toEqual({
+    signatures: 1,
+    signerPiiRows: 1,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
   expect(await erasureCounts(db, t1, parseGithubId(222))).toEqual({
     signatures: 1,
     signerPiiRows: 1,
     allowlistEntries: 0,
+    corporateApprovals: 0,
   });
   expect(await erasureCounts(db, t2, parseGithubId(222))).toEqual({
     signatures: 0,
     signerPiiRows: 0,
     allowlistEntries: 0,
+    corporateApprovals: 0,
   });
   expect(await erasureCounts(db, t1, parseGithubId(987_654))).toEqual({
     signatures: 0,
     signerPiiRows: 0,
     allowlistEntries: 0,
+    corporateApprovals: 0,
   });
 });
 
@@ -56,8 +69,18 @@ test('a signature whose personal data was erased still counts as a signature and
   const { db } = await migratedTestDatabase();
   const { t1, t2 } = await sharedSigner(db);
   await eraseSigner(db, t1, { githubUserId: PERSON, expectedRows: 1, actor: ACTOR });
-  expect(await erasureCounts(db, t1, PERSON)).toEqual({ signatures: 1, signerPiiRows: 0, allowlistEntries: 0 });
-  expect(await erasureCounts(db, t2, PERSON)).toEqual({ signatures: 1, signerPiiRows: 1, allowlistEntries: 0 });
+  expect(await erasureCounts(db, t1, PERSON)).toEqual({
+    signatures: 1,
+    signerPiiRows: 0,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
+  expect(await erasureCounts(db, t2, PERSON)).toEqual({
+    signatures: 1,
+    signerPiiRows: 1,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
 });
 
 test('the erasure returns the number of rows it deleted, leaves the signatures and writes one audit row of the tenant with the admin', async () => {
@@ -81,10 +104,20 @@ test('a person with signatures of two majors has all their rows in the tenant er
   const { db } = await migratedTestDatabase();
   const { t1, person } = await sharedSigner(db);
   await storePii(db, await insertSignature(db, t1, person, await publishSecondMajor(db, t1)), person);
-  expect(await erasureCounts(db, t1, PERSON)).toEqual({ signatures: 2, signerPiiRows: 2, allowlistEntries: 0 });
+  expect(await erasureCounts(db, t1, PERSON)).toEqual({
+    signatures: 2,
+    signerPiiRows: 2,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
 
   expect(await eraseSigner(db, t1, { githubUserId: PERSON, expectedRows: 2, actor: ACTOR })).toBe(2);
-  expect(await erasureCounts(db, t1, PERSON)).toEqual({ signatures: 2, signerPiiRows: 0, allowlistEntries: 0 });
+  expect(await erasureCounts(db, t1, PERSON)).toEqual({
+    signatures: 2,
+    signerPiiRows: 0,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
 });
 
 test('a person with no signature in the tenant is not found, even when they signed in another tenant, and nothing changes', async () => {
@@ -139,11 +172,21 @@ test("the erasure runs in the caller's transaction: when the caller rolls back, 
   await expect(
     db.transaction().execute(async (trx) => {
       expect(await eraseSigner(trx, t1, { githubUserId: PERSON, expectedRows: 1, actor: ACTOR })).toBe(1);
-      expect(await erasureCounts(trx, t1, PERSON)).toEqual({ signatures: 1, signerPiiRows: 0, allowlistEntries: 0 });
+      expect(await erasureCounts(trx, t1, PERSON)).toEqual({
+        signatures: 1,
+        signerPiiRows: 0,
+        allowlistEntries: 0,
+        corporateApprovals: 0,
+      });
       throw new Error('the caller gives up');
     }),
   ).rejects.toThrow('the caller gives up');
-  expect(await erasureCounts(db, t1, PERSON)).toEqual({ signatures: 1, signerPiiRows: 1, allowlistEntries: 0 });
+  expect(await erasureCounts(db, t1, PERSON)).toEqual({
+    signatures: 1,
+    signerPiiRows: 1,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
 });
 
 test('the errors say what happened in words that carry no personal data', () => {

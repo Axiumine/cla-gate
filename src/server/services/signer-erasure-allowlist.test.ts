@@ -15,10 +15,11 @@ import { ACTOR } from './test-support.ts';
 const BOT = parseGithubId(555);
 
 test.each([
-  [{ signatures: 0, signerPiiRows: 0, allowlistEntries: 0 }, false],
-  [{ signatures: 1, signerPiiRows: 0, allowlistEntries: 0 }, true],
-  [{ signatures: 0, signerPiiRows: 0, allowlistEntries: 1 }, true],
-  [{ signatures: 2, signerPiiRows: 1, allowlistEntries: 3 }, true],
+  [{ signatures: 0, signerPiiRows: 0, allowlistEntries: 0, corporateApprovals: 0 }, false],
+  [{ signatures: 1, signerPiiRows: 0, allowlistEntries: 0, corporateApprovals: 0 }, true],
+  [{ signatures: 0, signerPiiRows: 0, allowlistEntries: 1, corporateApprovals: 0 }, true],
+  [{ signatures: 0, signerPiiRows: 0, allowlistEntries: 0, corporateApprovals: 1 }, true],
+  [{ signatures: 2, signerPiiRows: 1, allowlistEntries: 3, corporateApprovals: 0 }, true],
 ])('the tenant holds something about a person with the counts %j: %s', (counts, expected) => {
   expect(holdsAnythingAbout(counts)).toBe(expected);
 });
@@ -30,11 +31,17 @@ test('the counts include the allowlist entries of this tenant for the person, an
   await listAccount(db, t1, 555, 'ada');
   await listAccount(db, t2, 555, 'ada');
   await listAccount(db, t2, 556, null);
-  expect(await erasureCounts(db, t1, BOT)).toEqual({ signatures: 0, signerPiiRows: 0, allowlistEntries: 1 });
+  expect(await erasureCounts(db, t1, BOT)).toEqual({
+    signatures: 0,
+    signerPiiRows: 0,
+    allowlistEntries: 1,
+    corporateApprovals: 0,
+  });
   expect(await erasureCounts(db, t1, parseGithubId(556))).toEqual({
     signatures: 0,
     signerPiiRows: 0,
     allowlistEntries: 0,
+    corporateApprovals: 0,
   });
 });
 

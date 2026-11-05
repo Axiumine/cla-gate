@@ -24,9 +24,11 @@ test('an org admin sees how many signatures and rows of personal data the instal
     signatures: 1,
     signerPiiRows: 1,
     allowlistEntries: 0,
+    corporateApprovals: 0,
   });
   expect(Object.keys(response.json()).toSorted((a, b) => a.localeCompare(b))).toEqual([
     'allowlistEntries',
+    'corporateApprovals',
     'githubUserId',
     'signatures',
     'signerPiiRows',
@@ -207,7 +209,13 @@ test('an erasure with the confirmed count deletes that many rows, answers erased
     await db.selectFrom('signer_pii').select('signature_id').where('user_id', '=', t1.signer.userId).execute(),
   ).toEqual([]);
   const after = await preview('admin1', t1.installationId, `?githubUserId=${MEMBER1}`);
-  expect(after.json()).toEqual({ githubUserId: MEMBER1, signatures: 1, signerPiiRows: 0, allowlistEntries: 0 });
+  expect(after.json()).toEqual({
+    githubUserId: MEMBER1,
+    signatures: 1,
+    signerPiiRows: 0,
+    allowlistEntries: 0,
+    corporateApprovals: 0,
+  });
 });
 
 test('erasing again is allowed and deletes nothing: the count to confirm is then zero', async () => {
