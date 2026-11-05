@@ -4,6 +4,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 import { metaRoute } from '../../shared/meta.ts';
 import type { ApiClient } from '../api/index.ts';
 import { useApiClient } from '../auth/hooks.ts';
+import { type InstallLink, installLinkOf } from './install-link.ts';
 import { type SourceLink, sourceLinkOf } from './source-link.ts';
 
 // What the instance says about itself (E17-S09), read once and kept in the query cache.
@@ -33,4 +34,12 @@ function metaQueryOptions(client: ApiClient) {
  */
 export function useSourceLink(): SourceLink {
   return sourceLinkOf(useQuery(metaQueryOptions(useApiClient())).data);
+}
+
+/**
+ * What the instance offers for installing the GitHub App (E18-S04), from the same cached answer as the footer: a link, "finish
+ * the setup first", or nothing known yet.
+ */
+export function useInstallLink(): InstallLink {
+  return installLinkOf(useQuery(metaQueryOptions(useApiClient())).data);
 }

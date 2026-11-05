@@ -34,3 +34,11 @@ test.each(['', 'tenant_denied', 'NOT_FOUND', '__proto__', 'constructor', 'toStri
     expect(isErrorCode(code)).toBe(false);
   },
 );
+
+test.each(['github_unavailable', 'github_rate_limited'])(
+  'the code %s of a route that needs GitHub to know who the person is is a domain code, and the app has a message for it (E18-S04)',
+  (code) => {
+    expect(DOMAIN_ERROR_CODES).toContain(code);
+    expect(isErrorCode(code)).toBe(true);
+  },
+);

@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import { expect, test } from 'vitest';
+import { switchTarget, TENANT_SECTIONS, TENANT_START, type TenantSection } from './tenant-sections.ts';
+
+// E18-S04: where the tenant switcher takes a person: the same screen when the other installation has it, else the start.
+
+const SECTIONS: readonly TenantSection<string>[] = [
+  { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
+  { to: '/installations/$installationId/documents', roles: ['org_admin', 'repo_admin'] },
+  { to: '/installations/$installationId/audit', roles: ['org_admin'] },
+];
+const START = '/installations/$installationId';
+
+test("the same screen, when the other installation has it for the person's role", () => {
+  expect(switchTarget(SECTIONS, START, '/installations/$installationId/documents', 'repo_admin')).toBe(
+    '/installations/$installationId/documents',
+  );
+  expect(switchTarget(SECTIONS, START, '/installations/$installationId/audit', 'org_admin')).toBe(
+    '/installations/$installationId/audit',
+  );
+});
+
+test('the start of that installation when the role cannot open the screen', () => {
+  expect(switchTarget(SECTIONS, START, '/installations/$installationId/audit', 'repo_admin')).toBe(START);
+});
+
+test.each([
+  '/installations/$installationId/repositories/$repositoryId/settings',
+  '/installations',
+  '/me/signatures',
+  '/',
+])('the start of that installation from %s, a route that is not a screen of the table', (here) => {
+  expect(switchTarget(SECTIONS, START, here, 'org_admin')).toBe(START);
+});
+
+test('the start of that installation when the route is not known at all', () => {
+  expect(switchTarget(SECTIONS, START, undefined, 'org_admin')).toBe(START);
+});
+
+test('an index route, which the router spells with a trailing slash, is the screen of its parent path', () => {
+  expect(switchTarget(SECTIONS, START, '/installations/$installationId/', 'repo_admin')).toBe(START);
+  expect(switchTarget(SECTIONS, '/elsewhere', '/installations/$installationId/', 'repo_admin')).toBe(
+    '/installations/$installationId',
+  );
+});
+
+test('a bare slash is the root, not an empty path', () => {
+  expect(switchTarget([{ to: '/', roles: ['org_admin'] }], START, '/', 'org_admin')).toBe('/');
+});
+
+test('the screens of the app are the overview, for both roles, and a tenant starts on it', () => {
+  expect(TENANT_SECTIONS).toEqual([{ to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] }]);
+  expect(TENANT_START).toBe('/installations/$installationId');
+});

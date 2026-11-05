@@ -4,7 +4,7 @@ import type { PlainMessageKey } from '../i18n/index.ts';
 
 /** One link of the main navigation: where it goes, and the catalog key of its words. */
 export interface NavItem {
-  readonly to: '/' | '/me/signatures';
+  readonly to: '/' | '/me/signatures' | '/installations';
   readonly label: PlainMessageKey;
 }
 
@@ -14,5 +14,6 @@ export interface NavItem {
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', label: 'nav.home' },
+  { to: '/installations', label: 'nav.installations' },
   { to: '/me/signatures', label: 'nav.signatures' },
 ];

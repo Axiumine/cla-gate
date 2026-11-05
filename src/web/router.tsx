@@ -6,6 +6,10 @@ import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
+import { InstallationsPage } from './installations/InstallationsPage.tsx';
+import { installationRouteParams } from './installations/installation-params.ts';
+import { InstallationHomeRoute, InstallationRoute } from './installations/route-components.tsx';
+import { tenantPage } from './installations/tenant-page.tsx';
 import { AppShell } from './layout/AppShell.tsx';
 import { MySignaturesPage } from './me/MySignaturesPage.tsx';
 import { mySignaturesSearchSchema } from './me/signatures-search.ts';
@@ -135,6 +139,32 @@ const mySignaturesRoute = createRoute({
   },
 });
 
+// The installations the person administers (E18-S04): the tenants of this instance. `authenticated`, like every maintainer screen.
+const installationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/installations',
+  ...withAccess('authenticated', { title: 'installations.title' }),
+  component: InstallationsPage,
+});
+
+// One tenant (E18-S04): `$installationId` is `installations.id`, the number the API gives, never GitHub's id. A segment that is
+// not a plain positive number is no page of the app. The route is the frame of every screen below it (the suspended banner), and
+// the screens that E18 adds are its children; each one hands the shell the tenant switcher (`tenantPage`).
+const installationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/installations/$installationId',
+  ...tenantPage('installation.title'),
+  params: installationRouteParams,
+  component: InstallationRoute,
+});
+
+const installationHomeRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: '/',
+  ...tenantPage('installation.title'),
+  component: InstallationHomeRoute,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -144,6 +174,8 @@ const routeTree = rootRoute.addChildren([
   repositorySettingsRoute,
   signRoute,
   mySignaturesRoute,
+  installationsRoute,
+  installationRoute.addChildren([installationHomeRoute]),
 ]);
 
 /**

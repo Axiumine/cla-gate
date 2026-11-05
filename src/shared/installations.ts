@@ -2,9 +2,11 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
 import { pageQuerySchema } from './cla.ts';
+import { defineRoute } from './contract.ts';
 
 // What a maintainer sees of the installations and repositories they can administer (E14-S01): the two paths, the query of the
-// repository list and the shape of both answers. The routes, their tests and the screens of the dashboard share them.
+// repository list and the shape of both answers, and the route descriptors the screens of the dashboard call them by (E18-S04). The
+// routes, their tests and those screens share them.
 
 /** `GET`: the installations the signed-in person administers on this instance. `id` is `installations.id`, never GitHub's id. */
 export const INSTALLATIONS_PATH = '/api/installations';
@@ -91,4 +93,40 @@ export const repositoryItemSchema = z.object({
 export const repositoryPageSchema = z.object({
   items: z.array(repositoryItemSchema),
   nextCursor: z.string().nullable(),
+});
+
+/** What a person is in an installation: the value of `role` of {@link InstallationSummary}. */
+export type InstallationRole = z.infer<typeof roleSchema>;
+
+/** One installation of {@link installationListSchema}. */
+export type InstallationSummary = z.infer<typeof installationSummarySchema>;
+
+/** One page of {@link repositoryPageSchema}. */
+export type RepositoryPage = z.infer<typeof repositoryPageSchema>;
+
+/** The path parameter of every route below an installation: its `installations.id`, never GitHub's id (E14-S01). */
+export const installationParamsSchema = z.object({ installationId: z.int().positive() });
+
+/**
+ * `GET /api/installations` (E14-S01): the installations the signed-in person administers on this instance, by account login and
+ * id. Without a session it is a `401`; GitHub failing to say who the person is, is a `502 github_unavailable` or a
+ * `503 github_rate_limited` with `Retry-After`, never an empty list.
+ */
+export const installationListRoute = defineRoute({
+  method: 'GET',
+  path: INSTALLATIONS_PATH,
+  responses: { 200: installationListSchema },
+});
+
+/**
+ * `GET /api/installations/:installationId/repositories` (E14-S01): a page of the repositories of one installation that the
+ * person may see. A person with no role there, an unknown id and a tenant the instance does not admit get the same `404`; a
+ * person who has a role in it but not the one the route needs gets a `403`.
+ */
+export const installationRepositoriesRoute = defineRoute({
+  method: 'GET',
+  path: INSTALLATION_REPOSITORIES_PATH,
+  params: installationParamsSchema,
+  query: repositoryListQuerySchema,
+  responses: { 200: repositoryPageSchema },
 });

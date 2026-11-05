@@ -32,7 +32,7 @@ test('every route of the tree names its page title, and it is a key of the catal
   expect(routeTitleProblems(routerFor().tree, messages)).toEqual([]);
 });
 
-test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07), the sign page (E18-S01) and the not-found route, all public, and the settings screen of a repository (E22-S03) and the list of the own signatures (E18-S03), which need a login', () => {
+test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07), the sign page (E18-S01) and the not-found route, all public, and the list of the own signatures (E18-S03), the installation screens (E18-S04) and the settings screen of a repository (E22-S03), which need a login', () => {
   expect(accessById(routerFor().tree)).toEqual({
     __root__: 'public',
     '/': 'public',
@@ -42,6 +42,9 @@ test('the routes are the front page, the failed-login page, the two pages of the
     '/installations/$installationId/repositories/$repositoryId/settings': 'authenticated',
     '/sign/$githubRepoId': 'public',
     '/me/signatures': 'authenticated',
+    '/installations': 'authenticated',
+    '/installations/$installationId': 'authenticated',
+    '/installations/$installationId/': 'authenticated',
   });
 });
 

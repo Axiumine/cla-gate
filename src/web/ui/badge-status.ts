@@ -15,9 +15,11 @@ export const BADGE_STATUSES = [
   'draft',
   'enabled',
   'failed',
+  'org_admin',
   'outdated',
   'passed',
   'pending',
+  'repo_admin',
   'revoked',
   'suspended',
 ] as const;
@@ -32,9 +34,11 @@ export const BADGE_VARIANTS: Record<BadgeStatus, BadgeVariant> = {
   draft: 'info',
   enabled: 'success',
   failed: 'danger',
+  org_admin: 'info',
   outdated: 'warning',
   passed: 'success',
   pending: 'info',
+  repo_admin: 'neutral',
   revoked: 'danger',
   suspended: 'warning',
 };
