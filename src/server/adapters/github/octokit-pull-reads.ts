@@ -3,6 +3,7 @@
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { GitHubClient } from '../../services/ports/github.ts';
 import { fetchIssueComment, fetchPullRequestsForCommit } from './octokit-comment-calls.ts';
+import { fetchCommit } from './octokit-commit-call.ts';
 import type { Dispatch } from './octokit-dispatch.ts';
 import {
   fetchMergeBase,
@@ -13,13 +14,14 @@ import {
 } from './octokit-pull-calls.ts';
 
 // The reads of the evaluation job (E07-S10) of the Octokit adapter: a pull request, its commits, the history behind a head and
-// the merge base of two commits, (E07-S07) a comment and the pull requests of a commit, and (E07-S08) the open pull requests
-// of a repository. They are the installation-level methods of the port that the evaluation and the sweep need, kept in a class
+// the merge base of two commits, (E07-S07) a comment and the pull requests of a commit, (E07-S08) the open pull requests
+// of a repository, and (E15-S05) whether a repository has a commit. They are the installation-level methods of the port that the evaluation and the sweep need, kept in a class
 // of their own that `OctokitGitHubClient` extends, so that no file of the adapter grows past what is easy to read.
 
 type PullReads = Pick<
   GitHubClient,
   | 'getPullRequest'
+  | 'getCommit'
   | 'listPullRequestCommits'
   | 'listRepositoryCommits'
   | 'compareCommits'
@@ -39,6 +41,12 @@ export class OctokitPullReads implements PullReads {
   getPullRequest(githubInstallationId: GithubId, fullName: string, prNumber: number) {
     return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
       fetchPullRequest(channel, headers, fullName, prNumber),
+    );
+  }
+
+  getCommit(githubInstallationId: GithubId, fullName: string, sha: string) {
+    return this.dispatch.asInstallation(githubInstallationId, (channel, headers) =>
+      fetchCommit(channel, headers, fullName, sha),
     );
   }
 

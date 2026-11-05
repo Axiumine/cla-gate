@@ -175,6 +175,9 @@ const commitSchema = z
     rawCommitter: commit.committer,
   }));
 
+/** `GET /repos/{owner}/{repo}/commits/{ref}` (E15-S05): the SHA of the commit, the only field used; the files and the diff GitHub adds are not read. */
+export const commitRefSchema = z.object({ sha: commitShaSchema });
+
 /** One page of a commit listing: a bare array. */
 export const commitPageSchema = z.array(commitSchema);
 

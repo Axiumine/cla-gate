@@ -4,9 +4,9 @@ import { expect, test } from 'vitest';
 import { scopeDocuments } from './discovery-fixture/test-support.ts';
 import { id } from './github-contract/test-support.ts';
 import { GitHubUnavailableError } from './ports/github-errors.ts';
+import { recordingLookup } from './recording-lookup-fixture/test-support.ts';
 import { listRepositoryPage, type RepositoryListRequest } from './repository-list.ts';
 import { VIEWER } from './role-fixture/test-support.ts';
-import type { CachedRepoAdminLookup } from './role-lookups.ts';
 import { worldOfTwoTenants } from './store-fixture/test-support.ts';
 
 // The page of repositories, below the HTTP layer (E14-S01): what an org admin and a repository admin are given, and how many
@@ -14,27 +14,6 @@ import { worldOfTwoTenants } from './store-fixture/test-support.ts';
 // repository it was asked about.
 
 const FIRST_PAGE: RepositoryListRequest = { limit: 50, from: null, q: null, enabled: null };
-
-/** A lookup that confirms the repositories named in `administered` (by full name), and keeps what it was asked and how many ran at once. */
-function recordingLookup(administered: ReadonlySet<string> | 'all') {
-  const asked: { installation: number; githubInstallationId: number; fullName: string; githubRepoId: number }[] = [];
-  const state = { running: 0, mostRunning: 0 };
-  const lookup: CachedRepoAdminLookup = async (installation, repository, viewer) => {
-    expect(viewer).toBe(VIEWER);
-    asked.push({
-      installation: installation.id,
-      githubInstallationId: installation.github_installation_id,
-      fullName: repository.full_name,
-      githubRepoId: repository.github_repo_id,
-    });
-    state.running += 1;
-    state.mostRunning = Math.max(state.mostRunning, state.running);
-    await Promise.resolve();
-    state.running -= 1;
-    return administered === 'all' || administered.has(repository.full_name);
-  };
-  return { lookup, asked, state };
-}
 
 async function setup(administered: ReadonlySet<string> | 'all' = 'all') {
   const world = await worldOfTwoTenants();

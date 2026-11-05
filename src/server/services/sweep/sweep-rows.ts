@@ -6,8 +6,9 @@ import { evaluationKey, type StoredEvaluationState } from '../../domain/sweep.ts
 import type { RepositoryScope } from '../close-pr/close-rows.ts';
 import { batches } from '../repository-rows.ts';
 
-// The rows of `pr_evaluations` the sweep reads (E07-S08). It writes none: a row changes through the jobs it starts and through
-// the cancellation of E07-S06. Every statement filters by the installation, so one tenant never reaches the rows of another.
+// The rows of `pr_evaluations` the sweep reads (E07-S08). It writes none here: a row changes through the jobs it starts and through
+// the cancellation of E07-S06 (the one column the sweep itself writes, `pr_state`, is in sweep-state-rows.ts). Every statement
+// filters by the installation, so one tenant never reaches the rows of another.
 
 /**
  * What is stored for each of the pull requests `prNumbers` of the repository, by {@link evaluationKey}: the row of every

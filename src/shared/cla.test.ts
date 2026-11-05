@@ -84,6 +84,14 @@ test('the limits and the status of each rule are the ones the story names', () =
     no_organization: 422,
     members_permission_missing: 422,
     allowlist_entry_exists: 409,
+    already_revoked: 409,
+    count_changed: 409,
+    nothing_to_invalidate: 409,
+    invalid_commit_sha: 422,
+    invalid_reason: 422,
+    commit_not_found: 422,
+    override_exists: 409,
+    repository_disabled: 409,
   });
 });
 

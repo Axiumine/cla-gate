@@ -217,8 +217,7 @@ test('the error names every offending route, one per line, and its name is Route
 test('the app becomes ready with the routes it registers itself, and the not-found handler needs no declaration', async () => {
   const { app } = await testApp();
   await app.ready();
-  const unknown = await app.inject('/nothing-answers-here');
-  expect(unknown.statusCode).toBe(404);
+  expect((await app.inject('/nothing-answers-here')).statusCode).toBe(404);
   expect(app.routeAccess.map((entry) => `${entry.method} ${entry.url}`)).toEqual([
     'GET /healthz',
     'GET /readyz',
@@ -236,6 +235,11 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /api/installations/:installationId/documents/:documentId/versions/:versionId',
     'GET /api/installations',
     'GET /api/installations/:installationId/repositories',
+    'GET /api/installations/:installationId/signatures',
+    'POST /api/installations/:installationId/signatures/:signatureId/revoke',
+    'GET /api/installations/:installationId/documents/:documentId/invalidation-preview',
+    'POST /api/installations/:installationId/documents/:documentId/invalidations',
+    'GET /api/installations/:installationId/pending-prs',
     'PUT /api/repositories/:repositoryId/cla-document',
     'POST /api/repositories/:repositoryId/enable',
     'POST /api/repositories/:repositoryId/disable',
@@ -244,6 +248,9 @@ test('the app becomes ready with the routes it registers itself, and the not-fou
     'GET /api/installations/:installationId/allowlist-entries',
     'GET /api/repositories/:repositoryId/allowlist-entries',
     'DELETE /api/installations/:installationId/allowlist-entries/:entryId',
+    'POST /api/repositories/:repositoryId/commit-overrides',
+    'GET /api/repositories/:repositoryId/commit-overrides',
+    'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
     'GET /api/meta',
     'GET /api/setup/status',
     'GET /api/installations/:installationId/audit-log',
@@ -358,9 +365,9 @@ test('a webhook declaration on any other route keeps the app from becoming ready
 
 test('an authenticated route with a tenant parameter keeps the app from becoming ready, naming the route', async () => {
   const { app } = await testApp();
-  app.get('/api/installations/:installationId/signatures', { config: { access: 'authenticated' } }, () => 'x');
+  app.get('/api/installations/:installationId/widgets', { config: { access: 'authenticated' } }, () => 'x');
   await expect(app.ready()).rejects.toThrow(
-    'route GET /api/installations/:installationId/signatures is authenticated but its path has the tenant parameter :installationId',
+    'route GET /api/installations/:installationId/widgets is authenticated but its path has the tenant parameter :installationId',
   );
 });
 

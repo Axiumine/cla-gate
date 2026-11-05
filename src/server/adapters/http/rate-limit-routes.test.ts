@@ -36,6 +36,7 @@ test('the budgets are the ones of the story, spelled out here on purpose', () =>
     signatureExport: 6,
     dataExport: 5,
     sign: 10,
+    signatureSearch: 30,
   });
 });
 

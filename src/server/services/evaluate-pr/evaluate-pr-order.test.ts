@@ -32,13 +32,14 @@ async function organisationWorld(): Promise<EvaluateWorld> {
   return world;
 }
 
-test('the steps run in the order of the protocol: repository, pull request, row and started, commits, policy, members, signatures last, engine, pull request again, write, publish', async () => {
+test('the steps run in the order of the protocol: repository, pull request, state of its rows, row and started, commits, policy, members, signatures last, engine, pull request again, write, publish', async () => {
   const world = await organisationWorld();
   await world.run();
   const steps = world.timeline.filter((step) => !['db:select installations', 'db:select repositories'].includes(step));
   expect(steps).toEqual([
     'gh:getRepositoryById',
     'gh:getPullRequest',
+    'db:update pr_evaluations',
     'db:select pr_evaluations',
     'db:insert pr_evaluations',
     'reporter.started',

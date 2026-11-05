@@ -53,10 +53,9 @@ const FULL_NAME = 'org-1/repo';
 export const COVERED = 11;
 export const UNCOVERED = 12;
 
-/** The mocked GitHub with tenant 1 on it and its two open pull requests; `heads` has the head SHA of each. */
-async function mockedGitHub(world: Awaited<ReturnType<typeof enableWorld>>) {
+/** Puts tenant 1 on the mocked GitHub with its two open pull requests; the answer has the head SHA of each. */
+function mockedGitHub(github: HttpWorld, world: Awaited<ReturnType<typeof enableWorld>>): ReadonlyMap<number, string> {
   const { t1, people } = world;
-  const github = await httpWorld(testGitHubKey());
   github.addInstallation(
     {
       id: t1.githubInstallationId,
@@ -79,7 +78,7 @@ async function mockedGitHub(world: Awaited<ReturnType<typeof enableWorld>>) {
   };
   open(COVERED, people.member1.githubId, 1);
   open(UNCOVERED, people.outsider.githubId, 3);
-  return { github, heads };
+  return heads;
 }
 
 /** The ports of the evaluation jobs over the mocked GitHub through the real adapter, with the real engine and the real reporter. */
@@ -162,8 +161,10 @@ function driverOf(flow: Flow) {
  */
 export async function flowWorld(through: (queue: FakeEnqueuer) => JobEnqueuer = (queue) => queue) {
   const queue = fakeEnqueuer();
-  const world = await enableWorld(through(queue));
-  const { github, heads } = await mockedGitHub(world);
+  const github = await httpWorld(testGitHubKey());
+  // The commit an override is for (E15-S05) is looked up on the mocked GitHub through the real adapter, like everything else here.
+  const world = await enableWorld(through(queue), github.client);
+  const heads = mockedGitHub(github, world);
   const driver = driverOf({
     db: world.db,
     github,

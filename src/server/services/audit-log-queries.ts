@@ -7,6 +7,7 @@ import { auditLogItemSchema, type auditLogPageSchema } from '../../shared/audit-
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { type AuditCursor, encodeAuditCursor } from '../domain/audit-cursor.ts';
+import { loginsOf } from './user-logins.ts';
 
 // What the audit log viewer reads (E16-S02). Every statement names the installation of the scope, so a row of another
 // tenant, or a row of no tenant (an instance-level action, whose installation is null), is never read. The table is
@@ -78,19 +79,6 @@ export function auditLogRows(db: Kysely<Database>, scope: TenantScope, request: 
     .orderBy('occurred_at', 'desc')
     .orderBy('id', 'desc')
     .limit(request.limit + 1);
-}
-
-/** The login of each person in `githubIds` as the `users` snapshot holds it now. A person it has no row for is missing. */
-async function loginsOf(db: Kysely<Database>, githubIds: readonly number[]): Promise<Map<number, string>> {
-  if (githubIds.length === 0) {
-    return new Map();
-  }
-  const users = await db
-    .selectFrom('users')
-    .select(['github_id', 'login'])
-    .where('github_id', 'in', githubIds)
-    .execute();
-  return new Map(users.map((user) => [user.github_id, user.login]));
 }
 
 type Row = Awaited<ReturnType<ReturnType<typeof auditLogRows>['execute']>>[number];

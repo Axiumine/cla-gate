@@ -52,7 +52,12 @@ export async function evaluateOpen(run: EvaluateRun, pr: GitHubPullRequest): Pro
   const { ports, job, resolved } = run;
   const { logger } = run.context;
   const { installation } = resolved.tenant;
-  const target = targetOf(job, resolved, pr, await startEvaluation(ports.db, evaluationKey(resolved.tenant, job, pr)));
+  const target = targetOf(
+    job,
+    resolved,
+    pr,
+    await startEvaluation(ports.db, evaluationKey(resolved.tenant, job, pr), pr.state),
+  );
   await ports.reporter.started(target);
   const collected = await collectCommits(
     { github: ports.github, githubInstallationId: job.githubInstallationId, fullName: resolved.fullName },

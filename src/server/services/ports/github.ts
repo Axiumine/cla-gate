@@ -205,6 +205,11 @@ export interface GitHubCommit {
   readonly rawCommitter: { readonly name: string; readonly email: string };
 }
 
+/** A commit GitHub has in a repository (E15-S05): its lower-case SHA, which is all the platform needs to know of it. */
+export interface GitHubCommitRef {
+  readonly sha: string;
+}
+
 /** One page of a listing of open pull requests (E07-S08), 100 at most, newest first. `last` is true when GitHub names no next page. */
 export interface GitHubPullRequestPage {
   readonly pulls: readonly GitHubPullRequestRef[];
@@ -287,6 +292,16 @@ export interface GitHubClient {
    * as GitHub shows it now. Resolves null for a pull request GitHub does not have, and for a name GitHub cannot hold.
    */
   getPullRequest(githubInstallationId: GithubId, fullName: string, prNumber: number): Promise<GitHubPullRequest | null>;
+
+  /**
+   * `GET /repos/{owner}/{repo}/commits/{ref}` with the installation's token, the full SHA as the `ref` (E15-S05): whether the
+   * repository has that commit, which a per-commit override is checked against. `fullName` is `owner/name` as GitHub shows it now.
+   * Resolves null for a commit or repository GitHub does not have (404 or 422: GitHub answers 422 to a SHA no commit has), one the
+   * installation does not reach, and for a name or SHA GitHub cannot hold (a branch name, an abbreviation; no request is sent for
+   * it, the installation is checked first all the same).
+   * @throws GitHubForbiddenError when GitHub refuses the read; GitHubResponseError when the answer holds no SHA.
+   */
+  getCommit(githubInstallationId: GithubId, fullName: string, sha: string): Promise<GitHubCommitRef | null>;
 
   /**
    * `GET /repos/{owner}/{repo}/issues/comments/{comment_id}` with the installation's token (E07-S07). Resolves null for a

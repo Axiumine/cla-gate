@@ -173,7 +173,7 @@ test('an evaluation that got its verdict while the Check Run was being reported 
   expect(world.logs.lines()).toContainEqual(expect.objectContaining({ msg: 'close_pr.pruned', evaluations: 0 }));
 });
 
-test('the job reads the repository, then the pull request, and only then touches the queue, the rows and the reporter', async () => {
+test('the job reads the repository, then the pull request, and only then touches the queue, the state of the rows, the reporter and the result of the rows', async () => {
   const world = await closeWorld();
   await seedEvaluation(world, { result: 'in_progress' });
   world.timeline.length = 0;
@@ -186,6 +186,7 @@ test('the job reads the repository, then the pull request, and only then touches
     'gh:getRepositoryById',
     'gh:getPullRequest',
     'queue.cancel',
+    'db:update pr_evaluations',
     'reporter.cancelled',
     'db:update pr_evaluations',
   ]);

@@ -101,6 +101,36 @@ export const PULL_CASES: readonly ContractCase[] = [
     },
   ],
   [
+    'getCommit finds a commit of the history of a repository and one of its pull requests, by the SHA in lower case',
+    async ({ client, addInstallation, setRepositoryCommits, setPullRequestCommits }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
+      setRepositoryCommits(id(11), ACME, history(1, 3));
+      setPullRequestCommits(id(11), ACME, 7, [commit(8, { author: null, committer: null })]);
+      expect(await client.getCommit(id(11), ACME, commitSha(2))).toEqual({ sha: commitSha(2) });
+      expect(await client.getCommit(id(11), ACME, commitSha(8))).toEqual({ sha: commitSha(8) });
+      expect(await client.getCommit(id(11), 'ACME/Api', commitSha(3))).toEqual({ sha: commitSha(3) });
+    },
+  ],
+  [
+    'getCommit resolves null for a commit nobody has, for one of another repository or installation, and for a SHA or a name GitHub cannot hold',
+    async ({ client, addInstallation, setRepositoryCommits, setPullRequestCommits }) => {
+      addInstallation(installation(11, 'acme'), [repository(101, ACME), repository(102, 'acme/web')]);
+      addInstallation(installation(12, 'globex'), [repository(201, 'globex/api')]);
+      setRepositoryCommits(id(11), ACME, history(9, 3));
+      setPullRequestCommits(id(12), 'globex/api', 7, [commit(20)]);
+      expect(await client.getCommit(id(11), ACME, commitSha(4))).toBeNull();
+      expect(await client.getCommit(id(11), 'acme/web', commitSha(10))).toBeNull();
+      expect(await client.getCommit(id(11), 'globex/api', commitSha(20))).toBeNull();
+      expect(await client.getCommit(id(11), 'acme/missing', commitSha(10))).toBeNull();
+      for (const sha of ['main', commitSha(10).slice(0, 7), commitSha(10).toUpperCase(), `${commitSha(10)}~1`, '']) {
+        expect(await client.getCommit(id(11), ACME, sha)).toBeNull();
+      }
+      for (const name of ['acme', '../api', 'acme/api/x', 'acme/a b', 'acme/..']) {
+        expect(await client.getCommit(id(11), name, commitSha(10))).toBeNull();
+      }
+    },
+  ],
+  [
     'listPullRequestCommits returns the commits with their linked accounts, parents, messages and raw identities',
     async ({ client, addInstallation, setPullRequestCommits }) => {
       addInstallation(installation(11, 'acme'));
@@ -197,17 +227,19 @@ export const PULL_CASES: readonly ContractCase[] = [
   [
     'the reads of the evaluation answer a view with a signal that has not aborted, and send nothing once it has',
     async ({ client, addInstallation, addPullRequest, setPullRequestCommits, reached }) => {
-      addInstallation(installation(11, 'acme'));
+      addInstallation(installation(11, 'acme'), [repository(101, ACME)]);
       addPullRequest(id(11), ACME, pullRequest(7));
       setPullRequestCommits(id(11), ACME, 7, [commit(1)]);
       const live = client.withSignal(new AbortController().signal);
       expect(await live.getPullRequest(id(11), ACME, 7)).toEqual(pullRequest(7));
+      expect(await live.getCommit(id(11), ACME, commitSha(1))).toEqual({ sha: commitSha(1) });
       expect((await live.listPullRequestCommits(id(11), ACME, 7, 1)).commits).toEqual([commit(1)]);
       const before = reached();
       const reason = new Error('the job was aborted');
       const aborted = client.withSignal(AbortSignal.abort(reason));
       for (const call of [
         () => aborted.getPullRequest(id(11), ACME, 7),
+        () => aborted.getCommit(id(11), ACME, commitSha(1)),
         () => aborted.listPullRequestCommits(id(11), ACME, 7, 1),
         () => aborted.listRepositoryCommits(id(11), ACME, commitSha(1), 1),
         () => aborted.compareCommits(id(11), ACME, commitSha(1), commitSha(2)),
@@ -224,6 +256,7 @@ export const PULL_CASES: readonly ContractCase[] = [
       addInstallation(installation(12, 'globex'));
       await expectInstallationRefusals(world, (installationId) => [
         () => client.getPullRequest(id(installationId), ACME, 7),
+        () => client.getCommit(id(installationId), ACME, commitSha(1)),
         () => client.listPullRequestCommits(id(installationId), ACME, 7, 1),
         () => client.listRepositoryCommits(id(installationId), ACME, commitSha(1), 1),
         () => client.compareCommits(id(installationId), ACME, commitSha(1), commitSha(2)),

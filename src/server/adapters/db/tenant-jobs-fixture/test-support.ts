@@ -4,17 +4,20 @@ import { type Kysely, NoResultError } from 'kysely';
 import type { PrEvaluationDetails } from '../../../../shared/pr-evaluation-details.ts';
 import { headShasToCancel } from '../../../services/close-pr/close-heads.ts';
 import { cancelEvaluation, evaluationsOfPullRequest } from '../../../services/close-pr/close-rows.ts';
+import { latestEvaluationPerPr } from '../../../services/current-evaluation-queries.ts';
 import {
   evaluationsAtHead,
   failEvaluation,
   findEvaluation,
   finishEvaluation,
+  setPullRequestState,
   startEvaluation,
 } from '../../../services/evaluate-pr/evaluation-rows.ts';
 import { readAllowlist, readOverrides, readPolicy } from '../../../services/evaluate-pr/policy-facts.ts';
 import { readSignatures } from '../../../services/evaluate-pr/signature-facts.ts';
 import { unfinishedPullRequests } from '../../../services/finalise/finalise-rows.ts';
 import { evaluationStates, staleEvaluations } from '../../../services/sweep/sweep-rows.ts';
+import { reconcilePullRequestStates } from '../../../services/sweep/sweep-state-rows.ts';
 import type { Database } from '../schema.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import type { Refusal, ScopedQuery } from '../tenant-registry/test-support.ts';
@@ -162,7 +165,7 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
     startEvaluation: scoped({
       refusal: isForeignKeyViolation,
       run: async (db, scope, ids) =>
-        ownersOfEvaluations(db, [await startEvaluation(db, { ...repositoryOf(scope, ids), ...UNSEEN })]),
+        ownersOfEvaluations(db, [await startEvaluation(db, { ...repositoryOf(scope, ids), ...UNSEEN }, 'open')]),
     }),
     finishEvaluation: scoped({
       refusal: isNoRow,
@@ -180,6 +183,20 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
           db,
           [failed].filter((row) => row !== null),
         );
+      },
+    }),
+    setPullRequestState: scoped({
+      run: async (db, scope, ids) => {
+        // The finished evaluation of pull request 7 is open: closing it changes one row of the tenant's own repository, and
+        // nothing when the repository is another tenant's.
+        const changed = await setPullRequestState(
+          db,
+          { ...repositoryOf(scope, ids), prNumber: FINISHED.prNumber },
+          'closed',
+        );
+        return changed === 0
+          ? []
+          : ownersOfEvaluations(db, await evaluationsOfRepository(db, ids, [FINISHED.prNumber]));
       },
     }),
     evaluationsAtHead: scoped({
@@ -239,6 +256,17 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
       },
     }),
   },
+  'services/current-evaluation-queries.ts': {
+    latestEvaluationPerPr: scoped({
+      run: async (db, scope, ids) => {
+        const rows = await latestEvaluationPerPr(db, scope.installationId, [ids.plain.repositoryId]).execute();
+        return ownersOfEvaluations(
+          db,
+          rows.map((row) => row.id),
+        );
+      },
+    }),
+  },
   'services/sweep/sweep-rows.ts': {
     evaluationStates: scoped({
       run: async (db, scope, ids) => {
@@ -253,6 +281,20 @@ export const JOB_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
           db,
           rows.map((row) => row.id),
         );
+      },
+    }),
+  },
+  'services/sweep/sweep-state-rows.ts': {
+    reconcilePullRequestStates: scoped({
+      run: async (db, scope, ids) => {
+        // A listing with no pull request closes the latest row of both pull requests the fixture stores for the repository, GitHub agreeing.
+        const corrected = await reconcilePullRequestStates(
+          db,
+          repositoryOf(scope, ids),
+          { open: [], listedAt: LATER },
+          () => Promise.resolve(false),
+        );
+        return corrected.closed === 0 ? [] : ownersOfEvaluations(db, await evaluationsOfRepository(db, ids, [7, 8]));
       },
     }),
   },
