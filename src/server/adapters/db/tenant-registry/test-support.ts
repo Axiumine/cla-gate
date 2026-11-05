@@ -53,7 +53,7 @@ import {
   VERSION_READS,
   VERSION_WRITES,
 } from '../tenant-registry-versions/test-support.ts';
-import { E15_TENANT_QUERIES } from '../tenant-revocation-fixture/test-support.ts';
+import { E15_TENANT_MODULES, E15_TENANT_QUERIES } from '../tenant-revocation-fixture/test-support.ts';
 import type { TenantScope } from '../tenant-scope.ts';
 import { SIGN_TENANT_QUERIES } from '../tenant-sign-fixture/test-support.ts';
 
@@ -64,7 +64,6 @@ export const TENANT_MODULES = [
   'adapters/db/pr-evaluation-links.ts',
   'adapters/db/tenant-scope.ts',
   'services/admin-ledger-queries.ts',
-  'services/affected-prs-queries.ts',
   'services/allowlist-entry-list-queries.ts',
   'services/allowlist-entry-queries.ts',
   'services/allowlist-entry-remove-queries.ts',
@@ -103,13 +102,13 @@ export const TENANT_MODULES = [
   'services/repository-transfer.ts',
   'services/sign-context-queries.ts',
   'services/sign-record-queries.ts',
-  'services/signature-revoke-queries.ts',
   'services/signature-search-queries.ts',
   'services/signature-search-scope-queries.ts',
   'services/signer-erasure.ts',
   'services/sweep/sweep-rows.ts',
   'services/sweep/sweep-state-rows.ts',
   'services/tenant-queries.ts',
+  ...E15_TENANT_MODULES,
 ] as const;
 
 /** The one file that writes `audit_log`: rows are appended in the transaction of the change they record, naming the installation the entry carries (E04-S09); nothing else inserts them, and reads of the table belong to a tenant module. */

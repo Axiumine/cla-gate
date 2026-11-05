@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, NoResultError } from 'kysely';
-import { listEnforcingRepositories } from '../../../services/cla-enforcing-queries.ts';
+import { countEnforcingRepositories, listEnforcingRepositories } from '../../../services/cla-enforcing-queries.ts';
 import { findVersion, listVersions } from '../../../services/cla-history-queries.ts';
 import { countSignaturesAtMajor, findActiveVersion, lockDocument } from '../../../services/cla-version-queries.ts';
 import { insertVersion, setActiveVersion } from '../../../services/cla-version-writes.ts';
@@ -111,6 +111,17 @@ export const ENFORCING_READS: Readonly<Record<string, ScopedQuery>> = {
             db,
             repositories.map((repository) => repository.githubRepoId),
           );
+    },
+  },
+  countEnforcingRepositories: {
+    kind: 'scoped',
+    takesIds: true,
+    activeOnly: true,
+    arrange: (db, tenants) => enforceDocuments(db, tenants),
+    run: async (db, scope, ids) => {
+      // The count is a number, so the repository it counted is read again by the plain repository the arrangement made enforce the document.
+      const count = await countEnforcingRepositories(db, scope, ids.documentId);
+      return count === 0 ? [] : ownersOfGithubIds(db, [ids.plain.githubRepoId]);
     },
   },
 };

@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { findAffectedPrs, findAffectedRepositories } from '../../../services/affected-prs-queries.ts';
+import { countActiveSignatures, invalidateActiveSignatures } from '../../../services/signature-invalidate-queries.ts';
 import { findSignatureToRevoke, markSignatureRevoked } from '../../../services/signature-revoke-queries.ts';
 import { ownersOfRepositories, ownersOfSignatures } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery, TenantQuery } from '../tenant-registry/test-support.ts';
 import { SEARCH_TENANT_QUERIES } from '../tenant-search-fixture/test-support.ts';
 
 // The registry entries (E11-S06) of the statements a revocation runs over a tenant table (E15-S03): the signature it reads and sets, and
-// the pull requests it finds to evaluate again. They sit in a file of their own so that the registry stays under the size cap, as the
+// the pull requests it finds to evaluate again; and those of the invalidation of a major (E15-S04): the signatures it counts and revokes. They sit in a file of their own so that the registry stays under the size cap, as the
 // entries of the search do (`tenant-search-fixture`). `twoTenants` stores, for each tenant, a signature on its installation-wide
 // document and finished evaluations (success) of pull requests 7, 9 and 10 of the plain repository, so a statement that strays has rows to meet.
+
+/** The files of epic E15 that run a statement over a tenant table, which `TENANT_MODULES` spreads in (the file of the registry is at its size cap). */
+export const E15_TENANT_MODULES = [
+  'services/affected-prs-queries.ts',
+  'services/signature-invalidate-queries.ts',
+  'services/signature-revoke-queries.ts',
+] as const;
 
 /** A function that takes the tenant and the ids of a resource and answers with the rows of that tenant it read or changed. */
 const scoped = (run: ScopedQuery['run']): ScopedQuery => ({ kind: 'scoped', takesIds: true, activeOnly: false, run });
@@ -34,6 +42,22 @@ const REVOCATION_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
             db,
             found.map((repository) => repository.repositoryId),
           );
+    }),
+  },
+  'services/signature-invalidate-queries.ts': {
+    // The world stores one signature, at major 1 of the installation-wide document of each tenant: a count that strayed finds it under the other tenant.
+    countActiveSignatures: scoped(async (db, scope, ids) => {
+      const count = await countActiveSignatures(db, scope, { documentId: ids.documentId, major: 1 });
+      return count === 0 ? [] : ownersOfSignatures(db, [ids.signatureId]);
+    }),
+    invalidateActiveSignatures: scoped(async (db, scope, ids) => {
+      const { count } = await invalidateActiveSignatures(db, scope, {
+        documentId: ids.documentId,
+        major: 1,
+        revokedBy: ids.admin.userId,
+        reason: 'other',
+      });
+      return count === 0 ? [] : ownersOfSignatures(db, [ids.signatureId]);
     }),
   },
   'services/signature-revoke-queries.ts': {

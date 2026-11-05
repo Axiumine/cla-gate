@@ -135,6 +135,18 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { document_id: 12, version_id: 22, major: 2, user_github_id: 4712, reason_code: 'maintainer_decision' },
     },
   ],
+  'services/signature-invalidate.ts#signatures.invalidated': [
+    {
+      action: 'signatures.invalidated',
+      subject: { type: 'document', id: 12 },
+      metadata: { major: 1, count: 1, reason_code: 'maintainer_decision' },
+    },
+    {
+      action: 'signatures.invalidated',
+      subject: { type: 'document', id: 12 },
+      metadata: { major: 2, count: 25_000, reason_code: 'legal_request' },
+    },
+  ],
   'services/dead-letter/dead-letter-sync.ts#installation.sync_failed': [
     {
       action: 'installation.sync_failed',

@@ -49,6 +49,7 @@ const SCOPED_QUERY_NAMES = [
   'services/cla-draft-writes.ts updateDraft',
   'services/cla-draft-writes.ts deleteDraft',
   'services/cla-enforcing-queries.ts listEnforcingRepositories',
+  'services/cla-enforcing-queries.ts countEnforcingRepositories',
   'services/cla-history-queries.ts listVersions',
   'services/cla-history-queries.ts findVersion',
   'services/cla-version-queries.ts lockDocument',
@@ -122,6 +123,8 @@ const SCOPED_QUERY_NAMES = [
   'services/signature-search-scope-queries.ts documentsOfRepositories',
   'services/affected-prs-queries.ts findAffectedPrs',
   'services/affected-prs-queries.ts findAffectedRepositories',
+  'services/signature-invalidate-queries.ts countActiveSignatures',
+  'services/signature-invalidate-queries.ts invalidateActiveSignatures',
   'services/signature-revoke-queries.ts findSignatureToRevoke',
   'services/signature-revoke-queries.ts markSignatureRevoked',
 ];
