@@ -18,7 +18,7 @@ test('a signature revoked after the evaluation read it sends the pull request to
   const world = await evaluateWorld({ engine: true });
   await createJobsTable(world.raw);
   const queue = fakeEnqueuer();
-  const signatures = [];
+  const signatures: Awaited<ReturnType<typeof seedSignature>>[] = [];
   for (const person of SIGNERS) {
     signatures.push(await seedSignature(world.raw, world.tenant, person));
   }
