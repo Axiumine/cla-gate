@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Giovanni Manzoni
+import { useMemo } from 'react';
+import { renderClaTree } from '../../../shared/cla-markdown.ts';
+import type { HeadingLevel } from '../../ui/Heading.tsx';
+import { drawTree } from './hast-react.tsx';
+
+export interface MarkdownViewProps {
+  /** The stored source text of the CLA (the text that was hashed), never HTML. */
+  readonly source: string;
+  /**
+   * The level that the `h1` of the text is shown as. The page that shows a CLA has its own `h1`, so the text starts one level
+   * below it: `2` unless the page says otherwise. Every other heading of the text moves down by the same amount, up to `h6`.
+   */
+  readonly headingLevel?: HeadingLevel;
+}
+
+/**
+ * A CLA text as it is read (E18-S01): the sanitised tree of `renderClaTree` (E12-S07) drawn as React elements. The sanitising
+ * rules are the ones of that function and are not repeated here: raw HTML is text, a link is kept only when it goes to
+ * `http:`, `https:` or `mailto:` and then opens in a new tab with `rel="noopener noreferrer nofollow"`, and an image is its
+ * alternative text. No markdown library is added, and no markup is set (the elements are made by React), so nothing in the text
+ * can run. The editor preview and the history view (E18-S05, E18-S11) draw their texts with this component too.
+ *
+ * Rendering costs more than linear time for some texts, so this belongs in the browser and nowhere else; the tree is made once
+ * per text and kept until the text changes.
+ */
+export function MarkdownView({ source, headingLevel = 2 }: MarkdownViewProps) {
+  const tree = useMemo(() => renderClaTree(source), [source]);
+  return <div className="text-fg">{drawTree(tree, headingLevel)}</div>;
+}

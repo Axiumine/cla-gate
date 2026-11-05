@@ -13,6 +13,8 @@ import { RepositorySettingsPage } from './repository-settings/RepositorySettings
 import { type RouterContext, withAccess } from './route-access.ts';
 import { SetupCallbackPage } from './setup/SetupCallbackPage.tsx';
 import { SetupPage } from './setup/SetupPage.tsx';
+import { parseGithubRepoId, signSearchSchema } from './sign/params.ts';
+import { SignPage } from './sign/SignPage.tsx';
 import { NotFoundPage, RouterErrorComponent } from './states/index.ts';
 
 // The route tree of the app (E17-S08), written in code: no generator, no generated file. Every route spreads
@@ -87,6 +89,27 @@ const repositorySettingsRoute = createRoute({
   },
 });
 
+// The sign page (E18-S01): the link of the pull request comment. Public, because it tells a visitor who is not logged in what
+// signing involves and offers the login (E18-S02); the data it shows is read with the session, so a visitor sees none of it.
+// A repository id that is not a plain positive number is no page of the app (the route does not match; `false` skips it), and
+// a `?pr=` that is not a pull request number is dropped.
+const signRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sign/$githubRepoId',
+  ...withAccess('public', { title: 'sign.title' }),
+  params: {
+    parse: ({ githubRepoId }) => {
+      const parsed = parseGithubRepoId(githubRepoId);
+      return parsed === undefined ? false : { githubRepoId: parsed };
+    },
+    stringify: ({ githubRepoId }) => ({ githubRepoId: String(githubRepoId) }),
+  },
+  validateSearch: signSearchSchema,
+  component: function SignRoute() {
+    return <SignPage githubRepoId={signRoute.useParams().githubRepoId} pr={signRoute.useSearch().pr} />;
+  },
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -94,6 +117,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   setupCallbackRoute,
   repositorySettingsRoute,
+  signRoute,
 ]);
 
 /**

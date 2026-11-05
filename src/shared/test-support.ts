@@ -300,3 +300,67 @@ export function slowdownOf(
   }
   return slowdown;
 }
+
+/**
+ * One row of the hostile CLA input table (E12-S07): what the row is, the Markdown source, and the text a signer must still read
+ * in what is shown (the markup that was refused stays visible as text, because a legal text must show all of what it says).
+ */
+export type HostileClaRow = readonly [label: string, source: string, shown: string];
+
+/**
+ * The hostile input table of the CLA renderer (E12-S07). The sanitiser test walks the tree it gives for each row, and the
+ * component that draws the tree (E18-S01, `MarkdownView`) is fed the same rows, so both are held to one table.
+ */
+export const HOSTILE_CLA_ROWS: readonly HostileClaRow[] = [
+  ['a script element', '<script>alert(1)</script>', '<script>alert(1)</script>'],
+  ['an image with an onerror handler', '<img src=x onerror=alert(1)>', '<img src=x onerror=alert(1)>'],
+  ['an iframe', '<iframe src="javascript:alert(1)"></iframe>', '<iframe src="javascript:alert(1)"></iframe>'],
+  ['a style element', '<style>body{display:none}</style>', '<style>body{display:none}</style>'],
+  ['an HTML comment', 'before <!-- hidden --> after', 'before <!-- hidden --> after'],
+  ['a javascript: link', '[x](javascript:alert(1))', 'x'],
+  ['a link with a mixed-case JaVaScRiPt: scheme', '[x](JaVaScRiPt:alert(1))', 'x'],
+  [
+    'a scheme broken by a tab, which the parser leaves as text',
+    '[x](java\tscript:alert(1))',
+    '[x](java\tscript:alert(1))',
+  ],
+  ['a scheme broken by an entity-encoded tab', '[x](java&#9;script:alert(1))', 'x'],
+  ['an entity-encoded first letter', '[x](&#106;avascript:alert(1))', 'x'],
+  ['a named-entity colon', '[x](javascript&colon;alert(1))', 'x'],
+  ['an entity-encoded line feed before the scheme', '[x](&#x0A;javascript:alert(1))', 'x'],
+  ['a data: URL', '[x](data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==)', 'x'],
+  ['a data: URL with the markup in the address', '[x](data:text/html,%3Cscript%3Ealert(1)%3C/script%3E)', 'x'],
+  ['a vbscript: link', '[x](vbscript:msgbox(1))', 'x'],
+  ['a protocol-relative link', '[x](//evil.example)', 'x'],
+  ['a relative link', '[x](/relative)', 'x'],
+  ['a link to a fragment', '[x](#fragment)', 'x'],
+  ['a scheme that only starts like http', '[x](http:javascript:alert(1))', 'x'],
+  ['an http scheme in capitals, which is not recognised', '[x](HTTP://OK.EXAMPLE)', 'x'],
+  ['a backslash after the scheme', '[x](https:\\\\evil)', 'x'],
+  ['an image with no alt text', '![](http://t.example/p.png)', ''],
+  ['an image with alt text', '![pixel](http://t.example/p.png)', 'pixel'],
+  ['a reference-style image', '![alt][r]\n\n[r]: http://t.example/p.png', 'alt'],
+  ['an image inside a safe link', '[![pixel](http://t.example/p.png)](http://ok.example)', 'pixel'],
+  [
+    'an svg with a style that breaks out of an attribute',
+    '<svg><p><style><a title="</style><img src onerror=alert(1)>">',
+    '<svg><p><style><a title="</style><img src onerror=alert(1)>">',
+  ],
+  ['an autolink to javascript:', '<javascript:alert(1)>', 'javascript:alert(1)'],
+  ['a reference-style link to javascript:', '[x][r]\n\n[r]: javascript:alert(1)', 'x'],
+  ['a raw anchor to javascript:', '<a href="javascript:x">click</a>', '<a href="javascript:x">click</a>'],
+  ['a pointy destination with a title', '[x](<javascript:alert(1)> "title")', 'x'],
+  ['an element with an onclick handler', '<div onclick="x()">text</div>', '<div onclick="x()">text</div>'],
+  ['an entity-encoded script element', '&lt;script&gt;alert(1)&lt;/script&gt;', '<script>alert(1)</script>'],
+  ['a title that tries to be an attribute', '[x](http://ok.example "onmouseover=alert(1)")', 'x'],
+  ['a quote that tries to end the href', '[x](http://ok.example/"onmouseover="alert(1))', 'x'],
+  ['a fenced block of HTML', '```html\n<script>alert(1)</script>\n```', '<script>alert(1)</script>\n'],
+  ['an indented block of HTML', '    <script>alert(1)</script>', '<script>alert(1)</script>\n'],
+  ['a code span of HTML', '`<script>`', '<script>'],
+  ['a heading with an onerror image', '# <img src=x onerror=alert(1)>', '<img src=x onerror=alert(1)>'],
+  [
+    'object, embed, form and input',
+    '<object data="javascript:alert(1)"></object><embed src=x><form action=x><input onfocus=alert(1)>',
+    '<object data="javascript:alert(1)"></object><embed src=x><form action=x><input onfocus=alert(1)>',
+  ],
+];
