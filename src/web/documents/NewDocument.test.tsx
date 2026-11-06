@@ -6,6 +6,7 @@ import { envelope } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { githubDown, repositoriesOf, repository, summary, tenantOf } from '../installations/test-support.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   bodyOf,
   button,
@@ -72,6 +73,7 @@ test('the repositories are asked for when the dialog opens, and not before: the 
 });
 
 test('creating a document of the whole installation sends the name and the kind, with no repository, and opens its editor', async () => {
+  const watch = watchDefault('submit');
   const { served, user } = await openDialog();
   await user.type(nameField(), 'Individual CLA v2');
   await user.click(create());
@@ -82,6 +84,7 @@ test('creating a document of the whole installation sends the name and the kind,
   expect(bodyOf(served.create[0])).toEqual({ name: 'Individual CLA v2', kind: 'individual' });
   expect(window.location.pathname).toBe('/installations/5/documents/12');
   expect(screen.queryByRole('dialog')).toBeNull();
+  expect(watch.prevented).toEqual([true]);
 });
 
 test('the name is sent as the server will store it: without the spaces around it', async () => {

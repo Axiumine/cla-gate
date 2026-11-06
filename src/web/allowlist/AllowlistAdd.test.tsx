@@ -3,6 +3,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { messages } from '../i18n/index.ts';
+import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   ALLOWLIST_ROUTE,
   addButton,
@@ -45,6 +46,7 @@ test('the dialog has the kind, with the user chosen, and one required login fiel
 });
 
 test('adding a user to the installation sends one request to that installation, closes the dialog, and the new row shows the stored login and numeric id', async () => {
+  const watch = watchDefault('submit');
   const { served, user } = await openDialog(ALLOWLIST_ROUTE, {
     installationList: [
       installationPage([entryOf()]),
@@ -64,6 +66,7 @@ test('adding a user to the installation sends one request to that installation, 
   expect(rowsOf(entriesTable()).map((row) => row[1])).toEqual(['defunkt 583231', 'New-User 9001']);
   expect(screen.getByText(messages['allowlist.notice.added'])).toBeInTheDocument();
   expect(addButton()).toHaveFocus();
+  expect(watch.prevented).toEqual([true]);
 });
 
 test('adding to a repository sends one request to that repository, and the list of the repository is asked for again', async () => {

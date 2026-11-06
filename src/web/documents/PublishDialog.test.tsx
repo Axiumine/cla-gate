@@ -5,6 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { envelope } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   ABC_HASH,
   bodyOf,
@@ -174,6 +175,7 @@ test('typing in the rationale clears the mark that it was needed', async () => {
 });
 
 test('a minor publish sends the draft revision, the bump, the trimmed rationale and the active version, and no acknowledgeResigning', async () => {
+  const watch = watchDefault('submit');
   const { served, user } = await openPublish();
   await user.click(rationaleField());
   await user.paste('  Fixed a typo in section 2  ');
@@ -189,6 +191,7 @@ test('a minor publish sends the draft revision, the bump, the trimmed rationale 
     rationale: 'Fixed a typo in section 2',
     expectedActiveVersionId: 301,
   });
+  expect(watch.prevented).toEqual([true]);
 });
 
 test('a first publish of a document with no version expects no active version', async () => {

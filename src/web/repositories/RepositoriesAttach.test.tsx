@@ -6,6 +6,7 @@ import { envelope } from '../api/test-support.ts';
 import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   attachButton,
   attachDialog,
@@ -112,6 +113,7 @@ test('the document a repository has is a choice even when the documents of the r
 });
 
 test('Save sends a PUT to the repository of the row with the chosen document and the CSRF header, asks for the list again, closes, and says so', async () => {
+  const watch = watchDefault('submit');
   const { served, user } = await openRepositories(undefined, {
     list: [pageOf([widgets(), gadgets()]), pageOf([widgets(), gadgets({ document: claOf() })])],
   });
@@ -131,6 +133,7 @@ test('Save sends a PUT to the repository of the row with the chosen document and
   expect(cells('acme/gadgets').slice(0, 3)).toEqual(['acme/gadgets', 'Disabled', 'Individual CLA1.0']);
   expect(status()).toHaveTextContent('A CLA is attached to acme/gadgets.');
   expect(screen.queryByRole('alert')).toBeNull();
+  expect(watch.prevented).toEqual([true]);
 });
 
 test('nothing is optimistic: while the request is out the row still shows no CLA, the dialog stays open, and Save is busy', async () => {

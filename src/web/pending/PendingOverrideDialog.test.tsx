@@ -6,6 +6,7 @@ import { expect, test } from 'vitest';
 import { messages } from '../i18n/index.ts';
 import { summary, tenantOf } from '../installations/test-support.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   bodyOf,
   gadgetsOf,
@@ -118,6 +119,7 @@ test('a reason of 2000 characters, with blanks around it, is trimmed and goes', 
 });
 
 test('confirming sends the trimmed reason and the commit to the repository of the row, with the CSRF header, then asks for the list again and closes', async () => {
+  const watch = watchDefault('submit');
   const { served, user } = await open({
     pending: [pageOf([pendingOf()]), pageOf([pendingOf({ reasons: [{ code: 'no_active_cla' }] })])],
   });
@@ -132,6 +134,7 @@ test('confirming sends the trimmed reason and the commit to the repository of th
   expect(served.pending).toHaveLength(2);
   expect(screen.getByText(messages['pending.notice.recorded'])).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /^Record override/ })).toBeNull();
+  expect(watch.prevented).toEqual([true]);
 });
 
 test('when the pull request leaves the list with its button, focus goes to the results heading', async () => {

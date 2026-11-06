@@ -7,6 +7,7 @@ import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { spyOnConsole, stubDownloads } from '../setup/test-support.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   csvFile,
   documentSelect,
@@ -107,13 +108,13 @@ test('the link is busy while the file is on its way, and a second click sends no
   expect(downloads.saved()).toHaveLength(1);
 });
 
-test('a click does not follow the link: the page stays where it was', async () => {
+test('a click does not follow the link: the page takes the click, so the browser does not navigate to the file', async () => {
   stubDownloads();
+  const watch = watchDefault('click');
   const { user } = await openSignatures(`${SIGNATURES_ROUTE}?document=11`);
   await user.click(exportLink());
   await screen.findByText('Saved as signatures-11-2026-11-04.csv.');
-  expect(window.location.pathname).toBe(SIGNATURES_ROUTE);
-  expect(window.location.search).toBe('?document=11');
+  expect(watch.prevented).toEqual([true]);
 });
 
 test.each([

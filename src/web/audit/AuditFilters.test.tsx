@@ -5,6 +5,7 @@ import { expect, test } from 'vitest';
 import { AUDIT_ACTIONS } from '../../shared/audit.ts';
 import { createTranslator, messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   AUDIT_ROUTE,
   actionSelect,
@@ -81,6 +82,7 @@ test('every field shows its help, so the format is known before it is wrong', as
 });
 
 test('choosing an action and applying puts it in the address and asks for it, from the first page', async () => {
+  const watch = watchDefault('submit');
   const { served, user } = await openAudit();
   await user.selectOptions(actionSelect(), 'signature.revoked');
   expect(served.log).toHaveLength(1);
@@ -90,6 +92,7 @@ test('choosing an action and applying puts it in the address and asks for it, fr
   });
   expect(paramsOf(served.log[1])).toEqual({ limit: '50', action: 'signature.revoked' });
   expect(window.location.search).toBe('?action=signature.revoked');
+  expect(watch.prevented).toEqual([true]);
 });
 
 test('every filter at once is asked for as one request, the ids as numbers and the range as UTC instants', async () => {
