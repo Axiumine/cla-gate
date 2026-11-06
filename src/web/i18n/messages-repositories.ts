@@ -70,6 +70,8 @@ export const repositoryMessages = {
   'repositories.search.field': 'Repository name',
   'repositories.search.help': 'Part of the full name, such as acme/widgets, in any case.',
   'repositories.search.label': 'Search repositories',
+  'repositories.settings': 'Settings',
+  'repositories.settings.label': 'Settings of {repository}',
   'repositories.title': 'Repositories',
   'tenant.nav.repositories': 'Repositories',
 } as const;

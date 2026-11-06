@@ -116,7 +116,10 @@ test('a repo admin is offered the dialog and no link to a screen that would refu
   });
   await user.click(enableButton('acme/gadgets'));
   await within(rowOf('acme/gadgets')).findByRole('alert');
-  expect(within(rowOf('acme/gadgets')).queryByRole('link')).toBeNull();
+  expect(
+    within(rowOf('acme/gadgets')).queryByRole('link', { name: messages['repositories.fix.documents'] }),
+  ).toBeNull();
+  expect(within(rowOf('acme/gadgets')).queryByRole('link', { name: messages['repositories.editor'] })).toBeNull();
   expect(attachFix()).toBeInTheDocument();
 });
 

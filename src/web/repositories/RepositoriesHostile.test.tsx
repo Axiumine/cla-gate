@@ -24,7 +24,7 @@ import {
 
 // E18-S10: the name of a repository, the name of a document and the login of the account are text a person controls and the server sends
 // verbatim. They are drawn as text in the table, in the names of the buttons, in the dialogs, in the notice and in the title of the tab,
-// and nowhere as markup. A repository name never becomes a link.
+// and nowhere as markup. A repository name never becomes a link: the one link of a row is the settings link, to a path of the app.
 
 const NAMES = [...HOSTILE_NAMES, ...HOSTILE_CONTROL_NAMES].map(
   (name) => [JSON.stringify(name).slice(0, 40), name] as const,
@@ -54,7 +54,11 @@ test.each(NAMES)(
     const [cells] = rowsOf(repositoriesTable());
     expect(cells?.[0]).toBe(visibleText(name));
     expect(cells?.[2]).toBe(`${visibleText(name)}1.0`);
-    expect(within(repositoriesTable()).queryByRole('link')).toBeNull();
+    const links = within(repositoriesTable()).queryAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/installations/5/repositories/1/settings']);
+    expect(links.map((link) => link.getAttribute('aria-label'))).toEqual([
+      messages['repositories.settings.label'].replace('{repository}', () => visibleText(name)),
+    ]);
     expect(activeContent(main)).toEqual([]);
     expect(main.querySelectorAll(ACTIVE)).toHaveLength(0);
   },

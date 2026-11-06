@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { screen } from '@testing-library/react';
 import { serveAllowlist } from '../allowlist/test-support.ts';
+import { answer } from '../api/test-support.ts';
 import { serveAudit } from '../audit/test-support.ts';
 import { serveDocuments } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
@@ -10,6 +11,7 @@ import { item, serveOnePage } from '../me/test-support.ts';
 import { installationOf, operatorList, rejectedOf, serveOperator } from '../operator/test-support.ts';
 import { servePending } from '../pending/test-support.ts';
 import { serveRepositories } from '../repositories/test-support.ts';
+import { on, SETTINGS_ADDRESS } from '../repository-settings/test-support.ts';
 import { CODE, STATE, serveSetup } from '../setup/test-support.ts';
 import { serveSign } from '../sign/test-support.ts';
 import { serveSignatures } from '../signatures/test-support.ts';
@@ -81,6 +83,16 @@ export const ROUTE_FIXTURES: ReadonlyMap<string, RouteFixture> = new Map<string,
         serveSetup();
       },
       ready: () => screen.findByRole('button', { name: messages['setup.callback.get'] }),
+    },
+  ],
+  [
+    '/installations/$installationId/repositories/$repositoryId/settings',
+    {
+      address: SETTINGS_ADDRESS,
+      serve: () => {
+        answer('/api/installations/7/repositories/42/badge-snippet', on());
+      },
+      ready: () => screen.findByRole('checkbox', { name: messages['repository.badge.toggle'] }),
     },
   ],
   [

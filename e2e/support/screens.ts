@@ -190,6 +190,10 @@ export const ROUTES_WITHOUT_SCREEN: ReadonlyMap<string, string> = new Map([
     'the operator screen (E18-S13) is for the person who operates the instance, and the application under test has no operator (no GitHub App and no OPERATOR_GITHUB_IDS), so it is the not-found page there; its screen is held by the unit tests and the route coverage guard',
   ],
   [
+    '/installations/$installationId/repositories/$repositoryId/settings',
+    'the settings screen of a repository (E22-S03) came after the browser specs and their baselines; the baselines are made in the pinned container (`yarn e2e:update`), so until that run it is held by the unit tests and the route coverage guard',
+  ],
+  [
     '/installations/$installationId/',
     'the home of a tenant is the repository list of `/installations/$installationId`, which has a screen',
   ],
