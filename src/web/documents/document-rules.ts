@@ -27,6 +27,7 @@ export const SHOWN_RULES = [
   'invalid_rationale',
   'first_version_must_be_major',
   'content_unchanged',
+  'rollback_requires_major',
   'version_conflict',
 ] as const satisfies readonly ClaRule[];
 

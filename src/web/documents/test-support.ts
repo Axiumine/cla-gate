@@ -136,17 +136,18 @@ export interface Served {
   readonly tenants: ReturnType<typeof serveTenants>;
 }
 
-async function answerWith(answer: Answer): Promise<Response> {
+export async function answerWith(answer: Answer): Promise<Response> {
   return typeof answer === 'function' ? await answer() : answer.clone();
 }
 
 /** What the next request is answered with: the one for its turn, the last one when there are fewer answers than requests. */
-async function nth(answers: readonly Answer[], turn: number): Promise<Response> {
+export async function nth(answers: readonly Answer[], turn: number): Promise<Response> {
   const answer = answers[Math.min(turn, answers.length) - 1];
   return answer === undefined ? HttpResponse.error() : await answerWith(answer);
 }
 
-async function record(request: Request): Promise<Seen> {
+/** What a request carried, as the tests of the screens read it back. */
+export async function record(request: Request): Promise<Seen> {
   return {
     method: request.method,
     url: request.url,

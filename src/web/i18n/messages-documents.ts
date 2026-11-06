@@ -59,6 +59,8 @@ export const documentMessages = {
     'Enter a name of 1 to 100 characters, with no control characters and no characters that change the text direction.',
   'documents.rule.invalid_rationale': 'Describe the change in 1 to 2000 characters, with no control characters.',
   'documents.rule.kind_not_supported': 'This kind of document cannot be created yet.',
+  'documents.rule.rollback_requires_major':
+    'This text belongs to an earlier major version. Publishing it again would change what the signers of the current major version agreed to, so it can only be published as a major version: everyone must sign again.',
   'documents.rule.version_conflict':
     'Another version was published at the same moment. Load the latest version and try again.',
   'documents.scope.installation': 'Whole installation',

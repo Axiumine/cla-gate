@@ -5251,6 +5251,7 @@ __metadata:
     "@vitejs/plugin-react": "npm:^6.1.2"
     "@vitest/coverage-v8": "npm:5.0.5"
     axe-core: "npm:^4.14.0"
+    diff: "npm:^9.0.0"
     eslint: "npm:^10.14.0"
     eslint-plugin-no-unsanitized: "npm:^4.1.5"
     eslint-plugin-react-hooks: "npm:^7.1.1"
@@ -5630,6 +5631,13 @@ __metadata:
   version: 1.0.5
   resolution: "diff-match-patch@npm:1.0.5"
   checksum: 10c0/142b6fad627b9ef309d11bd935e82b84c814165a02500f046e2773f4ea894d10ed3017ac20454900d79d4a0322079f5b713cf0986aaf15fce0ec4a2479980c86
+  languageName: node
+  linkType: hard
+
+"diff@npm:^9.0.0":
+  version: 9.0.0
+  resolution: "diff@npm:9.0.0"
+  checksum: 10c0/a971cc88f66071a33bd3942db2f51b57d484e9856265ae45cf44fb28ab2fde91f132d9c26d8be0fb6082d2be94d29e1295c1adb251b7461935d6a2dd304cd161
   languageName: node
   linkType: hard
 

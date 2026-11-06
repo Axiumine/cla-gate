@@ -16,7 +16,7 @@ import {
   VERSION_PATH,
   VERSIONS_PATH,
 } from './cla.ts';
-import { versionResponseSchema } from './cla-history.ts';
+import { versionListResponseSchema, versionResponseSchema } from './cla-history.ts';
 import { publishVersionRequestSchema, publishVersionResponseSchema } from './cla-version.ts';
 import { defineRoute } from './contract.ts';
 import { installationParamsSchema } from './installations.ts';
@@ -85,6 +85,15 @@ export const publishVersionRoute = defineRoute({
   params: documentParamsSchema,
   body: publishVersionRequestSchema,
   responses: { 201: publishVersionResponseSchema },
+});
+
+/** `GET .../documents/:documentId/versions?limit=&cursor=` (E12-S05): the history of a document, newest number first, one page at a time (E18-S11). */
+export const versionListRoute = defineRoute({
+  method: 'GET',
+  path: VERSIONS_PATH,
+  params: documentParamsSchema,
+  query: pageQuerySchema,
+  responses: { 200: versionListResponseSchema },
 });
 
 /** `GET .../documents/:documentId/versions/:versionId` (E12-S05): one version with its exact text. */

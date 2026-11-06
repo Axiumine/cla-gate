@@ -9,6 +9,7 @@ import { isDirty } from './editor-state.ts';
 import { PublishForm } from './PublishForm.tsx';
 import { SaveFirst } from './SaveFirst.tsx';
 import type { useDraftActions } from './use-draft-actions.ts';
+import { editorOutcomes } from './use-publish-request.ts';
 
 export interface PublishDialogProps {
   readonly ids: DocumentIds;
@@ -35,7 +36,12 @@ export function PublishDialog({ ids, state, dispatch, actions }: PublishDialogPr
       description={t('publish.description')}
     >
       {revision !== null && !isDirty(state) ? (
-        <PublishForm ids={ids} state={state} revision={revision} dispatch={dispatch} />
+        <PublishForm
+          ids={ids}
+          target={{ from: { type: 'draft', revision }, active: state.active }}
+          text={state.saved.text}
+          outcomes={editorOutcomes(dispatch)}
+        />
       ) : (
         <SaveFirst
           saving={actions.save.isPending}

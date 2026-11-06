@@ -7,7 +7,7 @@ import { publishBody } from './publish-body.ts';
 // E18-S05: the request of a publish is made in one place, and it is a body the contract of the server accepts.
 
 const INPUT = {
-  revision: 3,
+  source: { type: 'draft', revision: 3 },
   bump: 'major',
   rationale: 'Clarified section 2',
   activeVersionId: 301,
@@ -37,6 +37,15 @@ test('a confirmed re-signing is sent as acknowledgeResigning: true', () => {
   });
 });
 
+test('a restore names the version the text is copied from, and nothing of the draft', () => {
+  expect(publishBody({ ...INPUT, source: { type: 'version', versionId: 301 } })).toEqual({
+    source: { type: 'version', versionId: 301 },
+    bump: 'major',
+    rationale: 'Clarified section 2',
+    expectedActiveVersionId: 301,
+  });
+});
+
 test('a document with no version is published over null', () => {
   expect(publishBody({ ...INPUT, activeVersionId: null }).expectedActiveVersionId).toBeNull();
 });
@@ -45,6 +54,7 @@ test.each([
   INPUT,
   { ...INPUT, acknowledgeResigning: true },
   { ...INPUT, bump: 'minor', activeVersionId: null },
+  { ...INPUT, source: { type: 'version', versionId: 301 } },
 ] as const)('the body %# is one the server contract accepts', (input) => {
   expect(publishVersionRequestSchema.safeParse(publishBody(input)).success).toBe(true);
 });

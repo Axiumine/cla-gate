@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { z } from 'zod';
-import type { publishVersionRequestSchema, VersionBump } from '../../shared/cla-version.ts';
+import type { PublishSource, publishVersionRequestSchema, VersionBump } from '../../shared/cla-version.ts';
 
 // The request of a publish (E18-S05), made in one place so that what the screen sends is what the story says it sends.
 
@@ -9,8 +9,8 @@ import type { publishVersionRequestSchema, VersionBump } from '../../shared/cla-
 export type PublishBody = z.input<typeof publishVersionRequestSchema>;
 
 export interface PublishInput {
-  /** The revision of the saved draft the version is made from. */
-  readonly revision: number;
+  /** Where the text comes from: the saved draft at a revision, or a version of the document. */
+  readonly source: PublishSource;
   readonly bump: VersionBump;
   /** The rationale as the server will store it (`normaliseRationale`). */
   readonly rationale: string;
@@ -21,12 +21,12 @@ export interface PublishInput {
 }
 
 /**
- * `{ source: { type: 'draft', revision }, bump, rationale, expectedActiveVersionId }`, and `acknowledgeResigning: true` only when the
+ * `{ source, bump, rationale, expectedActiveVersionId }` with the source `{ type: 'draft', revision }` or `{ type: 'version', versionId }`, and `acknowledgeResigning: true` only when the
  * person confirmed the re-signing: the first request of a major publish never carries it, so the server can ask.
  */
 export function publishBody(input: PublishInput): PublishBody {
   return {
-    source: { type: 'draft', revision: input.revision },
+    source: input.source,
     bump: input.bump,
     rationale: input.rationale,
     expectedActiveVersionId: input.activeVersionId,

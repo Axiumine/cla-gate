@@ -190,3 +190,45 @@ describe('a publish', () => {
     expect(state.notice).toEqual({ type: 'published', published });
   });
 });
+
+describe('a restore of an old version (E18-S11)', () => {
+  const published = {
+    version: versionOf({ id: 303, major: 2, minor: 0 }),
+    requiresResigning: true,
+    affectedSignatures: 4,
+  };
+  const restore: EditorAction = { type: 'restored', published, text: 'the old text' };
+
+  test('makes the new version the active one with the text that was published again, and says so', () => {
+    const state = run(initialEditorState(OPENED), { type: 'stale' }, restore);
+    expect(state.active).toEqual(published.version);
+    expect(state.activeText).toBe('the old text');
+    expect(state.stale).toBe(false);
+    expect(state.notice).toEqual({ type: 'published', published });
+  });
+
+  test('leaves a saved draft as it is, with its text on screen: a restore does not consume the draft', () => {
+    const state = run(initialEditorState({ ...OPENED, draft: DRAFT }), restore);
+    expect(state.saved).toEqual({ revision: 3, text: 'the draft' });
+    expect(state.text).toBe('the draft');
+  });
+
+  test('with no draft and nothing unsaved the editor follows the active text, and has nothing unsaved after it', () => {
+    const state = run(initialEditorState(OPENED), restore);
+    expect(state.text).toBe('the old text');
+    expect(state.saved).toEqual({ revision: null, text: 'the old text' });
+    expect(isDirty(state)).toBe(false);
+  });
+
+  test('with no draft and typing that is not saved the typing stays, and is unsaved against the new active text', () => {
+    const state = run(initialEditorState(OPENED), { type: 'edit', text: 'my typing' }, restore);
+    expect(state.text).toBe('my typing');
+    expect(state.saved).toEqual({ revision: null, text: 'the old text' });
+    expect(isDirty(state)).toBe(true);
+  });
+
+  test('keeps a conflict of the draft, which is about the draft and not about the version', () => {
+    const state = run(initialEditorState({ ...OPENED, draft: DRAFT }), { type: 'conflict' }, restore);
+    expect(state.conflict).toBe(true);
+  });
+});

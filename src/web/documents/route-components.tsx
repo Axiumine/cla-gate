@@ -18,9 +18,22 @@ export function DocumentsRoute() {
   return <DocumentsPage installationId={documentsApi.useParams().installationId} />;
 }
 
-/** The route `/installations/$installationId/documents/$documentId`: one document and its editor. */
+/** The route `/installations/$installationId/documents/$documentId?tab=&view=&compare=&from=&to=&cursor=`: one document, with its editor and its history (E18-S11). */
 export function DocumentRoute() {
   // type-coverage:ignore-next-line -- the route API type is made from the route tree, which holds any
   const { installationId, documentId } = documentApi.useParams();
-  return <DocumentPage installationId={installationId} documentId={documentId} />;
+  // type-coverage:ignore-next-line -- the route API type is made from the route tree, which holds any
+  const search = documentApi.useSearch();
+  // type-coverage:ignore-next-line -- the route API type is made from the route tree, which holds any
+  const navigate = documentApi.useNavigate();
+  return (
+    <DocumentPage
+      installationId={installationId}
+      documentId={documentId}
+      search={search}
+      onSearch={(update, replace = false) => {
+        void navigate({ search: update, replace });
+      }}
+    />
+  );
 }

@@ -11,6 +11,7 @@ import { AllowlistRoute } from './allowlist/route-components.tsx';
 import { auditSearchSchema } from './audit/audit-search.ts';
 import { AuditRoute } from './audit/route-components.tsx';
 import { documentRouteParams } from './documents/document-params.ts';
+import { documentSearchSchema } from './documents/history/history-search.ts';
 import { DocumentRoute, DocumentsRoute } from './documents/route-components.tsx';
 import { InstallationsPage } from './installations/InstallationsPage.tsx';
 import { installationRouteParams } from './installations/installation-params.ts';
@@ -187,7 +188,8 @@ const repositoriesRoute = createRoute({
   component: RepositoriesRoute,
 });
 
-// The CLA documents of a tenant (E18-S05): the list, and one document with its editor. `$documentId` is `cla_documents.id`; a segment
+// The CLA documents of a tenant (E18-S05): the list, and one document with its editor and, in `?tab=history&view=&compare=&from=&to=&cursor=`, its history
+// (E18-S11), so a view of it is shared by its address. `$documentId` is `cla_documents.id`; a segment
 // that is not a plain positive number is no page of the app. The list needs an org admin, a document the role of its scope: the
 // server decides on every request.
 const documentsRoute = createRoute({
@@ -202,6 +204,7 @@ const documentRoute = createRoute({
   path: 'documents/$documentId',
   ...tenantPage('document.title'),
   params: documentRouteParams,
+  validateSearch: documentSearchSchema,
   component: DocumentRoute,
 });
 

@@ -68,6 +68,11 @@ export interface DocumentIds {
 
 const idsOf = ({ installationId, documentId }: DocumentIds) => ({ installationId, documentId });
 
+/** The start of the key of every query about one document: its editor and its history (E18-S11) are kept under it. */
+export function documentKey(ids: DocumentIds) {
+  return [...documentsKey(ids.installationId), ids.documentId] as const;
+}
+
 /** A document with its active version and whether a draft is saved, as `GET .../documents/:documentId` answers. */
 export type DocumentDetail = SuccessOf<typeof documentRoute>['document'];
 
@@ -111,7 +116,7 @@ export async function readEditorSeed(client: ApiClient, ids: DocumentIds, signal
  */
 export function editorSeedQueryOptions(client: ApiClient, ids: DocumentIds) {
   return queryOptions({
-    queryKey: [...documentsKey(ids.installationId), ids.documentId, 'editor'] as const,
+    queryKey: [...documentKey(ids), 'editor'] as const,
     queryFn: ({ signal }) => readEditorSeed(client, ids, signal),
     gcTime: 0,
     staleTime: 0,

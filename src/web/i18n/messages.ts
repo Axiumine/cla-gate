@@ -3,6 +3,7 @@
 import { allowlistMessages } from './messages-allowlist.ts';
 import { auditMessages } from './messages-audit.ts';
 import { documentMessages } from './messages-documents.ts';
+import { historyMessages } from './messages-history.ts';
 import { pendingMessages } from './messages-pending.ts';
 import { repositoryMessages } from './messages-repositories.ts';
 import { signatureMessages } from './messages-signatures.ts';
@@ -70,6 +71,7 @@ export const messages = {
   ...allowlistMessages,
   ...auditMessages,
   ...documentMessages,
+  ...historyMessages,
   ...pendingMessages,
   ...repositoryMessages,
   ...signatureMessages,

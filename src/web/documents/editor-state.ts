@@ -4,6 +4,7 @@
 import type { publishVersionRoute } from '../../shared/cla-routes.ts';
 import type { SuccessOf } from '../../shared/contract.ts';
 import type { EditorSeed } from './document-queries.ts';
+import { afterServer, isServerAction, type ServerAction } from './editor-server-state.ts';
 
 // What the editor of a document holds and how it changes (E18-S05), as one pure reducer so every rule about the text, the saved
 // draft, the active version and the notices is tested without a screen. The draft is on the server and shared by every admin of
@@ -54,7 +55,8 @@ export type EditorAction =
   | { readonly type: 'stale' }
   | { readonly type: 'loadedDraft'; readonly draft: EditorSeed['draft'] }
   | { readonly type: 'loadedActive'; readonly active: ActiveVersion | null; readonly activeText: string }
-  | { readonly type: 'published'; readonly published: Published };
+  | { readonly type: 'published'; readonly published: Published }
+  | { readonly type: 'restored'; readonly published: Published; readonly text: string };
 
 /** The state the editor opens in: the saved draft when there is one, else the active version's text, else nothing. */
 export function initialEditorState(seed: EditorSeed): EditorState {
@@ -80,10 +82,14 @@ export function isDirty(state: EditorState): boolean {
 }
 
 const SAVED: Notice = { type: 'saved' };
-const LOADED_ACTIVE: Notice = { type: 'loadedActive' };
 
 /** The state after `action`. */
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
+  return isServerAction(action) ? afterServer(state, action, isDirty(state)) : afterPerson(state, action);
+}
+
+/** The state after what the person did, or what a save or a refusal told the editor. */
+function afterPerson(state: EditorState, action: Exclude<EditorAction, ServerAction>): EditorState {
   switch (action.type) {
     case 'edit':
       return edited(state, action.text);
@@ -97,12 +103,6 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return { ...state, conflict: true, publishing: false };
     case 'stale':
       return { ...state, stale: true, publishing: false };
-    case 'loadedDraft':
-      return loadedDraft(state, action.draft);
-    case 'loadedActive':
-      return { ...state, active: action.active, activeText: action.activeText, stale: false, notice: LOADED_ACTIVE };
-    case 'published':
-      return published(state, action.published);
   }
 }
 
@@ -119,36 +119,5 @@ function discarded(state: EditorState): EditorState {
     saved: { revision: null, text: state.activeText },
     conflict: false,
     notice: { type: 'discarded' },
-  };
-}
-
-/** The draft was consumed by the publish: the version it made is the active one, and no draft is saved any more. */
-function published(state: EditorState, answer: Published): EditorState {
-  return {
-    ...state,
-    active: answer.version,
-    activeText: state.saved.text,
-    saved: { revision: null, text: state.saved.text },
-    conflict: false,
-    stale: false,
-    publishing: false,
-    notice: { type: 'published', published: answer },
-  };
-}
-
-/**
- * "Load latest" after a conflict: the draft another admin saved replaces the text on screen. When that draft has been discarded
- * meanwhile there is nothing to load, so the text on screen stays, and it is now unsaved work on top of the active version.
- */
-function loadedDraft(state: EditorState, draft: EditorSeed['draft']): EditorState {
-  if (draft === null) {
-    return { ...state, saved: { revision: null, text: state.activeText }, conflict: false, notice: undefined };
-  }
-  return {
-    ...state,
-    text: draft.contentMd,
-    saved: { revision: draft.revision, text: draft.contentMd },
-    conflict: false,
-    notice: { type: 'loadedDraft' },
   };
 }

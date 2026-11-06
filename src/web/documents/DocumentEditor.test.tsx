@@ -70,7 +70,7 @@ test('the editor asks for the document, its draft and the version text of this t
   ]);
 });
 
-test('the h1 is the name of the document, the facts say its scope, kind and active version, and there is one tab, "Editor"', async () => {
+test('the h1 is the name of the document, the facts say its scope, kind and active version, and there are two tabs, "Editor" and "History"', async () => {
   serveDocuments({
     detail: [detailOf(listedOf({ scope: 'repository', repositoryId: 7, repositoryFullName: 'acme/widgets' }))],
   });
@@ -82,7 +82,10 @@ test('the h1 is the name of the document, the facts say its scope, kind and acti
   expect(facts).toHaveTextContent(messages['documents.kind.individual']);
   expect(facts).toHaveTextContent('1.0');
   const tabs = within(screen.getByRole('tablist', { name: messages['document.tabs.label'] })).getAllByRole('tab');
-  expect(tabs.map((tab) => tab.textContent)).toEqual([messages['document.tabs.editor']]);
+  expect(tabs.map((tab) => tab.textContent)).toEqual([
+    messages['document.tabs.editor'],
+    messages['document.tabs.history'],
+  ]);
   expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
 });
 
