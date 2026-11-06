@@ -1311,7 +1311,7 @@ jobs:
     needs: coverage
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
       - name: Preflight (runner capabilities)
@@ -1389,6 +1389,10 @@ jobs:
             echo "::error title=Chromium::the browser Playwright installed does not start on this runner: a system library is probably missing (docs/ci-runners.md, Known unknowns)"
             exit 1
           fi
+      # E18-S12: the scenarios of the screens load the built dashboard (dist/web) and answer its API from a table of made-up
+      # bodies, so the job still needs no database, no Docker and no secret.
+      - name: Build the dashboard (the scenarios of the screens load it)
+        run: yarn build
       - name: Positive control (the wrapper must fail on a leak, pass on a clean page and report an error)
         run: yarn leaks:control
       - name: Leak scenarios

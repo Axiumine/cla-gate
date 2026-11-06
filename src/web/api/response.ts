@@ -87,5 +87,6 @@ export async function readError(response: Response, nowMs: number, signal: Abort
     code: status === UNAUTHENTICATED_STATUS ? UNAUTHENTICATED : (envelope?.error.code ?? UNEXPECTED_RESPONSE),
     requestId: envelope?.error.requestId ?? headerRequestId(response),
     retryAfterSeconds: parseRetryAfter(response.headers.get('retry-after'), nowMs),
+    details: envelope?.error.details,
   });
 }

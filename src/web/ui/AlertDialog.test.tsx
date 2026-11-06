@@ -154,6 +154,52 @@ test('while the action is under way the confirm button is busy and ignores click
   expect(alertDialog()).toBeInTheDocument();
 });
 
+test('a confirm button that cannot be taken yet is disabled and does nothing, while Cancel still closes the dialog (E18-S14)', async () => {
+  const onConfirm = vi.fn();
+  const onOpenChange = vi.fn();
+  const { user } = renderWithProviders(
+    <AlertDialog
+      open
+      confirmDisabled
+      title="Q"
+      description="D"
+      confirmLabel="Go"
+      onConfirm={onConfirm}
+      onOpenChange={onOpenChange}
+    />,
+  );
+  const confirm = screen.getByRole('button', { name: 'Go' });
+  expect(confirm).toBeDisabled();
+  await user.click(confirm);
+  expect(onConfirm).not.toHaveBeenCalled();
+  expect(onOpenChange).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+test('a question that opts in with escapeCancels is answered "no" by Escape, which closes it and gives focus back; a click outside still does nothing (E18-S14)', async () => {
+  const onConfirm = vi.fn();
+  const { user } = renderWithProviders(
+    <AlertDialog
+      escapeCancels
+      title="Q"
+      description="D"
+      confirmLabel="Go"
+      onConfirm={onConfirm}
+      trigger={<Button>Ask</Button>}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: 'Ask' }));
+  await userEvent.setup({ pointerEventsCheck: 0 }).click(alertDialog().parentElement ?? document.body);
+  expect(alertDialog()).toBeInTheDocument();
+  await user.keyboard('{Escape}');
+  await waitFor(() => {
+    expect(queryAlert()).toBeNull();
+  });
+  expect(onConfirm).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Ask' })).toHaveFocus();
+});
+
 test('a dialog with no trigger of its own gives focus back to the element that opened it', async () => {
   const { user, rerender } = renderWithProviders(
     <>

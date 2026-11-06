@@ -25,7 +25,8 @@ export function fixtureName(url: string | undefined): string | undefined {
   return FIXTURE_NAME.test(name) ? name : undefined;
 }
 
-function send(response: http.ServerResponse, status: number, type: string, body: string): void {
+/** Answers with `body` as `type`, never cached and never sniffed. */
+export function send(response: http.ServerResponse, status: number, type: string, body: string): void {
   response.writeHead(status, {
     'content-type': `${type}; charset=utf-8`,
     // The pages are tiny and a stale copy would make a scenario measure something that is not on disk.
@@ -58,11 +59,15 @@ function answer(root: string, request: http.IncomingMessage, response: http.Serv
   }
 }
 
-/** Serves the `*.html` files of `root` on a loopback port from `pickPort`. */
-export async function serveFixtures(root: string, pickPort: () => Promise<number>): Promise<FixtureServer> {
-  const server = http.createServer((request, response) => {
-    answer(root, request, response);
-  });
+/**
+ * Listens on a loopback port from `pickPort` (exclusive, so no other process shares it) and answers with `handle`. The
+ * origin is known once the port is; `close` ends the listener and every open connection.
+ */
+export async function listenOnLoopback(
+  handle: (request: http.IncomingMessage, response: http.ServerResponse) => void,
+  pickPort: () => Promise<number>,
+): Promise<FixtureServer> {
+  const server = http.createServer(handle);
   const port = await pickPort();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
@@ -82,4 +87,11 @@ export async function serveFixtures(root: string, pickPort: () => Promise<number
         server.closeAllConnections();
       }),
   };
+}
+
+/** Serves the `*.html` files of `root` on a loopback port from `pickPort`. */
+export function serveFixtures(root: string, pickPort: () => Promise<number>): Promise<FixtureServer> {
+  return listenOnLoopback((request, response) => {
+    answer(root, request, response);
+  }, pickPort);
 }

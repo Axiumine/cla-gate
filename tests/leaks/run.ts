@@ -5,8 +5,10 @@ import { ConsoleMode, config, run } from '@memlab/api';
 import { chromium } from '@playwright/test';
 import { stdIo } from '../../scripts/ci/lib/io.ts';
 import { pickSystemFreePort } from '../../scripts/ci/lib/ports.ts';
+import { answerTable } from '../../scripts/leaks/app-answers.ts';
+import { serveApp } from '../../scripts/leaks/app-server.ts';
 import { serveFixtures } from '../../scripts/leaks/fixture-server.ts';
-import { FIXTURES_DIR, REPORT_DIR, SCENARIOS_DIR } from '../../scripts/leaks/paths.ts';
+import { APP_DIR, FIXTURES_DIR, REPORT_DIR, SCENARIOS_DIR } from '../../scripts/leaks/paths.ts';
 import { runLeaks } from '../../scripts/leaks/runner.ts';
 import { loadModule, systemFiles } from '../../scripts/leaks/system.ts';
 
@@ -29,4 +31,5 @@ process.exitCode = await runLeaks(process.argv.slice(2), {
   load: loadModule,
   files: systemFiles,
   serve: (root) => serveFixtures(root, pickSystemFreePort),
+  serveApp: () => serveApp({ root: APP_DIR, answers: answerTable() }, pickSystemFreePort),
 });

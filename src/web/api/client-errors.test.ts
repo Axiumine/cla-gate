@@ -72,6 +72,24 @@ test('a domain code of the envelope is kept as it is', async () => {
   });
 });
 
+test('the details object of the envelope is kept as the server sent it, and an error without one has none (E18-S05)', async () => {
+  answer('/api/things', envelope(409, 'resign_confirmation_required', {}, { affectedSignatures: 3, note: null }));
+  const { client } = testClient();
+  const error = asApiError(await rejection(client.call(createThing, { body: { size: 1 } })));
+  expect(error.details).toEqual({ affectedSignatures: 3, note: null });
+  answer('/api/things', envelope(409, 'conflict'));
+  expect(asApiError(await rejection(client.call(createThing, { body: { size: 1 } }))).details).toBeUndefined();
+});
+
+test('details that are not a JSON object make the body something other than the envelope', async () => {
+  answer('/api/things', json({ error: { code: 'x', message: 'y', requestId: 'req-00000001', details: 'text' } }, 409));
+  const { client } = testClient();
+  expect(await rejection(client.call(createThing, { body: { size: 1 } }))).toMatchObject({
+    code: 'unexpected_response',
+    details: undefined,
+  });
+});
+
 test('the message of an ApiError is the status alone: nothing the server wrote reaches it', async () => {
   answer('/api/things', json({ error: { code: 'bad_request', message: leak, requestId: 'req-00000001' } }, 400));
   const { client } = testClient();

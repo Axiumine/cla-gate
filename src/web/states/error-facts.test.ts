@@ -44,6 +44,15 @@ test('only an ApiError with status 403 is forbidden', () => {
   expect(isForbidden(new ContractError('GET /api/x', 'response', []))).toBe(false);
 });
 
+test('a 503 github_rate_limited waits for the seconds it asked for, as a 429 does, and no other 503 does (E18-S04)', () => {
+  expect(waitSeconds(api({ status: 503, code: 'github_rate_limited', retryAfterSeconds: 42 }))).toBe(42);
+  expect(waitSeconds(api({ status: 503, code: 'github_rate_limited', retryAfterSeconds: 0 }))).toBe(0);
+  expect(waitSeconds(api({ status: 503, code: 'github_rate_limited' }))).toBe(0);
+  expect(waitSeconds(api({ status: 503, code: 'service_unavailable', retryAfterSeconds: 42 }))).toBe(0);
+  expect(waitSeconds(api({ status: 502, code: 'github_rate_limited', retryAfterSeconds: 42 }))).toBe(0);
+  expect(waitSeconds(api({ status: 429, code: 'github_rate_limited', retryAfterSeconds: 42 }))).toBe(42);
+});
+
 test('a 429 waits for the seconds it asked for, and nothing else waits', () => {
   expect(waitSeconds(api({ status: 429, retryAfterSeconds: 7 }))).toBe(7);
   expect(waitSeconds(api({ status: 429, retryAfterSeconds: 0 }))).toBe(0);

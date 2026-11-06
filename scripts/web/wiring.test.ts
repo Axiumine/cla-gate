@@ -60,11 +60,29 @@ test('the web project is a root reference, and the Node projects leave src/web t
   expect(readTsconfig('tsconfig.server.json').include).not.toContain('src/web/**/*.ts');
 });
 
-// E19-S01: the image build context leaves out e2e/, which scripts/e2e/ refer to, so `yarn build` compiles only the two projects
-// that ship (the server emits dist/server, the web project is type-checked) and `yarn typecheck` stays the whole solution.
-test('yarn build compiles the server and the web project and then builds the app; yarn typecheck is the compile of every project', () => {
-  expect(SCRIPTS.get('build')).toBe('tsc -b tsconfig.server.json tsconfig.web.json && vite build');
+// E19-S01: the image build context leaves out e2e/, which scripts/e2e/ and some tests refer to, so `yarn build` compiles only the
+// two projects that ship (the server emits dist/server, the web project is type-checked without its tests and test helpers:
+// tsconfig.web.build.json) and `yarn typecheck` stays the whole solution, tests included.
+test('yarn build compiles the server and the web project without its tests and then builds the app; yarn typecheck is the compile of every project', () => {
+  expect(SCRIPTS.get('build')).toBe('tsc -b tsconfig.server.json tsconfig.web.build.json && vite build');
   expect(SCRIPTS.get('typecheck')).toBe('tsc -b');
+  expect(readTsconfig('tsconfig.web.build.json').extends).toBe('./tsconfig.web.json');
+});
+
+test('the web project that yarn build compiles holds no test, no test helper and nothing outside src (the image has no e2e/)', () => {
+  const result = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'node_modules/typescript/bin/tsc'), '--listFilesOnly', '-p', 'tsconfig.web.build.json'],
+    { cwd: ROOT, encoding: 'utf8' },
+  );
+  expect(result.status).toBe(0);
+  const own = result.stdout
+    .split('\n')
+    .filter((line) => line.startsWith(ROOT) && !line.includes('/node_modules/'))
+    .map((line) => path.relative(ROOT, line));
+  expect(own.filter((file) => file.startsWith('src/web/')).length).toBeGreaterThan(100);
+  expect(own.filter((file) => !/^src\/(web|shared)\//.test(file))).toEqual([]);
+  expect(own.filter((file) => /\.test\.tsx?$|(^|\/)test-support(\.tsx?|\/)/.test(file))).toEqual([]);
 });
 
 test('yarn dev starts both dev servers through db.ts run app', () => {

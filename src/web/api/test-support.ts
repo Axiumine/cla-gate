@@ -123,9 +123,15 @@ export function json(body: JsonBodyType, status = 200, headers: Record<string, s
   return HttpResponse.json(body, { status, headers });
 }
 
-/** The standard error body of the server. */
-export function envelope(status: number, code: string, headers: Record<string, string> = {}): Response {
-  return json({ error: { code, message: 'Standard text', requestId: 'req-00000001' } }, status, headers);
+/** The standard error body of the server, with the `details` object of a domain error when the test gives one. */
+export function envelope(
+  status: number,
+  code: string,
+  headers: Record<string, string> = {},
+  details?: Record<string, JsonBodyType>,
+): Response {
+  const error = { code, message: 'Standard text', requestId: 'req-00000001' };
+  return json({ error: details === undefined ? error : { ...error, details } }, status, headers);
 }
 
 /** The error `work` throws, or `undefined` when it does not throw. */

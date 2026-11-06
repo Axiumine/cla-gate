@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { useQuery } from '@tanstack/react-query';
-import { screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { answer, envelope, json, listThings, THING, testClient } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
@@ -47,6 +47,26 @@ function Things({ withEmpty = true }: { readonly withEmpty?: boolean }) {
     </>
   );
 }
+
+/** A page that has no heading of its own before the data is there (E18-S04): the error state is its level-one heading. */
+function TopLevel() {
+  const query = useQuery({ queryKey: ['things'], queryFn: () => client.call(listThings) });
+  return (
+    <QueryBoundary query={query} errorLevel={1}>
+      {() => <p>data</p>}
+    </QueryBoundary>
+  );
+}
+
+test('the error state is a level-two heading unless the page says it is the level-one heading', async () => {
+  answer('/api/things', envelope(500, 'internal_server_error'));
+  renderWithProviders(<Things />);
+  expect(await screen.findByRole('heading', { level: 2, name: messages['states.error.title'] })).toBeInTheDocument();
+  cleanup();
+  renderWithProviders(<TopLevel />);
+  expect(await screen.findByRole('heading', { level: 1, name: messages['states.error.title'] })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+});
 
 test('loading to data: the loading state shows first, then the data, and the loading state is gone', async () => {
   answer('/api/things', json([THING]));

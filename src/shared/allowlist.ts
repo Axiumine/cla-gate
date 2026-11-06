@@ -39,8 +39,8 @@ export const allowlistEntryRequestSchema = z.discriminatedUnion('kind', [
 
 export type AllowlistEntryRequest = z.infer<typeof allowlistEntryRequestSchema>;
 
-/** What an entry exempts: one account, or the members of the installation's own organisation. */
-const allowlistKindSchema = z.enum(['user', 'bot', 'org_members']);
+/** What an entry exempts: one account, or the members of the installation's own organisation (the add dialog of E18-S06 reads its choice through it). */
+export const allowlistKindSchema = z.enum(['user', 'bot', 'org_members']);
 
 /**
  * One entry. `scope` follows `repositoryId` (null: the entry covers the installation). `githubId` is the identity;

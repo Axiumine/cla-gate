@@ -3,6 +3,7 @@
 import { type Kysely, sql } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
+import { REPOSITORY_NAME } from './cla-document-columns.ts';
 import { toDocument } from './cla-document-rows.ts';
 import type { DocumentPosition, RepositoryDocuments, StoredDocument } from './cla-document-types.ts';
 
@@ -11,7 +12,10 @@ import type { DocumentPosition, RepositoryDocuments, StoredDocument } from './cl
 // still part of the tenant. The statements that write them are in cla-document-writes.ts; the rules (names, limits, audit)
 // are in cla-documents.ts and cla-document-changes.ts.
 
-/** The documents of the tenant in the order `name asc, id asc`, with their active version: the version is joined on both keys, so it is the document's own. */
+/**
+ * The documents of the tenant in the order `name asc, id asc`, with their active version and the name of their repository (E18-S05):
+ * the version is joined on both keys and the repository is looked up by the installation of the document, so both are the document's own.
+ */
 function selectDocuments(db: Kysely<Database>, scope: TenantScope) {
   return db
     .selectFrom('cla_documents as d')
@@ -19,7 +23,7 @@ function selectDocuments(db: Kysely<Database>, scope: TenantScope) {
       join.onRef('v.id', '=', 'd.active_version_id').onRef('v.document_id', '=', 'd.id'),
     )
     .selectAll('d')
-    .select(['v.id as version_id', 'v.major', 'v.minor', 'v.content_sha256', 'v.published_at'])
+    .select(['v.id as version_id', 'v.major', 'v.minor', 'v.content_sha256', 'v.published_at', REPOSITORY_NAME])
     .where('d.installation_id', '=', scope.installationId)
     .orderBy('d.name')
     .orderBy('d.id');
@@ -38,7 +42,7 @@ export async function findDocument(
 /**
  * Up to `page.limit` documents of the tenant in the order `name asc, id asc`, starting at `page.from` (that document
  * included) when it is given. The position is compared as the pair (name, id) in that order, so no document is skipped or
- * repeated between pages.
+ * repeated between pages. Whether a draft is saved is read by the draft statements (`findDraftedDocumentIds`).
  */
 export async function listDocuments(
   db: Kysely<Database>,

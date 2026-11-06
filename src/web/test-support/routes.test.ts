@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { accessById, allRoutes, type RouteNode, routeAccessProblems, routeTitleProblems } from './routes.ts';
+import {
+  accessById,
+  allRoutes,
+  type RouteNode,
+  routeAccessProblems,
+  routeFixtureProblems,
+  routeTitleProblems,
+} from './routes.ts';
 
 const tree: RouteNode = {
   id: '__root__',
@@ -54,5 +61,32 @@ test('a route is a problem when its title is missing, is not text, or is not a k
     '/number: no catalog title declared',
     '/unknown: no catalog title declared',
     '/inherited: no catalog title declared',
+  ]);
+});
+
+// E18-S09: the route coverage guard fails on a route that has no fixture, and on a fixture that has no route.
+
+test('a table that lists exactly the routes of the tree has no problem', () => {
+  expect(routeFixtureProblems(tree, ['__root__', '/a', '/b', '/b/c'])).toEqual([]);
+});
+
+test('a route added to the tree without a fixture is a problem naming it', () => {
+  expect(routeFixtureProblems(tree, ['__root__', '/a', '/b'])).toEqual([
+    '/b/c: no fixture in the route coverage table',
+  ]);
+});
+
+test('a fixture whose route has gone is a problem naming it', () => {
+  expect(routeFixtureProblems(tree, ['__root__', '/a', '/b', '/b/c', '/gone'])).toEqual([
+    '/gone: a fixture for a route that is not in the tree',
+  ]);
+});
+
+test('every missing route and every stale fixture is named at once, routes first', () => {
+  expect(routeFixtureProblems(tree, ['/b', '/old'])).toEqual([
+    '__root__: no fixture in the route coverage table',
+    '/a: no fixture in the route coverage table',
+    '/b/c: no fixture in the route coverage table',
+    '/old: a fixture for a route that is not in the tree',
   ]);
 });

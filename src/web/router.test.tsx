@@ -32,7 +32,7 @@ test('every route of the tree names its page title, and it is a key of the catal
   expect(routeTitleProblems(routerFor().tree, messages)).toEqual([]);
 });
 
-test('the routes are the front page, the failed-login page, the two pages of the first-run setup (E19-S07) and the not-found route, all public, and the settings screen of a repository (E22-S03), which needs a login', () => {
+test('the access of every route: the pages of a visitor (front page, failed login, first-run setup, sign page) are public, every screen of a signed-in person needs a login', () => {
   expect(accessById(routerFor().tree)).toEqual({
     __root__: 'public',
     '/': 'public',
@@ -40,6 +40,19 @@ test('the routes are the front page, the failed-login page, the two pages of the
     '/setup': 'public',
     '/setup/callback': 'public',
     '/installations/$installationId/repositories/$repositoryId/settings': 'authenticated',
+    '/sign/$githubRepoId': 'public',
+    '/me/signatures': 'authenticated',
+    '/installations': 'authenticated',
+    '/installations/$installationId': 'authenticated',
+    '/installations/$installationId/': 'authenticated',
+    '/installations/$installationId/repositories': 'authenticated',
+    '/installations/$installationId/documents': 'authenticated',
+    '/installations/$installationId/documents/$documentId': 'authenticated',
+    '/installations/$installationId/allowlist': 'authenticated',
+    '/installations/$installationId/signatures': 'authenticated',
+    '/installations/$installationId/pending': 'authenticated',
+    '/installations/$installationId/audit': 'authenticated',
+    '/operator/installations': 'authenticated',
   });
 });
 

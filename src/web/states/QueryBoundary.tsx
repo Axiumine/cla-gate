@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import type { HeadingLevel } from '../ui/Heading.tsx';
 import { ErrorState } from './ErrorState.tsx';
 import { LoadingState } from './LoadingState.tsx';
 
@@ -12,6 +13,8 @@ type EmptyRule<Data> =
 
 export type QueryBoundaryProps<Data> = EmptyRule<Data> & {
   readonly query: UseQueryResult<Data>;
+  /** The heading level of the error state that replaces the screen: 1 on a page that has no heading of its own before the data is there (E18-S04). */
+  readonly errorLevel?: HeadingLevel;
   /** The screen for the data. It runs only once there is data, so it never has to handle `undefined`. */
   readonly children: (data: Data) => ReactNode;
 };
@@ -23,11 +26,11 @@ export type QueryBoundaryProps<Data> = EmptyRule<Data> & {
  * the banner's "Try again" repeats the request. Nothing here moves focus: an error is announced as an alert, and data
  * replacing the loading state is not announced at all.
  */
-export function QueryBoundary<Data>({ query, isEmpty, empty, children }: QueryBoundaryProps<Data>) {
+export function QueryBoundary<Data>({ query, errorLevel = 2, isEmpty, empty, children }: QueryBoundaryProps<Data>) {
   const data = query.data;
   if (data === undefined) {
     return query.isError ? (
-      <ErrorState error={query.error} refetch={query.refetch} retrying={query.isFetching} />
+      <ErrorState error={query.error} refetch={query.refetch} retrying={query.isFetching} level={errorLevel} />
     ) : (
       <LoadingState />
     );

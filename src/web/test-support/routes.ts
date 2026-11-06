@@ -50,3 +50,19 @@ export function routeTitleProblems(root: RouteNode, catalog: Readonly<Record<str
 export function accessById(root: RouteNode): Record<string, unknown> {
   return Object.fromEntries(allRoutes(root).map((route) => [route.id, route.options.staticData?.access]));
 }
+
+/**
+ * The route coverage guard's check on its own table (E18-S09), one line for each problem; none means the table of fixtures and the
+ * route tree list the same routes. A route with no fixture is a screen nobody renders in the guard, and a fixture with no route is a
+ * screen that has gone or been renamed, so both fail.
+ */
+export function routeFixtureProblems(root: RouteNode, fixtureIds: readonly string[]): string[] {
+  const fixtures = new Set(fixtureIds);
+  const routes = allRoutes(root).map((route) => route.id);
+  return [
+    ...routes.filter((id) => !fixtures.has(id)).map((id) => `${id}: no fixture in the route coverage table`),
+    ...[...fixtures]
+      .filter((id) => !routes.includes(id))
+      .map((id) => `${id}: a fixture for a route that is not in the tree`),
+  ];
+}

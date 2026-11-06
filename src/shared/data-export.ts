@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { defineRoute } from './contract.ts';
 
 // The data subject export (E16-S06): everything the instance holds about the signed-in person, across all orgs, as one JSON
 // document. The route, its tests and the page that offers the download share the path and the shape. Nothing in it names
@@ -90,3 +91,14 @@ export const dataExportSchema = z.object({
 });
 
 export type DataExport = z.infer<typeof dataExportSchema>;
+
+/**
+ * `GET /api/me/export` as the client calls it (E18-S03): no params, no query and no body, because the subject is the session
+ * user and nobody can be named. The server answers with the document as a download; the "my signatures" screen asks through the
+ * typed client, so a refusal (a `429` when the five an hour are used up) arrives as an `ApiError` the screen can show.
+ */
+export const dataExportRoute = defineRoute({
+  method: 'GET',
+  path: DATA_EXPORT_PATH,
+  responses: { 200: dataExportSchema },
+});

@@ -12,6 +12,13 @@ export const SNAPSHOT_PATH_TEMPLATE = '{testDir}/__screenshots__/{testFilePath}/
 /** Explicit on purpose: a changed default must never loosen the visual comparison. */
 export const MAX_DIFF_PIXELS = 20;
 
+/**
+ * Chromium switches of every test browser (E18-S12). `--disable-partial-raster` makes each paint draw whole tiles: a box that
+ * grows after the first paint (a preview that fills, a label that changes) is otherwise drawn over its old corners, which
+ * moves a few anti-aliased corner pixels by one level when the machine is busy, and two baselines of one screen then differ.
+ */
+export const BROWSER_ARGUMENTS: readonly string[] = ['--disable-partial-raster'];
+
 /** `1` inside the pinned Playwright container (yarn e2e:update and the `e2e` CI job set it), unset everywhere else. */
 export const CONTAINER_VARIABLE = 'E2E_CONTAINER';
 
@@ -87,6 +94,9 @@ export function appEnvironment(options: AppEnvironmentOptions): Record<string, s
     HOST: LOOPBACK,
     PORT: String(options.port),
     LOG_LEVEL: 'warn',
+    // E18-S12: the browser connects from the loopback, which is the one proxy trusted, so a context that names its own
+    // forwarded address gets a request budget of its own and a long run does not spend the budget of one address.
+    TRUST_PROXY: LOOPBACK,
     PUBLIC_BASE_URL: `http://${LOOPBACK}:${options.port}`,
     DATABASE_URL: variable(options.env, 'DATABASE_URL'),
     ...PLACEHOLDERS,

@@ -5,6 +5,10 @@ import {
   attachedDocumentSchema,
   INSTALLATION_REPOSITORIES_PATH,
   INSTALLATIONS_PATH,
+  installationListRoute,
+  installationListSchema,
+  installationParamsSchema,
+  installationRepositoriesRoute,
   installationSummarySchema,
   REPOSITORY_SEARCH_MAX_LENGTH,
   repositoryItemSchema,
@@ -102,4 +106,28 @@ test('a page has its items and a cursor that is text or null', () => {
   expect(repositoryPageSchema.parse({ items: [ITEM], nextCursor: 'abc' }).nextCursor).toBe('abc');
   expect(repositoryPageSchema.parse({ items: [], nextCursor: null }).nextCursor).toBeNull();
   expect(repositoryPageSchema.safeParse({ items: [] }).success).toBe(false);
+});
+
+test('the list of installations is a GET of its path, answered with the list schema, and takes no input', () => {
+  expect(installationListRoute.name).toBe('GET /api/installations');
+  expect(installationListRoute.method).toBe('GET');
+  expect(installationListRoute.path).toBe(INSTALLATIONS_PATH);
+  expect(installationListRoute.responses[200]).toBe(installationListSchema);
+  expect('params' in installationListRoute).toBe(false);
+  expect('query' in installationListRoute).toBe(false);
+});
+
+test('the list of repositories is a GET below an installation, with the id as its param and the repository query', () => {
+  expect(installationRepositoriesRoute.name).toBe('GET /api/installations/:installationId/repositories');
+  expect(installationRepositoriesRoute.path).toBe(INSTALLATION_REPOSITORIES_PATH);
+  expect(installationRepositoriesRoute.params).toBe(installationParamsSchema);
+  expect(installationRepositoriesRoute.query).toBe(repositoryListQuerySchema);
+  expect(installationRepositoriesRoute.responses[200]).toBe(repositoryPageSchema);
+});
+
+test('the installation of a path is a positive whole number, by the row id', () => {
+  expect(installationParamsSchema.parse({ installationId: 5 })).toEqual({ installationId: 5 });
+  for (const installationId of [0, -1, 1.5, '5', Number.NaN, 2 ** 53]) {
+    expect(installationParamsSchema.safeParse({ installationId }).success).toBe(false);
+  }
 });

@@ -6,6 +6,7 @@ import { defineConfig } from '@playwright/test';
 import { pickSystemFreePort } from './scripts/ci/lib/ports.ts';
 import {
   appEnvironment,
+  BROWSER_ARGUMENTS,
   isCi,
   MAX_DIFF_PIXELS,
   PORT_VARIABLE,
@@ -32,7 +33,7 @@ export default defineConfig({
   workers: 1,
   forbidOnly: isCi(process.env),
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: { baseURL, trace: 'retain-on-failure' },
+  use: { baseURL, trace: 'retain-on-failure', launchOptions: { args: [...BROWSER_ARGUMENTS] } },
   webServer: {
     command: 'yarn start',
     url: `${baseURL}/healthz`,

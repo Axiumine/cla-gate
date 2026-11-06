@@ -3,7 +3,8 @@
 import { expect, test } from 'vitest';
 import { findTenantRows } from '../../services/tenant-queries.ts';
 import { twoTenants } from './tenant-fixture/test-support.ts';
-import { attempt, ownersOfTenantRows, type ScopedQuery, TENANT_QUERIES } from './tenant-registry/test-support.ts';
+import { ownersOfTenantRows } from './tenant-owners/test-support.ts';
+import { attempt, type ScopedQuery, TENANT_QUERIES } from './tenant-registry/test-support.ts';
 import { migratedTestDatabase } from './test-support.ts';
 
 // The helpers of the registry (E11-S06): what `attempt` makes of a call, and what an answer of the guard's read says about

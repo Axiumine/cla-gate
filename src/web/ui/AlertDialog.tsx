@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { AlertDialog as AlertDialogPrimitive } from 'radix-ui';
 import type { ReactElement, ReactNode } from 'react';
-import { AlertDialogActions } from './AlertDialogActions.tsx';
+import { AlertDialogActions, type AlertDialogActionsProps } from './AlertDialogActions.tsx';
 import {
   BACKDROP_CLASSES,
   DESCRIPTION_CLASSES,
@@ -13,21 +13,13 @@ import {
   useOverlayFocus,
 } from './overlay.tsx';
 
-export interface AlertDialogProps {
+export interface AlertDialogProps extends AlertDialogActionsProps {
   /** The question, as the accessible name and the heading: text from the catalog, or user text through `UserText`. */
   readonly title: ReactNode;
   /** What the choice does, in full: read out after the name. An alert dialog always says what is at stake. */
   readonly description: ReactNode;
-  /** The label of the button that does it: a verb ("Revoke"), not "OK". */
-  readonly confirmLabel: ReactNode;
-  /** Runs when the person chooses to go ahead; the dialog then closes unless `open` is controlled and the screen keeps it open. */
-  readonly onConfirm: () => void;
-  /** Says no. Absent, it is "Cancel" from the catalog. */
-  readonly cancelLabel?: ReactNode;
-  /** The action cannot be undone: the confirm button is the danger one. */
-  readonly destructive?: boolean;
-  /** The action is under way: the confirm button is busy and ignores clicks. Keep the dialog open meanwhile with a controlled `open`. */
-  readonly confirming?: boolean;
+  /** Escape answers the question with "no", like Cancel does, instead of doing nothing: for a question whose safe answer is the one Escape gives (E18-S14). */
+  readonly escapeCancels?: boolean;
   /** The element that opens it, usually a `Button`. Focus returns to it when the dialog closes. */
   readonly trigger?: ReactElement;
   /** More for the body: what is affected, in a list. */
@@ -39,41 +31,39 @@ export interface AlertDialogProps {
 
 /**
  * A dialog that needs an explicit choice (E17-S10), on Radix's AlertDialog: role `alertdialog`, focus starts on Cancel (the
- * safe answer), Escape and a click outside do nothing, and only Cancel or the confirm button close it. Everything else a
+ * safe answer), Escape and a click outside do nothing, and only Cancel or the confirm button close it. A question that opts in with
+ * `escapeCancels` (E18-S14) is also answered "no" by Escape; a click outside still does nothing. Everything else a
  * `Dialog` does (focus trap, focus back to the trigger, no injected style) it does too.
  */
 export function AlertDialog({
   title,
   description,
-  confirmLabel,
-  onConfirm,
-  cancelLabel,
-  destructive = false,
-  confirming = false,
+  escapeCancels = false,
   trigger,
   children,
-  ...root
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...actions
 }: AlertDialogProps) {
   const focus = useOverlayFocus(trigger !== undefined);
   return (
-    <AlertDialogPrimitive.Root {...root}>
+    <AlertDialogPrimitive.Root open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
       {trigger === undefined ? null : <AlertDialogPrimitive.Trigger asChild>{trigger}</AlertDialogPrimitive.Trigger>}
       <AlertDialogPrimitive.Portal>
         <div className={BACKDROP_CLASSES}>
-          <AlertDialogPrimitive.Content className={PANEL_CLASSES} onEscapeKeyDown={keepOpen} {...focus}>
+          <AlertDialogPrimitive.Content
+            className={PANEL_CLASSES}
+            onEscapeKeyDown={escapeCancels ? undefined : keepOpen}
+            {...focus}
+          >
             <ScrollLock />
             <AlertDialogPrimitive.Title className={TITLE_CLASSES}>{title}</AlertDialogPrimitive.Title>
             <AlertDialogPrimitive.Description className={DESCRIPTION_CLASSES}>
               {description}
             </AlertDialogPrimitive.Description>
             {children}
-            <AlertDialogActions
-              confirmLabel={confirmLabel}
-              onConfirm={onConfirm}
-              cancelLabel={cancelLabel}
-              destructive={destructive}
-              confirming={confirming}
-            />
+            <AlertDialogActions {...actions} />
           </AlertDialogPrimitive.Content>
         </div>
       </AlertDialogPrimitive.Portal>

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import http from 'node:http';
 import path from 'node:path';
 import { collectIo } from '../ci/lib/test-support.ts';
 import type { LeakDeps, MemlabOptions, MemlabResult } from './deps.ts';
 import type { ExitTarget } from './exit-guard.ts';
+import type { FixtureServer } from './fixture-server.ts';
 
 // Test helpers for E20-S07: a scripted memlab, a process that records its exit handlers, and the fakes of the wrapper.
 
@@ -52,13 +54,15 @@ export interface Harness {
   readonly err: string[];
   readonly process: ReturnType<typeof fakeProcess>;
   readonly env: Record<string, string | undefined>;
-  /** What memlab was asked, with the fixture origin in the environment at that moment. */
-  readonly memlabCalls: { options: MemlabOptions; origin: string | undefined }[];
+  /** What memlab was asked, with the origins of the fixtures and of the dashboard in the environment at that moment. */
+  readonly memlabCalls: { options: MemlabOptions; origin: string | undefined; appOrigin: string | undefined }[];
   readonly madeDirectories: string[];
   readonly written: Map<string, string>;
   readonly loaded: string[];
   /** How many times the fixture server was started and closed. */
   readonly server: { started: number; closed: number };
+  /** The same for the server of the dashboard (E18-S12). */
+  readonly app: { started: number; closed: number };
 }
 
 export interface HarnessOptions {
@@ -68,9 +72,27 @@ export interface HarnessOptions {
   readonly memlab?: (name: string) => Promise<MemlabResult>;
   readonly load?: (file: string) => Promise<unknown>;
   readonly serve?: () => Promise<void>;
+  readonly serveApp?: () => Promise<void>;
 }
 
 const NO_LEAKS: MemlabResult = { leaks: [] };
+
+/** A server that counts its starts and closes in `count`, after `before` (which may refuse) has run. */
+async function fakeServer(
+  count: { started: number; closed: number },
+  origin: string,
+  before: (() => Promise<void>) | undefined,
+): Promise<FixtureServer> {
+  count.started += 1;
+  await (before ?? (() => Promise.resolve()))();
+  return {
+    origin,
+    close: () => {
+      count.closed += 1;
+      return Promise.resolve();
+    },
+  };
+}
 
 /** `LeakDeps` made of recording fakes; nothing touches the disk, a browser or a port. */
 export function harness(options: HarnessOptions = {}): Harness {
@@ -82,6 +104,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   const written = new Map<string, string>();
   const loaded: string[] = [];
   const server = { started: 0, closed: 0 };
+  const app = { started: 0, closed: 0 };
   const deps: LeakDeps = {
     io,
     env,
@@ -94,7 +117,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     },
     chromiumBinary: '/browsers/chromium/chrome',
     memlab: (call) => {
-      memlabCalls.push({ options: call, origin: env['LEAKS_ORIGIN'] });
+      memlabCalls.push({ options: call, origin: env['LEAKS_ORIGIN'], appOrigin: env['LEAKS_APP_ORIGIN'] });
       // The work directory is <report>/<scenario name>/memlab.
       const name = path.basename(path.dirname(call.workDir));
       return (options.memlab ?? (() => Promise.resolve(NO_LEAKS)))(name);
@@ -108,17 +131,36 @@ export function harness(options: HarnessOptions = {}): Harness {
       makeDirectory: (directory) => madeDirectories.push(directory),
       write: (file, text) => written.set(file, text),
     },
-    serve: async () => {
-      server.started += 1;
-      await (options.serve ?? (() => Promise.resolve()))();
-      return {
-        origin: 'http://127.0.0.1:40123',
-        close: () => {
-          server.closed += 1;
-          return Promise.resolve();
-        },
-      };
-    },
+    serve: () => fakeServer(server, 'http://127.0.0.1:40123', options.serve),
+    serveApp: () => fakeServer(app, 'http://127.0.0.1:40456', options.serveApp),
   };
-  return { deps, out, err, process, env, memlabCalls, madeDirectories, written, loaded, server };
+  return { deps, out, err, process, env, memlabCalls, madeDirectories, written, loaded, server, app };
+}
+
+// E18-S12: shared by the tests of both loopback servers.
+
+export interface Reply {
+  readonly status: number | undefined;
+  readonly headers: http.IncomingHttpHeaders;
+  readonly body: string;
+}
+
+/** A request with the path exactly as given: `fetch` and `URL` would resolve `..` before it leaves the process. */
+export function request(origin: string, rawPath: string, method = 'GET'): Promise<Reply> {
+  const { port } = new URL(origin);
+  return new Promise((resolve, reject) => {
+    const outgoing = http.request({ host: '127.0.0.1', port, path: rawPath, method }, (incoming) => {
+      const chunks: Buffer[] = [];
+      incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
+      incoming.on('end', () => {
+        resolve({
+          status: incoming.statusCode,
+          headers: incoming.headers,
+          body: Buffer.concat(chunks).toString('utf8'),
+        });
+      });
+    });
+    outgoing.on('error', reject);
+    outgoing.end();
+  });
 }

@@ -51,12 +51,14 @@ const CI_FILE = '.github/workflows/ci.yml';
 // than the fastest, and a job cannot be given more than 60. A `postgres` leg keeps the 60 minutes the guard allows and is
 // meant to take about 35; a `coverage-shard` leg is meant to take 15 to 20 and has 40. `coverage`, the required check, only
 // merges the four reports (a checkout, an install and about a minute) and has 15.
+// `leaks` runs memlab on four screen scenarios (E18-S12), 5 to 10 minutes each on a loaded development machine on 2026-11-06,
+// next to the canary and the positive control, so it gets the 60 minutes the guard allows.
 const LONG_JOBS = new Map([
   ['mutation', 180],
   ['postgres', 60],
   ['coverage-shard', 40],
   ['coverage', 15],
-  ['leaks', 30],
+  ['leaks', 60],
   ['qodana', 30],
 ]);
 // E20-S08: the one job that holds a secret (QODANA_TOKEN) runs on a GitHub-hosted machine; see scripts/qodana-gate.

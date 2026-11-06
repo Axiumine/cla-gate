@@ -3,7 +3,7 @@
 import { printable } from '../code-caps/types.ts';
 import type { LeakDeps } from './deps.ts';
 import { guardExit } from './exit-guard.ts';
-import { ORIGIN_VARIABLE } from './fixture-url.ts';
+import { APP_ORIGIN_VARIABLE, ORIGIN_VARIABLE } from './fixture-url.ts';
 import { EXIT_ERROR, exitCodeOf, reportLines, type ScenarioOutcome } from './outcome.ts';
 import { scenarioFiles } from './scenario.ts';
 import { messageOf, runScenario } from './scenario-run.ts';
@@ -11,23 +11,34 @@ import { messageOf, runScenario } from './scenario-run.ts';
 // E20-S07: the wrapper around @memlab/api, which decides the exit code from the outcome of every scenario.
 
 /** Runs the scenarios one after the other (one browser at a time), printing each result as soon as it is known. */
-async function runAll(files: readonly string[], deps: LeakDeps): Promise<ScenarioOutcome[]> {
-  const server = await deps.serve(deps.places.fixtures);
-  Reflect.set(deps.env, ORIGIN_VARIABLE, server.origin);
+async function runEach(files: readonly string[], deps: LeakDeps): Promise<ScenarioOutcome[]> {
   const outcomes: ScenarioOutcome[] = [];
-  try {
-    for (const file of files) {
-      const outcome = await runScenario(file, deps);
-      const print = outcome.status === 'failed' ? deps.io.err : deps.io.out;
-      reportLines(outcome).forEach((line) => {
-        print(line);
-      });
-      outcomes.push(outcome);
-    }
-  } finally {
-    await server.close();
+  for (const file of files) {
+    const outcome = await runScenario(file, deps);
+    const print = outcome.status === 'failed' ? deps.io.err : deps.io.out;
+    reportLines(outcome).forEach((line) => {
+      print(line);
+    });
+    outcomes.push(outcome);
   }
   return outcomes;
+}
+
+/** Serves the fixture pages and the dashboard for as long as the scenarios run, and closes both whatever happens. */
+async function runAll(files: readonly string[], deps: LeakDeps): Promise<ScenarioOutcome[]> {
+  const fixtures = await deps.serve(deps.places.fixtures);
+  try {
+    const app = await deps.serveApp();
+    try {
+      Reflect.set(deps.env, ORIGIN_VARIABLE, fixtures.origin);
+      Reflect.set(deps.env, APP_ORIGIN_VARIABLE, app.origin);
+      return await runEach(files, deps);
+    } finally {
+      await app.close();
+    }
+  } finally {
+    await fixtures.close();
+  }
 }
 
 async function runChecked(args: readonly string[], deps: LeakDeps): Promise<number> {
