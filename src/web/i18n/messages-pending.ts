@@ -36,7 +36,7 @@ export const pendingMessages = {
   'pending.override.commit.help': 'The full commit id, 40 or 64 hexadecimal characters. It cannot be changed here.',
   'pending.override.description':
     'This allows the commit without implying a signature and is written to the audit log.',
-  'pending.override.label': 'Record an override for commit {commit} of {repository}',
+  'pending.override.label': 'Record override for commit {commit} of {repository}',
   'pending.override.reason': 'Reason',
   'pending.override.reason.help':
     'Why this commit may pass without a signed CLA, in 1 to 2000 characters. Other maintainers read it.',
@@ -72,7 +72,7 @@ export const pendingMessages = {
   'pending.overrides.repository.choose': 'Choose a repository',
   'pending.overrides.repository.help': 'Overrides are kept for one repository at a time.',
   'pending.pr': 'PR #{number}',
-  'pending.pr.link': 'Pull request {number} of {repository} on GitHub',
+  'pending.pr.link': 'PR #{number} of {repository} on GitHub',
   'pending.reason.bot_not_allowlisted': 'Bot is not on the allowlist:',
   'pending.reason.commit_limit_exceeded': 'The pull request has more commits than can be checked.',
   'pending.reason.no_active_cla': 'The repository has no active CLA version.',

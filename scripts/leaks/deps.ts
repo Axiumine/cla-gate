@@ -26,7 +26,7 @@ export interface MemlabResult {
 
 export interface LeakDeps {
   readonly io: Io;
-  /** `process.env`: the wrapper writes the fixture origin into it, for `fixtureUrl()` in the scenarios. */
+  /** `process.env`: the wrapper writes the origins into it, for `fixtureUrl()` and `appUrl()` in the scenarios. */
   readonly env: Env;
   readonly process: ExitTarget;
   readonly cwd: string;
@@ -40,4 +40,6 @@ export interface LeakDeps {
     readonly write: (file: string, text: string) => void;
   };
   readonly serve: (root: string) => Promise<FixtureServer>;
+  /** E18-S12: the built dashboard and its made-up API, on a port of their own. */
+  readonly serveApp: () => Promise<FixtureServer>;
 }

@@ -11,11 +11,11 @@
 export const repositoryMessages = {
   'repositories.attach': 'Attach CLA',
   'repositories.attach.change': 'Change CLA',
-  'repositories.attach.changeLabel': 'Change the CLA of {repository}',
+  'repositories.attach.changeLabel': 'Change CLA of {repository}',
   'repositories.attach.description':
     'Choose the document that contributors to this repository sign. Only a document with a published version can be attached. Choosing no CLA detaches the document, which needs the check to be off.',
   'repositories.attach.field': 'CLA document',
-  'repositories.attach.label': 'Attach a CLA to {repository}',
+  'repositories.attach.label': 'Attach CLA to {repository}',
   'repositories.attach.none': 'No CLA (detach)',
   'repositories.attach.option.installation': '{name} ({version}), whole installation',
   'repositories.attach.option.repository': '{name} ({version}), this repository only',

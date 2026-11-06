@@ -107,6 +107,6 @@ test('a suspended installation says so in the banner and turns the write control
     tenants: [{ summary: summary({ suspended: true }), answer: () => repositoriesOf([repository(1, 'acme/widgets')]) }],
   });
   expect(screen.getByText(messages['installation.suspended'])).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /^Record an override/ })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /^Record override/ })).toBeDisabled();
   expect(within(pendingTable()).getAllByRole('row').length).toBeGreaterThan(1);
 });

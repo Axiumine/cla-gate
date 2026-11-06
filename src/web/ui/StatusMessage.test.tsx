@@ -34,6 +34,16 @@ test('a message without a tone is neutral', () => {
   expect(screen.getByRole('status')).toHaveClass('text-fg');
 });
 
+test.each(TONES.filter(([tone]) => tone !== 'neutral'))(
+  'the %s tone draws no colour, border or padding while it has no text, so an empty region is not a coloured bar above a table (E18-S12)',
+  (tone) => {
+    renderWithProviders(<StatusMessage tone={tone} />);
+    const region = screen.getByRole('status');
+    expect(region).toBeEmptyDOMElement();
+    expect(region).toHaveClass('empty:bg-transparent', 'empty:border-0', 'empty:p-0');
+  },
+);
+
 test('visuallyHidden keeps the text for assistive technology and takes it off the screen', () => {
   renderWithProviders(<StatusMessage visuallyHidden>Page 2 of 5</StatusMessage>);
   const region = screen.getByRole('status');

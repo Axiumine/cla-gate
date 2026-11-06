@@ -78,7 +78,7 @@ test.each(NAMES)('%s as the repository is text in the names of the three buttons
 
 test.each(NAMES)('%s is text in the attach dialog: the title, and the choices of the select', async (_label, name) => {
   const { user } = await openHostile(name);
-  await user.click(firstOf(screen.getAllByRole('button', { name: /^Change the CLA/ })));
+  await user.click(firstOf(screen.getAllByRole('button', { name: /^Change CLA/ })));
   const dialog = await screen.findByRole('dialog');
   await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
   expect(within(dialog).getByRole('heading', { level: 2 }).textContent).toBe(
@@ -149,7 +149,7 @@ test('a hostile name does not break the page: the list, the attach dialog and th
   const name = `<img src=x onerror=alert(1)> ${'n'.repeat(200)}`;
   const { user } = await openHostile(name);
   await expectNoA11yViolations(document.body);
-  await user.click(firstOf(screen.getAllByRole('button', { name: /^Change the CLA/ })));
+  await user.click(firstOf(screen.getAllByRole('button', { name: /^Change CLA/ })));
   await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
   await expectNoA11yViolations(document.body);
   await user.keyboard('{Escape}');

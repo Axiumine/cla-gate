@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +9,7 @@ import { readText } from '../ci/lib/test-support.ts';
 import { makeRepo, tempDir } from '../code-caps/test-support.ts';
 import { type FixtureServer, fixtureName, serveFixtures } from './fixture-server.ts';
 import { FIXTURES_DIR } from './paths.ts';
+import { request } from './test-support.ts';
 
 // E20-S07: the loopback server for the pages the scenarios load. Real sockets, random ports, nothing fixed.
 
@@ -23,32 +23,6 @@ async function serving(root: string, pick: () => Promise<number> = pickSystemFre
   const server = await serveFixtures(root, pick);
   open.push(server);
   return server;
-}
-
-interface Reply {
-  readonly status: number | undefined;
-  readonly headers: http.IncomingHttpHeaders;
-  readonly body: string;
-}
-
-/** A request with the path exactly as given: `fetch` and `URL` would resolve `..` before it leaves the process. */
-function request(origin: string, rawPath: string, method = 'GET'): Promise<Reply> {
-  const { port } = new URL(origin);
-  return new Promise((resolve, reject) => {
-    const outgoing = http.request({ host: '127.0.0.1', port, path: rawPath, method }, (incoming) => {
-      const chunks: Buffer[] = [];
-      incoming.on('data', (chunk: Buffer) => chunks.push(chunk));
-      incoming.on('end', () => {
-        resolve({
-          status: incoming.statusCode,
-          headers: incoming.headers,
-          body: Buffer.concat(chunks).toString('utf8'),
-        });
-      });
-    });
-    outgoing.on('error', reject);
-    outgoing.end();
-  });
 }
 
 /** A fixtures directory with one page and one non-page, and a page next to it, outside, that no request may reach. */

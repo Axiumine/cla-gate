@@ -72,7 +72,7 @@ test.each(NAMES)(
   '%s is text in the dialog: the read-only repository field, and in the name of the button',
   async (_label, name) => {
     const { user } = await openHostile(name);
-    const button = firstOf(within(pendingTable()).getAllByRole('button', { name: /^Record an override/ }));
+    const button = firstOf(within(pendingTable()).getAllByRole('button', { name: /^Record override/ }));
     expect(button.getAttribute('aria-label')).toBe(
       messages['pending.override.label']
         .replace('{commit}', UNLINKED_SHA.slice(0, 7))
@@ -151,7 +151,7 @@ test('a pull request of a repository with a well-formed name is linked, and one 
 
 test('the reason typed in the dialog stays text in the field and is sent as typed', async () => {
   const { user, served } = await openPending('/installations/5/pending');
-  await user.click(screen.getByRole('button', { name: /^Record an override/ }));
+  await user.click(screen.getByRole('button', { name: /^Record override/ }));
   await screen.findByRole('dialog');
   await user.click(reasonField());
   await user.paste("<script>alert(1)</script> =cmd|' /C calc'!A0");
@@ -177,7 +177,7 @@ test('every hostile name at once does not break the page: the list, the dialog a
   const { user } = await openPending('/installations/5/pending', { pending: [pageOf(items)] });
   expect(within(pendingTable()).getAllByRole('row')).toHaveLength(NAMES.length + 1);
   await expectNoA11yViolations(document.body);
-  await user.click(firstOf(within(pendingTable()).getAllByRole('button', { name: /^Record an override/ })));
+  await user.click(firstOf(within(pendingTable()).getAllByRole('button', { name: /^Record override/ })));
   await screen.findByRole('dialog');
   await expectNoA11yViolations(document.body);
   await user.keyboard('{Escape}');

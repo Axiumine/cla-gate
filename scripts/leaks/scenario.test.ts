@@ -21,6 +21,14 @@ test('the scenario of a module is its default export with url, action and back',
   expect(Object.keys(scenario).sort(compareNames)).toEqual(['action', 'back', 'url']);
 });
 
+test('a repeat is passed on to memlab (E18-S12): a dialog opened twenty times is one scenario', () => {
+  const repeat = () => 20;
+  const loaded = scenarioModule('x');
+  const scenario = scenarioOf({ default: { ...loaded.default, repeat } }, 'x.ts');
+  expect(scenario.repeat).toBe(repeat);
+  expect(scenario.repeat?.()).toBe(20);
+});
+
 const FN = () => 'x';
 test.each([
   ['nothing at all', undefined],
@@ -33,6 +41,7 @@ test.each([
   ['a scenario without back', { default: { url: FN, action: FN } }],
   ['a url that is a string', { default: { url: 'clean.html', action: FN, back: FN } }],
   ['an action that is an object', { default: { url: FN, action: {}, back: FN } }],
+  ['a repeat that is a number', { default: { url: FN, action: FN, back: FN, repeat: 20 } }],
 ])('%s is refused with a message that names the file', (_label, loaded) => {
   expect(() => scenarioOf(loaded, '/s/bad.ts')).toThrow(
     '/s/bad.ts must default-export { url, action, back }, each a function',

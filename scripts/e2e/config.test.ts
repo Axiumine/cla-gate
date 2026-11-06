@@ -24,7 +24,7 @@ const configSchema = z.object({
   retries: z.number(),
   workers: z.number(),
   forbidOnly: z.boolean(),
-  use: z.object({ baseURL: z.string(), trace: z.string() }),
+  use: z.object({ baseURL: z.string(), trace: z.string(), launchOptions: z.object({ args: z.array(z.string()) }) }),
   webServer: z.object({
     command: z.string(),
     url: z.string(),
@@ -82,6 +82,10 @@ test.each([
 test('the global setup file named by the config exists', async () => {
   const config = await loadConfig();
   expect(exists(path.resolve(ROOT, config.globalSetup))).toBe(true);
+});
+
+test('the browser draws whole tiles, so a box that grows after the first paint gives the same pixels on a busy machine (E18-S12)', async () => {
+  expect((await loadConfig()).use.launchOptions.args).toEqual(['--disable-partial-raster']);
 });
 
 test('the server is `yarn start` on a random free loopback port above 32768, and its health URL is the one tests use', async () => {

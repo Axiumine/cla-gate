@@ -131,7 +131,7 @@ test('confirming sends the trimmed reason and the commit to the repository of th
   expect(served.record[0]?.headers['x-csrf-token']).toBeTruthy();
   expect(served.pending).toHaveLength(2);
   expect(screen.getByText(messages['pending.notice.recorded'])).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /^Record an override/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Record override/ })).toBeNull();
 });
 
 test('when the pull request leaves the list with its button, focus goes to the results heading', async () => {

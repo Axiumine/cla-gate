@@ -38,7 +38,7 @@ async function openFor(commitSha: string) {
     <RecordOverride actions={ACTIONS} repository={{ id: 1, fullName: 'acme/widgets' }} commitSha={commitSha} />,
     { session: ALICE },
   );
-  await rendered.user.click(await screen.findByRole('button', { name: /^Record an override/ }));
+  await rendered.user.click(await screen.findByRole('button', { name: /^Record override/ }));
   await screen.findByRole('dialog');
   await rendered.user.type(reasonField(), 'Work email');
   await rendered.user.click(submitButton());
@@ -92,6 +92,6 @@ test('a pending list that names a commit that is not a full id is a contract err
   await heading(messages['pending.title']);
   expect(await screen.findByRole('alert')).toHaveTextContent(messages['errors.contract']);
   expect(screen.queryByRole('table')).toBeNull();
-  expect(screen.queryByRole('button', { name: /^Record an override/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Record override/ })).toBeNull();
   expect(served.record).toEqual([]);
 });

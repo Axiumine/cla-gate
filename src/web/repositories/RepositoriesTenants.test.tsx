@@ -113,7 +113,7 @@ test("the actions of a row are addressed through the repository of the row and t
   release();
   const { user } = renderRepositories(`/installations/6/repositories`);
   await screen.findByText(B_ONLY);
-  await user.click(screen.getByRole('button', { name: /^Change the CLA of/ }));
+  await user.click(screen.getByRole('button', { name: /^Change CLA of/ }));
   await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
   expect(documentSelect()).toHaveValue('61');
   expect(served.documents.map(pathOf)).toEqual(['/api/installations/6/repositories/61/documents']);

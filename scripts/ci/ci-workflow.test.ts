@@ -49,11 +49,13 @@ const CI_FILE = '.github/workflows/ci.yml';
 // one file at a time on a real server: 20 minutes on the fastest shared runner, and cancelled at 45 on the two slower ones
 // while its tests still passed (2026-11-04), so it gets the 60 minutes the guard allows. `coverage` runs the same suite under
 // V8 coverage: 7 minutes on the fastest runner, 18 on the next and 28 to 31 on the slowest, where it was cancelled at 30.
+// `leaks` runs memlab on four screen scenarios (E18-S12), 5 to 10 minutes each on a loaded development machine on 2026-11-06,
+// next to the canary and the positive control, so it gets the 60 minutes the guard allows.
 const LONG_JOBS = new Map([
   ['mutation', 180],
   ['postgres', 60],
   ['coverage', 45],
-  ['leaks', 30],
+  ['leaks', 60],
   ['qodana', 30],
 ]);
 // E20-S08: the one job that holds a secret (QODANA_TOKEN) runs on a GitHub-hosted machine; see scripts/qodana-gate.

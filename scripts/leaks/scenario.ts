@@ -5,7 +5,8 @@ import type { InteractionsCallback, IScenario } from '@memlab/api';
 import { z } from 'zod';
 import { compareNames } from '../code-caps/types.ts';
 
-// E20-S07: finding and checking the scenario files. A scenario default-exports memlab's `{ url, action, back }`.
+// E20-S07: finding and checking the scenario files. A scenario default-exports memlab's `{ url, action, back }`, and, since
+// E18-S12, may add `repeat`: a function that says how many more times `action` and `back` run (a dialog opened 20 times).
 
 const isFunction = (value: unknown): boolean => typeof value === 'function';
 
@@ -14,6 +15,7 @@ const scenarioModule = z.object({
     url: z.custom<() => string>(isFunction),
     action: z.custom<InteractionsCallback>(isFunction),
     back: z.custom<InteractionsCallback>(isFunction),
+    repeat: z.custom<() => number>(isFunction).optional(),
   }),
 });
 
@@ -28,8 +30,8 @@ export function scenarioOf(loaded: unknown, file: string): IScenario {
   if (!parsed.success) {
     throw new Error(`${file} must default-export { url, action, back }, each a function`);
   }
-  const { url, action, back } = parsed.data.default;
-  return { url, action, back };
+  const { url, action, back, repeat } = parsed.data.default;
+  return repeat === undefined ? { url, action, back } : { url, action, back, repeat };
 }
 
 /** The files named on the command line (relative to `cwd`), or every `*.ts` of `directory` in code point order. */
