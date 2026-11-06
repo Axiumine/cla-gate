@@ -9,6 +9,7 @@ import { twoTenants } from '../../adapters/db/tenant-fixture/test-support.ts';
 import { containing, migratedTestDatabase } from '../../adapters/db/test-support.ts';
 import type * as Audit from '../audit.ts';
 import { seedSignatures } from './export-fixture/test-support.ts';
+import type * as Corporate from './own-corporate-queries.ts';
 import { exportOwnData } from './own-data.ts';
 import type * as Queries from './own-data-queries.ts';
 import type * as Signatures from './own-signatures-query.ts';
@@ -51,6 +52,15 @@ vi.mock('./own-signatures-query.ts', async (importOriginal) => {
   return { ...actual, ownSignatures: probe.noted('signatures', actual.ownSignatures) };
 });
 
+vi.mock('./own-corporate-queries.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof Corporate>();
+  return {
+    ...actual,
+    ownCorporateAgreements: probe.noted('corporate agreements', actual.ownCorporateAgreements),
+    ownCorporateApprovals: probe.noted('corporate approvals', actual.ownCorporateApprovals),
+  };
+});
+
 vi.mock('./own-data-queries.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof Queries>();
   return {
@@ -87,7 +97,14 @@ const auditRows = (db: Awaited<ReturnType<typeof world>>['db']) =>
 test('the reads and the audit row run in one repeatable read transaction, the row last', async () => {
   const { db, t1 } = await world();
   await exportOwnData(db, t1.signer.githubId, NOW);
-  expect(probe.steps.map((step) => step.step)).toEqual(['signatures', 'allowlist', 'audit entries', 'audit row']);
+  expect(probe.steps.map((step) => step.step)).toEqual([
+    'signatures',
+    'corporate agreements',
+    'corporate approvals',
+    'allowlist',
+    'audit entries',
+    'audit row',
+  ]);
   expect(new Set(probe.steps.map((step) => step.isolation))).toEqual(new Set(['repeatable read']));
   expect(new Set(probe.steps.map((step) => step.tx)).size).toBe(1);
 });

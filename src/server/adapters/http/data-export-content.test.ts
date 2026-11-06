@@ -136,6 +136,8 @@ test('nothing in the document names another person: not who revoked, not who mad
     'exportedAt',
     'user',
     'signatures',
+    'corporateAgreements',
+    'corporateApprovals',
     'allowlistEntries',
     'auditEntries',
     'truncated',

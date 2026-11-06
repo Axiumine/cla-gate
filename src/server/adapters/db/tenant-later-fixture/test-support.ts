@@ -6,6 +6,10 @@ import {
   E21_COVERAGE_TENANT_MODULES,
   E21_COVERAGE_TENANT_QUERIES,
 } from '../tenant-corporate-coverage-fixture/test-support.ts';
+import {
+  E21_EXPORT_TENANT_MODULES,
+  E21_EXPORT_TENANT_QUERIES,
+} from '../tenant-corporate-export-fixture/test-support.ts';
 import { E21_TENANT_MODULES, E21_TENANT_QUERIES } from '../tenant-corporate-fixture/test-support.ts';
 import type { TenantQuery } from '../tenant-registry/test-support.ts';
 import { E15_TENANT_MODULES, E15_TENANT_QUERIES } from '../tenant-revocation-fixture/test-support.ts';
@@ -19,6 +23,7 @@ export const LATER_TENANT_MODULES = [
   ...E21_TENANT_MODULES,
   ...E21_CLAIM_TENANT_MODULES,
   ...E21_COVERAGE_TENANT_MODULES,
+  ...E21_EXPORT_TENANT_MODULES,
 ] as const;
 
 /** Every function of those files, by module and name. */
@@ -27,4 +32,5 @@ export const LATER_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<strin
   ...E21_TENANT_QUERIES,
   ...E21_CLAIM_TENANT_QUERIES,
   ...E21_COVERAGE_TENANT_QUERIES,
+  ...E21_EXPORT_TENANT_QUERIES,
 };

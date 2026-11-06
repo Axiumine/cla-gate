@@ -57,6 +57,8 @@ test('a query that meets another tenant by design says why and names the test th
     'ownAgreementRows',
     'ownAllowlistEntries',
     'ownAuditEntries',
+    'ownCorporateAgreements',
+    'ownCorporateApprovals',
     'ownSignatureRows',
     'ownSignatures',
     'readSignerFootprint',

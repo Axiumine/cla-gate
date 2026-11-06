@@ -5,6 +5,7 @@ import { DATA_EXPORT_AUDIT_LIMIT, type DataExport } from '../../../shared/data-e
 import type { GithubId } from '../../../shared/github-id.ts';
 import type { Database } from '../../adapters/db/schema.ts';
 import { appendAudit } from '../audit.ts';
+import { ownCorporateAgreements, ownCorporateApprovals } from './own-corporate-queries.ts';
 import { ownAllowlistEntries, ownAuditEntries } from './own-data-queries.ts';
 import { buildDataExport } from './own-data-rows.ts';
 import { ownSignatures } from './own-signatures-query.ts';
@@ -31,6 +32,8 @@ export async function exportOwnData(db: Kysely<Database>, githubId: GithubId, no
         .where('github_id', '=', githubId)
         .executeTakeFirstOrThrow();
       const signatures = await ownSignatures(trx, user.id);
+      const corporateAgreements = await ownCorporateAgreements(trx, user.id);
+      const corporateApprovals = await ownCorporateApprovals(trx, githubId);
       const allowlistEntries = await ownAllowlistEntries(trx, githubId);
       const auditEntries = await ownAuditEntries(trx, githubId, DATA_EXPORT_AUDIT_LIMIT + 1);
       await appendAudit(trx, {
@@ -44,6 +47,8 @@ export async function exportOwnData(db: Kysely<Database>, githubId: GithubId, no
         now,
         user: { githubId: user.github_id, login: user.login, name: user.name, createdAt: user.created_at },
         signatures,
+        corporateAgreements,
+        corporateApprovals,
         allowlistEntries,
         auditEntries,
       });
