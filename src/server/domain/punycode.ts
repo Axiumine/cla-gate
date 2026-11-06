@@ -4,7 +4,8 @@
 // Whether a label that starts with `xn--` is punycode a registry could hold (E21-S03, E21-S04), pure. The label is decoded by the algorithm
 // of RFC 3492 and the result is held to what an internationalised label may be made of: letters, digits and marks, with at least one
 // character outside ASCII. A URL parser may keep a label that does not decode as it was typed (`xn--a`), which would store a name nobody can
-// own, so the decoding is asked for here and not left to the parser. Nothing is returned of the decoded text: it is a yes or a no.
+// own, so the decoding is asked for here and not left to the parser. Nothing is returned of the decoded text: it is a yes or a no. The decoder
+// itself is exported for the tests, so that the constants of the RFC are held by the code points of its sample strings and not by a yes or a no.
 
 const BASE = 36;
 const T_MIN = 1;
@@ -83,8 +84,13 @@ function basicCodePoints(encoded: string, delimiter: number): number[] | null {
   return points;
 }
 
-/** The code points the encoded text stands for, or `null` when it is not well-formed punycode. */
-function decoded(encoded: string): number[] | null {
+/**
+ * The code points the encoded text stands for, or `null` when it is not well-formed punycode. A hyphen at the very start is not a delimiter
+ * (RFC 3492, section 6.2: the encoded part starts after the last delimiter only when basic code points come before it), so it is read as a
+ * digit and the text is refused.
+ * @internal Exported for the tests of the RFC vectors (Knip ignores `@internal` exports in production mode).
+ */
+export function decodePunycode(encoded: string): number[] | null {
   const delimiter = encoded.lastIndexOf('-');
   const points = basicCodePoints(encoded, delimiter);
   if (points === null) {
@@ -93,7 +99,7 @@ function decoded(encoded: string): number[] | null {
   let n = INITIAL_N;
   let position = 0;
   let bias = INITIAL_BIAS;
-  let index = delimiter < 0 ? 0 : delimiter + 1;
+  let index = delimiter > 0 ? delimiter + 1 : 0;
   while (index < encoded.length) {
     const read = readDelta(encoded, index, bias);
     if (read === null) {
@@ -118,7 +124,7 @@ function decoded(encoded: string): number[] | null {
  * least one character outside ASCII: the decoding of `xn--a` is a control character, and that of `xn--a-` is plain ASCII, and neither is a label.
  */
 export function decodesAsPunycode(encoded: string): boolean {
-  const points = decoded(encoded);
+  const points = decodePunycode(encoded);
   if (points === null) {
     return false;
   }
