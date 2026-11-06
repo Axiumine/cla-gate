@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { parseGithubId } from '../../../shared/github-id.ts';
 import { GitHubRateLimitedError } from '../ports/github-errors.ts';
 import { sweepPolicyChange } from './policy-sweep.ts';
-import { addNeighbour, INSTALLATION, POLICY_JOB, REPOSITORY, sweepWorld } from './test-support.ts';
+import { addNeighbour, INSTALLATION, POLICY_JOB, REPOSITORY, type SweepWorld, sweepWorld } from './test-support.ts';
 
 // What the `sweep-repository` job leaves alone and what it does when GitHub fails (E07-S09): an installation or repository that
 // is not evaluated ends the job before any GitHub call, the ids of a payload are keys read under the installation, and a
@@ -136,4 +136,53 @@ test('a queue that fails while the evaluations are sent fails the job and keeps 
   };
   await expect(sweepPolicyChange(world.evaluatePorts, POLICY_JOB, failing)).rejects.toBe(failure);
   expect(await world.queued()).toEqual([]);
+});
+
+// The log line of a skipped job (E07-S09): one line at info level, with the reason that is also the end of the outcome and nothing
+// of the job (no id of an installation or of a repository, no pull request): the operator reads why a job did nothing.
+const skippedLines = (world: SweepWorld) =>
+  world.logs.lines().filter((line) => line['msg'] === 'sweep_repository.skipped');
+
+test.each([
+  [
+    'a repository with enforcement off',
+    'repository_disabled',
+    (world: SweepWorld) => world.raw.updateTable('repositories').set({ enabled: false }).execute(),
+  ],
+  [
+    'a repository GitHub no longer lists for the installation',
+    'repository_removed',
+    (world: SweepWorld) =>
+      world.raw
+        .updateTable('repositories')
+        .set({ removed_at: new Date('2026-11-01T09:30:00Z') })
+        .execute(),
+  ],
+  [
+    'a repository GitHub no longer shows',
+    'repository_gone',
+    (world: SweepWorld) => {
+      world.fake.setRepositories(INSTALLATION, []);
+      return Promise.resolve();
+    },
+  ],
+] as const)(
+  '%s is logged once as skipped, with its reason and nothing else of the job',
+  async (_name, reason, prepare) => {
+    const world = await sweepWorld();
+    await prepare(world);
+    expect(await world.runPolicySweep()).toEqual({ outcome: `skipped:${reason}` });
+    const lines = skippedLines(world);
+    expect(lines).toHaveLength(1);
+    const { time, pid, hostname, ...fields } = lines[0] ?? {};
+    expect([typeof time, typeof pid, typeof hostname]).toEqual(['string', 'number', 'string']);
+    expect(fields).toEqual({ level: 30, reason, msg: 'sweep_repository.skipped' });
+    expect(world.logs.lines().filter((each) => each['msg'] === 'sweep_repository.swept')).toEqual([]);
+  },
+);
+
+test('a job that is swept logs no skipped line', async () => {
+  const world = await sweepWorld();
+  expect(await world.runPolicySweep()).toEqual({ outcome: 'swept' });
+  expect(skippedLines(world)).toEqual([]);
 });

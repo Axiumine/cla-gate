@@ -57,7 +57,7 @@ function run(script: string, machine: Machine) {
   return { code: result.status, out: result.stdout };
 }
 
-test.each([['static'], ['coverage'], ['leaks']])(
+test.each([['static'], ['coverage-shard'], ['coverage'], ['leaks']])(
   'the %s preflight passes with git, curl, tar and room, and reports the runner',
   (job) => {
     const { code, out } = run(preflight(job), {});
