@@ -112,7 +112,6 @@ const auditRoute = createRoute({
 });
 
 /** The route of a tenant with the screens below it, as the router tree takes it. */
-// type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 export const tenantRoutes = installationRoute.addChildren([
   installationHomeRoute,
   repositoriesRoute,

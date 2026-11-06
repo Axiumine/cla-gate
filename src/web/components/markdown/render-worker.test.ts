@@ -32,6 +32,8 @@ test('a message to the worker is answered by a message from it', () => {
   const post = vi.spyOn(self, 'postMessage').mockImplementation(() => undefined);
   self.dispatchEvent(new MessageEvent('message', { data: { source: 'Plain text' } }));
   self.dispatchEvent(new MessageEvent('message', { data: 'not a request' }));
-  expect(post.mock.calls).toEqual([[{ tree: renderClaTree('Plain text') }], [RENDER_FAILED]]);
+  expect(post).toHaveBeenCalledTimes(2);
+  expect(post).toHaveBeenNthCalledWith(1, { tree: renderClaTree('Plain text') });
+  expect(post).toHaveBeenNthCalledWith(2, RENDER_FAILED);
   post.mockRestore();
 });
