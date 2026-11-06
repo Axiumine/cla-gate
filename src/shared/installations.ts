@@ -16,7 +16,6 @@ export const INSTALLATION_REPOSITORIES_PATH = '/api/installations/:installationI
 
 /**
  * The longest `q` a request may carry: GitHub names a repository `owner/name` with at most 39 and 100 characters.
- * @internal exported for the tests of the query schema
  */
 export const REPOSITORY_SEARCH_MAX_LENGTH = 140;
 

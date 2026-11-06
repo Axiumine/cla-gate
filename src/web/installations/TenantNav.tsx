@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { Link } from '@tanstack/react-router';
 import { useT } from '../i18n/index.ts';
-import { sectionLabel, TENANT_SECTIONS, TENANT_START } from './tenant-sections.ts';
+import { sectionLabel, TENANT_OVERVIEW, TENANT_SECTIONS, TENANT_START } from './tenant-sections.ts';
 import { useInstallation } from './use-installations.ts';
 
 export interface TenantNavProps {
@@ -30,7 +30,7 @@ export function TenantNav({ installationId }: TenantNavProps) {
             <Link
               to={section.to}
               params={{ installationId }}
-              activeOptions={{ exact: section.to === TENANT_START }}
+              activeOptions={{ exact: section.to === TENANT_OVERVIEW }}
               className="underline-offset-2 hover:underline aria-[current=page]:font-semibold"
             >
               {t(sectionLabel(section.to))}

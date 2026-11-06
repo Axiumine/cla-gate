@@ -9,6 +9,7 @@ import type { PlainMessageKey } from '../i18n/index.ts';
 /** The `to` of every screen below an installation that the switcher can keep the person on. Each story that adds one adds it here. */
 export type TenantTo =
   | '/installations/$installationId'
+  | '/installations/$installationId/repositories'
   | '/installations/$installationId/documents'
   | '/installations/$installationId/allowlist'
   | '/installations/$installationId/signatures'
@@ -21,14 +22,18 @@ export interface TenantSection<To extends string> {
   readonly roles: readonly InstallationRole[];
 }
 
+/** The overview of an installation: the index route, whose link is the only one that is current for its own address alone. */
+export const TENANT_OVERVIEW: TenantTo = '/installations/$installationId';
+
 /**
- * Where a tenant starts: the screen the switcher falls back to. Today it is the overview of the installation; the repository list
- * (E18-S10) takes its place there when it lands.
+ * Where a tenant starts: the screen the switcher falls back to, and the one link a person whose role is not known yet is offered. It is
+ * the repository list (E18-S10), the screen on which a tenant turns enforcement on; the overview is a glance that stays next to it.
  */
-export const TENANT_START: TenantTo = '/installations/$installationId';
+export const TENANT_START: TenantTo = '/installations/$installationId/repositories';
 
 /**
  * The screens below an installation, with the roles that can open each. The overview is for every role in the installation; the list
+ * of the repositories is for both roles (E18-S10): the server decides which repositories each may see and administer. The list
  * of the documents of the installation is for an org admin (E18-S05: a repo admin reaches the documents of a repository from the
  * repository screen). The allowlist is for both roles (E18-S06): an org admin manages the whole installation and every repository, a repo
  * admin the repositories they administer. The signatures are for both roles too (E18-S07): an org admin reads every document, a repo admin the
@@ -37,6 +42,7 @@ export const TENANT_START: TenantTo = '/installations/$installationId';
  */
 export const TENANT_SECTIONS: readonly TenantSection<TenantTo>[] = [
   { to: '/installations/$installationId', roles: ['org_admin', 'repo_admin'] },
+  { to: '/installations/$installationId/repositories', roles: ['org_admin', 'repo_admin'] },
   { to: '/installations/$installationId/documents', roles: ['org_admin'] },
   { to: '/installations/$installationId/allowlist', roles: ['org_admin', 'repo_admin'] },
   { to: '/installations/$installationId/signatures', roles: ['org_admin', 'repo_admin'] },
@@ -52,6 +58,8 @@ export function sectionLabel(to: TenantTo): PlainMessageKey {
   switch (to) {
     case '/installations/$installationId':
       return 'tenant.nav.overview';
+    case '/installations/$installationId/repositories':
+      return 'tenant.nav.repositories';
     case '/installations/$installationId/documents':
       return 'tenant.nav.documents';
     case '/installations/$installationId/allowlist':

@@ -86,14 +86,14 @@ test('the filters of one tenant are not carried to another: the filtered address
   expect(actorField()).toHaveValue('');
 });
 
-test('switching to a tenant where the person is a repo admin leaves the audit log for the start of that tenant, which has none', async () => {
+test('switching to a tenant where the person is a repo admin leaves the audit log for the start of that tenant, the repositories, which has none', async () => {
   const repoAdmin: Tenant = { ...GLOBEX, summary: summary({ id: 6, accountLogin: 'globex', role: 'repo_admin' }) };
   const served = serveAudit({ tenants: [ACME, repoAdmin] });
   const { user } = renderAudit('/installations/5/audit');
   await screen.findByRole('table', { name: messages['audit.caption'] });
   await switchToGlobex(user);
-  await heading('globex');
-  expect(window.location.pathname).toBe('/installations/6');
+  await heading(messages['repositories.title']);
+  expect(window.location.pathname).toBe('/installations/6/repositories');
   expect(screen.queryByRole('table', { name: messages['audit.caption'] })).toBeNull();
   expect(served.log).toHaveLength(1);
 });

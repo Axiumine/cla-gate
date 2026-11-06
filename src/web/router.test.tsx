@@ -45,6 +45,7 @@ test('the access of every route: the pages of a visitor (front page, failed logi
     '/installations': 'authenticated',
     '/installations/$installationId': 'authenticated',
     '/installations/$installationId/': 'authenticated',
+    '/installations/$installationId/repositories': 'authenticated',
     '/installations/$installationId/documents': 'authenticated',
     '/installations/$installationId/documents/$documentId': 'authenticated',
     '/installations/$installationId/allowlist': 'authenticated',

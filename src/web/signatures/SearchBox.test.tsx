@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { messages } from '../i18n/index.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
-import { SEARCH_DEBOUNCE_MS, SearchBox } from './SearchBox.tsx';
+import { SEARCH_DEBOUNCE_MS } from '../ui/DebouncedSearch.tsx';
+import { SearchBox } from './SearchBox.tsx';
 
 // E18-S07: the search box asks 300 ms after the last key or at once on Enter, with one clean text; it follows the address when the
 // address changes by itself and leaves the text alone when the address only caught up with it.

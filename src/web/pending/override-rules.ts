@@ -23,7 +23,7 @@ export const OVERRIDE_RULES = [
 export type OverrideRule = (typeof OVERRIDE_RULES)[number] | 'installation_suspended';
 
 /** `409 installation_suspended`: the tenant guard refuses every write of a suspended installation. It is no rule of the documents API. */
-function isSuspended(error: unknown): boolean {
+export function isSuspended(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409 && error.code === 'installation_suspended';
 }
 

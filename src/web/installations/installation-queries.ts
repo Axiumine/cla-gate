@@ -9,10 +9,7 @@ import type { ApiClient } from '../api/index.ts';
 // kept and dropped as a unit, and the data of one tenant can never be read under the key of another. No query here uses
 // `placeholderData`: when the installation changes, the screen shows loading until the new tenant's answer is there.
 
-/**
- * The key of the list of installations the person administers: the person's, not a tenant's.
- * @internal Exported for the unit tests (Knip ignores `@internal` exports in production mode).
- */
+/** The key of the list of installations the person administers: the person's, not a tenant's. */
 export const INSTALLATIONS_KEY = ['installations'] as const;
 
 /** The start of the key of every query that belongs to one installation. */

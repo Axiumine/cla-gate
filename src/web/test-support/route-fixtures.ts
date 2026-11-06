@@ -8,6 +8,7 @@ import { messages } from '../i18n/index.ts';
 import { globex, serveTenants, summary, tenantOf } from '../installations/test-support.ts';
 import { item, serveOnePage } from '../me/test-support.ts';
 import { servePending } from '../pending/test-support.ts';
+import { serveRepositories } from '../repositories/test-support.ts';
 import { CODE, STATE, serveSetup } from '../setup/test-support.ts';
 import { serveSign } from '../sign/test-support.ts';
 import { serveSignatures } from '../signatures/test-support.ts';
@@ -119,6 +120,16 @@ export const ROUTE_FIXTURES: ReadonlyMap<string, RouteFixture> = new Map<string,
       address: '/installations/5',
       serve: serveInstallations,
       ready: table(messages['installation.repositories.caption']),
+    },
+  ],
+  [
+    '/installations/$installationId/repositories',
+    {
+      address: '/installations/5/repositories',
+      serve: () => {
+        serveRepositories();
+      },
+      ready: table(messages['repositories.caption']),
     },
   ],
   [

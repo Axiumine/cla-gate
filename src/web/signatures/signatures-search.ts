@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { digitsAsText } from '../ui/search-text.ts';
 import { queryOf, STATE_FILTERS } from './signature-filters.ts';
 
 // What the address of the signatures screen holds (E18-S07): `/installations/$installationId/signatures?q=&state=&document=&cursor=`,
@@ -9,14 +10,6 @@ import { queryOf, STATE_FILTERS } from './signature-filters.ts';
 
 /** The longest `cursor` the endpoint reads (1 to 1024 characters, the bound of every paged list). */
 const MAX_CURSOR_LENGTH = 1024;
-
-/**
- * The router reads a value that looks like a number as a number (`?q=4711` is 4711), and a search of digits is an id. A safe whole
- * number is put back into the text it was written as; anything else that is not text is dropped by the schema.
- */
-function digitsAsText(value: unknown): unknown {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : value;
-}
 
 /**
  * `?q=` is the search text, in the form `queryOf` gives (trimmed, at most as long as a login can be); `?state=` is one of the three

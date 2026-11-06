@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { SIGNATURE_SEARCH_MAX_LOGIN } from '../../shared/signature-search.ts';
+import { searchTextOf } from '../ui/search-text.ts';
 
 // What the signatures screen filters by (E18-S07), and how a search text becomes one of the two exact filters of the endpoint.
 
@@ -22,10 +23,7 @@ export interface Filters {
  * of the address, so a text that cannot be sent is no search at all instead of a `400`.
  */
 export function queryOf(text: string): string | undefined {
-  const trimmed = text.trim();
-  const sendable =
-    trimmed !== '' && trimmed.length <= SIGNATURE_SEARCH_MAX_LOGIN && trimmed.isWellFormed() && !trimmed.includes('\0');
-  return sendable ? trimmed : undefined;
+  return searchTextOf(text, SIGNATURE_SEARCH_MAX_LOGIN);
 }
 
 /** A positive whole number in plain digits that a number holds exactly: what `users.github_id` can be. */

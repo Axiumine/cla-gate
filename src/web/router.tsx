@@ -23,6 +23,8 @@ import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
 import { pendingSearchSchema } from './pending/pending-search.ts';
 import { PendingRoute } from './pending/route-components.tsx';
+import { repositorySearchSchema } from './repositories/repository-search.ts';
+import { RepositoriesRoute } from './repositories/route-components.tsx';
 import { RepositorySettingsPage } from './repository-settings/RepositorySettingsPage.tsx';
 import { type RouterContext, withAccess } from './route-access.ts';
 import { SetupCallbackPage } from './setup/SetupCallbackPage.tsx';
@@ -175,6 +177,16 @@ const installationHomeRoute = createRoute({
   component: InstallationHomeRoute,
 });
 
+// The repositories of a tenant (E18-S10): where enforcement is turned on, with `?q=&enabled=&cursor=` so a filtered view is shared by its address.
+// Any role of the tenant opens it; the server decides which repositories a person may see and administer, on every request.
+const repositoriesRoute = createRoute({
+  getParentRoute: () => installationRoute,
+  path: 'repositories',
+  ...tenantPage('repositories.title'),
+  validateSearch: repositorySearchSchema,
+  component: RepositoriesRoute,
+});
+
 // The CLA documents of a tenant (E18-S05): the list, and one document with its editor. `$documentId` is `cla_documents.id`; a segment
 // that is not a plain positive number is no page of the app. The list needs an org admin, a document the role of its scope: the
 // server decides on every request.
@@ -246,6 +258,7 @@ const routeTree = rootRoute.addChildren([
   installationsRoute,
   installationRoute.addChildren([
     installationHomeRoute,
+    repositoriesRoute,
     documentsRoute,
     documentRoute,
     allowlistRoute,
