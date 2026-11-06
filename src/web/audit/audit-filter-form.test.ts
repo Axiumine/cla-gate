@@ -50,6 +50,25 @@ test.each([
   expect(parseFilterForm({ ...EMPTY, ...change })).toEqual({ ok: false, errors: new Map([[field, 'invalid']]) });
 });
 
+test.each([
+  ['1', 1],
+  ['2', 2],
+  ['9', 9],
+  ['10', 10],
+  ['1234', 1234],
+  ['19', 19],
+  ['9007199254740991', Number.MAX_SAFE_INTEGER],
+])('the id %s is read as a number in the actor and in the subject, whatever its first digit', (text, id) => {
+  expect(parseFilterForm({ ...EMPTY, actorGithubId: text })).toEqual({
+    ok: true,
+    filters: { ...NO_FILTERS, actorGithubId: id },
+  });
+  expect(parseFilterForm({ ...EMPTY, subjectId: text })).toEqual({
+    ok: true,
+    filters: { ...NO_FILTERS, subjectId: id },
+  });
+});
+
 test('an end earlier than the start is an error on the end', () => {
   expect(parseFilterForm({ ...EMPTY, from: '2026-11-02', to: '2026-11-01' })).toEqual({
     ok: false,
