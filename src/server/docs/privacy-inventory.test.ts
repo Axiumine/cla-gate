@@ -30,19 +30,6 @@ const NOT_PERSONAL: Readonly<Record<string, string>> = {
  */
 const PLANNED_COLUMNS: Readonly<Record<string, string>> = {};
 
-/**
- * Live columns of personal data whose row of the inventory is written when the epic that adds them closes (the documents are
- * frozen while the epic is built), each with the story that adds it. The guard test below fails once a name is documented, which
- * is the moment to drop it from this map, so the map only ever shrinks.
- */
-const INVENTORY_PENDING: Readonly<Record<string, string>> = {
-  'corporate_agreement_pii.company_name': 'E21-S01 (migration 020): the company a signatory signed a corporate CLA for',
-  'corporate_approval_pii.login':
-    'E21-S01 (migration 020): login snapshot of a user or org a corporate agreement covers',
-  'sessions.verified_email_domains':
-    'E21-S04 (migration 021): the domains of the verified addresses of a session, kept for the claim under an employer agreement, gone with the session row',
-};
-
 /** The columns the story names; the document may list more, never fewer. */
 const REQUIRED = [
   'users.login',
@@ -59,8 +46,7 @@ const REQUIRED = [
 
 const table = markedTable(readPrivacyDoc(), 'inventory');
 const documented = table.rows.map((cells) => unquote(cells[0] ?? ''));
-const isListed = (name: string): boolean =>
-  documented.includes(name) || Object.hasOwn(NOT_PERSONAL, name) || Object.hasOwn(INVENTORY_PENDING, name);
+const isListed = (name: string): boolean => documented.includes(name) || Object.hasOwn(NOT_PERSONAL, name);
 
 test('the inventory has the header and the separator the story fixes', () => {
   expect(table.header).toBe('| Column | Purpose | Visible to | Retention | Erasable |');
@@ -113,16 +99,4 @@ test('NOT_PERSONAL holds live columns that the pattern catches, none of them in 
   expect(names.filter((name) => !PERSONAL_COLUMN_PATTERN.test(name))).toEqual([]);
   expect(names.filter((name) => documented.includes(name))).toEqual([]);
   expect(Object.values(NOT_PERSONAL).filter((reason) => reason === '')).toEqual([]);
-});
-
-test('every column waiting for its row of the inventory is live, has a reason, and is not documented yet', async () => {
-  const { db } = await migratedTestDatabase();
-  const live = new Set(await liveColumns(db));
-  const names = Object.keys(INVENTORY_PENDING);
-  expect(names.filter((name) => !live.has(name))).toEqual([]);
-  expect(Object.values(INVENTORY_PENDING).filter((reason) => reason === '')).toEqual([]);
-  expect(
-    names.filter((name) => documented.includes(name)),
-    'the column is documented now: drop it from INVENTORY_PENDING',
-  ).toEqual([]);
 });

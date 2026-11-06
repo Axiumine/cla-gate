@@ -47,6 +47,8 @@ Items marked (planned) do not exist yet.
 │   │                            user upsert (users.ts); global-setup.ts (the throw-away database of a real-server run) and
 │   │                            test-database-guard/ (E19-S10: what the guard refuses, in test-support.ts); provision-database*.test.ts are the
 │   │                            real-Postgres tests of scripts/provision-database.sh
+│   │                            (E21: corporate-fixture/ is the rows of migration 020 for the database tests, and tenant-corporate-fixture/, -claim-fixture/, -coverage-fixture/,
+│   │                            -export-fixture/ and tenant-later-fixture/ carry the registry entries of the corporate statements; all test only)
 │   ├── adapters/jobs/           the pg-boss adapter of the job queue (E07): runtime.ts (start, stop, readiness), boss.ts (the slice
 │   │                            of pg-boss the code uses), queues.ts and queue-options.ts (the twelve queues and their bounds),
 │   │                            queue-policy.ts and queue-check.ts (a queue of the wrong policy is refused), serialisation.ts (the
@@ -77,6 +79,7 @@ Items marked (planned) do not exist yet.
 │   │                            pending-prs-routes.ts (with -cursor, -presenter, -query); the fixtures (signature-search-, signature-revoke-,
 │   │                            signature-invalidate-, commit-override-, commit-override-flow-, pending-prs- and cross-tenant-revocation-fixture/) are test only
 │   ├── adapters/github/octokit-commit-call.ts  `getCommit`: one commit by SHA, null for a 404 or 422 (E15-S05)
+│   ├── adapters/github/octokit-account-calls.ts  `fetchUserAccount`, `fetchOrganizationAccount` (`GET /orgs/{org}`) and `fetchPublicMembership` (`GET /orgs/{org}/public_members/{username}`) of the corporate flow (E21)
 │   ├── adapters/http/           logger, request ids, security headers, error handling (errors.ts: AppError; also for
 │   │                            failures that never reach a route), HTTP limits, health routes, trust-proxy conversion,
 │   │                            the /api route-audit guard (audit-routes.ts); the webhook route: webhook-routes.ts (the
@@ -108,6 +111,11 @@ Items marked (planned) do not exist yet.
 │   │                            E22: public-verification-routes.ts and public-badge-routes.ts (the public signature check and the badges), with public-answers.ts,
 │   │                            public-headers.ts and public-rate-limit.ts, repository-public-verification-routes.ts (the opt-in) and badge-snippet-route.ts;
 │   │                            public-verification-fixture/, repository-public-verification-fixture/ and cross-tenant-public-fixture/ are test only;
+│   │                            E21: corporate-routes.ts (registers the rest), corporate-sign-routes.ts, corporate-agreement-routes.ts, corporate-tenant-routes.ts (the
+│   │                            corporate document of a repository and the agreements of a tenant), corporate-approval-routes.ts with -list-route, -add-routes (add and
+│   │                            carry-over), -revoke-route, -route-options and -presenters, corporate-claim-routes.ts, corporate-export-routes.ts (the two CSV files),
+│   │                            corporate-presenters.ts, corporate-rule-errors.ts and csv-attachment.ts; the fixtures corporate-fixture/, corporate-approval-fixture/,
+│   │                            corporate-claim-fixture/, cross-tenant-corporate-fixture/ and cross-tenant-later-fixture/ are test only;
 │   │                            E16: audit-log-routes.ts (with audit-log-query.ts), signature-csv-routes.ts (with signature-csv-query.ts and
 │   │                            signature-csv-log.ts), erasure-routes.ts (with erasure-request.ts) and data-export-routes.ts; the
 │   │                            api-snapshots/ directory (the JSON of the own-data export) and the fixtures audit-route-state/,
@@ -119,7 +127,7 @@ Items marked (planned) do not exist yet.
 │   │                            allowlist-entry-cursor.ts; installation-list-fixture/, repository-document-fixture/, repository-enable-fixture/,
 │   │                            repository-disable-fixture/, repository-flow-fixture/, allowlist-entry-fixture/, allowlist-list-fixture/ and
 │   │                            cross-tenant-prepare/ are test only
-│   ├── domain/                  E22: badge-svg.ts (the three fixed badges) and badge-snippet.ts (the README snippet), retention.ts (the cutoffs of the sweep), erase-arguments.ts,
+│   ├── domain/                  E21: corporate-domain.ts (the domain of an approval, in punycode), punycode.ts (RFC 3492 decoding of an `xn--` label; punycode-vectors.test.ts holds the sample strings of the RFC), corporate-sign-request.ts and corporate-approval-request.ts (the strict bodies), evaluation/corporate-cover.ts (the pure index of the covering approvals); E22: badge-svg.ts (the three fixed badges) and badge-snippet.ts (the README snippet), retention.ts (the cutoffs of the sweep), erase-arguments.ts,
 │   │                            operator-erasure.ts and operator-erasure-lines.ts (the judgement and the printed lines of the erasure command); admission.ts (who is served, pure), eligibility.ts (when an installation or repository
 │   │                            is evaluated), permissions.ts (the missing-permission check), jobs.ts (the job
 │   │                            catalogue), delivery-id.ts, webhook-routing*.ts (the routing table: delivery to job or
@@ -168,6 +176,7 @@ Items marked (planned) do not exist yet.
 │                                tenant-authorization.ts and tenant-authorizer.ts (the guard's reads and decision), admin-ledger.ts and
 │                                admin-ledger-queries.ts (the ledger of org admins), document-placement.ts, operator-policies.ts;
 │                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only;
+│                                E21: corporate-sign.ts, corporate-agreements.ts, corporate-agreement-*.ts, corporate-approval-*.ts (add, list, revoke, carry-over, expired, audit, lock, the queries), corporate-claim*.ts, corporate-coverage-queries.ts, corporate-repository-queries.ts, repository-corporate-document.ts, evaluate-pr/corporate-facts.ts and export/corporate-export*.ts (the two CSV files and their audit record), export/own-corporate-queries.ts (the corporate part of the own-data export), when-present.ts; corporate-fixture/ files under evaluate-pr/ and export/ are test only;
 │                                E22: merge-group/ (the `evaluate-merge-group` job), retention/ (the sweep, its handler and statements), public-verification.ts with
 │                                public-verification-queries.ts, public-login-cache.ts and public-lookup-budget.ts (the public signature check), repository-public-verification.ts
 │                                (the opt-in), repository-badge-snippet.ts, operator-erasure.ts and operator-erasure-queries.ts (the erasure command; operator-erasure-fixture/ is test only);
@@ -211,7 +220,7 @@ Items marked (planned) do not exist yet.
 │                                cla-markdown-nesting.ts and the line scan cla-markdown-containers.ts, -items.ts, -leaf.ts and -lines.ts,
 │                                snapshots/ (the rendered files); the route
 │                                descriptors the SPA calls (`defineRoute`): contract.ts, auth-contract.ts, meta.ts (`GET /api/meta`); error-codes.ts
-│                                (the codes the SPA can see); E22: public-verification.ts (the public paths, the opt-in and snippet descriptors and answers); hostile-names.ts (the hostile-name corpus, test only); E16: audit-log.ts,
+│                                (the codes the SPA can see); E21: corporate.ts, corporate-approvals.ts, corporate-claims.ts, corporate-export.ts, corporate-text.ts and free-mail-domains.ts (paths, shapes, cleaning of the company text and the free-mail list); E22: public-verification.ts (the public paths, the opt-in and snippet descriptors and answers); hostile-names.ts (the hostile-name corpus, test only); E16: audit-log.ts,
 │                                signature-export.ts, erasure.ts and data-export.ts (paths, shapes and limits of the compliance routes); E14: installations.ts,
 │                                repository-document.ts, repository-enabled.ts and allowlist.ts (paths, queries and answers))
 │                                E15: signature-search.ts, signature-revoke.ts, signature-invalidate.ts, commit-override.ts and pending-prs.ts (paths, queries, bodies, pages)
@@ -226,6 +235,7 @@ Items marked (planned) do not exist yet.
 │   │                            test-support.ts (MSW helpers) is test only
 │   ├── auth/                    session.ts (the query ['auth','session']), auth.ts, guard.ts, hooks.ts, navigate.ts, return-to.ts, use-logout.ts,
 │   │                            UserMenu, Avatar, LoginLink, LogoutButton, SessionEndedBanner, index.ts
+│   ├── corporate/               E21: the corporate CLA pages and parts: CorporateSignPage (`/corporate/sign/$githubRepoId`), CorporateAgreementsPage (`/corporate/agreements`, the manager's approvals), EmployerClaim and EmployerClaimPage (`/corporate/claim/$githubRepoId`), ClaText (the stored source rendered in the browser through `renderClaTree`), the forms, hooks (use-signing, use-agreements, use-claim) and corporate-errors.ts
 │   ├── i18n/                    messages.ts (the English catalog), translate.ts (`t`, `t.plural`), interpolate.ts, format.ts (`formatUtc`),
 │   │                            context.ts, I18nProvider.tsx, Timestamp.tsx, index.ts; test-support.ts is test only
 │   ├── layout/                  AppShell (skip link, header, main landmark, live region), PrimaryNav, nav-items.ts, SourceFooter (the AGPL
@@ -247,7 +257,7 @@ Items marked (planned) do not exist yet.
 │   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
 │                                theme.ts, tailwind.ts and vitest.setup.ts
-├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; 16: `pr_evaluations.pr_state`; 17: the index `signer_pii_login_lower_idx`; 18: the table `merge_group_evaluations`; 19: `repositories.public_verification`; the numbers 006 and later go to the epics in order of merge)
+├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; 16: `pr_evaluations.pr_state`; 17: the index `signer_pii_login_lower_idx`; 18: the table `merge_group_evaluations`; 19: `repositories.public_verification`; 20: `020_corporate_cla.sql` (the corporate CLA tables, `repositories.corporate_document_id`, the extended `erase_signer_pii`); 21: `sessions.verified_email_domains`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           the operator stack (E19-S04): postgres, a one-shot migrate and app, and caddy in the profile `tls`; `docker compose up --build`

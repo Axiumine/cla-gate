@@ -28,15 +28,12 @@ As of 2026-11 CLA Assistant is near-dormant, `contributor-assistant/github-actio
 - `/recheck` comment and the Check Run "Re-run" button.
 - Dashboard: repos, signatures, pending PRs, CSV export, revoke, audit log.
 
-### After the MVP (built, epic E22)
+### After the MVP (epics E22 and E21)
 
 - Merge queue support: `license/cla` on the head SHA of a merge group.
 - Opt-in public signature check (signed or not, nothing else) and README badges.
 - A daily retention sweep and the operator's erasure command (GDPR).
-
-### Later
-
-- Corporate CLA: a signatory becomes CLA manager and approves employees by GitHub username, verified email domain, or GitHub org (EasyCLA-style ICLA / CCLA / employee flow).
+- Corporate CLA (E21, in progress): a signatory signs at `/corporate/sign/:githubRepoId`, becomes CLA manager (`/corporate/agreements`) and approves employees by GitHub username, verified email domain, or GitHub org.
 
 ### Non-goals
 
@@ -146,7 +143,7 @@ Everything is strict by default: 100% coverage and type coverage, zero lint find
 3. **Signing**: login, CLA versions, consent flow, signature storage.
 4. **Dashboard**: repos, signatures, CSV export, revoke, audit log.
 5. **Hardening**: promote the stable CI jobs to required checks, raise the mutation floor, e2e and visual baselines for every screen, memlab nightly, Qodana once licensed.
-6. **Corporate CLA**.
+6. **Corporate CLA** (in progress).
 
 ## License
 
