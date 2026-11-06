@@ -152,6 +152,17 @@ test.each([
   },
 );
 
+test('the budget is kept for each of the three routes, not shared: 60 spent on adding leave the other two their own 60', async () => {
+  const world = await approvalWorld();
+  const { add, revoke, carryOver } = changes(world);
+  expect(new Set(await sendRepeatedly(world, world.ada, { change: add, count: BUDGET }))).toEqual(new Set([404]));
+  expect(await sendRepeatedly(world, world.ada, { change: add, count: 1 })).toEqual([429]);
+  expect(new Set(await sendRepeatedly(world, world.ada, { change: revoke, count: BUDGET }))).toEqual(new Set([404]));
+  expect(new Set(await sendRepeatedly(world, world.ada, { change: carryOver, count: BUDGET }))).toEqual(new Set([404]));
+  expect(await sendRepeatedly(world, world.ada, { change: revoke, count: 1 })).toEqual([429]);
+  expect(await sendRepeatedly(world, world.ada, { change: carryOver, count: 1 })).toEqual([429]);
+});
+
 test('the budget is the person’s: another person from the same address is not limited, and the same person from another address is', async () => {
   const world = await approvalWorld();
   const { add: change } = changes(world);
