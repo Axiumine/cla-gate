@@ -38,6 +38,17 @@ async function addSecondRepository(world: SweepWorld): Promise<void> {
 
 const failed = (world: SweepWorld) => world.logs.lines().filter((line) => line['msg'] === 'sweep.repository_failed');
 
+/** What the logger adds to every line, and what a line says besides its fields: the rest of the line of the totals is the totals. */
+const LINE_BASE = new Set(['level', 'time', 'pid', 'hostname', 'msg']);
+
+/** The totals the job logged when it ended: all of them, nothing else (the line is logged once, at info level). */
+function totalsOf(world: SweepWorld): Record<string, unknown> {
+  const lines = world.logs.lines().filter((line) => line['msg'] === 'sweep_installation.swept');
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toMatchObject({ level: 30 });
+  return Object.fromEntries(Object.entries(lines[0] ?? {}).filter(([key]) => !LINE_BASE.has(key)));
+}
+
 test('a rate limit ends the job with the rate limit, so the queue retries it later, and the repositories before it were swept', async () => {
   const world = await sweepWorld();
   await addSecondRepository(world);
@@ -58,6 +69,48 @@ test('a repository that fails is logged and the next one is swept all the same: 
   expect(await world.queuedPulls()).toEqual([1]);
   expect(failed(world)).toHaveLength(1);
   expect(failed(world)[0]).toMatchObject({ githubRepoId: 9000, err: { message: 'GitHub answered 502' } });
+});
+
+test('the totals of a job in which one repository failed and the next was swept count both, the failure once and the listing once', async () => {
+  const world = await sweepWorld();
+  await addSecondRepository(world);
+  world.fake.failNext('listOpenPullRequests', new Error('GitHub answered 502'));
+  await world.runSweep();
+  expect(totalsOf(world)).toEqual({
+    repositories: 2,
+    listed: 1,
+    truncated: 0,
+    queued: 1,
+    alreadyQueued: 0,
+    deduplicated: 0,
+    closed: 0,
+    superseded: 0,
+    markedClosed: 0,
+    markedOpen: 0,
+    unreachable: 0,
+    failed: 1,
+  });
+});
+
+test('the totals of a job in which one repository was no longer shown by GitHub and the next was swept count both, the removal once', async () => {
+  const world = await sweepWorld();
+  await addSecondRepository(world);
+  world.fake.setRepositories(INSTALLATION, [{ id: parseGithubId(9001), fullName: 'org-1/second' }]);
+  await world.runSweep();
+  expect(totalsOf(world)).toEqual({
+    repositories: 2,
+    listed: 1,
+    truncated: 0,
+    queued: 1,
+    alreadyQueued: 0,
+    deduplicated: 0,
+    closed: 0,
+    superseded: 0,
+    markedClosed: 0,
+    markedOpen: 0,
+    unreachable: 1,
+    failed: 0,
+  });
 });
 
 test('a limit hit by one installation fails its job only: the sweep of another installation, run after it, finishes', async () => {

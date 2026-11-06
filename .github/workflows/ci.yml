@@ -50,16 +50,28 @@ on:
         options:
           - all
           - shared
+          - shared-cla
           - config
-          - http-a-v
+          - http-a-d
+          - http-e-o
+          - http-p-r
+          - http-s
           - http-rest
           - db
-          - root-domain-ports
-          - github-a-o
+          - root-reporting-ports
+          - domain-a-o
+          - domain-rest
+          - github-a-n
+          - github-o
           - github-rest
           - evaluation-a-l
           - evaluation-rest
           - services-installation
+          - services-a
+          - services-b-d
+          - services-e-q
+          - services-r
+          - services-s
           - services-other
           - jobs-adapter
           - evaluate-pr
@@ -771,7 +783,7 @@ jobs:
   # its own cache. It was 2 until 2026-11-03: the first scheduled run held two of the three runners for hours and the pull
   # request jobs queued behind it, and the nightly run's own `coverage`, `postgres` and `leaks` jobs ask for runners too. A
   # leg may now take three hours (below), and the maintainer decided on 2026-11-02 not to mind the total time, so the cost,
-  # a cold run of seventeen shards that takes about twice as long, is accepted. A manual run can pick one shard (`shard`
+  # a cold run of twenty-nine shards that takes about twice as long, is accepted. A manual run can pick one shard (`shard`
   # input, a `choice` that GitHub validates against its options; a test keeps the options, the list below and shards.ts
   # equal); the matrix value only ever reaches the job through an environment variable, never a command line.
   #
@@ -820,7 +832,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","config","http-a-v","http-rest","db","root-domain-ports","github-a-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-other","jobs-adapter","evaluate-pr","job-handlers","sweep","scripts"]') }}
+        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","shared-cla","config","http-a-d","http-e-o","http-p-r","http-s","http-rest","db","root-reporting-ports","domain-a-o","domain-rest","github-a-n","github-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-a","services-b-d","services-e-q","services-r","services-s","services-other","jobs-adapter","evaluate-pr","job-handlers","sweep","scripts"]') }}
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
       - name: Preflight (runner capabilities)

@@ -95,7 +95,7 @@ test('the matrix runs every shard, one failed shard does not stop the others, an
   expect(strategy['fail-fast']).toBe(false);
   // 1 since 2026-11-03 (it was 2): the first scheduled run held two of the three runners for hours and the pull request jobs
   // queued behind it, a leg may now take three hours, and the nightly run's own coverage, postgres and leaks jobs need runners
-  // too. The cost is a cold run of seventeen shards that takes about twice as long, which follows the maintainer's decision of
+  // too. The cost is a cold run of twenty-nine shards that takes about twice as long, which follows the maintainer's decision of
   // 2026-11-02 not to mind the total time of the mutation gate (docs/ci-runners.md, Known unknowns and risks).
   expect(strategy['max-parallel']).toBe(1);
   expect(ciText).toMatch(/max-parallel: 1\n/);

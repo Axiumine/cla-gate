@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { resultsOf } from '../close-pr/test-support.ts';
-import { pullRequest } from '../github-pull-contract/test-support.ts';
+import { commitSha, pullRequest } from '../github-pull-contract/test-support.ts';
 import {
   addNeighbour,
   FULL_NAME,
@@ -97,6 +97,12 @@ test('a lost evaluation of an open pull request at its head SHA is queued again 
     ['evaluate-pr', 'evaluation:9000:7'],
   ]);
   expect(world.calls()).toEqual(['listOpenPullRequests']);
+  // at its own head SHA the evaluation is not superseded: its row and its Check Run are left to the evaluation that was sent
+  expect(await resultsOf(world)).toEqual([[7, HEAD, 'in_progress']]);
+  expect(world.reporter.cancellations).toEqual([]);
+  expect(world.logs.lines()).toContainEqual(
+    expect.objectContaining({ msg: 'sweep_installation.swept', superseded: 0, closed: 0, queued: 1 }),
+  );
   world.clock.advance(MINUTE);
   await world.runSweep(undefined, 'sweep-2');
   expect(await world.queuedPulls()).toEqual([7]);
@@ -121,6 +127,31 @@ test('a lost evaluation of a head SHA the pull request has moved on from is canc
   expect(await world.queuedPulls()).toEqual([7]);
   expect(world.pending.targets).toEqual([]);
   expect(world.calls()).toEqual(['listOpenPullRequests']);
+  expect(world.logs.lines()).toContainEqual(
+    expect.objectContaining({ msg: 'sweep_installation.swept', superseded: 1, closed: 0, queued: 1 }),
+  );
+});
+
+test('the lost evaluations of superseded head SHAs are counted one each, and the one at the head SHA GitHub shows is not', async () => {
+  const world = await sweepWorld();
+  openPull(world, 7, NEWER_HEAD);
+  await seedAged(world, { prNumber: 7, headSha: HEAD, result: 'in_progress', ageMinutes: 31 });
+  await seedAged(world, { prNumber: 7, headSha: NEWER_HEAD, result: 'in_progress', ageMinutes: 32 });
+  openPull(world, 8);
+  await seedAged(world, { prNumber: 8, headSha: commitSha(7), result: 'in_progress', ageMinutes: 33 });
+  await world.runSweep();
+  expect(await resultsOf(world)).toEqual([
+    [7, HEAD, 'cancelled'],
+    [7, NEWER_HEAD, 'in_progress'],
+    [8, commitSha(7), 'cancelled'],
+  ]);
+  expect(world.reporter.cancellations.map((target) => [target.prNumber, target.headSha])).toEqual([
+    [7, HEAD],
+    [8, commitSha(7)],
+  ]);
+  expect(world.logs.lines()).toContainEqual(
+    expect.objectContaining({ msg: 'sweep_installation.swept', superseded: 2, closed: 0 }),
+  );
 });
 
 test('a lost evaluation beyond the pages the sweep reads is found by its number: GitHub is asked for the pull request and, when open, it is queued', async () => {

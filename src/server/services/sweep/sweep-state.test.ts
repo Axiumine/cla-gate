@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
+import { MAX_STATE_CONFIRMATIONS } from '../../domain/sweep.ts';
 import { statesOf, touchedOf } from '../close-pr/test-support.ts';
 import { pullRequest } from '../github-pull-contract/test-support.ts';
 import {
@@ -75,6 +76,73 @@ test('a row that was touched after the listing began is left alone, and one touc
     [GONE, HEAD, 'open'],
     [ALSO_GONE, HEAD, 'closed'],
   ]);
+});
+
+test('a row touched after the listing began costs no question to GitHub and does not take the place of an older row under the cap', async () => {
+  const world = await sweepWorld();
+  for (let index = 0; index < MAX_STATE_CONFIRMATIONS; index += 1) {
+    await seedAged(world, { prNumber: 300 + index, headSha: HEAD, result: 'failure', ageMinutes: -1 - index });
+  }
+  await seedAged(world, { prNumber: GONE, headSha: HEAD, result: 'failure', ageMinutes: 5 });
+  await world.runSweep();
+  // the rows touched since are the newest, so they would fill the cap first if the sweep asked about them
+  expect(world.calls().filter((method) => method === 'getPullRequest')).toHaveLength(1);
+  expect((await statesOf(world)).filter(([, , state]) => state === 'closed')).toEqual([[GONE, HEAD, 'closed']]);
+  expect(world.logs.lines()).toContainEqual(
+    expect.objectContaining({ msg: 'sweep_installation.swept', markedClosed: 1, markedOpen: 0 }),
+  );
+});
+
+/**
+ * Moves the last touch of every row to `touched` as the next question to GitHub about a pull request begins: an evaluation that ends
+ * while GitHub is asked, after the sweep chose the row and before it changes it.
+ */
+function touchWhileAsking(world: SweepWorld, touched: Date): void {
+  world.fake.beforeNext('getPullRequest', async () => {
+    await world.raw.updateTable('pr_evaluations').set({ updated_at: touched }).execute();
+  });
+}
+
+const LISTED_AT = new Date('2026-11-02T10:00:00Z');
+
+test('a row that is evaluated while GitHub is asked about its pull request is not closed: it was touched after the listing began', async () => {
+  const world = await sweepWorld();
+  expect(world.clock.now()).toEqual(LISTED_AT);
+  await seedAged(world, { prNumber: GONE, headSha: HEAD, result: 'failure', ageMinutes: 5 });
+  touchWhileAsking(world, new Date(LISTED_AT.getTime() + 1));
+  await world.runSweep();
+  expect(await statesOf(world)).toEqual([[GONE, HEAD, 'open']]);
+  expect(world.calls().filter((method) => method === 'getPullRequest')).toHaveLength(1);
+  expect(world.logs.lines()).toContainEqual(
+    expect.objectContaining({ msg: 'sweep_installation.swept', markedClosed: 0, markedOpen: 0 }),
+  );
+});
+
+test('a row touched at the very instant the listing began, while GitHub is asked, is closed all the same', async () => {
+  const world = await sweepWorld();
+  await seedAged(world, { prNumber: GONE, headSha: HEAD, result: 'failure', ageMinutes: 5 });
+  touchWhileAsking(world, LISTED_AT);
+  await world.runSweep();
+  expect(await statesOf(world)).toEqual([[GONE, HEAD, 'closed']]);
+  expect(world.logs.lines()).toContainEqual(
+    expect.objectContaining({ msg: 'sweep_installation.swept', markedClosed: 1, markedOpen: 0 }),
+  );
+});
+
+test('a row touched after the listing began is opened again when the listing shows its pull request, before and while GitHub is asked: only a closing waits', async () => {
+  const world = await sweepWorld();
+  await seedAged(world, { prNumber: 7, headSha: HEAD, result: 'success', ageMinutes: -1, prState: 'closed' });
+  await seedAged(world, { prNumber: 8, headSha: HEAD, result: 'success', ageMinutes: 5, prState: 'closed' });
+  openPull(world, 8);
+  touchWhileAsking(world, new Date(LISTED_AT.getTime() + 60_000));
+  await world.runSweep();
+  expect(await statesOf(world)).toEqual([
+    [7, HEAD, 'open'],
+    [8, HEAD, 'open'],
+  ]);
+  expect(world.logs.lines()).toContainEqual(
+    expect.objectContaining({ msg: 'sweep_installation.swept', markedClosed: 0, markedOpen: 2 }),
+  );
 });
 
 test('a pull request the listing shows is opened again on its latest row when a reopening was missed, and its older rows are left as they are', async () => {
