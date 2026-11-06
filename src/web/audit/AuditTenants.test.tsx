@@ -8,6 +8,7 @@ import { answer } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { installationKey } from '../installations/installation-queries.ts';
 import { heading, repositoriesOf, repository, summary, type Tenant, tenantOf } from '../installations/test-support.ts';
+import { logOutAndExpectNoTrace } from '../test-support/log-out.ts';
 import { auditKey } from './audit-queries.ts';
 import { AUDIT_ROUTE, actorField, eventOf, notFound, pageOf, pathOf, renderAudit, serveAudit } from './test-support.ts';
 
@@ -117,12 +118,8 @@ test("the pages of the log are kept under ['installation', its id, 'audit'], and
 test('logging out clears the cache: no tenant query, and none of its events, is left', async () => {
   answer(logoutRoute.path, new Response(null, { status: 204 }));
   serveAudit({ tenants: [ACME, GLOBEX], log: [pageOf([eventBy(A_ONLY)])] });
-  const { user, queryClient, setSession } = renderAudit(AUDIT_ROUTE);
+  const app = renderAudit(AUDIT_ROUTE);
   await screen.findByText(A_ONLY);
-  expect(queryClient.getQueryCache().findAll({ queryKey: installationKey(5) }).length).toBeGreaterThan(0);
-  setSession(undefined);
-  await user.click(screen.getByRole('button', { name: messages['auth.logout'] }));
-  await heading(messages['app.name']);
-  expect(queryClient.getQueryCache().findAll({ queryKey: ['installation'] })).toEqual([]);
-  expect(screen.queryByText(A_ONLY)).toBeNull();
+  expect(app.queryClient.getQueryCache().findAll({ queryKey: installationKey(5) }).length).toBeGreaterThan(0);
+  await logOutAndExpectNoTrace(app, A_ONLY);
 });

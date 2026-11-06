@@ -159,6 +159,17 @@ export async function record(request: Request): Promise<Seen> {
 /** The JSON a request carried, as the server read it. */
 export const bodyOf = (seen: Seen | undefined): unknown => JSON.parse(String(seen?.text));
 
+/** The `cursor` parameter of a recorded request: `null` when it names none. */
+export const cursorOf = (seen: Seen | undefined): string | null =>
+  new URL(String(seen?.url)).searchParams.get('cursor');
+
+/** The query parameters of a recorded request, as an object: the names the screen sent and nothing else. */
+export const paramsOf = (seen: Seen | undefined): Record<string, string> =>
+  Object.fromEntries(new URL(String(seen?.url)).searchParams);
+
+/** The path of a request. */
+export const pathOf = (seen: Seen | undefined): string => new URL(String(seen?.url)).pathname;
+
 /** The text of the version the editor asks for when a document has an active version: made-up CLA text, not legal text. */
 export const ACTIVE_TEXT = '# Zzzz agreement\n\nThe text of version 1.0.';
 
@@ -182,6 +193,34 @@ export function endpoint(seen: Seen[], answers: readonly Answer[]) {
     seen.push(await record(request));
     return await nth(answers, seen.length);
   };
+}
+
+/** The pages of a paged list by cursor, `null` standing for the first page; a cursor with no page is a `400`. */
+export type PageAnswers = ReadonlyMap<string | null, () => Response | Promise<Response>>;
+
+/** A handler that records each request in `seen` and answers it with the page for its cursor (the paged screens' servers use it). */
+export function pagesEndpoint(seen: Seen[], pages: PageAnswers) {
+  return async ({ request }: { readonly request: Request }) => {
+    const sent = await record(request);
+    seen.push(sent);
+    const page = pages.get(cursorOf(sent));
+    return page === undefined ? envelope(400, 'bad_request') : await page();
+  };
+}
+
+/**
+ * Three pages of a list: the first holds `first` and leads to `c2`, which holds `second` and leads to `c3`, the last, which holds
+ * `third`. `pageOf` makes the response of the screen's own endpoint from the items of a page and the cursor that follows it.
+ */
+export function threePages<Item>(
+  pageOf: (items: readonly Item[], nextCursor?: string | null) => Response,
+  [first, second, third]: readonly [Item, Item, Item],
+): PageAnswers {
+  return new Map<string | null, () => Response>([
+    [null, () => pageOf([first], 'c2')],
+    ['c2', () => pageOf([second], 'c3')],
+    ['c3', () => pageOf([third])],
+  ]);
 }
 
 /**

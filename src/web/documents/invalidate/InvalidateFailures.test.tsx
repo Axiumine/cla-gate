@@ -5,6 +5,7 @@ import { expect, test } from 'vitest';
 import { envelope } from '../../api/test-support.ts';
 import { messages } from '../../i18n/index.ts';
 import { expectNoA11yViolations } from '../../test-support/a11y.ts';
+import { confirmIntoForbidden } from '../../test-support/question-failures.ts';
 import { bodyOf, held } from '../test-support.ts';
 import {
   acknowledgement,
@@ -113,11 +114,7 @@ test('403 on the invalidation is shown in the question, with its request id and 
     invalidate: { invalidate: [envelope(403, 'forbidden'), invalidatedAs(7)] },
   });
   await agree(user);
-  await user.click(confirmButton());
-  const alert = await within(question()).findByRole('alert');
-  expect(alert).toHaveTextContent(messages['errors.forbidden']);
-  expect(within(alert).queryByRole('button', { name: messages['states.retry'] })).toBeNull();
-  expect(question()).toBeInTheDocument();
+  await confirmIntoForbidden(user, { question, confirmButton });
   await user.click(confirmButton());
   await waitFor(() => {
     expect(screen.queryByRole('alertdialog')).toBeNull();

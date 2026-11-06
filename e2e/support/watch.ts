@@ -29,6 +29,7 @@ export interface PageWatch {
 
 /**
  * Starts watching `page`: call it before the first navigation, or the violations of that page are not seen.
+ * @param page the page to watch.
  * @param allowed the answers of the server the page is expected to get and handle (and the browser logs as console errors).
  */
 export async function watchPage(page: Page, allowed: readonly Refusal[]): Promise<PageWatch> {

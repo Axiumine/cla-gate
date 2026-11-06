@@ -4,8 +4,10 @@ import { focusManager } from '@tanstack/react-query';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test } from 'vitest';
 import { envelope } from '../api/test-support.ts';
+import { threePages } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { githubDown, summary } from '../installations/test-support.ts';
+import { nextButton, previousButton } from '../test-support/pager-buttons.ts';
 import {
   gadgetsOf,
   noActiveCla,
@@ -149,19 +151,16 @@ test('a list of the repositories that cannot be read is an error with Try again,
   expect(pendingTable()).toBeInTheDocument();
 });
 
-const THREE_PAGES = new Map<string | null, () => Response>([
-  [null, () => pageOf([pendingOf({ evaluationId: 1, repository: { id: 1, fullName: 'acme/one' } })], 'c2')],
-  ['c2', () => pageOf([pendingOf({ evaluationId: 2, repository: { id: 1, fullName: 'acme/two' } })], 'c3')],
-  ['c3', () => pageOf([pendingOf({ evaluationId: 3, repository: { id: 1, fullName: 'acme/three' } })])],
+const THREE_PAGES = threePages(pageOf, [
+  pendingOf({ evaluationId: 1, repository: { id: 1, fullName: 'acme/one' } }),
+  pendingOf({ evaluationId: 2, repository: { id: 1, fullName: 'acme/two' } }),
+  pendingOf({ evaluationId: 3, repository: { id: 1, fullName: 'acme/three' } }),
 ]);
-
-const next = () => screen.getByRole('button', { name: messages['pager.next'] });
-const previous = () => screen.getByRole('button', { name: messages['pager.previous'] });
 
 test('Next puts the cursor of the server in the address next to the filters and asks for that page, Previous goes back', async () => {
   const { served, user } = await openPending(`${PENDING_ROUTE}?reason=unsigned_contributor`, { pages: THREE_PAGES });
-  expect(previous()).toBeDisabled();
-  await user.click(next());
+  expect(previousButton()).toBeDisabled();
+  await user.click(nextButton());
   await waitFor(() => {
     expect(repositories()).toEqual(['acme/two']);
   });
@@ -169,9 +168,9 @@ test('Next puts the cursor of the server in the address next to the filters and 
   expect(paramsOf(served.pending.at(-1))).toEqual({ limit: '50', reason: 'unsigned_contributor', cursor: 'c2' });
   expect(screen.getByText('Page 2')).toBeInTheDocument();
   await waitFor(() => {
-    expect(previous()).toBeEnabled();
+    expect(previousButton()).toBeEnabled();
   });
-  await user.click(previous());
+  await user.click(previousButton());
   await waitFor(() => {
     expect(repositories()).toEqual(['acme/one']);
   });
@@ -180,16 +179,16 @@ test('Next puts the cursor of the server in the address next to the filters and 
 
 test('the last page has no Next, and the Back button of the browser goes back through the pages', async () => {
   const { user } = await openPending(PENDING_ROUTE, { pages: THREE_PAGES });
-  await user.click(next());
+  await user.click(nextButton());
   await waitFor(() => {
     expect(repositories()).toEqual(['acme/two']);
   });
-  await user.click(next());
+  await user.click(nextButton());
   await waitFor(() => {
     expect(repositories()).toEqual(['acme/three']);
   });
   await waitFor(() => {
-    expect(next()).toBeDisabled();
+    expect(nextButton()).toBeDisabled();
   });
   act(() => {
     window.history.back();
@@ -213,7 +212,7 @@ test('a page that cannot be loaded leaves the page on screen and the pager says 
     ['c2', () => envelope(502, 'github_unavailable')],
   ]);
   const { user } = await openPending(PENDING_ROUTE, { pages });
-  await user.click(next());
+  await user.click(nextButton());
   expect(await screen.findByText(messages['pager.failed'])).toBeInTheDocument();
   expect(repositories()).toEqual(['acme/widgets']);
 });

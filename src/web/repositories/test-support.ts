@@ -217,15 +217,8 @@ export const rowOf = (name: string): HTMLElement =>
     name: (_accessibleName, row) => row.querySelector('td')?.textContent === name,
   });
 
-/** The query parameters of a recorded request, as an object: the names the screen sent and nothing else. */
-export const paramsOf = (seen: Seen | undefined): Record<string, string> =>
-  Object.fromEntries(new URL(String(seen?.url)).searchParams);
-
-/** The path of a request. */
-export const pathOf = (seen: Seen | undefined): string => new URL(String(seen?.url)).pathname;
-
-/** The JSON a request carried, as the server read it. */
-export const bodyOf = (seen: Seen | undefined): unknown => JSON.parse(String(seen?.text));
+// What a test reads back from a recorded request: the same readers as the other screens.
+export { bodyOf, paramsOf, pathOf } from '../documents/test-support.ts';
 
 /** The search box of the page, the enforcement filter. */
 export const searchBox = () =>

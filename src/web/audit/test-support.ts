@@ -6,7 +6,7 @@ import { createElement } from 'react';
 import type { z } from 'zod';
 import { AUDIT_LOG_PATH, auditLogPageSchema } from '../../shared/audit-log.ts';
 import { envelope, json, type Seen } from '../api/test-support.ts';
-import { type Answer, endpoint } from '../documents/test-support.ts';
+import { type Answer, endpoint, type PageAnswers, pagesEndpoint } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { serveTenants, summary, type Tenant, tenantOf } from '../installations/test-support.ts';
 import { AppRouter } from '../router.tsx';
@@ -63,7 +63,7 @@ export interface ServeAudit {
   readonly listing?: () => Response | Promise<Response>;
   readonly log?: readonly Answer[];
   /** The pages of the log by cursor, `null` standing for the first page; a cursor with no page is a `400`. Used instead of `log`. */
-  readonly pages?: ReadonlyMap<string | null, () => Response | Promise<Response>>;
+  readonly pages?: PageAnswers;
 }
 
 /** Every request the screen made to the server. */
@@ -71,15 +71,6 @@ export interface ServedAudit {
   readonly log: Seen[];
   /** The requests of the installation screens: the list of installations and the repositories. */
   readonly tenants: ReturnType<typeof serveTenants>;
-}
-
-/** A handler that records each request and answers it with the page for its cursor. */
-function pagesEndpoint(seen: Seen[], pages: NonNullable<ServeAudit['pages']>) {
-  return async ({ request }: { readonly request: Request }) => {
-    seen.push({ method: request.method, url: request.url, headers: Object.fromEntries(request.headers), text: '' });
-    const page = pages.get(new URL(request.url).searchParams.get('cursor'));
-    return page === undefined ? envelope(400, 'bad_request') : await page();
-  };
 }
 
 /**
@@ -106,6 +97,9 @@ export function renderAudit(route: string) {
   return renderWithProviders(createElement(AppRouter), { route, session: ALICE });
 }
 
+// What a test reads back from a recorded request: the same readers as the other screens.
+export { cursorOf, paramsOf, pathOf } from '../documents/test-support.ts';
+
 export const AUDIT_ROUTE = '/installations/5/audit';
 
 /** The h1 of the app, once it is there. */
@@ -120,17 +114,6 @@ export const bodyRows = (table: HTMLElement): HTMLElement[] => within(table).get
 /** The cells of the rows of `table`, as text, header row left out. */
 export const rowsOf = (table: HTMLElement): string[][] =>
   bodyRows(table).map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent));
-
-/** The `cursor` parameter of a recorded request: `null` when it names none. */
-export const cursorOf = (seen: Seen | undefined): string | null =>
-  new URL(String(seen?.url)).searchParams.get('cursor');
-
-/** The query parameters of a recorded request, as an object: the names the screen sent and nothing else. */
-export const paramsOf = (seen: Seen | undefined): Record<string, string> =>
-  Object.fromEntries(new URL(String(seen?.url)).searchParams);
-
-/** The path of a request. */
-export const pathOf = (seen: Seen | undefined): string => new URL(String(seen?.url)).pathname;
 
 /** The filter fields of the form. */
 export const actionSelect = () => screen.getByRole('combobox', { name: messages['audit.filter.action'] });

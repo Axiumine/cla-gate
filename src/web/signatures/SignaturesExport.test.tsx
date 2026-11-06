@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { envelope } from '../api/test-support.ts';
 import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
-import { spyOnConsole, stubDownloads } from '../setup/test-support.ts';
+import { expectRateLimitedDownload, spyOnConsole, stubDownloads } from '../setup/test-support.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
 import { watchDefault } from '../test-support/default-prevented.ts';
 import {
@@ -149,11 +149,7 @@ test('a 429 shows the error state with the countdown, nothing is saved, and "Try
     csv: [envelope(429, 'too_many_requests', { 'retry-after': '3' }), csvFile()],
   });
   await user.click(exportLink());
-  expect(await screen.findByText('You can try again in 3 seconds.')).toBeInTheDocument();
-  const alert = screen.getByRole('alert');
-  expect(alert).toHaveTextContent(messages['errors.too_many_requests']);
-  expect(alert).toHaveTextContent('req-00000001');
-  expect(downloads.saved()).toEqual([]);
+  const alert = await expectRateLimitedDownload(downloads);
   const retry = within(alert).getByRole('button', { name: messages['states.retry'] });
   expect(retry).toBeDisabled();
   act(() => {

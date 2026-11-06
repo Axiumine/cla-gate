@@ -18,6 +18,7 @@ import { installationKey } from '../installations/installation-queries.ts';
 import { summary, tenantOf } from '../installations/test-support.ts';
 import { AppRouter } from '../router.tsx';
 import { spyOnPageNavigation } from '../test-support/location.ts';
+import { logOutAndExpectNoTrace } from '../test-support/log-out.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { server } from '../test-support/server.ts';
 import { allowlistKey } from './allowlist-queries.ts';
@@ -266,14 +267,10 @@ test('logging out clears the cache: no allowlist query, and none of its logins, 
   const { release } = serveTwoTenants();
   release();
   answer(logoutRoute.path, new HttpResponse(null, { status: 204 }));
-  const { user, queryClient, setSession } = renderAllowlist('/installations/5/allowlist');
+  const app = renderAllowlist('/installations/5/allowlist');
   await screen.findByText(A_ONLY);
-  expect(queryClient.getQueryCache().findAll({ queryKey: ['installation', 5, 'allowlist'] })).toHaveLength(1);
-  setSession(undefined);
-  await user.click(screen.getByRole('button', { name: messages['auth.logout'] }));
-  await screen.findByRole('heading', { level: 1, name: messages['app.name'] });
-  expect(queryClient.getQueryCache().findAll({ queryKey: ['installation'] })).toEqual([]);
-  expect(screen.queryByText(A_ONLY)).toBeNull();
+  expect(app.queryClient.getQueryCache().findAll({ queryKey: ['installation', 5, 'allowlist'] })).toHaveLength(1);
+  await logOutAndExpectNoTrace(app, A_ONLY);
 });
 
 test('a visitor without a session who opens the allowlist is sent to the login, and no entry of any tenant is asked for', async () => {

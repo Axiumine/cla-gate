@@ -9,6 +9,7 @@ import { expectNoA11yViolations } from '../test-support/a11y.ts';
 import { watchDefault } from '../test-support/default-prevented.ts';
 import {
   bodyOf,
+  cancelAndReopen,
   gadgetsOf,
   openPending,
   pageOf,
@@ -204,12 +205,7 @@ test('the dialog is made for the repository of its own row: the second repositor
 test('Cancel closes the dialog with no request, and the dialog opened again starts empty', async () => {
   const { served, user } = await open();
   await user.type(reasonField(), 'Typed and abandoned');
-  await user.click(within(recordDialog()).getByRole('button', { name: messages['common.cancel'] }));
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-  await user.click(recordButton(SHORT));
-  await screen.findByRole('dialog');
+  await cancelAndReopen(user, SHORT);
   expect(reasonField()).toHaveValue('');
   expect(served.record).toEqual([]);
 });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { screen, waitFor, within } from '@testing-library/react';
+import type { UserEvent } from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 import { envelope } from '../api/test-support.ts';
 import { held } from '../documents/test-support.ts';
@@ -43,6 +44,26 @@ const hiddenCells = (name: string) =>
     .map((cell) => cell.textContent);
 const status = () => screen.getByText(/^(A CLA is attached|The CLA is detached|Nothing changed|.* is not in this)/);
 
+/** Opens the dialog behind `button` (Attach CLA or Change) and waits for its select. */
+async function openDialog(user: UserEvent, button: HTMLElement) {
+  await user.click(button);
+  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+}
+
+/** The dialog is gone. */
+const closed = () =>
+  waitFor(() => {
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+/** Opens the dialog behind `button`, chooses `choice` (a value or a label of the select), presses Save and waits until the dialog has closed. */
+async function chooseAndSave(user: UserEvent, button: HTMLElement, choice: string) {
+  await openDialog(user, button);
+  await user.selectOptions(documentSelect(), choice);
+  await user.click(saveButton());
+  await closed();
+}
+
 test('Attach CLA opens a dialog named after the repository, with the documents of that repository asked for through the installation and the repository of the row', async () => {
   const { served, user } = await openRepositories();
   await user.click(attachButton('acme/gadgets'));
@@ -68,8 +89,7 @@ test("the select offers no CLA, then the repository's own documents, then those 
       }),
     ],
   });
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, attachButton('acme/gadgets'));
   expect(
     within(documentSelect())
       .getAllByRole('option')
@@ -85,15 +105,11 @@ test("the select offers no CLA, then the repository's own documents, then those 
 
 test('a repository with no document starts on no CLA, and one with a document starts on that document', async () => {
   const { user } = await openRepositories();
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, attachButton('acme/gadgets'));
   expect(documentSelect()).toHaveValue('none');
   await user.keyboard('{Escape}');
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-  await user.click(changeButton('acme/widgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await closed();
+  await openDialog(user, changeButton('acme/widgets'));
   expect(documentSelect()).toHaveValue('11');
 });
 
@@ -104,8 +120,7 @@ test('the document a repository has is a choice even when the documents of the r
       documentsOf({ installationScoped: [installationDocument(11, 'Individual CLA', { major: 1, minor: 0 })] }),
     ],
   });
-  await user.click(changeButton('acme/widgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, changeButton('acme/widgets'));
   expect(documentSelect()).toHaveValue('99');
   expect(
     within(documentSelect()).getByRole('option', { name: 'Corporate CLA (1.0), whole installation' }),
@@ -117,13 +132,7 @@ test('Save sends a PUT to the repository of the row with the chosen document and
   const { served, user } = await openRepositories(undefined, {
     list: [pageOf([widgets(), gadgets()]), pageOf([widgets(), gadgets({ document: claOf() })])],
   });
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
-  await user.selectOptions(documentSelect(), 'Individual CLA (1.0), whole installation');
-  await user.click(saveButton());
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await chooseAndSave(user, attachButton('acme/gadgets'), 'Individual CLA (1.0), whole installation');
   expect(served.attach.map((seen) => [seen.method, pathOf(seen)])).toEqual([
     ['PUT', '/api/repositories/2/cla-document'],
   ]);
@@ -142,8 +151,7 @@ test('nothing is optimistic: while the request is out the row still shows no CLA
     list: [pageOf([widgets(), gadgets()]), pageOf([widgets(), gadgets({ document: claOf() })])],
     attach: [request.answer],
   });
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, attachButton('acme/gadgets'));
   await user.selectOptions(documentSelect(), '11');
   await user.click(saveButton());
   expect(saveButton()).toHaveAttribute('aria-busy', 'true');
@@ -151,25 +159,20 @@ test('nothing is optimistic: while the request is out the row still shows no CLA
   await user.keyboard('{Escape}');
   expect(attachDialog()).toBeInTheDocument();
   request.release();
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await closed();
   expect(cells('acme/gadgets')[2]).toBe('Individual CLA1.0');
 });
 
 test('a double click on Save and the Enter key repeating send one request', async () => {
   const request = held(attachedAs(11));
   const { served, user } = await openRepositories(undefined, { attach: [request.answer] });
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, attachButton('acme/gadgets'));
   await user.selectOptions(documentSelect(), '11');
   await user.dblClick(saveButton());
   await user.keyboard('{Enter}{Enter}');
   expect(served.attach).toHaveLength(1);
   request.release();
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await closed();
   expect(served.attach).toHaveLength(1);
 });
 
@@ -181,13 +184,7 @@ test('choosing no CLA detaches: the body is null, and the row that had a documen
     ],
     attach: [attachedAs(null)],
   });
-  await user.click(changeButton('acme/widgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
-  await user.selectOptions(documentSelect(), messages['repositories.attach.none']);
-  await user.click(saveButton());
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await chooseAndSave(user, changeButton('acme/widgets'), messages['repositories.attach.none']);
   expect(bodyOf(served.attach[0])).toEqual({ documentId: null });
   expect(pathOf(served.attach[0])).toBe('/api/repositories/1/cla-document');
   expect(cells('acme/widgets')[2]).toBe(messages['repositories.cla.none']);
@@ -196,13 +193,7 @@ test('choosing no CLA detaches: the body is null, and the row that had a documen
 
 test('changed: false is an information message and not an error: the dialog closes and the page says nothing changed', async () => {
   const { user } = await openRepositories(undefined, { attach: [attachedAs(11, false)] });
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
-  await user.selectOptions(documentSelect(), '11');
-  await user.click(saveButton());
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await chooseAndSave(user, attachButton('acme/gadgets'), '11');
   expect(status()).toHaveTextContent('Nothing changed for acme/gadgets: it already was that way.');
   expect(screen.queryByRole('alert')).toBeNull();
 });
@@ -212,13 +203,7 @@ test('a repository that vanished (404) closes the dialog, is removed by the refe
     list: [pageOf([widgets(), gadgets()]), pageOf([widgets()])],
     attach: [envelope(404, 'not_found')],
   });
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
-  await user.selectOptions(documentSelect(), '11');
-  await user.click(saveButton());
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await chooseAndSave(user, attachButton('acme/gadgets'), '11');
   expect(served.list).toHaveLength(2);
   expect(rowsOf(repositoriesTable()).map((row) => row[0])).toEqual(['acme/widgets']);
   expect(status()).toHaveTextContent('acme/gadgets is not in this installation any more.');
@@ -229,29 +214,22 @@ test('a repository that vanished (404) closes the dialog, is removed by the refe
 
 test('Escape and Cancel close the dialog with no request and put focus back on the button that opened it; reopening starts from the repository again', async () => {
   const { served, user } = await openRepositories();
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, attachButton('acme/gadgets'));
   await user.selectOptions(documentSelect(), '11');
   await user.keyboard('{Escape}');
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await closed();
   expect(attachButton('acme/gadgets')).toHaveFocus();
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, attachButton('acme/gadgets'));
   expect(documentSelect()).toHaveValue('none');
   await user.click(within(attachDialog()).getByRole('button', { name: messages['common.cancel'] }));
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+  await closed();
   expect(attachButton('acme/gadgets')).toHaveFocus();
   expect(served.attach).toEqual([]);
 });
 
 test('the dialog is keyboard-complete: Tab stays inside it and reaches the select, Cancel, Save and the close button, and Enter on Save saves', async () => {
   const { served, user } = await openRepositories();
-  await user.click(attachButton('acme/gadgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, attachButton('acme/gadgets'));
   const reached = new Set<string>();
   for (let step = 0; step < 8; step += 1) {
     await user.tab();
@@ -284,7 +262,6 @@ test('while the documents are not there Save is off, and a failed list is the er
 
 test('the dialog passes axe', async () => {
   const { user } = await openRepositories();
-  await user.click(changeButton('acme/widgets'));
-  await screen.findByRole('combobox', { name: messages['repositories.attach.field'] });
+  await openDialog(user, changeButton('acme/widgets'));
   await expectNoA11yViolations(document.body);
 });

@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { dataExportSchema } from '../../shared/data-export.ts';
 import { envelope, json } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
-import { spyOnConsole, stubDownloads } from '../setup/test-support.ts';
+import { expectRateLimitedDownload, spyOnConsole, stubDownloads } from '../setup/test-support.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
 import {
   EXPORTED_EMAIL,
@@ -123,11 +123,7 @@ test('a 429 shows the error state with the countdown, and "Try again" works agai
     json(exportDocument()),
   );
   await user.click(download());
-  expect(await screen.findByText('You can try again in 3 seconds.')).toBeInTheDocument();
-  const alert = screen.getByRole('alert');
-  expect(alert).toHaveTextContent(messages['errors.too_many_requests']);
-  expect(alert).toHaveTextContent('req-00000001');
-  expect(downloads.saved()).toEqual([]);
+  await expectRateLimitedDownload(downloads);
   const retry = screen.getByRole('button', { name: messages['states.retry'] });
   expect(retry).toBeDisabled();
   act(() => {

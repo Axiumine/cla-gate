@@ -101,11 +101,8 @@ export interface ServedAllowlist {
   readonly tenants: ReturnType<typeof serveTenants>;
 }
 
-/** The path of a request. */
-export const pathOf = (seen: Seen | undefined): string => new URL(String(seen?.url)).pathname;
-
-/** The JSON a request carried, as the server read it. */
-export const bodyOf = (seen: Seen | undefined): unknown => JSON.parse(String(seen?.text));
+// What a test reads back from a recorded request: the same readers as the other screens.
+export { bodyOf, pathOf } from '../documents/test-support.ts';
 
 /** The default answers: one user on the installation list; one entry of the repository and one inherited; an add that stores `defunkt`; a removal. */
 function defaults() {

@@ -3,7 +3,9 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { envelope } from '../api/test-support.ts';
+import { threePages } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
+import { nextButton, previousButton } from '../test-support/pager-buttons.ts';
 import { AUDIT_ROUTE, auditTable, cursorOf, eventOf, openAudit, pageOf, paramsOf, rowsOf } from './test-support.ts';
 
 // E18-S09: a page holds 50 events, the page is the `cursor` of the address next to the filters, and nothing says how many there are in all.
@@ -13,21 +15,15 @@ const SECOND = eventOf({ id: 2, actor: { githubId: 2, login: 'two' } });
 const THIRD = eventOf({ id: 1, actor: { githubId: 3, login: 'three' } });
 
 /** Three pages: the first leads to `c2`, which leads to `c3`, the last. */
-const THREE_PAGES = new Map<string | null, () => Response>([
-  [null, () => pageOf([FIRST], 'c2')],
-  ['c2', () => pageOf([SECOND], 'c3')],
-  ['c3', () => pageOf([THIRD])],
-]);
+const THREE_PAGES = threePages(pageOf, [FIRST, SECOND, THIRD]);
 
-const next = () => screen.getByRole('button', { name: messages['pager.next'] });
-const previous = () => screen.getByRole('button', { name: messages['pager.previous'] });
 const actors = () => rowsOf(auditTable()).map((cells) => cells[1]);
 
 test('the first page has no cursor, Next puts the cursor of the server in the address next to the filters and asks for that page', async () => {
   const { served, user } = await openAudit(`${AUDIT_ROUTE}?actorGithubId=4711`, { pages: THREE_PAGES });
   expect(served.log.map(cursorOf)[0]).toBeNull();
-  expect(previous()).toBeDisabled();
-  await user.click(next());
+  expect(previousButton()).toBeDisabled();
+  await user.click(nextButton());
   await waitFor(() => {
     expect(actors()).toEqual(['2 two']);
   });
@@ -38,16 +34,16 @@ test('the first page has no cursor, Next puts the cursor of the server in the ad
 
 test('the last page has no Next, and Previous and the Back button of the browser go back through the pages', async () => {
   const { user } = await openAudit(AUDIT_ROUTE, { pages: THREE_PAGES });
-  await user.click(next());
+  await user.click(nextButton());
   await waitFor(() => {
     expect(actors()).toEqual(['2 two']);
   });
-  await user.click(next());
+  await user.click(nextButton());
   await waitFor(() => {
     expect(actors()).toEqual(['3 three']);
   });
   await waitFor(() => {
-    expect(next()).toBeDisabled();
+    expect(nextButton()).toBeDisabled();
   });
   act(() => {
     window.history.back();
@@ -57,9 +53,9 @@ test('the last page has no Next, and Previous and the Back button of the browser
   });
   expect(window.location.search).toBe('?cursor=c2');
   await waitFor(() => {
-    expect(previous()).toBeEnabled();
+    expect(previousButton()).toBeEnabled();
   });
-  await user.click(previous());
+  await user.click(previousButton());
   await waitFor(() => {
     expect(actors()).toEqual(['1 one']);
   });
@@ -100,11 +96,11 @@ test('a page that cannot be loaded leaves the page on screen and the pager says 
     ['c2', () => (failing ? envelope(502, 'github_unavailable') : pageOf([SECOND]))],
   ]);
   const { user } = await openAudit(AUDIT_ROUTE, { pages });
-  await user.click(next());
+  await user.click(nextButton());
   expect(await screen.findByText(messages['pager.failed'])).toBeInTheDocument();
   expect(actors()).toEqual(['1 one']);
   failing = false;
-  await user.click(next());
+  await user.click(nextButton());
   await waitFor(() => {
     expect(actors()).toEqual(['2 two']);
   });
@@ -113,8 +109,8 @@ test('a page that cannot be loaded leaves the page on screen and the pager says 
 
 test('a page with no next page and no earlier one has a pager with both buttons off, and says no total', async () => {
   await openAudit(AUDIT_ROUTE, { pages: new Map([[null, () => pageOf([FIRST, SECOND])]]) });
-  expect(next()).toBeDisabled();
-  expect(previous()).toBeDisabled();
+  expect(nextButton()).toBeDisabled();
+  expect(previousButton()).toBeDisabled();
   expect(screen.getByText('Page 1')).toBeInTheDocument();
   expect(screen.queryByText(/of \d+/)).toBeNull();
 });

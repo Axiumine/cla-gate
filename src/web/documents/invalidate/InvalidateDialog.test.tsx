@@ -4,6 +4,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 import { messages } from '../../i18n/index.ts';
 import { expectNoA11yViolations } from '../../test-support/a11y.ts';
+import { expectRevokeReasonChoices } from '../../test-support/revoke-reasons.ts';
 import { HISTORY, openHistory, pageOf, versionsTable } from '../history/test-support.ts';
 import { bodyOf, held } from '../test-support.ts';
 import {
@@ -75,18 +76,7 @@ test('the preview is asked for the major of the row, and again every time the qu
 
 test('the reason is a required choice of the four codes in the words of the catalog, with no free-text field, and the acknowledgement says how many', async () => {
   await openQuestion({ invalidate: { preview: [previewOf(7)] } });
-  expect(reasonSelect()).toHaveAttribute('aria-required', 'true');
-  expect(
-    within(reasonSelect())
-      .getAllByRole('option')
-      .map((option) => [option.getAttribute('value'), option.textContent]),
-  ).toEqual([
-    ['', messages['signatures.revoke.reason.choose']],
-    ['signer_request', messages['signatures.revoke.reason.signer_request']],
-    ['maintainer_decision', messages['signatures.revoke.reason.maintainer_decision']],
-    ['legal_request', messages['signatures.revoke.reason.legal_request']],
-    ['other', messages['signatures.revoke.reason.other']],
-  ]);
+  expectRevokeReasonChoices(reasonSelect());
   expect(within(question()).queryByRole('textbox')).toBeNull();
   expect(acknowledgement()).toHaveAttribute('aria-required', 'true');
   expect(acknowledgement()).toHaveAccessibleName(

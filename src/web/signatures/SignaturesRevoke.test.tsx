@@ -6,6 +6,7 @@ import { expect, test } from 'vitest';
 import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { expectRevokeReasonChoices } from '../test-support/revoke-reasons.ts';
 import {
   bodyOf,
   confirmButton,
@@ -58,18 +59,7 @@ test('the reason is a required choice of the four codes in the words of the cata
   const { user } = await openSignatures();
   await user.click(revokeButton('Ada Lovelace'));
   await screen.findByRole('alertdialog');
-  expect(reasonSelect()).toHaveAttribute('aria-required', 'true');
-  expect(
-    within(reasonSelect())
-      .getAllByRole('option')
-      .map((option) => [option.getAttribute('value'), option.textContent]),
-  ).toEqual([
-    ['', messages['signatures.revoke.reason.choose']],
-    ['signer_request', messages['signatures.revoke.reason.signer_request']],
-    ['maintainer_decision', messages['signatures.revoke.reason.maintainer_decision']],
-    ['legal_request', messages['signatures.revoke.reason.legal_request']],
-    ['other', messages['signatures.revoke.reason.other']],
-  ]);
+  expectRevokeReasonChoices(reasonSelect());
   expect(reasonSelect()).toHaveValue('');
   expect(within(revokeDialog()).queryByRole('textbox')).toBeNull();
 });

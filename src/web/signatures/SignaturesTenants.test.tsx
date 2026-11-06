@@ -14,6 +14,7 @@ import { installationKey } from '../installations/installation-queries.ts';
 import { summary, tenantOf } from '../installations/test-support.ts';
 import { AppRouter } from '../router.tsx';
 import { spyOnPageNavigation } from '../test-support/location.ts';
+import { logOutAndExpectNoTrace } from '../test-support/log-out.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { server } from '../test-support/server.ts';
 import { signaturesKey } from './signature-queries.ts';
@@ -217,15 +218,11 @@ test('logging out clears the cache: no signatures query, and none of the signers
   const { release } = serveTwoTenants();
   release();
   answer(logoutRoute.path, new HttpResponse(null, { status: 204 }));
-  const { user, queryClient, setSession, container } = renderSignatures(SIGNATURES_ROUTE);
+  const app = renderSignatures(SIGNATURES_ROUTE);
   await screen.findByText(A_ONLY);
-  expect(queryClient.getQueryCache().findAll({ queryKey: signaturesKey(5) })).toHaveLength(1);
-  setSession(undefined);
-  await user.click(screen.getByRole('button', { name: messages['auth.logout'] }));
-  await screen.findByRole('heading', { level: 1, name: messages['app.name'] });
-  expect(queryClient.getQueryCache().findAll({ queryKey: ['installation'] })).toEqual([]);
-  expect(screen.queryByText(A_ONLY)).toBeNull();
-  expect(container.textContent).not.toContain('zzzz');
+  expect(app.queryClient.getQueryCache().findAll({ queryKey: signaturesKey(5) })).toHaveLength(1);
+  await logOutAndExpectNoTrace(app, A_ONLY);
+  expect(app.container.textContent).not.toContain('zzzz');
 });
 
 test('a visitor without a session who opens the signatures is sent to the login, and no signature of any tenant is asked for', async () => {

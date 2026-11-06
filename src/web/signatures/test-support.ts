@@ -9,7 +9,7 @@ import { SIGNATURES_CSV_PATH } from '../../shared/signature-export.ts';
 import { SIGNATURE_REVOKE_PATH, signatureRevokeResponseSchema } from '../../shared/signature-revoke.ts';
 import { SIGNATURES_PATH, signatureSearchPageSchema } from '../../shared/signature-search.ts';
 import { envelope, json, type Seen } from '../api/test-support.ts';
-import { type Answer, endpoint, listedOf, listOf } from '../documents/test-support.ts';
+import { type Answer, endpoint, listedOf, listOf, type PageAnswers, pagesEndpoint } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { serveTenants, summary, type Tenant, tenantOf } from '../installations/test-support.ts';
 import { AppRouter } from '../router.tsx';
@@ -96,7 +96,7 @@ export interface ServeSignatures {
   readonly listing?: () => Response | Promise<Response>;
   readonly search?: readonly Answer[];
   /** The pages of the search by cursor, `null` standing for the first page; a cursor with no page is a `400`. Used instead of `search`. */
-  readonly pages?: ReadonlyMap<string | null, () => Response | Promise<Response>>;
+  readonly pages?: PageAnswers;
   readonly revoke?: readonly Answer[];
   /** The documents of the installation, as `GET .../documents` answers. */
   readonly documents?: readonly Answer[];
@@ -153,20 +153,8 @@ export function serveSignatures(serve: ServeSignatures = {}): ServedSignatures {
     csv: [],
     tenants: serveTenants(serve.tenants ?? [tenantOf(summary(), 'acme/widgets', 'acme/gadgets')], serve.listing),
   };
-  const { pages } = serve;
   const search =
-    pages === undefined
-      ? endpoint(served.search, answers.search)
-      : async ({ request }: { readonly request: Request }) => {
-          served.search.push({
-            method: request.method,
-            url: request.url,
-            headers: Object.fromEntries(request.headers),
-            text: '',
-          });
-          const page = pages.get(new URL(request.url).searchParams.get('cursor'));
-          return page === undefined ? envelope(400, 'bad_request') : await page();
-        };
+    serve.pages === undefined ? endpoint(served.search, answers.search) : pagesEndpoint(served.search, serve.pages);
   server.use(
     http.get(SIGNATURES_PATH, search),
     http.post(SIGNATURE_REVOKE_PATH, endpoint(served.revoke, answers.revoke)),
@@ -199,19 +187,8 @@ export const rowsOf = (table: HTMLElement): string[][] =>
     .slice(1)
     .map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent));
 
-/** The `cursor` parameter of a recorded request: `null` when it names none. */
-export const cursorOf = (seen: Seen | undefined): string | null =>
-  new URL(String(seen?.url)).searchParams.get('cursor');
-
-/** The query parameters of a recorded request, as an object: the names the screen sent and nothing else. */
-export const paramsOf = (seen: Seen | undefined): Record<string, string> =>
-  Object.fromEntries(new URL(String(seen?.url)).searchParams);
-
-/** The path of a request. */
-export const pathOf = (seen: Seen | undefined): string => new URL(String(seen?.url)).pathname;
-
-/** The JSON a request carried, as the server read it. */
-export const bodyOf = (seen: Seen | undefined): unknown => JSON.parse(String(seen?.text));
+// What a test reads back from a recorded request: the same readers as the other screens.
+export { bodyOf, cursorOf, paramsOf, pathOf } from '../documents/test-support.ts';
 
 /** The search box. */
 export const searchBox = () => screen.getByRole('searchbox', { name: messages['signatures.search.field'] });

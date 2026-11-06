@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import type { UserEvent } from '@testing-library/user-event';
 import { http } from 'msw';
 import { createElement } from 'react';
-import { assert } from 'vitest';
+import { assert, expect } from 'vitest';
 import type { z } from 'zod';
 import { REPOSITORY_DOCUMENTS_PATH } from '../../shared/cla.ts';
 import { COMMIT_OVERRIDE_PATH, COMMIT_OVERRIDES_PATH, commitOverridePageSchema } from '../../shared/commit-override.ts';
 import { PENDING_PRS_PATH, pendingPrsPageSchema } from '../../shared/pending-prs.ts';
 import { envelope, json, type Seen } from '../api/test-support.ts';
-import { type Answer, endpoint, noContent } from '../documents/test-support.ts';
+import { type Answer, endpoint, noContent, type PageAnswers, pagesEndpoint } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { serveTenants, summary, type Tenant, tenantOf } from '../installations/test-support.ts';
 import { documentsOf } from '../repositories/test-support.ts';
@@ -133,7 +134,7 @@ export interface ServePending {
   readonly listing?: () => Response | Promise<Response>;
   readonly pending?: readonly Answer[];
   /** The pages of the pending list by cursor, `null` standing for the first page; a cursor with no page is a `400`. Used instead of `pending`. */
-  readonly pages?: ReadonlyMap<string | null, () => Response | Promise<Response>>;
+  readonly pages?: PageAnswers;
   readonly overrides?: readonly Answer[];
   /** The answers to the check that a repository belongs to the installation in the address (`GET .../repositories/:repositoryId/documents`). */
   readonly membership?: readonly Answer[];
@@ -161,15 +162,6 @@ function defaults() {
     membership: [documentsOf()],
     record: [recordedAs()],
     remove: [noContent()],
-  };
-}
-
-/** Records a request that the pages handler answers, so the test can read what the screen asked for. */
-function pagesEndpoint(seen: Seen[], pages: NonNullable<ServePending['pages']>) {
-  return async ({ request }: { readonly request: Request }) => {
-    seen.push({ method: request.method, url: request.url, headers: Object.fromEntries(request.headers), text: '' });
-    const page = pages.get(new URL(request.url).searchParams.get('cursor'));
-    return page === undefined ? envelope(400, 'bad_request') : await page();
   };
 }
 
@@ -226,15 +218,8 @@ export const rowsOf = (table: HTMLElement): string[][] =>
     .slice(1)
     .map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent));
 
-/** The query parameters of a recorded request, as an object: the names the screen sent and nothing else. */
-export const paramsOf = (seen: Seen | undefined): Record<string, string> =>
-  Object.fromEntries(new URL(String(seen?.url)).searchParams);
-
-/** The path of a request. */
-export const pathOf = (seen: Seen | undefined): string => new URL(String(seen?.url)).pathname;
-
-/** The JSON a request carried, as the server read it. */
-export const bodyOf = (seen: Seen | undefined): unknown => JSON.parse(String(seen?.text));
+// What a test reads back from a recorded request: the same readers as the other screens.
+export { bodyOf, paramsOf, pathOf } from '../documents/test-support.ts';
 
 /** The repository filter of the pending tab, and its reason filter. */
 export const repositoryFilter = () => screen.getByRole('combobox', { name: messages['pending.filter.repository'] });
@@ -248,6 +233,16 @@ export const recordButton = (commit: string, repository = 'acme/widgets') =>
 
 /** The record dialog, once it is open. */
 export const recordDialog = () => screen.getByRole('dialog', { name: messages['pending.override.title'] });
+
+/** Cancels the record dialog, waits until it has closed, and opens it again on the commit whose short id is `commit`. */
+export async function cancelAndReopen(user: UserEvent, commit: string): Promise<void> {
+  await user.click(within(recordDialog()).getByRole('button', { name: messages['common.cancel'] }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  await user.click(recordButton(commit));
+  await screen.findByRole('dialog');
+}
 
 /** The reason field and the submit button of the record dialog. */
 export const reasonField = () => within(recordDialog()).getByRole('textbox', { name: /^Reason/ });

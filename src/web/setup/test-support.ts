@@ -3,7 +3,7 @@
 import { screen } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { createElement } from 'react';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import type { z } from 'zod';
 import {
   type AppManifest,
@@ -148,6 +148,19 @@ export function stubDownloads() {
         .filter((link): link is HTMLAnchorElement => link instanceof HTMLAnchorElement)
         .map((link) => ({ name: link.download, address: link.href })),
   };
+}
+
+/**
+ * The `429` of a download (`Retry-After: 3`): the countdown, the standard message with its request id, and nothing saved. It
+ * returns the alert, so a test can look into it.
+ */
+export async function expectRateLimitedDownload(downloads: ReturnType<typeof stubDownloads>): Promise<HTMLElement> {
+  expect(await screen.findByText('You can try again in 3 seconds.')).toBeInTheDocument();
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent(messages['errors.too_many_requests']);
+  expect(alert).toHaveTextContent('req-00000001');
+  expect(downloads.saved()).toEqual([]);
+  return alert;
 }
 
 const named = (template: string, name: string) => template.replace('{name}', name);

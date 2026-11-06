@@ -4,6 +4,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { envelope } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
+import { nextButton, previousButton } from '../test-support/pager-buttons.ts';
 import {
   cursorOf,
   type Item,
@@ -33,16 +34,14 @@ function serveThreePages() {
   ]);
 }
 
-const next = () => screen.getByRole('button', { name: messages['pager.next'] });
-const previous = () => screen.getByRole('button', { name: messages['pager.previous'] });
 const shows = (name: string) => within(signaturesTable()).getByText(name);
 
 test('the first page has no cursor, Next puts the cursor of the server in the address and asks for that page', async () => {
   const seen = serveThreePages();
   const { user } = await openList();
   expect(seen.map(cursorOf)[0]).toBeNull();
-  expect(previous()).toBeDisabled();
-  await user.click(next());
+  expect(previousButton()).toBeDisabled();
+  await user.click(nextButton());
   expect(await screen.findByText('Page two CLA')).toBeInTheDocument();
   expect(window.location.search).toBe('?cursor=c2');
   expect(seen.map(cursorOf).at(-1)).toBe('c2');
@@ -53,23 +52,23 @@ test('the first page has no cursor, Next puts the cursor of the server in the ad
 test('the pager announces the page that arrived, and the last page has no Next', async () => {
   serveThreePages();
   const { user } = await openList();
-  await user.click(next());
+  await user.click(nextButton());
   await screen.findByText('Page two CLA');
-  await user.click(next());
+  await user.click(nextButton());
   await screen.findByText('Page three CLA');
   expect(screen.getByText('Page 3')).toBeInTheDocument();
   await waitFor(() => {
-    expect(next()).toBeDisabled();
+    expect(nextButton()).toBeDisabled();
   });
-  expect(previous()).toBeEnabled();
+  expect(previousButton()).toBeEnabled();
 });
 
 test('Previous goes back through the pages, and so does the Back button of the browser', async () => {
   serveThreePages();
   const { user } = await openList();
-  await user.click(next());
+  await user.click(nextButton());
   await screen.findByText('Page two CLA');
-  await user.click(next());
+  await user.click(nextButton());
   await screen.findByText('Page three CLA');
   act(() => {
     window.history.back();
@@ -77,9 +76,9 @@ test('Previous goes back through the pages, and so does the Back button of the b
   expect(await screen.findByText('Page two CLA')).toBeInTheDocument();
   expect(window.location.search).toBe('?cursor=c2');
   await waitFor(() => {
-    expect(previous()).toBeEnabled();
+    expect(previousButton()).toBeEnabled();
   });
-  await user.click(previous());
+  await user.click(previousButton());
   expect(await screen.findByText('Page one CLA')).toBeInTheDocument();
   expect(window.location.search).toBe('');
 });
@@ -137,15 +136,15 @@ test('a page that cannot be loaded leaves the page on screen with a message, and
     ['c2', () => (failing ? envelope(500, 'internal_server_error') : pageOf([SECOND]))],
   ]);
   const { user } = await openList();
-  await user.click(next());
+  await user.click(nextButton());
   expect(await screen.findByText(messages['pager.failed'])).toBeInTheDocument();
   expect(shows('Page one CLA')).toBeInTheDocument();
   expect(screen.queryByText('Page two CLA')).toBeNull();
   failing = false;
   await waitFor(() => {
-    expect(next()).toBeEnabled();
+    expect(nextButton()).toBeEnabled();
   });
-  await user.click(next());
+  await user.click(nextButton());
   expect(await screen.findByText('Page two CLA')).toBeInTheDocument();
   expect(screen.queryByText(messages['pager.failed'])).toBeNull();
 });
@@ -153,7 +152,7 @@ test('a page that cannot be loaded leaves the page on screen with a message, and
 test('a cursor the server refuses on a click leaves the page on screen and says so: it is not the first page again', async () => {
   const seen = serveSignatures([[null, () => pageOf([FIRST], 'stale')]]);
   const { user } = await openList();
-  await user.click(next());
+  await user.click(nextButton());
   expect(await screen.findByText(messages['pager.failed'])).toBeInTheDocument();
   expect(shows('Page one CLA')).toBeInTheDocument();
   expect(seen.map(cursorOf)).toEqual([null, 'stale']);
@@ -166,11 +165,11 @@ test('while a page loads the page on screen stays, both buttons are off, and one
     ['c2', () => gate.promise],
   ]);
   const { user } = await openList();
-  await user.click(next());
+  await user.click(nextButton());
   await waitFor(() => {
-    expect(next()).toBeDisabled();
+    expect(nextButton()).toBeDisabled();
   });
-  expect(previous()).toBeDisabled();
+  expect(previousButton()).toBeDisabled();
   expect(shows('Page one CLA')).toBeInTheDocument();
   expect(screen.getByText('Page 1')).toBeInTheDocument();
   gate.resolve(pageOf([SECOND]));
@@ -181,7 +180,7 @@ test('while a page loads the page on screen stays, both buttons are off, and one
 test('the keyboard pages through the list: Tab to Next and Enter', async () => {
   serveThreePages();
   const { user } = await openList();
-  next().focus();
+  nextButton().focus();
   await user.keyboard('{Enter}');
   expect(await screen.findByText('Page two CLA')).toBeInTheDocument();
 });

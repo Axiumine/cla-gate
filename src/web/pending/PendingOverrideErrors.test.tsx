@@ -9,6 +9,7 @@ import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
 import {
+  cancelAndReopen,
   openPending,
   PENDING_ROUTE,
   pageOf,
@@ -139,12 +140,7 @@ test('a new attempt with the reason edited takes the error away first, and the d
   await alertOf();
   await user.type(reasonField(), ' again');
   expect(within(recordDialog()).queryByRole('alert')).toBeNull();
-  await user.click(within(recordDialog()).getByRole('button', { name: messages['common.cancel'] }));
-  await waitFor(() => {
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-  await user.click(recordButton(SHORT));
-  await screen.findByRole('dialog');
+  await cancelAndReopen(user, SHORT);
   expect(within(recordDialog()).queryByRole('alert')).toBeNull();
   expect(reasonField()).toHaveValue('');
 });
