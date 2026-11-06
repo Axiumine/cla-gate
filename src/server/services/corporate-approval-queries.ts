@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Kysely, sql } from 'kysely';
+import type { GithubId } from '../../shared/github-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { type ApprovalRow, readRow } from './corporate-approval-row.ts';
@@ -95,4 +96,23 @@ export async function activeApprovalRows(
     .orderBy('p.id', 'asc')
     .execute();
   return rows.map(readRow);
+}
+
+/**
+ * How many approvals of kind `user` of the tenant name the person, revoked and expired ones included, since the login snapshot stays with each
+ * (the erasure of a signer counts them, E21-S03). An approval of another tenant for the same person is not counted.
+ */
+export async function countApprovalsOfPerson(
+  db: Kysely<Database>,
+  scope: TenantScope,
+  githubUserId: GithubId,
+): Promise<number> {
+  const { approvals } = await db
+    .selectFrom('corporate_approvals')
+    .where('installation_id', '=', scope.installationId)
+    .where('kind', '=', 'user')
+    .where('subject_github_id', '=', githubUserId)
+    .select(sql<number>`count(*)`.as('approvals'))
+    .executeTakeFirstOrThrow();
+  return approvals;
 }

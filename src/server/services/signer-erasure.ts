@@ -5,6 +5,7 @@ import type { GithubId } from '../../shared/github-id.ts';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { withTransaction } from '../adapters/db/transaction.ts';
+import { countApprovalsOfPerson } from './corporate-approval-queries.ts';
 import { type ErasureCounts, holdsAnythingAbout } from './signer-erasure-counts.ts';
 import { ErasureCountChangedError, SignerNotFoundError } from './signer-erasure-errors.ts';
 
@@ -50,18 +51,11 @@ export async function erasureCounts(
     .where('github_id', '=', githubUserId)
     .select(sql<number>`count(*)`.as('entries'))
     .executeTakeFirstOrThrow();
-  const approvals = await db
-    .selectFrom('corporate_approvals')
-    .where('installation_id', '=', scope.installationId)
-    .where('kind', '=', 'user')
-    .where('subject_github_id', '=', githubUserId)
-    .select(sql<number>`count(*)`.as('approvals'))
-    .executeTakeFirstOrThrow();
   return {
     signatures: row.signatures,
     signerPiiRows: row.signer_pii_rows,
     allowlistEntries: entries.entries,
-    corporateApprovals: approvals.approvals,
+    corporateApprovals: await countApprovalsOfPerson(db, scope, githubUserId),
   };
 }
 

@@ -1,34 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { useQueryClient } from '@tanstack/react-query';
-import { createRootRouteWithContext, createRoute, createRouter, RouterProvider } from '@tanstack/react-router';
+import { createRoute, createRouter, RouterProvider } from '@tanstack/react-router';
 import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
-import { CorporateAgreementsPage } from './corporate/CorporateAgreementsPage.tsx';
-import { CorporateSignPage } from './corporate/CorporateSignPage.tsx';
-import { EmployerClaimRoute } from './corporate/EmployerClaimRoute.tsx';
-import { REPOSITORY_ID_IN_PATH } from './corporate/repository-id.ts';
+import { corporateAgreementsRoute, corporateClaimRoute, corporateSignRoute } from './corporate/corporate-routes.tsx';
 import { AppShell } from './layout/AppShell.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
 import { RepositorySettingsPage } from './repository-settings/RepositorySettingsPage.tsx';
+import { rootRoute } from './root-route.ts';
 import { type RouterContext, withAccess } from './route-access.ts';
 import { SetupCallbackPage } from './setup/SetupCallbackPage.tsx';
 import { SetupPage } from './setup/SetupPage.tsx';
-import { NotFoundPage, RouterErrorComponent } from './states/index.ts';
 
 // The route tree of the app (E17-S08), written in code: no generator, no generated file. Every route spreads
 // `withAccess(...)`, which is where it says who may see it. E18 adds the sign page and the maintainer screens here; the setup
-// pages (E19-S07) are below.
-
-// The root is the deepest match only when no route matched, so its title is the not-found page's.
-const rootRoute = createRootRouteWithContext<RouterContext>()({
-  ...withAccess('public', { title: 'states.notFound.title' }),
-  notFoundComponent: NotFoundPage,
-  errorComponent: RouterErrorComponent,
-});
+// pages (E19-S07) are below, and the corporate routes (E21) are in corporate/corporate-routes.tsx, the root in root-route.ts.
 
 const landingRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -88,55 +78,6 @@ const repositorySettingsRoute = createRoute({
   },
   component: function RepositorySettingsRoute() {
     return <RepositorySettingsPage {...repositorySettingsRoute.useParams()} />;
-  },
-});
-
-// Corporate signing (E21-S02): the page where an authorised signatory signs for a company, and the list of the agreements a person
-// signed. Both need a login. The paths are those of CORPORATE_SIGN_PAGE_PATH and CORPORATE_AGREEMENTS_PAGE_PATH in the shared contract
-// (TanStack spells a parameter `$name`; router.test.tsx holds the two spellings together).
-
-const corporateSignRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/corporate/sign/$githubRepoId',
-  ...withAccess('authenticated', { title: 'corporate.sign.title' }),
-  component: function CorporateSignRoute() {
-    const { githubRepoId } = corporateSignRoute.useParams();
-    return REPOSITORY_ID_IN_PATH.test(githubRepoId) ? (
-      <CorporateSignPage githubRepoId={Number(githubRepoId)} />
-    ) : (
-      <NotFoundPage />
-    );
-  },
-});
-
-// The claim of an employee (E21-S04): a page of its own at CORPORATE_CLAIM_PAGE_PATH, for a signed-in person, until the page where a contributor
-// signs embeds the entry.
-const corporateClaimRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/corporate/claim/$githubRepoId',
-  ...withAccess('authenticated', { title: 'corporate.claim.pageTitle' }),
-  component: EmployerClaimRoute,
-});
-
-/** `?cursor=` of the list: the opaque cursor of the page on screen, else the first page. The raw value goes no further. */
-const corporateAgreementsSearch = z.object({ cursor: z.string().max(512).optional().catch(undefined) });
-
-const corporateAgreementsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/corporate/agreements',
-  ...withAccess('authenticated', { title: 'corporate.agreements.title' }),
-  validateSearch: corporateAgreementsSearch,
-  component: function CorporateAgreementsRoute() {
-    const { cursor } = corporateAgreementsRoute.useSearch();
-    const navigate = corporateAgreementsRoute.useNavigate();
-    return (
-      <CorporateAgreementsPage
-        cursor={cursor}
-        onCursorChange={(next) => {
-          void navigate({ search: { cursor: next } });
-        }}
-      />
-    );
   },
 });
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { DATA_EXPORT_AUDIT_LIMIT, DATA_EXPORT_SCHEMA_VERSION, type DataExport } from '../../../shared/data-export.ts';
-import type { ownCorporateAgreements, ownCorporateApprovals } from './own-corporate-queries.ts';
+import { type AgreementRow, type ApprovalRow, agreementOf, approvalOf } from './own-corporate-rows.ts';
 import type { ownAllowlistEntries, ownAuditEntries } from './own-data-queries.ts';
 import type { ownSignatures } from './own-signatures-query.ts';
 
@@ -9,8 +9,6 @@ import type { ownSignatures } from './own-signatures-query.ts';
 // Pure: the statements are in own-data-queries.ts and the transaction in own-data.ts.
 
 type SignatureRow = Awaited<ReturnType<typeof ownSignatures>>[number];
-type AgreementRow = Awaited<ReturnType<typeof ownCorporateAgreements>>[number];
-type ApprovalRow = Awaited<ReturnType<typeof ownCorporateApprovals>>[number];
 type AllowlistRow = Awaited<ReturnType<typeof ownAllowlistEntries>>[number];
 type AuditRow = Awaited<ReturnType<typeof ownAuditEntries>>[number];
 
@@ -55,33 +53,6 @@ const signatureOf = (row: SignatureRow): DataExport['signatures'][number] => ({
           ipAddress: row.personal_data.ip_address,
           userAgent: row.personal_data.user_agent,
         },
-});
-
-const agreementOf = (row: AgreementRow): DataExport['corporateAgreements'][number] => ({
-  id: row.id,
-  signatureId: row.signature_id,
-  installation: { githubInstallationId: row.github_installation_id, accountLogin: row.account_login },
-  document: { id: row.document_id, name: row.document_name },
-  major: row.major,
-  signedAt: row.signed_at.toISOString(),
-  revokedAt: row.revoked_at?.toISOString() ?? null,
-  personalData:
-    row.personal_data === null
-      ? null
-      : { companyName: row.personal_data.company_name, signatoryTitle: row.personal_data.signatory_title },
-});
-
-const approvalOf = (row: ApprovalRow): DataExport['corporateApprovals'][number] => ({
-  id: row.id,
-  agreementId: row.agreement_id,
-  installation: { githubInstallationId: row.github_installation_id, accountLogin: row.account_login },
-  document: { id: row.document_id, name: row.document_name },
-  major: row.major,
-  source: row.source,
-  approvedAt: row.approved_at.toISOString(),
-  expiresAt: row.expires_at?.toISOString() ?? null,
-  revokedAt: row.revoked_at?.toISOString() ?? null,
-  login: row.login,
 });
 
 const allowlistEntryOf = (row: AllowlistRow): DataExport['allowlistEntries'][number] => ({

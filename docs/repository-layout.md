@@ -176,7 +176,7 @@ Items marked (planned) do not exist yet.
 │                                tenant-authorization.ts and tenant-authorizer.ts (the guard's reads and decision), admin-ledger.ts and
 │                                admin-ledger-queries.ts (the ledger of org admins), document-placement.ts, operator-policies.ts;
 │                                role-fixture/, role-lookups-fixture/, role-table-fixture/ and discovery-fixture/ are test only;
-│                                E21: corporate-sign.ts, corporate-agreements.ts, corporate-agreement-*.ts, corporate-approval-*.ts (add, list, revoke, carry-over, expired, audit, lock, the queries), corporate-claim*.ts, corporate-coverage-queries.ts, corporate-repository-queries.ts, repository-corporate-document.ts, evaluate-pr/corporate-facts.ts and export/corporate-export*.ts (the two CSV files and their audit record), export/own-corporate-queries.ts (the corporate part of the own-data export), when-present.ts; corporate-fixture/ files under evaluate-pr/ and export/ are test only;
+│                                E21: corporate-sign.ts, corporate-agreements.ts, corporate-agreement-*.ts, corporate-approval-*.ts (add, list, revoke, carry-over, expired, audit, lock, the queries), corporate-claim*.ts, corporate-coverage-queries.ts, corporate-repository-queries.ts, repository-corporate-document.ts, evaluate-pr/corporate-facts.ts and export/corporate-export*.ts (the two CSV files and their audit record), export/own-corporate-queries.ts and own-corporate-rows.ts (the corporate part of the own-data export), when-present.ts; corporate-fixture/ files under evaluate-pr/ and export/ are test only;
 │                                E22: merge-group/ (the `evaluate-merge-group` job), retention/ (the sweep, its handler and statements), public-verification.ts with
 │                                public-verification-queries.ts, public-login-cache.ts and public-lookup-budget.ts (the public signature check), repository-public-verification.ts
 │                                (the opt-in), repository-badge-snippet.ts, operator-erasure.ts and operator-erasure-queries.ts (the erasure command; operator-erasure-fixture/ is test only);
@@ -227,7 +227,7 @@ Items marked (planned) do not exist yet.
 ├── src/web/                     the React 19 SPA (Vite 8, Tailwind CSS 4); built to dist/web and served by the server; tests co-located
 │   ├── main.tsx  zod-config.ts  index.html
 │   │                            the entry (kept logic-free; zod-config.ts turns off Zod's eval probe and is its first import) and the page
-│   ├── App.tsx  providers.tsx  router.tsx  route-access.ts
+│   ├── App.tsx  providers.tsx  router.tsx  root-route.ts  route-access.ts
 │   │                            the app, the providers (I18nProvider outermost), the code-based routes and the access each declares (`withAccess`)
 │   ├── public/                  files copied as they are to the root of dist/web (favicon.svg)
 │   ├── api/                     the typed client over the shared route descriptors: client.ts (`createApiClient`), exchange.ts, request.ts,
@@ -235,7 +235,7 @@ Items marked (planned) do not exist yet.
 │   │                            test-support.ts (MSW helpers) is test only
 │   ├── auth/                    session.ts (the query ['auth','session']), auth.ts, guard.ts, hooks.ts, navigate.ts, return-to.ts, use-logout.ts,
 │   │                            UserMenu, Avatar, LoginLink, LogoutButton, SessionEndedBanner, index.ts
-│   ├── corporate/               E21: the corporate CLA pages and parts: CorporateSignPage (`/corporate/sign/$githubRepoId`), CorporateAgreementsPage (`/corporate/agreements`, the manager's approvals), EmployerClaim and EmployerClaimPage (`/corporate/claim/$githubRepoId`), ClaText (the stored source rendered in the browser through `renderClaTree`), the forms, hooks (use-signing, use-agreements, use-claim) and corporate-errors.ts
+│   ├── corporate/               E21: the corporate CLA pages and parts: CorporateSignPage (`/corporate/sign/$githubRepoId`), CorporateAgreementsPage (`/corporate/agreements`, the manager's approvals), EmployerClaim and EmployerClaimPage (`/corporate/claim/$githubRepoId`), corporate-routes.tsx (the three routes, added to the tree by router.tsx), ClaText (the stored source rendered in the browser through `renderClaTree`), the forms, hooks (use-signing, use-agreements, use-claim) and corporate-errors.ts
 │   ├── i18n/                    messages.ts (the English catalog), translate.ts (`t`, `t.plural`), interpolate.ts, format.ts (`formatUtc`),
 │   │                            context.ts, I18nProvider.tsx, Timestamp.tsx, index.ts; test-support.ts is test only
 │   ├── layout/                  AppShell (skip link, header, main landmark, live region), PrimaryNav, nav-items.ts, SourceFooter (the AGPL

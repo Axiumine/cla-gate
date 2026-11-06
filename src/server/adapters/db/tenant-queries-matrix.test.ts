@@ -157,6 +157,7 @@ const SCOPED_QUERY_NAMES = [
   'services/corporate-approval-queries.ts findApprovalRow',
   'services/corporate-approval-queries.ts getApprovalRow',
   'services/corporate-approval-queries.ts activeApprovalRows',
+  'services/corporate-approval-queries.ts countApprovalsOfPerson',
   'services/corporate-approval-coverage-queries.ts countActiveApprovals',
   'services/corporate-approval-coverage-queries.ts domainApprovals',
   'services/corporate-approval-write-queries.ts insertManagerApproval',

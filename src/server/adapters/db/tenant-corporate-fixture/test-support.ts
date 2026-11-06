@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { type Kysely, NoResultError } from 'kysely';
+import { type Kysely, NoResultError, sql } from 'kysely';
 import { parseGithubId } from '../../../../shared/github-id.ts';
 import {
   insertAgreement,
@@ -14,6 +14,7 @@ import { lockAgreementSignature } from '../../../services/corporate-approval-loc
 import {
   activeApprovalRows,
   approvalPageRows,
+  countApprovalsOfPerson,
   findApprovalRow,
   getApprovalRow,
 } from '../../../services/corporate-approval-queries.ts';
@@ -30,6 +31,7 @@ import {
   corporateTenant,
   DOMAIN,
   insertAgreement as insertAgreementRow,
+  PEOPLE,
   personWithId,
   publishCorporateDocument,
   signCorporate,
@@ -351,6 +353,23 @@ export const E21_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string,
       arrange: arrangeApprovals,
       run: async (db, scope, ids) => {
         const rows = await activeApprovalRows(db, scope, await agreementOf(db, ids));
+        return ownersOfApprovals(
+          db,
+          rows.map((row) => row.id),
+        );
+      },
+    }),
+    // A count has no owner to read again, so the run takes as many approvals of the person as it counted, those of the tenant first: both
+    // tenants approve the same employee, so a count that took in the other tenant's approval shows that tenant as an owner.
+    countApprovalsOfPerson: scoped({
+      takesIds: false,
+      activeOnly: false,
+      arrange: arrangeApprovals,
+      run: async (db, scope) => {
+        const counted = await countApprovalsOfPerson(db, scope, parseGithubId(PEOPLE.employee));
+        const { rows } = await sql<{ id: number }>`
+          select id from corporate_approvals where kind = 'user' and subject_github_id = ${PEOPLE.employee}
+          order by installation_id = ${scope.installationId} desc, id limit ${counted}`.execute(db);
         return ownersOfApprovals(
           db,
           rows.map((row) => row.id),
