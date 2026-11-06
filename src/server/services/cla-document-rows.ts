@@ -21,6 +21,7 @@ export function toDocument(row: DocumentRow): StoredDocument {
   return {
     id: row.id,
     repositoryId: row.repository_id,
+    repositoryFullName: row.repository_full_name,
     name: row.name,
     kind: row.kind,
     activeVersion:

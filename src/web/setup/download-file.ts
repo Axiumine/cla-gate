@@ -10,12 +10,13 @@
 export const REVOKE_DELAY_MS = 1000;
 
 /**
- * Saves `text` as a file named `name` (E19-S07): a Blob, an object URL, a link with `download` that is clicked once, and the
- * object URL revoked afterwards. Nothing is sent anywhere and the Content-Security-Policy is not involved: the browser
- * downloads the Blob, it does not load it into the page.
+ * Saves `blob` as a file named `name` (E18-S07): an object URL, a link with `download` that is clicked once, and the object URL
+ * revoked afterwards. Nothing is sent anywhere and the Content-Security-Policy is not involved: the browser downloads the Blob, it does
+ * not load it into the page. The bytes are handed over as they are, so a file from the server (the signature CSV) is never
+ * rebuilt in the page.
  */
-export function saveAsFile(name: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+export function saveBlobAs(name: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = name;
@@ -23,4 +24,14 @@ export function saveAsFile(name: string, text: string): void {
   setTimeout(() => {
     URL.revokeObjectURL(url);
   }, REVOKE_DELAY_MS);
+}
+
+/**
+ * Saves `text` as a file named `name` (E19-S07): a Blob, an object URL, a link with `download` that is clicked once, and the
+ * object URL revoked afterwards. Nothing is sent anywhere and the Content-Security-Policy is not involved: the browser
+ * downloads the Blob, it does not load it into the page. The Blob is plain text unless `type` names another media type
+ * (the data export of E18-S03 is `application/json`).
+ */
+export function saveAsFile(name: string, text: string, type = 'text/plain'): void {
+  saveBlobAs(name, new Blob([text], { type }));
 }

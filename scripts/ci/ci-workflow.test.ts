@@ -45,15 +45,20 @@ const CI_FILE = '.github/workflows/ci.yml';
 // whole server suite: 7003 tests took 12 minutes 37 seconds on a development machine on 2026-11-03 and more than the 20
 // minutes it was given on a shared runner, and the suite is planned to reach 25 000 tests, which is 120 minutes on a runner
 // three times slower, before the mutants; see the comment on the job in ci.yml, stryker.config.mjs and docs/quality-gates.md
-// (Testing, Stryker), which have the arithmetic and the measurements. `postgres` runs the whole suite (8181 tests and growing)
-// one file at a time on a real server: 20 minutes on the fastest shared runner, and cancelled at 45 on the two slower ones
-// while its tests still passed (2026-11-04), so it gets the 60 minutes the guard allows. `coverage` runs the same suite under
-// V8 coverage: 7 minutes on the fastest runner, 18 on the next and 28 to 31 on the slowest, where it was cancelled at 30.
+// (Testing, Stryker), which have the arithmetic and the measurements. `postgres` and `coverage-shard` are matrices of four
+// legs that each run a quarter of the suite (`vitest run --shard=i/4`): the whole suite (26 000 tests) did not fit the 60
+// minutes of `postgres` or the 45 of `coverage` on the slowest shared runner (2026-11-06), which is about four times slower
+// than the fastest, and a job cannot be given more than 60. A `postgres` leg keeps the 60 minutes the guard allows and is
+// meant to take about 35; a `coverage-shard` leg is meant to take 15 to 20 and has 40. `coverage`, the required check, only
+// merges the four reports (a checkout, an install and about a minute) and has 15.
+// `leaks` runs memlab on four screen scenarios (E18-S12), 5 to 10 minutes each on a loaded development machine on 2026-11-06,
+// next to the canary and the positive control, so it gets the 60 minutes the guard allows.
 const LONG_JOBS = new Map([
   ['mutation', 180],
   ['postgres', 60],
-  ['coverage', 45],
-  ['leaks', 30],
+  ['coverage-shard', 40],
+  ['coverage', 15],
+  ['leaks', 60],
   ['qodana', 30],
 ]);
 // E20-S08: the one job that holds a secret (QODANA_TOKEN) runs on a GitHub-hosted machine; see scripts/qodana-gate.
@@ -71,9 +76,10 @@ function jobNamed(id: string) {
   return job;
 }
 
-test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, caddy, container, leaks and qodana, and the required ones keep their exact names', () => {
+test('the jobs are static, coverage-shard, coverage, postgres, semgrep, trivy, mutation, e2e, caddy, container, leaks and qodana, and the required ones keep their exact names', () => {
   expect([...jobs.keys()]).toEqual([
     'static',
+    'coverage-shard',
     'coverage',
     'postgres',
     'semgrep',
@@ -87,8 +93,9 @@ test('the jobs are static, coverage, postgres, semgrep, trivy, mutation, e2e, ca
   ]);
   expect([...jobs.entries()].map(([id, job]) => [id, job.name])).toEqual([
     ['static', 'static'],
+    ['coverage-shard', `coverage shard (${expression('matrix.index')}/4)`],
     ['coverage', 'coverage'],
-    ['postgres', 'postgres'],
+    ['postgres', `postgres (${expression('matrix.index')}/4)`],
     ['semgrep', 'semgrep'],
     ['trivy', 'trivy'],
     ['mutation', `mutation (${expression('matrix.shard')})`],
@@ -151,10 +158,10 @@ test('the postgres job has no service container and publishes no port by itself'
   expect(code).not.toContain('5432');
 });
 
-test('the postgres job starts the helper, then runs the suite, then always removes the container', () => {
+test('the postgres job starts the helper, then runs its shard of the suite, then always removes the container', () => {
   const runs = jobNamed('postgres').steps.map((step) => step.run);
   const start = runs.indexOf('yarn ci:postgres start');
-  const suite = runs.indexOf('yarn test');
+  const suite = runs.indexOf('yarn test --shard="$SHARD/4"');
   const steps = jobNamed('postgres').steps;
   const stop = steps.findIndex((step) => step.run === 'yarn ci:postgres stop');
   expect(start).toBeGreaterThan(0);

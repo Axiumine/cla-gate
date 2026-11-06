@@ -61,6 +61,22 @@ test('the fixture origin is in the environment while memlab runs, and the server
   expect(run.memlabCalls.map((call) => call.origin)).toEqual(['http://127.0.0.1:40123', 'http://127.0.0.1:40123']);
 });
 
+test('the origin of the dashboard is in the environment too (E18-S12), and its server is closed with the other one', async () => {
+  const run = harness({ listing: ['a.ts', 'b.ts'] });
+  await runLeaks([], run.deps);
+  expect(run.app).toEqual({ started: 1, closed: 1 });
+  expect(run.memlabCalls.map((call) => call.appOrigin)).toEqual(['http://127.0.0.1:40456', 'http://127.0.0.1:40456']);
+});
+
+test('a dashboard server that cannot start exits 2, the fixture server is closed again, and no scenario runs', async () => {
+  const run = harness({ serveApp: () => Promise.reject(new Error('listen EADDRINUSE: 127.0.0.1:40456')) });
+  expect(await runLeaks([], run.deps)).toBe(2);
+  expect(run.err).toEqual(['leaks: listen EADDRINUSE: 127.0.0.1:40456']);
+  expect(run.server).toEqual({ started: 1, closed: 1 });
+  expect(run.app.closed).toBe(0);
+  expect(run.memlabCalls).toEqual([]);
+});
+
 test('every scenario of the directory runs, in order, and one leak among clean ones still exits 1', async () => {
   const run = harness({
     listing: ['c.ts', 'a.ts', 'b.ts'],

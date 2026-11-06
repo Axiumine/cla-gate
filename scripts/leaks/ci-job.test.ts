@@ -17,6 +17,7 @@ import { yamlOf } from '../trivy-gate/test-support.ts';
 const job = ciJob('leaks');
 const INSTALL = 'Install Chromium (the one browser, in the runner temp directory)';
 const CHECK = 'Check that Chromium starts';
+const BUILD = 'Build the dashboard (the scenarios of the screens load it)';
 const CONTROL = 'Positive control (the wrapper must fail on a leak, pass on a clean page and report an error)';
 const UPLOAD = 'Upload the leak report, traces and heap profiles';
 
@@ -40,11 +41,11 @@ const workflow = z
   })
   .parse(yamlOf('.github/workflows/ci.yml'));
 
-test('the job is named leaks, waits for coverage, runs on the shared self-hosted runners and may take 30 minutes', () => {
+test('the job is named leaks, waits for coverage, runs on the shared self-hosted runners and may take an hour (E18-S12: four screen scenarios of about 5 to 10 minutes each)', () => {
   expect(job.name).toBe('leaks');
   expect(job.needs).toBe('coverage');
   expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
-  expect(job['timeout-minutes']).toBe(30);
+  expect(job['timeout-minutes']).toBe(60);
 });
 
 test('the workflow also runs for release candidate tags (v*), next to main, the nightly schedule and a manual run', () => {
@@ -80,7 +81,7 @@ test('the job has no container, no services, no permissions of its own, no envir
   expect(ciTextOnSharedRunners()).not.toMatch(/\$\{\{\s*secrets\./);
 });
 
-test('the steps are the standard setup, one browser, the control, the scenarios and the upload', () => {
+test('the steps are the standard setup, one browser, the build, the control, the scenarios and the upload', () => {
   expect(job.steps.map((each) => each.name)).toEqual([
     'Preflight (runner capabilities)',
     'Keep tool state in the runner temp directory',
@@ -91,6 +92,7 @@ test('the steps are the standard setup, one browser, the control, the scenarios 
     'Install dependencies',
     INSTALL,
     CHECK,
+    BUILD,
     CONTROL,
     'Leak scenarios',
     UPLOAD,
@@ -110,6 +112,13 @@ test('the positive control runs before the scenarios, each with its yarn script 
   for (const each of job.steps) {
     expect(each.run ?? '').not.toContain('${{');
   }
+});
+
+test('the dashboard is built with its yarn script before the scenarios that load it, and the job still has no Docker and no secret', () => {
+  expect(step(BUILD).run).toBe('yarn build');
+  const names = job.steps.map((each) => each.name);
+  expect(names.indexOf(BUILD)).toBeLessThan(names.indexOf('Leak scenarios'));
+  expect(JSON.stringify(job)).not.toMatch(/docker|secrets\./);
 });
 
 test('the leak report is uploaded when a step fails, for seven days, and holds the traces and any heap profile in reports/leaks', () => {

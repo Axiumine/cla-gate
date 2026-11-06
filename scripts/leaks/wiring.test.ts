@@ -7,7 +7,7 @@ import { readText } from '../ci/lib/test-support.ts';
 import { compareNames } from '../code-caps/types.ts';
 import { activeLines, listDir, ROOT, repoText, SCRIPTS } from '../semgrep-rules/test-support.ts';
 import { CONTROL_CASES } from './control.ts';
-import { CONTROL_DIR, FIXTURES_DIR, REPORT_DIR, SCENARIOS_DIR, WRAPPER } from './paths.ts';
+import { APP_DIR, CONTROL_DIR, FIXTURES_DIR, REPORT_DIR, SCENARIOS_DIR, WRAPPER } from './paths.ts';
 
 // E20-S07: the files and scripts that wire memlab into the repository.
 
@@ -35,6 +35,7 @@ test('the paths the wrapper and the control use are the files of the repository'
   expect(path.relative(ROOT, CONTROL_DIR)).toBe('tests/leaks/control');
   expect(path.relative(ROOT, FIXTURES_DIR)).toBe('tests/leaks/fixtures');
   expect(path.relative(ROOT, REPORT_DIR)).toBe('reports/leaks');
+  expect(path.relative(ROOT, APP_DIR)).toBe('dist/web');
   expect(SCRIPTS.get('leaks:control')).toContain(path.relative(ROOT, CONTROL_DIR));
 });
 
@@ -106,5 +107,35 @@ test.each([['clean.html'], ['leaky.html']])(
     expect(page).not.toMatch(/https?:|<link|<img|<iframe|\bsrc=|@import|url\(/i);
     expect(page).toContain('<a id="open" href="#detail">');
     expect(page).toContain('<a id="close" href="#home">');
+  },
+);
+
+test('the wrapper serves the built dashboard next to the fixtures, from dist/web, answering its API from the table of made-up bodies (E18-S12)', () => {
+  const entry = repoText('tests/leaks/run.ts');
+  expect(entry).toContain('serveApp({ root: APP_DIR, answers: answerTable() }, pickSystemFreePort)');
+  expect(repoText('package.json')).toContain('"build":');
+});
+
+test('the scenarios of the screens (E18-S12) open and close a dialog 20 times, switch tenant 10 times and navigate list and detail', () => {
+  expect(listDir(SCENARIOS_DIR)).toEqual([
+    'canary-navigation.ts',
+    'dialog-open-close.ts',
+    'navigation-documents.ts',
+    'navigation-installations.ts',
+    'tenant-switch.ts',
+  ]);
+  expect(repoText('tests/leaks/scenarios/dialog-open-close.ts')).toContain('const TIMES = 20;');
+  expect(repoText('tests/leaks/scenarios/tenant-switch.ts')).toContain('const TIMES = 10;');
+  for (const name of ['navigation-documents', 'navigation-installations']) {
+    expect(repoText(`tests/leaks/scenarios/${name}.ts`)).toContain('await page.goBack();');
+  }
+});
+
+test.each([['dialog-open-close'], ['tenant-switch'], ['navigation-documents'], ['navigation-installations']])(
+  'the scenario %s finds things by role and visible name and holds no test id, class or selector of its own',
+  (name) => {
+    const code = activeLines(repoText(`tests/leaks/scenarios/${name}.ts`)).join('\n');
+    expect(code).not.toMatch(/data-testid|getByTestId|querySelector|\[class|page\.\$\(/);
+    expect(code).toContain("from '../support/dashboard.ts'");
   },
 );

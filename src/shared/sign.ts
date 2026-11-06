@@ -54,11 +54,7 @@ export const signedSignatureSchema = signatureViewSchema.extend({ versionId: id 
  */
 export const signResponseSchema = z.strictObject({ signature: signedSignatureSchema, created: z.boolean() });
 
-/**
- * The answer as a type, for the sign page (E18).
- *
- * @internal
- */
+/** The answer as a type, for the sign page (E18-S01). */
 export type SignResponse = z.infer<typeof signResponseSchema>;
 
 /**

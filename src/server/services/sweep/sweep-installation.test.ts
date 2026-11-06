@@ -15,6 +15,7 @@ import {
   openPull,
   REPOSITORY,
   SWEEP_JOB,
+  type SweepWorld,
   seedAged,
   sweepWorld,
 } from './test-support.ts';
@@ -184,4 +185,61 @@ test('the sweep of one installation reads and writes nothing of another: the sam
     prNumber: 7,
   });
   expect(callsFor(world, INSTALLATION)).toBe(1);
+});
+
+// The log line of a skipped job (E07-S08): one line at info level, with the reason that is also the end of the outcome and nothing
+// of the job (no id of an installation, no repository): the operator reads why a job did nothing.
+const skippedLines = (world: SweepWorld) =>
+  world.logs.lines().filter((line) => line['msg'] === 'sweep_installation.skipped');
+
+test.each([
+  [
+    'an installation the database does not know',
+    'installation_not_found',
+    () => Promise.resolve(parseGithubId(424_242)),
+  ],
+  [
+    'an installation that is rejected',
+    'installation_rejected',
+    async (world: SweepWorld) => (await addNeighbour(world, 2, { admission: 'rejected' })).githubInstallationId,
+  ],
+  [
+    'an installation that is suspended',
+    'installation_suspended',
+    async (world: SweepWorld) => (await addNeighbour(world, 2, { suspended: true })).githubInstallationId,
+  ],
+  [
+    'an installation that is deleted',
+    'installation_deleted',
+    async (world: SweepWorld) => (await addNeighbour(world, 2, { deleted: true })).githubInstallationId,
+  ],
+  [
+    'an installation GitHub no longer has',
+    'installation_unavailable',
+    (world: SweepWorld) => {
+      world.fake.removeInstallation(INSTALLATION);
+      return Promise.resolve(INSTALLATION);
+    },
+  ],
+] as const)(
+  '%s is logged once as skipped, with its reason and nothing else of the job',
+  async (_name, reason, prepare) => {
+    const world = await sweepWorld();
+    const id = await prepare(world);
+    expect(await world.runSweep({ type: 'sweep-installation', githubInstallationId: id })).toEqual({
+      outcome: `skipped:${reason}`,
+    });
+    const lines = skippedLines(world);
+    expect(lines).toHaveLength(1);
+    const { time, pid, hostname, ...fields } = lines[0] ?? {};
+    expect([typeof time, typeof pid, typeof hostname]).toEqual(['string', 'number', 'string']);
+    expect(fields).toEqual({ level: 30, reason, msg: 'sweep_installation.skipped' });
+    expect(world.logs.lines().filter((each) => each['msg'] === 'sweep_installation.swept')).toEqual([]);
+  },
+);
+
+test('an installation that is swept logs no skipped line', async () => {
+  const world = await sweepWorld();
+  expect(await world.runSweep()).toEqual({ outcome: 'swept' });
+  expect(skippedLines(world)).toEqual([]);
 });

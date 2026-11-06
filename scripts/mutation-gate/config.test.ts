@@ -105,7 +105,7 @@ test('the Stryker config selects the Vitest runner, the TypeScript checker, the 
 
 test('the checker and the test runner processes start with the flag that keeps a long message to them from aborting Node', async () => {
   expect(STRYKER_NODE_ARGS).toEqual(['--no-json-stringify-fast-path']);
-  for (const options of [strykerConfig, scriptsConfig, scopeOptions(undefined, 'http-a-v')]) {
+  for (const options of [strykerConfig, scriptsConfig, scopeOptions(undefined, 'http-a-d')]) {
     expect(options.checkerNodeArgs).toEqual(STRYKER_NODE_ARGS);
     expect(options.testRunnerNodeArgs).toEqual(STRYKER_NODE_ARGS);
   }

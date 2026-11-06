@@ -7,6 +7,7 @@ import {
   CORPORATE_KIND_ENABLED,
   claDocumentDetailSchema,
   claDocumentSchema,
+  claListedDocumentSchema,
   createDocumentRequestSchema,
   DOCUMENT_PATH,
   DOCUMENTS_PATH,
@@ -166,8 +167,18 @@ test('an active version carries the hash of the text as 64 lower-case hex digits
   }
 });
 
+test('a listed document adds the draft flag and the name of its repository, which is null for a document of the installation (E18-S05)', () => {
+  const listed = { ...DOCUMENT, hasDraft: true, repositoryFullName: 'acme/widgets' };
+  expect(claListedDocumentSchema.parse(listed)).toEqual(listed);
+  expect(claListedDocumentSchema.parse({ ...listed, repositoryFullName: null }).repositoryFullName).toBeNull();
+  expect(claListedDocumentSchema.safeParse({ ...DOCUMENT, hasDraft: true }).success).toBe(false);
+  expect(claListedDocumentSchema.safeParse({ ...DOCUMENT, repositoryFullName: null }).success).toBe(false);
+  expect(documentListResponseSchema.parse({ documents: [listed], nextCursor: null }).documents).toEqual([listed]);
+  expect(documentListResponseSchema.safeParse({ documents: [DOCUMENT], nextCursor: null }).success).toBe(false);
+});
+
 test('a page of the list has a cursor or null, and the installation-wide entries of a repository carry no text, hash or time', () => {
-  expect(documentListResponseSchema.parse({ documents: [DOCUMENT], nextCursor: null }).nextCursor).toBeNull();
+  expect(documentListResponseSchema.parse({ documents: [], nextCursor: null }).nextCursor).toBeNull();
   const entry = { id: 3, name: 'Individual CLA', activeVersion: { major: 2, minor: 1 } };
   const parsed = repositoryDocumentsResponseSchema.parse({
     repositoryScoped: [],

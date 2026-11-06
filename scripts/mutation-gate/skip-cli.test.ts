@@ -3,6 +3,7 @@
 import { expect, test } from 'vitest';
 import type { Env } from '../ci/lib/env.ts';
 import { collectIo } from '../ci/lib/test-support.ts';
+import { SHARD_NAMES } from './shards.ts';
 import { runSkipCli } from './skip-cli.ts';
 import { jobNameOf } from './skip-decision.ts';
 import { COMMIT, fakeGithub, githubOf, jobEntry, runEntry, skipEnv, TOKEN } from './test-support.ts';
@@ -75,8 +76,8 @@ test('a shard that is not a shard runs (the next step rejects it loudly), says s
   const result = await step(skipEnv({ GITHUB_OUTPUT: OUTPUT, STRYKER_SHARD: 'nope' }));
   expect(result.code).toBe(0);
   expect(result.out).toHaveLength(1);
-  expect(result.out[0]).toMatch(
-    /^mutation skip check \(nope\): run, STRYKER_SHARD must be one of shared, config, .*, not "nope"$/,
+  expect(result.out[0]).toBe(
+    `mutation skip check (nope): run, STRYKER_SHARD must be one of ${SHARD_NAMES.join(', ')}, not "nope"`,
   );
   expect(result.files).toEqual(new Map([[OUTPUT, 'skip=false\n']]));
   expect(result.calls).toEqual([]);

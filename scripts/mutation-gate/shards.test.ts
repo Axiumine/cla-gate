@@ -11,7 +11,7 @@ import {
   serverShard,
   UNSHARDED_SERVER_GLOBS,
 } from './shards.ts';
-import { isMutated, mutated, ownersOf } from './test-support.ts';
+import { isMutated, mutantsOf, mutated, originalText, ownersOf } from './test-support.ts';
 
 // E20-S04: the shards of the server and shared scope. Nothing may escape the gate and nothing may be mutated twice, so the
 // files on disk are matched against the unsharded scope and against every shard.
@@ -39,8 +39,15 @@ test('the shards select nothing outside the unsharded scope', () => {
 
 test('no glob of any shard matches nothing, so a deleted directory or a mistyped glob fails here', () => {
   for (const shard of SERVER_SHARDS) {
-    for (const glob of shard.mutate) {
+    const positive = shard.mutate.filter((glob) => !glob.startsWith('!'));
+    for (const glob of positive) {
       expect(mutated([glob, ...MUTATE_EXCLUSIONS], ['src']), `${shard.name}: ${glob}`).not.toEqual([]);
+    }
+    // A negation takes files out of what the globs before it select, so it has to take at least one, or it is a leftover.
+    for (const glob of shard.mutate.filter((each) => each.startsWith('!'))) {
+      const without = mutated([...positive, ...MUTATE_EXCLUSIONS], ['src']);
+      const within = mutated([...positive, glob, ...MUTATE_EXCLUSIONS], ['src']);
+      expect(within.length, `${shard.name}: ${glob}`).toBeLessThan(without.length);
     }
   }
 });
@@ -73,6 +80,7 @@ test('the directories with letter ranges cover the whole alphabet and every digi
   for (const directory of [
     'src/server/adapters/github',
     'src/server/adapters/http',
+    'src/server/domain',
     'src/server/domain/evaluation',
     'src/server/services',
   ]) {
@@ -81,6 +89,46 @@ test('the directories with letter ranges cover the whole alphabet and every digi
       expect(ownersOf(file, SERVER_SHARDS, MUTATE_EXCLUSIONS), file).toHaveLength(1);
     }
   }
+});
+
+test('the shared code is cut by a negation: a name that starts with cla- is in shared-cla, and any other name, near misses included, is in shared', () => {
+  for (const file of ['cla-text.ts', 'cla-x.ts', 'cla-.ts']) {
+    expect(ownersOf(`src/shared/${file}`, SERVER_SHARDS, MUTATE_EXCLUSIONS), file).toEqual(['shared-cla']);
+  }
+  for (const file of [
+    'cla.ts',
+    'cl-text.ts',
+    'clb-text.ts',
+    'c.ts',
+    'check.ts',
+    'Cla-text.ts',
+    '1cla-text.ts',
+    'errors.ts',
+  ]) {
+    expect(ownersOf(`src/shared/${file}`, SERVER_SHARDS, MUTATE_EXCLUSIONS), file).toEqual(['shared']);
+  }
+});
+
+// The size rule of the split of 2026-11-06: the nightly run 42014893309 lost five shards of 881 to 4586 mutants to the budget of
+// 170 minutes. The count is Stryker's own, from its instrumenter, so it is the figure Stryker prints before the initial test run
+// ("Instrumented N source file(s) with M mutant(s)"): no test run is needed, and it takes about a second.
+const MAX_MUTANTS = 1500;
+
+test(`no shard has more than ${MAX_MUTANTS} mutants, so a shard that grows past it is split in the pull request that grows it`, async () => {
+  const mutants = await mutantsOf(files.map((name) => ({ name, content: originalText(name) })));
+  const perFile = new Map<string, number>();
+  for (const { fileName } of mutants) {
+    perFile.set(fileName, (perFile.get(fileName) ?? 0) + 1);
+  }
+  const perShard = SERVER_SHARDS.map((shard) => ({
+    name: shard.name,
+    mutants: files
+      .filter((file) => isMutated(file, [...shard.mutate, ...MUTATE_EXCLUSIONS]))
+      .reduce((sum, file) => sum + (perFile.get(file) ?? 0), 0),
+  }));
+  // The guard is not empty: the biggest shards hold a thousand mutants and more.
+  expect(Math.max(...perShard.map(({ mutants: count }) => count))).toBeGreaterThan(1000);
+  expect(perShard.filter(({ mutants: count }) => count > MAX_MUTANTS)).toEqual([]);
 });
 
 test('shard names are unique lower case words joined by hyphens, and none is the name of the scripts shard', () => {
@@ -101,13 +149,14 @@ test('every shard lists at least one glob, and every glob stays below src/server
   for (const shard of SERVER_SHARDS) {
     expect(shard.mutate.length, shard.name).toBeGreaterThan(0);
     for (const glob of shard.mutate) {
-      expect(glob, shard.name).toMatch(/^src\/(?:server|shared)\/.+\.ts$/);
+      expect(glob, shard.name).toMatch(/^!?src\/(?:server|shared)\/.+\.ts$/);
     }
   }
 });
 
 test('the shard lookup returns the shard by name and throws for anything else, listing the valid names', () => {
-  expect(serverShard('shared')).toEqual({ name: 'shared', mutate: ['src/shared/**/*.ts'] });
+  expect(serverShard('shared-cla')).toEqual({ name: 'shared-cla', mutate: ['src/shared/cla-*.ts'] });
+  expect(serverShard('shared').mutate).toEqual(['src/shared/**/*.ts', '!src/shared/cla-*.ts']);
   for (const wrong of ['', 'Shared', 'share', 'scripts', 'shared ', 'all']) {
     expect(() => serverShard(wrong)).toThrow(
       `STRYKER_SHARD must be unset or one of ${SERVER_SHARDS.map((shard) => shard.name).join(', ')}, not ${JSON.stringify(wrong)}`,

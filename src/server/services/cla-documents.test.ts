@@ -145,6 +145,36 @@ test('a page holds the limit and says where the next starts: that is the documen
   expect(all.next).toBeNull();
 });
 
+test('a page says for each document whether a draft is saved and names the repository of a scoped one, tenant by tenant (E18-S05)', async () => {
+  const { db, t1, t2 } = await world();
+  const first = await listDocumentPage(db, { installationId: t1.installationId }, { limit: 100, from: null });
+  expect(first.documents.map((document) => [document.id, document.hasDraft, document.repositoryFullName])).toEqual([
+    [t1.documentId, false, null],
+    [t1.scoped.documentId, true, t1.scoped.fullName],
+  ]);
+  await db
+    .insertInto('cla_drafts')
+    .values({
+      document_id: t2.documentId,
+      installation_id: t2.installationId,
+      content_md: 'A draft.\n',
+      updated_by: t2.publisherId,
+    })
+    .execute();
+  const again = await listDocumentPage(db, { installationId: t1.installationId }, { limit: 100, from: null });
+  const other = await listDocumentPage(db, { installationId: t2.installationId }, { limit: 100, from: null });
+  expect(again.documents.map((document) => document.hasDraft)).toEqual([false, true]);
+  expect(other.documents.map((document) => document.hasDraft)).toEqual([true, true]);
+});
+
+test('the flag of a page is read for the documents of that page only: the second page has its own', async () => {
+  const { db, t1 } = await world();
+  const scope = { installationId: t1.installationId };
+  const first = await listDocumentPage(db, scope, { limit: 1, from: null });
+  const second = await listDocumentPage(db, scope, { limit: 1, from: first.next });
+  expect([first.documents[0]?.hasDraft, second.documents[0]?.hasDraft]).toEqual([false, true]);
+});
+
 test('the documents of a repository are read, and a repository that is not the tenant is not_found', async () => {
   const { db, t1, t2 } = await world();
   const scope = { installationId: t1.installationId };

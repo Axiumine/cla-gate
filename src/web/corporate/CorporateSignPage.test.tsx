@@ -7,6 +7,7 @@ import { CORPORATE_DOCUMENT_PATH } from '../../shared/corporate.ts';
 import { messages } from '../i18n/index.ts';
 import { AppRouter } from '../router.tsx';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
+import { activeContent } from '../test-support/hostile.ts';
 import { spyOnPageNavigation } from '../test-support/location.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { server } from '../test-support/server.ts';
@@ -40,7 +41,7 @@ test('the page shows the corporate CLA of the repository in the main landmark of
   const { container } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
   const heading = await screen.findByRole('heading', { level: 1, name: messages['corporate.sign.title'] });
   expect(screen.getByRole('main')).toContainElement(heading);
-  expect(await screen.findByRole('heading', { level: 1, name: 'Corporate terms' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { level: 2, name: 'Corporate terms' })).toBeInTheDocument();
   expect(screen.getByText('acme/widgets')).toBeInTheDocument();
   expect(screen.getByText('Version 1.0, published 2026-10-01 09:00 UTC')).toBeInTheDocument();
   expect(screen.getByText(DOCUMENT.consent.text)).toBeInTheDocument();
@@ -159,7 +160,7 @@ test.each([
     expect(within(alert).getByText(words)).toBeInTheDocument();
     expect(reads).toBe(1);
     await user.click(within(alert).getByRole('button', { name: messages['corporate.sign.reload'] }));
-    await screen.findByRole('heading', { level: 1, name: 'Corporate terms' });
+    await screen.findByRole('heading', { level: 2, name: 'Corporate terms' });
     expect(reads).toBe(2);
   },
 );
@@ -211,4 +212,19 @@ test('the names of the repository and the document are text, whatever they hold'
   expect(page.querySelector('script')).toBeNull();
   expect(container.textContent).toContain('<img src=x onerror=alert(1)>/=HYPERLINK("http://x","y")');
   expect(container.textContent).toContain('<script>alert(1)</script>');
+});
+
+test('the text of the corporate CLA is drawn by the markdown view: raw HTML, an image and a script link stay inert text, and its h1 is the h2 of the page', async () => {
+  answerDocument({
+    ...DOCUMENT,
+    contentMd: '# Terms\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n[x](javascript:alert(1))\n',
+  });
+  renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
+  await screen.findByRole('heading', { level: 2, name: 'Terms' });
+  // The shell has the avatar of the signed-in person; the page is the main landmark.
+  const page = screen.getByRole('main');
+  expect(activeContent(page)).toEqual([]);
+  expect(page.textContent).toContain('<script>alert(1)</script>');
+  expect(page.textContent).toContain('<img src=x onerror=alert(1)>');
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
 });

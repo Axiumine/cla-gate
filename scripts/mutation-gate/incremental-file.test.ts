@@ -81,13 +81,13 @@ test('a file that is not there is nothing to check, and nothing is created', () 
 });
 
 test('a truncated file is deleted with a warning annotation, so that the cache step has nothing broken to keep', () => {
-  const root = rootWith({ 'http-a-v': report().slice(0, 150) });
+  const root = rootWith({ 'http-a-d': report().slice(0, 150) });
   const { io, out, err } = collectIo();
-  expect(runCheckIncremental({ STRYKER_SHARD: 'http-a-v' }, io, root)).toBe(0);
-  expect(exists(path.join(root, incrementalFileOf('http-a-v')))).toBe(false);
+  expect(runCheckIncremental({ STRYKER_SHARD: 'http-a-d' }, io, root)).toBe(0);
+  expect(exists(path.join(root, incrementalFileOf('http-a-d')))).toBe(false);
   expect(out).toHaveLength(1);
   expect(out[0]).toMatch(
-    /^::warning title=Stryker incremental file::reports\/stryker-incremental-http-a-v\.json is not a /,
+    /^::warning title=Stryker incremental file::reports\/stryker-incremental-http-a-d\.json is not a /,
   );
   expect(err).toEqual([]);
 });

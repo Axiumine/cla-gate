@@ -18,3 +18,5 @@ export const FIXTURES_DIR = path.join(LEAKS, 'fixtures');
 export const WRAPPER = path.join(LEAKS, 'run.ts');
 /** git-ignored; per scenario, `leaks.json` (the traces) and `memlab/` (heap snapshots). CI uploads it when the job fails. */
 export const REPORT_DIR = path.join(ROOT, 'reports/leaks');
+/** E18-S12: the built dashboard (`yarn build`), which the scenarios of the screens load. A missing build is a 404 of the page, not of the run. */
+export const APP_DIR = path.join(ROOT, 'dist/web');

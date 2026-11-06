@@ -172,13 +172,20 @@ export const claDocumentSchema = z.object({
 /** A document as `GET .../documents/:documentId` answers: `hasDraft` says whether work in progress is saved (E12-S03). */
 export const claDocumentDetailSchema = claDocumentSchema.extend({ hasDraft: z.boolean() });
 
+/**
+ * A document as the list of an installation answers with it (E18-S05): the detail's `hasDraft` and, for a document scoped to a
+ * repository, the `full_name` of that repository as the repository row holds it (a display snapshot; `null` for a document that
+ * covers the installation), so the screen names the scope without a second request. The screen shows the name as text.
+ */
+export const claListedDocumentSchema = claDocumentDetailSchema.extend({ repositoryFullName: z.string().nullable() });
+
 export const documentResponseSchema = z.object({ document: claDocumentSchema });
 
 export const documentDetailResponseSchema = z.object({ document: claDocumentDetailSchema });
 
 /** One page of the documents of an installation; `nextCursor` is null on the last page. */
 export const documentListResponseSchema = z.object({
-  documents: z.array(claDocumentSchema),
+  documents: z.array(claListedDocumentSchema),
   nextCursor: z.string().nullable(),
 });
 

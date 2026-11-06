@@ -19,12 +19,7 @@ import {
 import { storedStates, writeChanged } from '../../../services/repository-statements.ts';
 import { releaseTransferred } from '../../../services/repository-transfer.ts';
 import { eraseSigner, erasureCounts } from '../../../services/signer-erasure.ts';
-import {
-  findAdmittedTenantRows,
-  findTenantRows,
-  installationOfRepository,
-  type TenantRows,
-} from '../../../services/tenant-queries.ts';
+import { findAdmittedTenantRows, findTenantRows, installationOfRepository } from '../../../services/tenant-queries.ts';
 import type { Database } from '../schema.ts';
 import { EXPORT_TENANT_QUERIES } from '../tenant-export-fixture/test-support.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
@@ -38,6 +33,7 @@ import {
   ownersOfGithubIds,
   ownersOfRepositories,
   ownersOfSignatures,
+  ownersOfTenantRows,
   removedRepositories,
 } from '../tenant-owners/test-support.ts';
 import { ALLOWLIST_TENANT_QUERIES } from '../tenant-registry-allowlist/test-support.ts';
@@ -72,6 +68,7 @@ export const TENANT_MODULES = [
   'services/audit-log-queries.ts',
   'services/close-pr/close-heads.ts',
   'services/close-pr/close-rows.ts',
+  'services/cla-document-columns.ts',
   'services/cla-document-queries.ts',
   'services/cla-document-writes.ts',
   'services/cla-draft-queries.ts',
@@ -169,21 +166,6 @@ export type TenantQuery = ScopedQuery | ByDesignQuery;
 const isUniqueViolation: Refusal = (error) =>
   typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
 
-/**
- * The installations that own the rows the guard's read returned: the installation and its repository, which the
- * registry always asks for.
- * @throws Error when the read answers an installation with no repository: the entry asked for one.
- */
-export function ownersOfTenantRows(rows: TenantRows | null): number[] {
-  if (rows === null) {
-    return [];
-  }
-  if (rows.repository === null) {
-    throw new Error('the registry asks for a repository and the read answered none');
-  }
-  return [rows.installation.id, rows.repository.installation_id];
-}
-
 const RENAMED = 'renamed/by-test';
 const WHEN = new Date('2026-07-01T00:00:00Z');
 
@@ -257,6 +239,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
       },
     }),
   },
+  'services/cla-document-columns.ts': {},
   'services/cla-document-queries.ts': DOCUMENT_READS,
   'services/cla-document-writes.ts': DOCUMENT_WRITES,
   'services/cla-draft-queries.ts': DRAFT_READS,

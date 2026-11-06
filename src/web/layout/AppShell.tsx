@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { SessionEndedBanner, UserMenu } from '../auth/index.ts';
 import { useT } from '../i18n/index.ts';
 import { StatusMessage } from '../ui/StatusMessage.tsx';
 import { PrimaryNav } from './PrimaryNav.tsx';
+import { PageSubjectContext } from './page-subject.ts';
 import { SourceFooter } from './SourceFooter.tsx';
 import { useFocusOnNavigation } from './use-focus-on-navigation.ts';
 import { useHeaderSlot, usePageTitle } from './use-page.ts';
@@ -25,33 +26,36 @@ export interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const t = useT();
   const main = useRef<HTMLElement>(null);
-  const title = usePageTitle();
+  const [subject, setSubject] = useState<string>();
+  const title = usePageTitle(subject);
   const headerSlot = useHeaderSlot();
   useFocusOnNavigation(main);
   return (
-    <div className="flex min-h-dvh flex-col">
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-10 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
-      >
-        {t('nav.skip')}
-      </a>
-      <SessionEndedBanner />
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
-          <span className="text-lg font-semibold">{t('app.name')}</span>
-          <PrimaryNav />
-          <div className="flex flex-wrap items-center gap-4 md:ms-auto">
-            {headerSlot}
-            <UserMenu />
+    <PageSubjectContext value={setSubject}>
+      <div className="flex min-h-dvh flex-col">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-10 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
+        >
+          {t('nav.skip')}
+        </a>
+        <SessionEndedBanner />
+        <header className="border-b border-line bg-surface">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
+            <span className="text-lg font-semibold">{t('app.name')}</span>
+            <PrimaryNav />
+            <div className="flex flex-wrap items-center gap-4 md:ms-auto">
+              {headerSlot}
+              <UserMenu />
+            </div>
           </div>
-        </div>
-      </header>
-      <main id="main" tabIndex={-1} ref={main} className="mx-auto w-full max-w-2xl flex-1 p-6">
-        {children}
-      </main>
-      <SourceFooter />
-      <StatusMessage visuallyHidden>{title}</StatusMessage>
-    </div>
+        </header>
+        <main id="main" tabIndex={-1} ref={main} className="mx-auto w-full max-w-2xl flex-1 p-6">
+          {children}
+        </main>
+        <SourceFooter />
+        <StatusMessage visuallyHidden>{title}</StatusMessage>
+      </div>
+    </PageSubjectContext>
   );
 }

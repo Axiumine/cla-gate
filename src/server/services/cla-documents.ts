@@ -4,8 +4,8 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../adapters/db/schema.ts';
 import type { TenantScope } from '../adapters/db/tenant-scope.ts';
 import { findDocument, listDocuments, listRepositoryDocuments } from './cla-document-queries.ts';
-import type { DocumentPosition, RepositoryDocuments, StoredDocument } from './cla-document-types.ts';
-import { findDraftRevision } from './cla-draft-queries.ts';
+import type { DocumentPosition, ListedDocument, RepositoryDocuments, StoredDocument } from './cla-document-types.ts';
+import { findDraftedDocumentIds, findDraftRevision } from './cla-draft-queries.ts';
 import { ClaRuleError } from './cla-rule-error.ts';
 
 // What can be read of the CLA documents of a tenant (E12-S01): one document, a page of them, and those of a repository.
@@ -38,13 +38,14 @@ export async function readDocument(
 
 /** One page of the documents of a tenant: the rows, and where the next page starts (null on the last page). */
 export interface DocumentPage {
-  readonly documents: readonly StoredDocument[];
+  readonly documents: readonly ListedDocument[];
   readonly next: DocumentPosition | null;
 }
 
 /**
  * A page of the documents of the tenant in the order `name asc, id asc`: `limit` rows from `from` (inclusive). One row more
- * than the page is read: it tells whether more follow, and it is where the next page starts.
+ * than the page is read: it tells whether more follow, and it is where the next page starts. Each document says whether a draft is
+ * saved for it (E18-S05), read for the documents of the page only.
  */
 export async function listDocumentPage(
   db: Kysely<Database>,
@@ -53,8 +54,14 @@ export async function listDocumentPage(
 ): Promise<DocumentPage> {
   const rows = await listDocuments(db, scope, { limit: page.limit + 1, from: page.from });
   const following = rows[page.limit];
+  const shown = rows.slice(0, page.limit);
+  const drafted = await findDraftedDocumentIds(
+    db,
+    scope,
+    shown.map((document) => document.id),
+  );
   return {
-    documents: rows.slice(0, page.limit),
+    documents: shown.map((document) => ({ ...document, hasDraft: drafted.has(document.id) })),
     next: following === undefined ? null : { name: following.name, id: following.id },
   };
 }

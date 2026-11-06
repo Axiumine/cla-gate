@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { useLocation } from '@tanstack/react-router';
 import { useT } from '../i18n/index.ts';
+import { OperatorLink } from '../operator/OperatorLink.tsx';
 import { ThemeToggle } from '../theme/index.ts';
 import { UserText } from '../ui/UserText.tsx';
 import { Avatar } from './Avatar.tsx';
@@ -11,7 +12,7 @@ import { LogoutButton } from './LogoutButton.tsx';
 import { returnPathOf } from './return-to.ts';
 import type { SessionUser } from './session.ts';
 
-/** Who is logged in: the avatar, the login as user text, and "Log out". The numeric id is never shown. */
+/** Who is logged in: the avatar, the login as user text, the "Operator" link for the operator of the instance (E18-S13), and "Log out". The numeric id is never shown. */
 function Account({ user }: { readonly user: SessionUser }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -19,6 +20,7 @@ function Account({ user }: { readonly user: SessionUser }) {
       <span className="text-sm">
         <UserText>{user.login}</UserText>
       </span>
+      <OperatorLink />
       <LogoutButton />
     </div>
   );

@@ -104,6 +104,122 @@ test.each([
   ]);
 });
 
+test.each([
+  ['the bare function', 'always()'],
+  ['an expression', expression('always()')],
+  ['an expression without spaces', ['$', '{{always()}}'].join('')],
+  ['spaces around it', '  always()  '],
+])('a job-level if of %s cannot skip the job, so it is allowed', (_label, condition) => {
+  const workflow = workflowWithJobs(
+    'push',
+    '  coverage:',
+    '    name: coverage',
+    `    if: ${JSON.stringify(condition)}`,
+    '    runs-on: ubuntu-24.04',
+  );
+  expect(requiredJobProblems(FILE, workflow, ['coverage'])).toEqual([]);
+});
+
+test.each([
+  ['always() with another condition', expression("always() && github.ref == 'refs/heads/main'")],
+  ['not cancelled', expression('!cancelled()')],
+  ['the literal text always', 'always'],
+  ['the function with an argument', 'always(1)'],
+])('a job-level if of %s can skip the job, so it is reported', (_label, condition) => {
+  const workflow = workflowWithJobs(
+    'push',
+    '  coverage:',
+    '    name: coverage',
+    `    if: ${JSON.stringify(condition)}`,
+    '    runs-on: ubuntu-24.04',
+  );
+  expect(requiredJobProblems(FILE, workflow, ['coverage'])).toEqual([
+    `${FILE}: the required job "coverage" (coverage) has a job-level if:, so it can be skipped and never report`,
+  ]);
+});
+
+const SKIPPED =
+  'without a job-level if: always(), so it is skipped when one of them fails, and a skipped required check counts as passing';
+
+test.each([
+  ['one job as text', ['    needs: shards'], 'shards'],
+  ['one job as a list', ['    needs: [shards]'], 'shards'],
+  ['two jobs', ['    needs: [shards, build]'], 'shards, build'],
+])(
+  'a required job that needs %s and has no if is skipped when they fail, so it is reported',
+  (_label, needs, listed) => {
+    const workflow = workflowWithJobs(
+      'push',
+      '  coverage:',
+      '    name: coverage',
+      ...needs,
+      '    runs-on: ubuntu-24.04',
+    );
+    expect(requiredJobProblems(FILE, workflow, ['coverage'])).toEqual([
+      `${FILE}: the required job "coverage" (coverage) needs ${listed} ${SKIPPED}`,
+    ]);
+  },
+);
+
+test('an empty needs list waits for nothing, so no if is needed', () => {
+  const workflow = workflowWithJobs(
+    'push',
+    '  coverage:',
+    '    name: coverage',
+    '    needs: []',
+    '    runs-on: ubuntu-24.04',
+  );
+  expect(requiredJobProblems(FILE, workflow, ['coverage'])).toEqual([]);
+});
+
+const MERGE_JOB = [
+  '  coverage:',
+  '    name: coverage',
+  '    needs: [shards, build]',
+  `    if: ${expression('always()')}`,
+  '    runs-on: ubuntu-24.04',
+  '    steps:',
+];
+
+test('a required job that runs always() and reads the result of every job it needs is clean, wherever the step reads it', () => {
+  const workflow = workflowWithJobs(
+    'push',
+    ...MERGE_JOB,
+    '      - run: echo "$RESULT"',
+    '        env:',
+    `          RESULT: ${expression('needs.shards.result')}`,
+    '      - run: exit 1',
+    `        if: ${expression("needs.build.result != 'success'")}`,
+  );
+  expect(requiredJobProblems(FILE, workflow, ['coverage'])).toEqual([]);
+});
+
+test('a required job that runs always() but never reads the result of a job it needs passes when that job fails, so it is reported', () => {
+  const workflow = workflowWithJobs(
+    'push',
+    ...MERGE_JOB,
+    '      - run: echo "$RESULT"',
+    '        env:',
+    `          RESULT: ${expression('needs.shards.result')}`,
+  );
+  expect(requiredJobProblems(FILE, workflow, ['coverage'])).toEqual([
+    `${FILE}: the required job "coverage" (coverage) runs with always() but no step reads needs.build.result, so it passes when build fails`,
+  ]);
+});
+
+test('a required job that runs always() and has no steps reads no result, so every job it needs is reported', () => {
+  const workflow = workflowWithJobs(
+    'push',
+    '  coverage:',
+    '    name: coverage',
+    '    needs: shards',
+    '    if: always()',
+  );
+  expect(requiredJobProblems(FILE, workflow, ['coverage'])).toEqual([
+    `${FILE}: the required job "coverage" (coverage) runs with always() but no step reads needs.shards.result, so it passes when shards fails`,
+  ]);
+});
+
 test('two jobs with the same name are both judged: a skippable twin is reported by its id', () => {
   const workflow = workflowWithJobs(
     'push',

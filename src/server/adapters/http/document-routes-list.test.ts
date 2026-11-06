@@ -7,6 +7,7 @@ import {
   type DocumentWorld,
   documentsPath,
   documentWorld,
+  draftPath,
   errorCodeOf,
   fillDocuments,
   nameOf,
@@ -61,6 +62,32 @@ test('an org admin lists every document of the installation by name and id, with
   });
   expect(page.documents[1]).toMatchObject({ repositoryId: world.t1.scoped.repositoryId, activeVersion: null });
   expect(page.documents.map((document) => document.id)).not.toContain(world.t2.documentId);
+});
+
+test('each listed document says whether a draft is saved and names its repository, and a document of the installation has none (E18-S05)', async () => {
+  const world = await documentWorld();
+  const { documents } = parsed(await listPage(world), documentListResponseSchema);
+  expect(documents.map((document) => [document.id, document.hasDraft, document.repositoryFullName])).toEqual([
+    [world.t1.documentId, false, null],
+    [world.t1.scoped.documentId, true, world.t1.scoped.fullName],
+  ]);
+});
+
+test('a draft saved for a document of the installation turns its flag on and the other documents keep theirs; the other tenant is not read (E18-S05)', async () => {
+  const world = await documentWorld();
+  const saved = await world.ask('admin1', {
+    method: 'PUT',
+    url: draftPath(world.t1.installationId, world.t1.documentId),
+    payload: { contentMd: 'A text.', expectedRevision: null },
+  });
+  expect(saved.statusCode).toBe(200);
+  const { documents } = parsed(await listPage(world), documentListResponseSchema);
+  expect(documents.map((document) => document.hasDraft)).toEqual([true, true]);
+  const other = await world.ask('admin2', { method: 'GET', url: documentsPath(world.t2.installationId) });
+  expect(parsed(other, documentListResponseSchema).documents.map((document) => document.hasDraft)).toEqual([
+    false,
+    true,
+  ]);
 });
 
 test('a repo admin does not list the documents of the installation: 403', async () => {

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { CorporateDocumentResponse } from '../../shared/corporate.ts';
+import { MarkdownView } from '../components/markdown/MarkdownView.tsx';
 import { useFormatters, useT } from '../i18n/index.ts';
 import { UserText } from '../ui/UserText.tsx';
-import { ClaText } from './ClaText.tsx';
 import { CorporateSignForm } from './CorporateSignForm.tsx';
 
 export interface CorporateDocumentViewProps {
@@ -38,7 +38,7 @@ export function CorporateDocumentView({ document, onReload }: CorporateDocumentV
           })}
         </dd>
       </dl>
-      <ClaText markdown={document.contentMd} />
+      <MarkdownView source={document.contentMd} />
       <CorporateSignForm document={document} onReload={onReload} />
     </>
   );

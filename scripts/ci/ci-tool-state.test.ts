@@ -50,6 +50,7 @@ function runner() {
 
 const JOBS = [
   ['static'],
+  ['coverage-shard'],
   ['coverage'],
   ['postgres'],
   ['semgrep'],

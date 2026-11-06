@@ -25,7 +25,7 @@ test('Stryker starts under this Node with the flag of node-args.ts before its en
   vi.doMock('node:child_process', () => ({ spawn }));
   vi.resetModules();
   const { systemDeps } = await import('./mutate-run.ts');
-  const outcome = await systemDeps.run(['run', '--incremental', '--force'], { STRYKER_SHARD: 'http-a-v' }, undefined);
+  const outcome = await systemDeps.run(['run', '--incremental', '--force'], { STRYKER_SHARD: 'http-a-d' }, undefined);
   expect(outcome).toEqual({ code: 0, timedOut: false });
   expect(spawn).toHaveBeenCalledExactlyOnceWith(
     process.execPath,
@@ -36,7 +36,7 @@ test('Stryker starts under this Node with the flag of node-args.ts before its en
       '--incremental',
       '--force',
     ],
-    expect.objectContaining({ cwd: ROOT, env: { STRYKER_SHARD: 'http-a-v' } }),
+    expect.objectContaining({ cwd: ROOT, env: { STRYKER_SHARD: 'http-a-d' } }),
   );
   expect(STRYKER_NODE_ARGS).toEqual(['--no-json-stringify-fast-path']);
 });

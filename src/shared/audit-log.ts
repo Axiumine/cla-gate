@@ -13,6 +13,9 @@ import { githubIdSchema } from './github-id.ts';
  */
 export const AUDIT_LOG_PATH = '/api/installations/:installationId/audit-log';
 
+/** The shape of the kind of row an audit entry is about (`subject.type`), which the writer accepts and the `subjectType` filter takes. */
+export const AUDIT_SUBJECT_TYPE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+
 /** Rows in a page when the request names no `limit`. */
 export const AUDIT_LOG_DEFAULT_LIMIT = 50;
 

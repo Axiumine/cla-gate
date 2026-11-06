@@ -12,7 +12,8 @@ import {
 } from '../../../shared/cla.ts';
 import { listDocumentPage, readRepositoryDocuments } from '../../services/cla-documents.ts';
 import type { Database } from '../db/schema.ts';
-import { positionCursor, presentDocument, presentEntry, readPositionCursor } from './document-presenters.ts';
+import { presentPage } from './document-list-presenters.ts';
+import { presentDocument, presentEntry, readPositionCursor } from './document-presenters.ts';
 import { setNoStore } from './no-store.ts';
 import { parseInput } from './request-body.ts';
 import { requireTenant, tenantAccess } from './tenant-access.ts';
@@ -38,10 +39,7 @@ export function listRoute(app: Routes, db: Kysely<Database>): void {
       const from = query.cursor === undefined ? null : readPositionCursor(query.cursor);
       const page = await listDocumentPage(db, tenant, { limit: query.limit ?? PAGE_SIZE.default, from });
       setNoStore(reply);
-      return {
-        documents: page.documents.map(presentDocument),
-        nextCursor: page.next === null ? null : positionCursor(page.next),
-      };
+      return presentPage(page);
     },
   );
 }

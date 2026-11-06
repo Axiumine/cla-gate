@@ -4,11 +4,15 @@ import type { ReactNode } from 'react';
 
 export type StatusTone = 'neutral' | 'info' | 'success' | 'warning';
 
+// E18-S12: a region with no text yet is in the page (a screen reader needs it there before its text changes) but draws nothing: the
+// `empty:` classes take the colour, the border and the padding away, which the browser pass found as a coloured bar above a table.
+const FILLED = 'border border-transparent px-3 py-2 rounded-md empty:border-0 empty:bg-transparent empty:p-0';
+
 const TONE_CLASSES: Record<StatusTone, string> = {
   neutral: 'text-fg',
-  info: 'border border-transparent bg-info-bg px-3 py-2 text-info-fg rounded-md',
-  success: 'border border-transparent bg-success-bg px-3 py-2 text-success-fg rounded-md',
-  warning: 'border border-transparent bg-warning-bg px-3 py-2 text-warning-fg rounded-md',
+  info: `${FILLED} bg-info-bg text-info-fg`,
+  success: `${FILLED} bg-success-bg text-success-fg`,
+  warning: `${FILLED} bg-warning-bg text-warning-fg`,
 };
 
 export interface StatusMessageProps {

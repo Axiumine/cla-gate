@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { exists, readText } from '../ci/lib/test-support.ts';
 import { listDir, ROOT } from '../semgrep-rules/test-support.ts';
 import { CONTROL_CASES } from './control.ts';
-import { ORIGIN_VARIABLE } from './fixture-url.ts';
+import { APP_ORIGIN_VARIABLE, ORIGIN_VARIABLE } from './fixture-url.ts';
 import { CONTROL_DIR, FIXTURES_DIR, SCENARIOS_DIR } from './paths.ts';
 import { scenarioOf } from './scenario.ts';
 import { loadModule } from './system.ts';
@@ -18,13 +18,24 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+const CANARY = 'canary-navigation.ts';
+const APP_ORIGIN = 'http://127.0.0.1:40888';
+
+/** The scenarios that load a page of tests/leaks/fixtures: the canary and the control. */
 const FILES = [
-  ...listDir(SCENARIOS_DIR).map((name) => path.join(SCENARIOS_DIR, name)),
+  ...listDir(SCENARIOS_DIR)
+    .filter((name) => name === CANARY)
+    .map((name) => path.join(SCENARIOS_DIR, name)),
   ...CONTROL_CASES.map((each) => path.join(CONTROL_DIR, `${each.name}.ts`)),
 ];
 
+/** E18-S12: the scenarios that load a screen of the dashboard. */
+const SCREEN_FILES = listDir(SCENARIOS_DIR)
+  .filter((name) => name !== CANARY)
+  .map((name) => path.join(SCENARIOS_DIR, name));
+
 test('there is the canary scenario, and the control has its three', () => {
-  expect(listDir(SCENARIOS_DIR)).toContain('canary-navigation.ts');
+  expect(listDir(SCENARIOS_DIR)).toContain(CANARY);
   expect(FILES.length).toBeGreaterThanOrEqual(4);
 });
 
@@ -39,15 +50,41 @@ test.each(FILES.map((file) => [path.relative(ROOT, file), file]))(
   },
 );
 
+test.each(SCREEN_FILES.map((file) => [path.relative(ROOT, file), file]))(
+  '%s default-exports { url, action, back } and its url is a screen of the dashboard on the origin the wrapper serves',
+  async (_label, file) => {
+    vi.stubEnv(ORIGIN_VARIABLE, ORIGIN);
+    vi.stubEnv(APP_ORIGIN_VARIABLE, APP_ORIGIN);
+    const scenario = scenarioOf(await loadModule(file), file);
+    const url = new URL(scenario.url());
+    expect(url.origin).toBe(APP_ORIGIN);
+    expect(url.pathname).toMatch(/^\/installations(\/|$)/);
+    expect(scenario.repeat?.()).toBeGreaterThanOrEqual(9);
+  },
+);
+
+/** The code of a file, without its comment lines. */
+const codeOf = (file: string): string =>
+  readText(file)
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n');
+
+const NO_ADDRESS = /https?:|localhost|127\.0\.0\.1|0\.0\.0\.0|:\d{2,5}\b|\bport\b/i;
+
 test.each(FILES.map((file) => [path.basename(file), file]))(
   '%s names no host, no protocol and no port',
   (_label, file) => {
-    const code = readText(file)
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('//'))
-      .join('\n');
-    expect(code).toContain('fixtureUrl(');
-    expect(code).not.toMatch(/https?:|localhost|127\.0\.0\.1|0\.0\.0\.0|:\d{2,5}\b|\bport\b/i);
+    expect(codeOf(file)).toContain('fixtureUrl(');
+    expect(codeOf(file)).not.toMatch(NO_ADDRESS);
+  },
+);
+
+test.each(SCREEN_FILES.map((file) => [path.basename(file), file]))(
+  '%s asks for its screen with appUrl and names no host, no protocol and no port',
+  (_label, file) => {
+    expect(codeOf(file)).toContain('appUrl(');
+    expect(codeOf(file)).not.toMatch(NO_ADDRESS);
   },
 );
 

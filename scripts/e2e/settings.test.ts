@@ -101,6 +101,14 @@ test('the application runs on loopback, on the chosen port, against the database
   });
 });
 
+test('only the loopback is a trusted proxy, so a browser context can name its own client address (E18-S12)', () => {
+  expect(
+    appEnvironment({ ...OPTIONS, env: { ...OPTIONS.env, TRUST_PROXY: 'true' }, randomHex: counting }),
+  ).toMatchObject({
+    TRUST_PROXY: '127.0.0.1',
+  });
+});
+
 test('a missing database URL becomes an empty value, which the application reports by name', () => {
   expect(appEnvironment({ env: {}, port: 41_234, randomHex: counting })['DATABASE_URL']).toBe('');
 });

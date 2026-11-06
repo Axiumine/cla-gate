@@ -18,11 +18,21 @@ export interface StoredDocument {
   readonly id: number;
   /** `repositories.id` of the repository the document is scoped to, or null for a document that covers the installation. */
   readonly repositoryId: number | null;
+  /** `repositories.full_name` of that repository (a display snapshot, E18-S05), or null for a document that covers the installation. */
+  readonly repositoryFullName: string | null;
   readonly name: string;
   readonly kind: ClaDocumentKind;
   readonly activeVersion: StoredActiveVersion | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+/**
+ * A document of the list of an installation (E18-S05): the stored document plus the fact the list shows that the other reads do not
+ * need, whether a draft is saved for it.
+ */
+export interface ListedDocument extends StoredDocument {
+  readonly hasDraft: boolean;
 }
 
 /** Where a page of documents starts: at the document with this name and id, in the order `name asc, id asc`. */
@@ -41,6 +51,7 @@ export interface RepositoryDocuments {
 export interface DocumentRow {
   readonly id: number;
   readonly repository_id: number | null;
+  readonly repository_full_name: string | null;
   readonly name: string;
   readonly kind: ClaDocumentKind;
   readonly created_at: Date;

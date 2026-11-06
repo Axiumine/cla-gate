@@ -45,6 +45,7 @@ const SCOPED_QUERY_NAMES = [
   'services/cla-draft-queries.ts findDraft',
   'services/cla-draft-queries.ts lockDraft',
   'services/cla-draft-queries.ts findDraftRevision',
+  'services/cla-draft-queries.ts findDraftedDocumentIds',
   'services/cla-draft-writes.ts insertDraft',
   'services/cla-draft-writes.ts updateDraft',
   'services/cla-draft-writes.ts deleteDraft',
