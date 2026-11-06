@@ -11,7 +11,7 @@ import { renderClaTree } from '../../shared/cla-markdown.ts';
 export type WorkerBehaviour = 'render' | 'silent' | 'error' | 'garbage';
 
 /** What the stand-ins answer with from now on. */
-const doing = { behaviour: 'render' as WorkerBehaviour };
+const doing: { behaviour: WorkerBehaviour } = { behaviour: 'render' };
 
 /** Changes what the workers already started, and the ones to come, do with the messages they get from now on. */
 export function setWorkerBehaviour(behaviour: WorkerBehaviour): void {
