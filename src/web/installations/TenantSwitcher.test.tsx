@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
@@ -114,6 +114,14 @@ test('a click outside closes it, and so does the focus leaving it by Tab', async
   await user.click(button);
   expect(button).toHaveAttribute('aria-expanded', 'true');
   await user.tab({ shift: true });
+  expect(button).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('a pointer going down on something that takes no focus closes it too', async () => {
+  serveTwo();
+  const { button } = await openSwitcher();
+  expect(button).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.pointerDown(screen.getByRole('banner'));
   expect(button).toHaveAttribute('aria-expanded', 'false');
 });
 
