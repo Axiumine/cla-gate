@@ -6,6 +6,7 @@ import { documentMessages } from './messages-documents.ts';
 import { eraseMessages } from './messages-erase.ts';
 import { historyMessages } from './messages-history.ts';
 import { invalidateMessages } from './messages-invalidate.ts';
+import { markdownMessages } from './messages-markdown.ts';
 import { operatorMessages } from './messages-operator.ts';
 import { pendingMessages } from './messages-pending.ts';
 import { repositoryMessages } from './messages-repositories.ts';
@@ -77,6 +78,7 @@ export const messages = {
   ...eraseMessages,
   ...historyMessages,
   ...invalidateMessages,
+  ...markdownMessages,
   ...operatorMessages,
   ...pendingMessages,
   ...repositoryMessages,
