@@ -53,19 +53,21 @@ test('the entry script exits 1 on an unjustified escape hatch', async () => {
   expect(stderr.mock.calls.join('')).toContain('a.ts:1: any: missing "-- <reason>"');
 });
 
-// The scan reads and lints every source file of the repository, which takes longer under the coverage run and grows with
-// the repository; the default five seconds is not a limit that means anything for it.
-const REPOSITORY_SCAN_TIMEOUT_MS = 60_000;
+// The whole repository is scanned by `yarn lint:hatches` (the `static` job and the pre-commit hook), which is the gate. This test
+// runs the real entry script on real, tracked sources: the tool's own directory. A scan of the whole repository here took 64
+// seconds on the slowest shared runner (2026-11-06, 2 900 files) and grows with every epic, so it did not tell a slow run
+// from a wrong one; the default five seconds is no limit that means anything for a scan of one directory either.
+const TOOL_DIRECTORY_SCAN_TIMEOUT_MS = 60_000;
 
 test(
-  'this repository has no unjustified escape hatch',
+  'the sources of the tool itself have no unjustified escape hatch',
   async () => {
     const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
-    await runEntry([]);
+    await runEntry(['--root', path.join(REPOSITORY, 'scripts/escape-hatches')]);
     expect(stderr.mock.calls.join('')).toBe('');
-    expect(stdout.mock.calls.join('')).toMatch(/^escape hatches ok \(\d+ source file\(s\)\)\n$/);
+    expect(stdout.mock.calls.join('')).toMatch(/^escape hatches ok \((?:[1-9]\d*) source file\(s\)\)\n$/);
     expect(process.exitCode).toBe(0);
   },
-  REPOSITORY_SCAN_TIMEOUT_MS,
+  TOOL_DIRECTORY_SCAN_TIMEOUT_MS,
 );
