@@ -13,7 +13,7 @@ import { COMMIT, CURRENT_RUN, githubOf, jobEntry, OTHER_COMMIT, runEntry, skipEn
 // failure. The API is a fake; the failure paths are in skip-failures.test.ts.
 
 const NAME = jobNameOf('config');
-const PASSED = [jobEntry('static', 'success'), jobEntry(NAME, 'success'), jobEntry(jobNameOf('http-a-v'), 'failure')];
+const PASSED = [jobEntry('static', 'success'), jobEntry(NAME, 'success'), jobEntry(jobNameOf('http-a-d'), 'failure')];
 const NO_PASS = `run, no earlier scheduled run passed ${NAME} on commit ${COMMIT}`;
 /** The decision when the newest run that has the job is `runId` and the job did not pass in it. */
 const redIn = (runId: number) =>
@@ -125,7 +125,7 @@ test('a job that is not completed is not a pass, whatever its conclusion field s
 test.each([
   ['no job at all', []],
   ['other jobs only', [jobEntry('static', 'success'), jobEntry('coverage', 'success')]],
-  ['the name of another shard', [jobEntry(jobNameOf('http-a-v'), 'success')]],
+  ['the name of another shard', [jobEntry(jobNameOf('http-a-d'), 'success')]],
   ['the bare job name', [jobEntry('mutation', 'success')]],
   ['a name with a suffix', [jobEntry(`${NAME} `, 'success')]],
   ['a name with another case', [jobEntry('Mutation (config)', 'success')]],
@@ -189,7 +189,7 @@ test('a newer pass outranks an older failure, so a shard that went red and then 
 });
 
 test('a run without the job says nothing about the shard, so the search goes on to the next older run, whichever way that one ended', async () => {
-  const none = [jobEntry('static', 'success'), jobEntry(jobNameOf('http-a-v'), 'success')];
+  const none = [jobEntry('static', 'success'), jobEntry(jobNameOf('http-a-d'), 'success')];
   const passed = await decided([runEntry(800), runEntry(700)], { 800: none, 700: PASSED });
   expect(passed.decision).toMatchObject({ skip: true, runId: 700 });
   expect(passed.urls).toHaveLength(3);
