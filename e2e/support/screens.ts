@@ -59,6 +59,21 @@ export const SCREENS: readonly Screen[] = [
     viewer: 'visitor',
     ready: heading(messages['login.failed.title']),
   },
+  {
+    route: '/installations/$installationId/repositories/$repositoryId/settings',
+    id: 'repository-settings',
+    path: `${tenant}/repositories/${String(REPOSITORIES.widgets.id)}/settings`,
+    viewer: 'alice',
+    ready: { role: 'checkbox', name: messages['repository.badge.toggle'] },
+    // The badge is off in the seeded world, and the snippet call answers `409 public_verification_disabled` then: the screen reads the
+    // switch from that answer, and the browser logs the 409 whatever the page does with it.
+    refusals: [
+      {
+        status: 409,
+        path: `/api/installations/${String(TENANT.id)}/repositories/${String(REPOSITORIES.widgets.id)}/badge-snippet`,
+      },
+    ],
+  },
   { route: '/sign/$githubRepoId', id: 'sign-form', path: sign, viewer: 'frank', ready: { role: 'checkbox' } },
   {
     route: '/sign/$githubRepoId',
@@ -188,10 +203,6 @@ export const ROUTES_WITHOUT_SCREEN: ReadonlyMap<string, string> = new Map([
   [
     '/operator/installations',
     'the operator screen (E18-S13) is for the person who operates the instance, and the application under test has no operator (no GitHub App and no OPERATOR_GITHUB_IDS), so it is the not-found page there; its screen is held by the unit tests and the route coverage guard',
-  ],
-  [
-    '/installations/$installationId/repositories/$repositoryId/settings',
-    'the settings screen of a repository (E22-S03) came after the browser specs and their baselines; the baselines are made in the pinned container (`yarn e2e:update`), so until that run it is held by the unit tests and the route coverage guard',
   ],
   [
     '/installations/$installationId/',
