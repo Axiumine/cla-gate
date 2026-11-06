@@ -19,3 +19,12 @@ export type DocumentScope = 'installation' | 'repository';
 export function canManage(role: InstallationRole | undefined, scope: DocumentScope | undefined): boolean {
   return role === 'org_admin' || (role === 'repo_admin' && scope !== 'installation');
 }
+
+/**
+ * Whether a person with `role` in the installation is offered the erasure of a signer's personal data (E18-S14): an org admin only,
+ * because the personal data of a person spans documents and repositories, so a repo admin is refused by the server (`403`) and a role
+ * that is not known is offered nothing. The server decides on every request.
+ */
+export function canErase(role: InstallationRole | undefined): boolean {
+  return role === 'org_admin';
+}

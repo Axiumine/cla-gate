@@ -4,9 +4,10 @@
 import { useT } from '../i18n/index.ts';
 import { Timestamp } from '../i18n/Timestamp.tsx';
 import { Badge, type DataColumn, DataTable } from '../ui/index.ts';
-import { RevokeAction, type RevokeActionProps } from './RevokeAction.tsx';
+import type { EraseActionProps } from './erase/EraseAction.tsx';
+import type { RevokeActionProps } from './RevokeAction.tsx';
+import { SignatureActions } from './SignatureActions.tsx';
 import { GithubIdCell, SignerCell, SourceCell } from './SignatureCells.tsx';
-import { SignatureDetails } from './SignatureDetails.tsx';
 import type { Signature } from './signature-queries.ts';
 
 /** What a table needs to offer the revocation of its rows. */
@@ -16,18 +17,24 @@ export interface RevokeControl
   readonly allowed: (documentId: number) => boolean;
 }
 
+/** What a table needs to offer the erasure of the personal data of the signers of its rows (E18-S14). */
+export type EraseControl = Pick<EraseActionProps, 'installationId' | 'suspended' | 'onDone'>;
+
 export interface SignaturesTableProps {
   readonly items: readonly Signature[];
   /** The revocation of the rows the viewer may revoke. */
   readonly revoke: RevokeControl;
+  /** The erasure of personal data on every row, for an org admin; absent for any other viewer. */
+  readonly erase?: EraseControl | undefined;
 }
 
 /**
  * The signatures of a page as a semantic table with a caption (E18-S07), in the order the server gave, newest first. The signer, the
  * document and the repository are text a person controls and are drawn through `UserText`; the verified email is not in the table (it is in
- * the detail of a row). The last column has "Details" on every row and "Revoke" on the rows the viewer may revoke.
+ * the detail of a row). The last column has "Details" on every row, "Revoke" on the rows the viewer may revoke and, for an org admin, "Erase
+ * personal data" (E18-S14), which reads "Erased" once the signer's personal data is gone.
  */
-export function SignaturesTable({ items, revoke }: SignaturesTableProps) {
+export function SignaturesTable({ items, revoke, erase }: SignaturesTableProps) {
   const t = useT();
   const columns: readonly DataColumn<Signature>[] = [
     { id: 'signer', header: t('signatures.col.signer'), render: (item) => <SignerCell item={item} /> },
@@ -52,20 +59,7 @@ export function SignaturesTable({ items, revoke }: SignaturesTableProps) {
     {
       id: 'actions',
       header: t('signatures.col.actions'),
-      render: (item) => (
-        <div className="flex flex-wrap gap-2">
-          <SignatureDetails item={item} />
-          {revoke.allowed(item.document.id) ? (
-            <RevokeAction
-              installationId={revoke.installationId}
-              item={item}
-              suspended={revoke.suspended}
-              onOutcome={revoke.onOutcome}
-              onVanished={revoke.onVanished}
-            />
-          ) : null}
-        </div>
-      ),
+      render: (item) => <SignatureActions item={item} revoke={revoke} erase={erase} />,
     },
   ];
   return (

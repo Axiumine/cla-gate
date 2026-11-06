@@ -52,13 +52,15 @@ test('the id of who published is in code, and a screen reader is told what the n
   expect(by?.textContent).toBe(`octocat ${messages['history.publishedBy.id']} 4711`);
 });
 
-test('a row has one control, "View", which names its version, and nothing on a version edits or deletes it', async () => {
+test('a row has "View", which names its version, the first version of a major also has "Invalidate signatures" (E18-S14), and nothing on a version edits or deletes it', async () => {
   await openHistory();
   const controls = within(versionsTable()).getAllByRole('button');
   expect(controls.map((control) => control.getAttribute('aria-label'))).toEqual([
     'View version 2.0',
+    'Invalidate signatures of version 2',
     'View version 1.1',
     'View version 1.0',
+    'Invalidate signatures of version 1',
   ]);
   const others = ['textbox', 'checkbox', 'combobox', 'link', 'switch', 'radio'].flatMap((role) =>
     within(versionsTable()).queryAllByRole(role),

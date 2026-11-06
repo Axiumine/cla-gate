@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
 import { useApiClient } from '../auth/hooks.ts';
 import { useT } from '../i18n/index.ts';
 import { EmptyState } from '../states/EmptyState.tsx';
 import { PagedResults } from '../ui/PagedResults.tsx';
 import { ResultStatus } from './ResultStatus.tsx';
-import { type RevokeControl, SignaturesTable } from './SignaturesTable.tsx';
+import { type EraseControl, type RevokeControl, SignaturesTable } from './SignaturesTable.tsx';
 import { type Filters, isFiltered } from './signature-filters.ts';
 import { signaturesQueryOptions } from './signature-queries.ts';
-import type { RevokeOutcome } from './use-revoke-signature.ts';
+import { useResultNotices } from './use-result-notices.ts';
 
 export interface SignatureResultsProps {
   /** `installations.id` of the tenant in the address. */
@@ -22,6 +21,8 @@ export interface SignatureResultsProps {
   readonly onFirstPage: () => void;
   /** What the viewer may do with the rows: which documents they may revoke the signatures of, and whether the revocation is off. */
   readonly revoke: Omit<RevokeControl, 'onOutcome' | 'onVanished'>;
+  /** The erasure of personal data on every row, for an org admin (E18-S14); absent for any other viewer. */
+  readonly erase: Omit<EraseControl, 'onDone'> | undefined;
 }
 
 /**
@@ -38,10 +39,11 @@ export function SignatureResults({
   onCursorChange,
   onFirstPage,
   revoke,
+  erase,
 }: SignatureResultsProps) {
   const t = useT();
   const query = useQuery(signaturesQueryOptions(useApiClient(), installationId, { filters, cursor }));
-  const [notice, setNotice] = useState<RevokeOutcome | undefined>(undefined);
+  const { notice, erased, onRevoked, onErased } = useResultNotices();
   return (
     <PagedResults
       query={query}
@@ -49,7 +51,7 @@ export function SignatureResults({
       onCursorChange={onCursorChange}
       onFirstPage={onFirstPage}
       title={t('signatures.results.title')}
-      status={(shown) => <ResultStatus shown={shown} notice={notice} />}
+      status={(shown) => <ResultStatus shown={shown} notice={notice} erased={erased} />}
       empty={
         <EmptyState
           level={3}
@@ -58,7 +60,11 @@ export function SignatureResults({
         />
       }
       rows={(page, focusHeading) => (
-        <SignaturesTable items={page.items} revoke={{ ...revoke, onOutcome: setNotice, onVanished: focusHeading }} />
+        <SignaturesTable
+          items={page.items}
+          revoke={{ ...revoke, onOutcome: onRevoked, onVanished: focusHeading }}
+          erase={erase === undefined ? undefined : { ...erase, onDone: onErased }}
+        />
       )}
     />
   );

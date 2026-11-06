@@ -25,7 +25,7 @@ import { installationParamsSchema } from './installations.ts';
 // the schemas are those of cla.ts, cla-version.ts and cla-history.ts, so the screens and the server cannot drift apart.
 
 /** The two numbers every route of one document has in its path: the tenant (`installations.id`) and the document (`cla_documents.id`). */
-const documentParamsSchema = installationParamsSchema.extend({ documentId: z.int().positive() });
+export const documentParamsSchema = installationParamsSchema.extend({ documentId: z.int().positive() });
 
 /** `GET .../documents?limit=&cursor=` (E12-S01): the documents of an installation by name and id, for an org admin. */
 export const documentListRoute = defineRoute({

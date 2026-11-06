@@ -60,6 +60,7 @@ export function DocumentEditor({ ids, seed, search, onSearch }: DocumentEditorPr
             panel: (
               <HistoryPanel
                 ids={ids}
+                document={seed.document}
                 search={search}
                 state={state}
                 dispatch={dispatch}

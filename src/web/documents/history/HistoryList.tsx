@@ -9,6 +9,7 @@ import { PagedListing } from '../../ui/PagedListing.tsx';
 import { ResultsPager } from '../../ui/ResultsPager.tsx';
 import { usePagedList } from '../../ui/use-paged-list.ts';
 import type { DocumentIds } from '../document-queries.ts';
+import type { InvalidateControl } from '../invalidate/use-invalidate-control.ts';
 import { versionPageQueryOptions } from './history-queries.ts';
 import { VersionsTable } from './VersionsTable.tsx';
 
@@ -20,6 +21,8 @@ export interface HistoryListProps {
   /** Replaces the address with the first page. */
   readonly onFirstPage: () => void;
   readonly onView: (versionId: number) => void;
+  /** The invalidation of a major on its first version, for a viewer who may manage the document. */
+  readonly invalidate: InvalidateControl | undefined;
 }
 
 /**
@@ -28,7 +31,7 @@ export interface HistoryListProps {
  * counts none. The page on screen stays while the next one loads, and when it fails to load the pager says so. A cursor the server
  * refuses is answered with the first page.
  */
-export function HistoryList({ ids, cursor, onCursorChange, onFirstPage, onView }: HistoryListProps) {
+export function HistoryList({ ids, cursor, onCursorChange, onFirstPage, onView, invalidate }: HistoryListProps) {
   const t = useT();
   const query = useQuery(versionPageQueryOptions(useApiClient(), ids, cursor));
   const { shown, keptPage, cursorRefused, goTo } = usePagedList(query, { cursor, onCursorChange, onFirstPage });
@@ -41,7 +44,7 @@ export function HistoryList({ ids, cursor, onCursorChange, onFirstPage, onView }
           query={query}
           keptPage={keptPage}
           empty={<EmptyState level={3} title={t('history.empty.title')} description={t('history.empty.description')} />}
-          rows={(page) => <VersionsTable items={page.items} onView={onView} />}
+          rows={(page) => <VersionsTable items={page.items} onView={onView} invalidate={invalidate} />}
         />
       )}
       <ResultsPager

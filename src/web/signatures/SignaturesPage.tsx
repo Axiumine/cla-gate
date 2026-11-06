@@ -9,7 +9,7 @@ import { ExportCsv } from './ExportCsv.tsx';
 import { SignatureFilters } from './SignatureFilters.tsx';
 import { SignatureResults } from './SignatureResults.tsx';
 import { type Filters, filterKey } from './signature-filters.ts';
-import { canManage } from './signature-permissions.ts';
+import { canErase, canManage } from './signature-permissions.ts';
 import { useDocumentChoices } from './use-document-choices.ts';
 
 export interface SignaturesPageProps {
@@ -28,7 +28,7 @@ export interface SignaturesPageProps {
 
 /**
  * The page at `/installations/$installationId/signatures` (E18-S07): the signatures of one tenant a maintainer looks up, with the exact search,
- * the status and document filters, the revocation and the CSV export. It waits for the list of installations, because the role decides
+ * the status and document filters, the revocation, the CSV export and, for an org admin, the erasure of a signer's personal data (E18-S14). It waits for the list of installations, because the role decides
  * what is offered: an org admin may revoke and export every document, a repo admin the documents of their repositories, and a role that is
  * not known gets neither (the server decides on every request all the same). Every request is addressed through the installation on screen.
  * The results are made for the installation and the search in the address, so another one starts from nothing.
@@ -46,6 +46,7 @@ export function SignaturesPage({
   const installation = installations.data?.find((candidate) => candidate.id === installationId);
   usePageSubject(installation?.accountLogin);
   const role = installation?.role;
+  const suspended = installation?.suspended === true;
   const documents = useDocumentChoices(installationId, role);
   if (installations.isPending) {
     return <LoadingState />;
@@ -70,7 +71,8 @@ export function SignaturesPage({
         cursor={cursor}
         onCursorChange={onCursorChange}
         onFirstPage={onFirstPage}
-        revoke={{ installationId, suspended: installation?.suspended === true, allowed }}
+        revoke={{ installationId, suspended, allowed }}
+        erase={canErase(role) ? { installationId, suspended } : undefined}
       />
     </div>
   );

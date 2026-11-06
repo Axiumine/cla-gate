@@ -72,7 +72,7 @@ test('a row shows the typed name and the login, the id in code, the document, th
     '2026-11-02 09:30 UTC',
     `acme/widgetsPR #45`,
     messages['status.active'],
-    `${messages['signatures.details']}${messages['signatures.revoke']}`,
+    `${messages['signatures.details']}${messages['signatures.revoke']}${messages['erase.action']}`,
   ]);
   expect(grace?.slice(0, 7)).toEqual([
     'Grace Hopperdefunkt',
