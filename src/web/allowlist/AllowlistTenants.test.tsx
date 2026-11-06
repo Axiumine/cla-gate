@@ -198,6 +198,17 @@ test("a repository of another tenant is the server's uniform 404: the not-found 
   expect(screen.queryByText(A_ONLY)).toBeNull();
 });
 
+test('a repository of another tenant that the person also administers is not drawn under this tenant: the check through this installation says 404, and that allowlist is never asked for', async () => {
+  const served = serveAllowlist({ tenants: TENANTS, membership: [envelope(404, 'not_found')] });
+  renderAllowlist('/installations/5/allowlist?repository=99');
+  const state = await screen.findByRole('alert');
+  expect(state).toHaveTextContent(messages['errors.not_found']);
+  expect(served.membership.map(pathOf)).toEqual(['/api/installations/5/repositories/99/documents']);
+  expect(served.repositoryList).toEqual([]);
+  expect(screen.queryByRole('table')).toBeNull();
+  expect(screen.queryByRole('button', { name: messages['allowlist.add'] })).toBeNull();
+});
+
 test('the id of an entry of another tenant is a 404: nothing of that tenant is shown, the answer says it was not found, and the list is asked for again', async () => {
   const { release } = serveTwoTenants();
   release();

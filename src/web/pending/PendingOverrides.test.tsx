@@ -211,18 +211,38 @@ test('while the repositories are on their way, a repository in the address is lo
   expect(screen.queryByRole('heading', { name: messages['pending.overrides.choose.title'] })).toBeNull();
 });
 
-test('when the list of the installation is cut short, a repository of the address that it does not hold is still named by its id and the server decides', async () => {
+test('when the list of the installation is cut short, a repository of the address that it does not hold is still named by its id once the installation has said that it is its own', async () => {
   const served = servePending({
     tenants: [{ summary: summary(), answer: () => repositoriesOf([repository(1, 'acme/widgets')], 'more') }],
   });
   renderPending(`${OVERRIDES_ROUTE}&repository=999`);
   await screen.findByRole('table', { name: messages['pending.overrides.caption'] });
+  expect(served.membership.map(pathOf)).toEqual(['/api/installations/5/repositories/999/documents']);
   expect(served.overrides.map(pathOf)).toEqual(['/api/repositories/999/commit-overrides']);
   expect(chooser()).toHaveValue('999');
   expect(
     within(chooser()).getByRole('option', { name: messages['pending.repository.byId'].replace('{id}', '999') }),
   ).toBeInTheDocument();
   expect(screen.getByText(messages['pending.repository.more'].replace('{count}', '100'))).toBeInTheDocument();
+});
+
+test('a repository that the list holds is of this installation, so no call is made to check it', async () => {
+  const served = servePending();
+  renderPending(`${OVERRIDES_ROUTE}&repository=1`);
+  await screen.findByRole('table', { name: messages['pending.overrides.caption'] });
+  expect(served.membership).toEqual([]);
+});
+
+test('when the list is cut short, a repository of another tenant that the person also administers is a 404 through this installation: no overrides are asked for or drawn', async () => {
+  const served = servePending({
+    tenants: [{ summary: summary(), answer: () => repositoriesOf([repository(1, 'acme/widgets')], 'more') }],
+    membership: [envelope(404, 'not_found')],
+  });
+  renderPending(`${OVERRIDES_ROUTE}&repository=999`);
+  expect(await screen.findByRole('alert')).toHaveTextContent(messages['errors.not_found']);
+  expect(served.membership.map(pathOf)).toEqual(['/api/installations/5/repositories/999/documents']);
+  expect(served.overrides).toEqual([]);
+  expect(screen.queryByRole('table', { name: messages['pending.overrides.caption'] })).toBeNull();
 });
 
 test('the tab passes axe, with the choice, with the table', async () => {

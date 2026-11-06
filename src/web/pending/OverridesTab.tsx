@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { ReactElement } from 'react';
 import type { InstallationRole } from '../../shared/installations.ts';
 import { useT } from '../i18n/index.ts';
+import { RepositoryGate } from '../repositories/RepositoryGate.tsx';
 import { EmptyState } from '../states/EmptyState.tsx';
 import { LoadingState } from '../states/LoadingState.tsx';
 import { OverrideResults } from './OverrideResults.tsx';
@@ -37,6 +39,30 @@ function NoRepository({ waiting }: { readonly waiting: boolean }) {
   );
 }
 
+interface OwnedRepositoryProps {
+  readonly installationId: number;
+  readonly repositoryId: number;
+  /** The list of this installation holds the repository, which says that it is the installation's own. */
+  readonly listed: boolean;
+  readonly children: ReactElement;
+}
+
+/**
+ * The overrides of a repository, drawn once the repository is known to be the installation's own: it is in the list of the installation,
+ * or, when the list is cut short and cannot say, the installation in the address has answered a call about it
+ * ({@link RepositoryGate}). The overrides are addressed by the repository id alone, so without this a repository of another tenant that
+ * the person also administers would be drawn, and changed, under this tenant's page.
+ */
+function OwnedRepository({ installationId, repositoryId, listed, children }: OwnedRepositoryProps) {
+  return listed ? (
+    children
+  ) : (
+    <RepositoryGate installationId={installationId} repositoryId={repositoryId}>
+      {children}
+    </RepositoryGate>
+  );
+}
+
 /**
  * The second tab (E18-S08): the overrides of one repository, which has to be chosen first, because the list is kept per repository.
  * The choice is among the repositories of this installation: a repository id in the address that the list of the installation does not
@@ -56,7 +82,8 @@ export function OverridesTab({
   const t = useT();
   const choices = useRepositoryChoices(installationId, role);
   const { query, items, truncated } = choices;
-  const known = repositoryId !== undefined && (truncated || items.some((item) => item.id === repositoryId));
+  const listed = repositoryId !== undefined && items.some((item) => item.id === repositoryId);
+  const known = repositoryId !== undefined && (truncated || listed);
   return (
     <div className="flex flex-col gap-4">
       <p className="max-w-prose text-fg-muted">{t('pending.overrides.intro')}</p>
@@ -71,15 +98,17 @@ export function OverridesTab({
         onChange={onRepositoryChange}
       />
       {known ? (
-        <OverrideResults
-          key={`${String(installationId)}:${String(repositoryId)}`}
-          installationId={installationId}
-          repositoryId={repositoryId}
-          cursor={cursor}
-          onCursorChange={onCursorChange}
-          onFirstPage={onFirstPage}
-          suspended={suspended}
-        />
+        <OwnedRepository installationId={installationId} repositoryId={repositoryId} listed={listed}>
+          <OverrideResults
+            key={`${String(installationId)}:${String(repositoryId)}`}
+            installationId={installationId}
+            repositoryId={repositoryId}
+            cursor={cursor}
+            onCursorChange={onCursorChange}
+            onFirstPage={onFirstPage}
+            suspended={suspended}
+          />
+        </OwnedRepository>
       ) : (
         <NoRepository waiting={repositoryId !== undefined && query.isPending} />
       )}

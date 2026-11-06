@@ -5,12 +5,14 @@ import { http } from 'msw';
 import { createElement } from 'react';
 import { assert } from 'vitest';
 import type { z } from 'zod';
+import { REPOSITORY_DOCUMENTS_PATH } from '../../shared/cla.ts';
 import { COMMIT_OVERRIDE_PATH, COMMIT_OVERRIDES_PATH, commitOverridePageSchema } from '../../shared/commit-override.ts';
 import { PENDING_PRS_PATH, pendingPrsPageSchema } from '../../shared/pending-prs.ts';
 import { envelope, json, type Seen } from '../api/test-support.ts';
 import { type Answer, endpoint, noContent } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { serveTenants, summary, type Tenant, tenantOf } from '../installations/test-support.ts';
+import { documentsOf } from '../repositories/test-support.ts';
 import { AppRouter } from '../router.tsx';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { server } from '../test-support/server.ts';
@@ -133,6 +135,8 @@ export interface ServePending {
   /** The pages of the pending list by cursor, `null` standing for the first page; a cursor with no page is a `400`. Used instead of `pending`. */
   readonly pages?: ReadonlyMap<string | null, () => Response | Promise<Response>>;
   readonly overrides?: readonly Answer[];
+  /** The answers to the check that a repository belongs to the installation in the address (`GET .../repositories/:repositoryId/documents`). */
+  readonly membership?: readonly Answer[];
   readonly record?: readonly Answer[];
   readonly remove?: readonly Answer[];
 }
@@ -141,6 +145,8 @@ export interface ServePending {
 export interface ServedPending {
   readonly pending: Seen[];
   readonly overrides: Seen[];
+  /** The checks that a repository belongs to the installation in the address. */
+  readonly membership: Seen[];
   readonly record: Seen[];
   readonly remove: Seen[];
   /** The requests of the installation screens: the list of installations and the repositories. */
@@ -152,6 +158,7 @@ function defaults() {
   return {
     pending: [pageOf([pendingOf(), gadgetsOf()])],
     overrides: [overridesPage([overrideOf()])],
+    membership: [documentsOf()],
     record: [recordedAs()],
     remove: [noContent()],
   };
@@ -175,6 +182,7 @@ export function servePending(serve: ServePending = {}): ServedPending {
   const served: ServedPending = {
     pending: [],
     overrides: [],
+    membership: [],
     record: [],
     remove: [],
     tenants: serveTenants(serve.tenants ?? [tenantOf(summary(), 'acme/widgets', 'acme/gadgets')], serve.listing),
@@ -187,6 +195,7 @@ export function servePending(serve: ServePending = {}): ServedPending {
         : pagesEndpoint(served.pending, serve.pages),
     ),
     http.get(COMMIT_OVERRIDES_PATH, endpoint(served.overrides, answers.overrides)),
+    http.get(REPOSITORY_DOCUMENTS_PATH, endpoint(served.membership, answers.membership)),
     http.post(COMMIT_OVERRIDES_PATH, endpoint(served.record, answers.record)),
     http.delete(COMMIT_OVERRIDE_PATH, endpoint(served.remove, answers.remove)),
   );

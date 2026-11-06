@@ -12,10 +12,12 @@ import {
   REPOSITORY_ALLOWLIST_PATH,
   repositoryAllowlistPageSchema,
 } from '../../shared/allowlist.ts';
+import { REPOSITORY_DOCUMENTS_PATH } from '../../shared/cla.ts';
 import { envelope, json, type Seen } from '../api/test-support.ts';
 import { type Answer, endpoint } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { serveTenants, summary, type Tenant, tenantOf } from '../installations/test-support.ts';
+import { documentsOf } from '../repositories/test-support.ts';
 import { AppRouter } from '../router.tsx';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { server } from '../test-support/server.ts';
@@ -79,6 +81,8 @@ export interface ServeAllowlist {
   readonly listing?: () => Response | Promise<Response>;
   readonly installationList?: readonly Answer[];
   readonly repositoryList?: readonly Answer[];
+  /** The answers to the check that a repository belongs to the installation in the address (`GET .../repositories/:repositoryId/documents`). */
+  readonly membership?: readonly Answer[];
   /** The answers to an add, whichever scope it is for. */
   readonly add?: readonly Answer[];
   readonly remove?: readonly Answer[];
@@ -88,6 +92,8 @@ export interface ServeAllowlist {
 export interface ServedAllowlist {
   readonly installationList: Seen[];
   readonly repositoryList: Seen[];
+  /** The checks that a repository belongs to the installation in the address. */
+  readonly membership: Seen[];
   readonly addInstallation: Seen[];
   readonly addRepository: Seen[];
   readonly remove: Seen[];
@@ -111,6 +117,7 @@ function defaults() {
         [inheritedOf({ id: 3, loginSnapshot: 'monalisa', githubId: 88 })],
       ),
     ],
+    membership: [documentsOf()],
     add: [storedAs()],
     remove: [new Response(null, { status: 204 })],
   };
@@ -125,6 +132,7 @@ export function serveAllowlist(serve: ServeAllowlist = {}): ServedAllowlist {
   const served: ServedAllowlist = {
     installationList: [],
     repositoryList: [],
+    membership: [],
     addInstallation: [],
     addRepository: [],
     remove: [],
@@ -133,6 +141,7 @@ export function serveAllowlist(serve: ServeAllowlist = {}): ServedAllowlist {
   server.use(
     http.get(INSTALLATION_ALLOWLIST_PATH, endpoint(served.installationList, answers.installationList)),
     http.get(REPOSITORY_ALLOWLIST_PATH, endpoint(served.repositoryList, answers.repositoryList)),
+    http.get(REPOSITORY_DOCUMENTS_PATH, endpoint(served.membership, answers.membership)),
     http.post(INSTALLATION_ALLOWLIST_PATH, endpoint(served.addInstallation, answers.add)),
     http.post(REPOSITORY_ALLOWLIST_PATH, endpoint(served.addRepository, answers.add)),
     http.delete(ALLOWLIST_ENTRY_PATH, endpoint(served.remove, answers.remove)),
