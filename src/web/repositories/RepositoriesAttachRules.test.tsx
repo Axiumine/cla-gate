@@ -3,6 +3,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { json } from '../api/test-support.ts';
+import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { summary } from '../installations/test-support.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
@@ -185,4 +186,22 @@ test('the refusal passes axe', async () => {
   await attempt({ attach: [rule(409, 'document_unpublished')] });
   await alertOf();
   await expectNoA11yViolations(document.body);
+});
+
+test('a document chosen while the request is out does not lock the dialog: the next save is sent, and the answer to the first one is dropped', async () => {
+  const gate = held(rule(409, 'document_unpublished'));
+  const { served, user } = await attempt({ attach: [gate.answer, attachedAs(null)] });
+  await waitFor(() => {
+    expect(served.attach).toHaveLength(1);
+  });
+  await user.selectOptions(documentSelect(), 'none');
+  gate.release();
+  await waitFor(() => {
+    expect(saveButton()).not.toHaveAttribute('aria-busy', 'true');
+  });
+  expect(within(attachDialog()).queryByRole('alert')).toBeNull();
+  await user.click(saveButton());
+  await waitFor(() => {
+    expect(served.attach).toHaveLength(2);
+  });
 });

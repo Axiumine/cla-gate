@@ -166,6 +166,29 @@ test('the button is busy while the request is out, and Enter pressed twice sends
   expect(served.addInstallation).toHaveLength(1);
 });
 
+test('a login edited while the request is out does not lock the dialog: the next submit sends its own request (the answer to the old one is dropped)', async () => {
+  const gate = held(refused('github_account_not_found'));
+  const { served, user } = await typeLogin('someone', { add: [gate.answer, storedAs()] });
+  await user.click(submitButton());
+  await waitFor(() => {
+    expect(served.addInstallation).toHaveLength(1);
+  });
+  await user.type(loginField(), 'x');
+  gate.release();
+  await waitFor(() => {
+    expect(submitButton()).not.toHaveAttribute('aria-busy', 'true');
+  });
+  expect(within(addDialog()).queryByText(messages['allowlist.rule.github_account_not_found'])).toBeNull();
+  await user.click(submitButton());
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  expect(served.addInstallation.map(bodyOf)).toEqual([
+    { kind: 'user', login: 'someone' },
+    { kind: 'user', login: 'someonex' },
+  ]);
+});
+
 test('the members of the organisation take no login and ask a question first; Cancel sends nothing', async () => {
   const { served, user } = await openAllowlist(ALLOWLIST_ROUTE);
   await user.click(addButton());

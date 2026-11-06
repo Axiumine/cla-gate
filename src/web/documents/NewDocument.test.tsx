@@ -190,6 +190,30 @@ test("editing a field takes the server's answer away, and the next try goes out 
   });
 });
 
+test('a name edited while the request is out does not lock the dialog: the next try goes out, and the answer to the first one is dropped', async () => {
+  const gate = held(envelope(409, 'document_name_taken'));
+  const { served, user } = await openDialog({
+    create: [gate.answer, Response.json({ document: listedOf({ id: 12, activeVersion: null }) }, { status: 201 })],
+  });
+  await user.type(nameField(), 'Taken');
+  await user.click(create());
+  await waitFor(() => {
+    expect(served.create).toHaveLength(1);
+  });
+  await user.type(nameField(), ' too');
+  gate.release();
+  await waitFor(() => {
+    expect(create()).not.toHaveAttribute('aria-busy', 'true');
+  });
+  expect(nameField()).toBeValid();
+  await user.click(create());
+  await heading('Individual CLA');
+  expect(served.create.map((seen) => bodyOf(seen))).toEqual([
+    { name: 'Taken', kind: 'individual' },
+    { name: 'Taken too', kind: 'individual' },
+  ]);
+});
+
 test('any other failure is the error state in the dialog, and the typed values stay', async () => {
   const { user } = await openDialog({ create: [envelope(403, 'forbidden')] });
   await user.type(nameField(), 'Forbidden name');

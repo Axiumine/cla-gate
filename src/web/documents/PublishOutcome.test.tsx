@@ -220,6 +220,27 @@ test('with the checkbox ticked the same request is sent again with acknowledgeRe
   });
 });
 
+test('a rationale edited while the first request is out does not lock the form: the confirmed publish is sent once the re-signing question is answered', async () => {
+  const gate = held(resignRequired(3));
+  const opened = await openPublish({ publish: [gate.answer, publishedAs(2, 0, 3, true)] });
+  await opened.user.click(within(publishDialog()).getByRole('radio', { name: messages['publish.bump.major'] }));
+  await publish(opened);
+  await waitFor(() => {
+    expect(opened.served.publish).toHaveLength(1);
+  });
+  await opened.user.type(rationaleField(), '!');
+  gate.release();
+  await opened.user.click(await within(publishDialog()).findByRole('checkbox'));
+  expect(submitButton()).toBeEnabled();
+  await opened.user.click(submitButton());
+  expect(await statusRegion('Version 2.0 is now the active version')).toBeInTheDocument();
+  expect(opened.served.publish).toHaveLength(2);
+  expect(bodyOf(opened.served.publish[1])).toMatchObject({
+    rationale: 'Clarified the grant!',
+    acknowledgeResigning: true,
+  });
+});
+
 test('one contributor is said in the singular', async () => {
   const opened = await openPublish({ publish: [resignRequired(1)] });
   await opened.user.click(within(publishDialog()).getByRole('radio', { name: messages['publish.bump.major'] }));

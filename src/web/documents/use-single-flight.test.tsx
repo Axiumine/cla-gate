@@ -62,3 +62,53 @@ test('once the request has settled the next send goes out', async () => {
   });
   expect(request.mock.calls.map((call) => call[0])).toEqual(['first', 'second']);
 });
+
+test('a reset while the request is under way (a field edited meanwhile) still opens the guard once the request has settled', async () => {
+  const { request, view, release } = setup();
+  act(() => {
+    view.result.current.send('first');
+  });
+  await waitFor(() => {
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+  act(() => {
+    view.result.current.mutation.reset();
+  });
+  release(0);
+  await waitFor(() => {
+    expect(view.result.current.mutation.isIdle).toBe(true);
+  });
+  act(() => {
+    view.result.current.send('second');
+  });
+  await waitFor(() => {
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+  expect(request.mock.calls.map((call) => call[0])).toEqual(['first', 'second']);
+});
+
+test('a request that fails opens the guard too, and nothing is thrown at the caller', async () => {
+  const request = vi.fn<(variables: string) => Promise<string>>(() => Promise.reject(new Error('refused')));
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+  );
+  const view = renderHook(
+    () => {
+      const mutation = useMutation({ mutationFn: request });
+      return { send: useSingleFlight(mutation), mutation };
+    },
+    { wrapper },
+  );
+  act(() => {
+    view.result.current.send('first');
+  });
+  await waitFor(() => {
+    expect(view.result.current.mutation.isError).toBe(true);
+  });
+  act(() => {
+    view.result.current.send('second');
+  });
+  await waitFor(() => {
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+});

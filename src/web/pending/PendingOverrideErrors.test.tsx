@@ -5,6 +5,7 @@ import type { UserEvent } from '@testing-library/user-event';
 import { HttpResponse } from 'msw';
 import { expect, test } from 'vitest';
 import { envelope } from '../api/test-support.ts';
+import { held } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
 import {
@@ -152,4 +153,25 @@ test('the dialog with a refusal passes axe', async () => {
   await attempt({ record: [rule(422, 'commit_not_found')] });
   await alertOf();
   await expectNoA11yViolations(document.body);
+});
+
+test('a reason edited while the request is out does not lock the dialog: the next submit is sent, and the answer to the first one is dropped', async () => {
+  const gate = held(rule(409, 'override_exists'));
+  const opened = await openPending(PENDING_ROUTE, { record: [gate.answer, recordedAs()] });
+  await opened.user.click(recordButton(SHORT));
+  await screen.findByRole('dialog');
+  await opened.user.type(reasonField(), REASON);
+  await opened.user.click(submitButton());
+  await waitFor(() => {
+    expect(opened.served.record).toHaveLength(1);
+  });
+  await opened.user.type(reasonField(), '!');
+  gate.release();
+  await waitFor(() => {
+    expect(submitButton()).not.toHaveAttribute('aria-busy', 'true');
+  });
+  expect(within(recordDialog()).queryByRole('alert')).toBeNull();
+  await opened.user.click(submitButton());
+  await screen.findByText(messages['pending.notice.recorded']);
+  expect(opened.served.record).toHaveLength(2);
 });
