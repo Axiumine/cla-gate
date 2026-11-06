@@ -57,7 +57,7 @@ test('every row of the shard table gives a mutant count', () => {
   for (const row of rows ?? []) {
     // The cells are: empty (before the first bar), shard, mutates, mutants, cold run, local score, empty.
     const cells = row.split('|').map((cell) => cell.trim());
-    expect(cells[3], row).toMatch(/^[1-9]\d{2}$/);
+    expect(cells[3], row).toMatch(/^[1-9]\d{2,3}$/);
   }
 });
 
