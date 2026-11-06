@@ -6,7 +6,7 @@ import { expect, test } from 'vitest';
 import { parse } from 'yaml';
 import { z } from 'zod';
 import { tempDir } from '../code-caps/test-support.ts';
-import { findOnPath, readText, writeExecutable } from './lib/test-support.ts';
+import { expression, findOnPath, readText, writeExecutable } from './lib/test-support.ts';
 
 // E20-S03: the `postgres` job makes the real-Postgres run trustworthy. It must fail, not skip, when a real-server test
 // finds no server (REQUIRE_REAL_POSTGRES=1), must enable the role tests against its own disposable container
@@ -22,7 +22,11 @@ const stepSchema = z.object({
 const workflowSchema = z.object({
   jobs: z.record(
     z.string(),
-    z.object({ steps: z.array(stepSchema), env: z.record(z.string(), z.string()).optional() }),
+    z.object({
+      steps: z.array(stepSchema),
+      env: z.record(z.string(), z.string()).optional(),
+      strategy: z.unknown().optional(),
+    }),
   ),
 });
 const ciText = readText(path.join(ROOT, '.github/workflows/ci.yml'));
@@ -31,7 +35,7 @@ const jobs = new Map(Object.entries(workflowSchema.parse(parsed).jobs));
 const steps = jobs.get('postgres')?.steps ?? [];
 
 const STEP_NAMES = steps.map((step) => step.name);
-const SUITE = 'Tests against PostgreSQL 18';
+const SUITE = 'Tests against PostgreSQL 18 (this shard)';
 const SUMMARY = 'Record the server version in the job summary';
 
 function stepNamed(name: string) {
@@ -42,10 +46,28 @@ function stepNamed(name: string) {
   return step;
 }
 
-test('the suite step requires a real server and enables the role tests, as the only change to its environment', () => {
+test('the suite step runs its shard of the suite, requires a real server and enables the role tests, with the shard index as the only other variable', () => {
   const suite = stepNamed(SUITE);
-  expect(suite.run).toBe('yarn test');
-  expect(suite.env).toEqual({ REQUIRE_REAL_POSTGRES: '1', CLA_ROLE_TESTS: '1' });
+  expect(suite.run).toBe('yarn test --shard="$SHARD/4"');
+  expect(suite.env).toEqual({
+    REQUIRE_REAL_POSTGRES: '1',
+    CLA_ROLE_TESTS: '1',
+    SHARD: expression('matrix.index'),
+  });
+});
+
+// Two legs on one host at once: each starts its own container through the helper, whose name has a random tail and whose port is
+// probed and retried (scripts/ci/lib/postgres-cli.test.ts, "two helpers at once get distinct ports and distinct container
+// names"), and the database of the suite is created inside that container. Nothing of the leg is taken from the matrix.
+test('the job is a matrix of four shards that fail independently, and no command but the suite reads the matrix', () => {
+  const strategy = z
+    .object({
+      'fail-fast': z.literal(false),
+      matrix: z.object({ index: z.tuple([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]) }),
+    })
+    .parse(jobs.get('postgres')?.strategy);
+  expect(strategy.matrix.index).toEqual([1, 2, 3, 4]);
+  expect(steps.filter((step) => (step.run ?? '').includes('matrix'))).toEqual([]);
 });
 
 test('only the postgres job sets the two variables, in its suite step', () => {

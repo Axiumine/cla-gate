@@ -126,12 +126,12 @@ test('the linter image is the tag of qodana.yaml and also pinned by digest in th
   expect(args.startsWith(`--linter ${linter}@sha256:`)).toBe(true);
 });
 
-test('the coverage job uploads coverage/lcov.info as coverage-lcov, kept one day, after the tests', () => {
+test('the coverage job uploads coverage/lcov.info as coverage-lcov, kept one day, after the merge of the shard reports', () => {
   const coverage = ciJob('coverage');
   const names = coverage.steps.map((each) => each.name);
   const upload = coverage.steps.find((each) => each.name === 'Upload the lcov report for Qodana');
   expect(names.at(-1)).toBe('Upload the lcov report for Qodana');
-  expect(names.at(-2)).toBe('Tests with 100% coverage');
+  expect(names.at(-2)).toBe('Merge the shard reports and enforce 100% coverage');
   expect(upload?.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/);
   expect(upload?.with).toEqual({
     name: 'coverage-lcov',
@@ -164,7 +164,17 @@ test('the jobs on the shared runners never see a secret: ci.yml without the qoda
   const shared = ciTextOnSharedRunners();
   expect(shared).not.toMatch(/\$\{\{\s*secrets\./);
   expect(shared).not.toContain('\n  qodana:\n');
-  for (const id of ['static', 'coverage', 'postgres', 'semgrep', 'trivy', 'mutation', 'e2e', 'leaks']) {
+  for (const id of [
+    'static',
+    'coverage-shard',
+    'coverage',
+    'postgres',
+    'semgrep',
+    'trivy',
+    'mutation',
+    'e2e',
+    'leaks',
+  ]) {
     expect(shared).toContain(`\n  ${id}:\n`);
   }
 });

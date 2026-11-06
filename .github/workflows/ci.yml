@@ -182,14 +182,31 @@ jobs:
       - name: Runner guard (docs/ci-runners.md)
         run: yarn ci:runners
 
-  coverage:
-    name: coverage
+  # The required check `coverage` is two kinds of job (docs/ci-runners.md, Known unknowns): the matrix `coverage-shard` runs a
+  # quarter of the suite under V8 coverage, and `coverage` (below) merges the four reports and applies the 100% thresholds to
+  # the merged coverage. The whole suite (26 000 tests, with jsdom for the web project) under coverage on the slowest shared
+  # runner, `app1-gio-home-github-ci`, ran into the 45 minutes the one job had (2026-11-06, pull request 41: cancelled), and
+  # the guard caps a job at 60 (R4), so the job got smaller, not the timeout longer.
+  # Each shard is `vitest run --coverage --shard=i/4` (Vitest splits the test files by a hash of the path, so a shard holds a
+  # stable quarter of them) with the blob reporter, which writes the test results and the coverage map of the shard to one JSON
+  # file. A shard cannot meet 100% alone, so it turns the thresholds off for itself (`--coverage.thresholds.100=false`); the
+  # thresholds of vitest.config.ts stay 100% for the merge, and scripts/qodana-gate/coverage-config.test.ts pins them. The
+  # coverage map keys every file by its absolute path, and the three runners have different workspaces, so the blob would not
+  # merge with another runner's (the same file would be two files at 50%): the step after the tests replaces the workspace
+  # path with a placeholder, and the merge job puts its own workspace path back.
+  # A matrix job reports one check per leg (`coverage shard (1/4)` and so on) and none of them is the required one.
+  coverage-shard:
+    name: coverage shard (${{ matrix.index }}/4)
     runs-on: [self-hosted, Linux, X64]
-    # 45 minutes, not the 15 of `static`: the whole suite (17 000 tests and growing, with jsdom for the web project) runs
-    # under V8 coverage. The three shared runners differ by a factor of four: 7 minutes on `srv1-gio-home-github-ci`, 18 on
-    # `Hetzner-github-ci`, 28 to 31 on `app1-gio-home-github-ci`, where it was cancelled at the old 30 on 2026-11-04. A
-    # required check must not depend on which runner picks the job up.
-    timeout-minutes: 45
+    # Meant to take 15 to 20 minutes on `app1-gio-home-github-ci`: a quarter of the whole suite, which needed more than the 45
+    # minutes of the old job there (28 to 31 for 17 000 tests on 2026-11-04), plus the checkout and the install. 40 leaves
+    # room for a loaded runner and stays under the 45 that the one job lost.
+    timeout-minutes: 40
+    strategy:
+      # One failed shard says nothing about the others, and the merge job needs all four to say anything.
+      fail-fast: false
+      matrix:
+        index: [1, 2, 3, 4]
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Also the first look at a
       # runner's capabilities (docs/ci-runners.md, Known unknowns): the log shows who runs here and how much room is left.
@@ -250,9 +267,171 @@ jobs:
           restore-keys: yarn-${{ runner.os }}-
       - name: Install dependencies
         run: yarn install --immutable
-      # CI=1 (set by the script) makes Vitest refuse to write new snapshots; thresholds are 100%.
-      - name: Tests with 100% coverage
-        run: yarn coverage
+      # CI=1, as `yarn coverage` sets it: Vitest refuses to write new snapshots. The text-summary reporter keeps the log short
+      # (the full table is the merge job's); the blob goes to reports/coverage-blob, a directory that is not hidden, so the
+      # upload action (which skips hidden paths) takes it, and which .gitignore lists.
+      - name: Tests of this shard with coverage
+        run: yarn vitest run --coverage --shard="$SHARD/4" --reporter=default --reporter=github-actions --reporter=blob --outputFile.blob="reports/coverage-blob/blob-$SHARD-4.json" --coverage.reporter=text-summary --coverage.thresholds.100=false
+        env:
+          CI: "1"
+          SHARD: ${{ matrix.index }}
+      # The placeholder is put back by the merge job. A step that cannot do this exactly fails the leg: a blob that keeps the
+      # runner's path would merge into a wrong, lower coverage.
+      - name: Make the blob independent of the workspace path
+        shell: bash
+        env:
+          SHARD: ${{ matrix.index }}
+        run: |
+          set -eu
+          case "$GITHUB_WORKSPACE" in
+            *[!A-Za-z0-9_./-]*)
+              echo "::error title=Coverage blob::the workspace path has a character this step does not handle: $GITHUB_WORKSPACE"
+              exit 1
+              ;;
+          esac
+          blob="reports/coverage-blob/blob-$SHARD-4.json"
+          sed -i "s|${GITHUB_WORKSPACE//./\\.}|@@GITHUB_WORKSPACE@@|g" "$blob"
+          if ! grep -q '@@GITHUB_WORKSPACE@@' "$blob" || grep -qF "$GITHUB_WORKSPACE" "$blob"; then
+            echo "::error title=Coverage blob::$blob does not hold the workspace path exactly as a placeholder"
+            exit 1
+          fi
+      - name: Upload the blob report of this shard
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-blob-${{ matrix.index }}
+          path: reports/coverage-blob/blob-${{ matrix.index }}-4.json
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  # Required check: the exact name `coverage`. It merges the blob reports of the four shards and applies the thresholds of
+  # vitest.config.ts (100% for lines, functions, branches and statements, no exclusion beyond the fixed list) to the MERGED
+  # coverage; a shard that is missing, or a file that no shard covered, fails here. The job is the one branch protection waits
+  # for, so it must always run and must fail by itself: a required job that is SKIPPED counts as passing, and a job with `needs`
+  # is skipped when a needed job fails or is cancelled. `if: always()` makes it run in every case, the step after the preflight
+  # exits 1 unless every shard succeeded (`needs.coverage-shard.result`), and scripts/ci/ci-coverage-job.test.ts and
+  # scripts/ci-contract/ pin both.
+  coverage:
+    name: coverage
+    needs: coverage-shard
+    if: ${{ always() }}
+    runs-on: [self-hosted, Linux, X64]
+    # Checkout and install, then a merge of four reports that takes about a minute.
+    timeout-minutes: 15
+    steps:
+      # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Also the first look at a
+      # runner's capabilities (docs/ci-runners.md, Known unknowns): the log shows who runs here and how much room is left.
+      - name: Preflight (runner capabilities)
+        shell: bash
+        run: |
+          set -eu
+          echo "runner: $(uname -sm), user $(id -un)"
+          missing=""
+          for tool in git curl tar; do
+            command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Runner preflight::missing on this runner:$missing (docs/ci-runners.md, Known unknowns)"
+            exit 1
+          fi
+          free_mib=$(df -Pk . | awk 'NR==2 {print int($4/1024)}')
+          echo "free space in the workspace: $free_mib MiB"
+          if [ "$free_mib" -lt 4096 ]; then
+            echo "::error title=Runner preflight::only $free_mib MiB free in the workspace, 4096 needed (docs/ci-runners.md)"
+            exit 1
+          fi
+      # Nothing outside the workspace and the tool cache: Corepack, Yarn, npm, the XDG data and cache directories (Vitest's
+      # token, Biome's cache) and the temp directory (Node's compile cache, test scratch files) all live in the runner's
+      # temp directory, which the runner cleans, not in the shared home directory or /tmp.
+      - name: Keep tool state in the runner temp directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/xdg-data"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/xdg-cache"
+            echo "TMPDIR=$RUNNER_TEMP/tmp"
+          } >> "$GITHUB_ENV"
+      # Anything but success (a failed, cancelled or skipped shard) fails the job. This is the whole check: nothing after it
+      # runs when it fails, and it comes before the checkout so that a failed run does not spend minutes on an install.
+      - name: Require every shard to have passed
+        shell: bash
+        env:
+          SHARDS_RESULT: ${{ needs.coverage-shard.result }}
+        run: |
+          if [ "$SHARDS_RESULT" != "success" ]; then
+            echo "::error title=Coverage::the coverage shards ended as '$SHARDS_RESULT', not 'success': coverage is not proven"
+            exit 1
+          fi
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: |
+          prefix="$RUNNER_TEMP/npm-global"
+          npm install --global --prefix "$prefix" corepack@0.36.0
+          "$prefix/bin/corepack" enable --install-directory "$prefix/bin"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+      - name: Restore the Yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/yarn/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Install dependencies
+        run: yarn install --immutable
+      # One artifact per shard, merged into one directory (without merge-multiple each would get a folder of its own, which
+      # the merge refuses).
+      - name: Download the blob reports of the shards
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coverage-blob-*
+          merge-multiple: true
+          path: reports/coverage-blob
+      # Exactly the four blobs, by name: a missing or an extra file fails here instead of making the merged coverage look
+      # complete when a shard whose tests covered nothing of their own is missing.
+      - name: Require the blob of every shard
+        shell: bash
+        env:
+          SHARD_COUNT: "4"
+        run: |
+          set -eu
+          dir=reports/coverage-blob
+          missing=""
+          for i in $(seq 1 "$SHARD_COUNT"); do
+            [ -s "$dir/blob-$i-$SHARD_COUNT.json" ] || missing="$missing $i/$SHARD_COUNT"
+          done
+          found=$(find "$dir" -mindepth 1 | wc -l)
+          if [ -n "$missing" ] || [ "$found" -ne "$SHARD_COUNT" ]; then
+            echo "::error title=Coverage::expected the blobs of $SHARD_COUNT shards in $dir; missing:${missing:- none}; entries found: $found"
+            exit 1
+          fi
+      - name: Put the workspace path back into the blobs
+        shell: bash
+        run: |
+          set -eu
+          case "$GITHUB_WORKSPACE" in
+            *[!A-Za-z0-9_./-]*)
+              echo "::error title=Coverage blob::the workspace path has a character this step does not handle: $GITHUB_WORKSPACE"
+              exit 1
+              ;;
+          esac
+          sed -i "s|@@GITHUB_WORKSPACE@@|$GITHUB_WORKSPACE|g" reports/coverage-blob/blob-*.json
+      # The thresholds are those of vitest.config.ts: 100% on all four metrics of the merged coverage, which Vitest checks
+      # after it has read the coverage maps of the blobs. CI=1 as in `yarn coverage`.
+      - name: Merge the shard reports and enforce 100% coverage
+        run: yarn vitest run --merge-reports=reports/coverage-blob --coverage
+        env:
+          CI: "1"
       # E20-S08: the qodana job reads the lcov report (paths relative to the repository root) as its coverage input. One day
       # is enough: the job needs this one, runs in the same workflow run, and the report is rebuilt on every run.
       - name: Upload the lcov report for Qodana
@@ -268,20 +447,30 @@ jobs:
   # that would publish the database on a fixed port (5432) of the shared host. scripts/ci/postgres.ts starts the pinned
   # image on a random free port above 32768, bound to 127.0.0.1 only, with a per-run random password (masked) and a
   # per-run container name, and exports DATABASE_URL for the next step. The Vitest globalSetup then creates a throw-away
-  # `cla_test_<hex>` database (the postgres user may), runs the whole suite in it (one file at a time, one connection
+  # `cla_test_<hex>` database (the postgres user may), runs the tests in it (one file at a time, one connection
   # per file) and drops it afterwards. The last step removes the container even when the job failed or was cancelled.
   # Coverage is measured by the `coverage` job, not here.
   # E20-S03: the suite runs with REQUIRE_REAL_POSTGRES=1, so a test that needs a real server (realPostgresOnly in
   # src/server/adapters/db/test-support.ts) fails here instead of being skipped when the database is missing, and with
   # CLA_ROLE_TESTS=1, which lets the tests that create or alter cluster-wide roles run: the server is this job's own
   # disposable container, so no other database is touched. The server version goes to the job summary before the tests.
-  # The timeout is 60 minutes, the most the runner guard allows besides `mutation`: the suite (17 000 tests, more with every
-  # epic) runs one file at a time on a real server. It takes 20 minutes on `srv1-gio-home-github-ci` and was cancelled at 45
-  # on `app1-gio-home-github-ci` and `Hetzner-github-ci` while its tests were still passing (2026-11-04).
+  # Four shards (`vitest run --shard=i/4`, a stable quarter of the test files each), `fail-fast: false`, each with a
+  # PostgreSQL container of its own: the whole suite (one file at a time on a real server) took 20 minutes on
+  # `srv1-gio-home-github-ci` for 17 000 tests (2026-11-04) and was cancelled at 60 on `app1-gio-home-github-ci`, about four
+  # times slower, with 26 000 tests (2026-11-06, pull request 41), so a quarter of it is meant to stay near 35 minutes there. The timeout stays 60, the most
+  # the runner guard allows besides `mutation`. Two shards on one host at once do not collide: the container name is
+  # `cla-pg-<run id>-<attempt>-<8 random hex digits>` (a taken name makes `start` fail and never touches the other
+  # container), the port is a random free one that is probed and retried, and the database lives inside the container. The
+  # name of a leg is `postgres (i/4)`; none of them is a required check.
   postgres:
-    name: postgres
+    name: postgres (${{ matrix.index }}/4)
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
+    strategy:
+      # One failed shard says nothing about the others.
+      fail-fast: false
+      matrix:
+        index: [1, 2, 3, 4]
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Also the first look at a
       # runner's capabilities (docs/ci-runners.md, Known unknowns): the log shows who runs here and how much room is left.
@@ -364,11 +553,12 @@ jobs:
             echo "$version"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Tests against PostgreSQL 18
-        run: yarn test
+      - name: Tests against PostgreSQL 18 (this shard)
+        run: yarn test --shard="$SHARD/4"
         env:
           REQUIRE_REAL_POSTGRES: "1"
           CLA_ROLE_TESTS: "1"
+          SHARD: ${{ matrix.index }}
       # CLA_PG_CONTAINER is exported by the start step before docker runs, so a failed start is cleaned up as well, and
       # a job that never got that far (a failed checkout) skips this step.
       - name: Remove the PostgreSQL container
