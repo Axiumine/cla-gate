@@ -15,7 +15,7 @@
   "scripts": {
     "postinstall": "node scripts/dev/install-hooks.ts",
     "dev": "node scripts/dev/db.ts run app -- node scripts/dev/dev.ts",
-    "build": "tsc -b tsconfig.server.json tsconfig.web.json && vite build",
+    "build": "tsc -b tsconfig.server.json tsconfig.web.build.json && vite build",
     "start": "node dist/server/main.js",
     "typecheck": "tsc -b",
     "type-coverage": "type-coverage --strict --at-least 100 -p tsconfig.server.json && type-coverage --strict --at-least 100 -p tsconfig.server.test.json && type-coverage --strict --at-least 100 -p tsconfig.web.json && type-coverage --strict --at-least 100 -p tsconfig.scripts.json && type-coverage --strict --at-least 100 -p tsconfig.e2e.json && type-coverage --strict --at-least 100 -p tsconfig.node.json",

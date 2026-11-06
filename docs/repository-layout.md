@@ -354,8 +354,9 @@ Items marked (planned) do not exist yet.
 ├── .nvmrc  mise.toml  .yarnrc.yml  package.json  yarn.lock  .gitattributes
 ├── tsconfig.json                solution-style root (files: [])
 ├── tsconfig.base.json  tsconfig.server.json  tsconfig.server.test.json  tsconfig.web.json
+├── tsconfig.web.build.json
 ├── tsconfig.scripts.json  tsconfig.e2e.json  tsconfig.node.json
 ├── README.md  CLAUDE.md  CONTRIBUTING.md  CHANGELOG.md
 ```
 
-The server compiles with `tsconfig.server.json` (composite, emits `dist/`, excludes tests, test helpers and the PGlite adapter). `tsconfig.server.test.json` type-checks the same sources plus every test, and ESLint and type-coverage run over both.
+The server compiles with `tsconfig.server.json` (composite, emits `dist/`, excludes tests, test helpers and the PGlite adapter). `tsconfig.server.test.json` type-checks the same sources plus every test, and ESLint and type-coverage run over both. `tsconfig.web.build.json` is `tsconfig.web.json` without tests and test helpers: it is what `yarn build` and the image build compile.

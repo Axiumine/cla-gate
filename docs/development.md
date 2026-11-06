@@ -50,7 +50,7 @@ The `State` column says whether the script exists now or is deferred until its t
 | Script | Runs | State |
 |---|---|---|
 | `yarn dev` | `scripts/dev/dev.ts` as the `cla_app` role of `docker-compose.dev.yml` on the port `yarn db:up` chose (via `scripts/dev/db.ts run`): the Fastify dev server (`node --watch src/server/main.ts`) and the Vite dev server, both on random free loopback ports above 32768 (never 3000 or 5173). Vite serves the app and proxies `/api`, `/healthz` and `/readyz` to Fastify; it also serves `/theme-init.js` through its plugin, so the page head is the same as in the build. Stops both on SIGINT or SIGTERM and exits non-zero when either dies | exists |
-| `yarn build` | `tsc -b tsconfig.server.json tsconfig.web.json` (the server into `dist/server`, the web project type-checked), then `vite build` into `dist/web`. `yarn typecheck` is the whole solution | exists |
+| `yarn build` | `tsc -b tsconfig.server.json tsconfig.web.build.json` (the server into `dist/server`, the web project type-checked without its tests and test helpers: `tsconfig.web.build.json`, because the image build context has no `e2e/`), then `vite build` into `dist/web`. `yarn typecheck` is the whole solution | exists |
 | `yarn start` | `node dist/server/main.js`; after `yarn build` it serves the app at `/` (`WEB_ROOT` overrides the directory); `yarn dev` still serves it from Vite | exists |
 | `yarn typecheck` | `tsc -b` | exists |
 | `yarn type-coverage` | `type-coverage --strict --at-least 100` once per tsconfig project (`-p`), including e2e and node-config projects | exists (server, server.test, web, scripts, e2e and node-config projects) |
