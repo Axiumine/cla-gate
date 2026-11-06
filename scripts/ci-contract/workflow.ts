@@ -28,7 +28,7 @@ const jobsSchema = z.object({
     }),
   ),
 });
-const EXPRESSION = /^\$\{\{(?<inner>[^}]*)\}\}$/;
+const EXPRESSION = /^\$\{\{(?<inner>[^}]*)}}$/;
 
 /** The workflow files among a directory listing (`.yml` and `.yaml`, as the runner guard reads them), in code point order. */
 export function workflowFileNames(listing: readonly string[]): string[] {
