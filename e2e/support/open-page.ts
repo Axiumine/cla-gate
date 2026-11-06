@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import type { Browser, Page } from '@playwright/test';
-import { ANONYMOUS_REFUSALS, type Refusal } from '../../scripts/e2e/console-rules.ts';
+import { ANONYMOUS_REFUSALS, type Refusal, SIGNED_IN_REFUSALS } from '../../scripts/e2e/console-rules.ts';
 import { expectQuiet } from './quiet.ts';
 import { watchPage } from './watch.ts';
 
@@ -15,7 +15,7 @@ export interface Visitor {
   /** The value of the session cookie, or none for a visitor who is not logged in. */
   readonly cookie?: string;
   readonly scheme?: Scheme;
-  /** The answers of 4xx or 5xx the page is expected to get; the browser logs each as a console error. A visitor with no cookie always expects the two of {@link ANONYMOUS_REFUSALS}. */
+  /** The answers of 4xx or 5xx the page is expected to get; the browser logs each as a console error. A visitor with no cookie always expects the two of {@link ANONYMOUS_REFUSALS}, one with a cookie the operator probe of {@link SIGNED_IN_REFUSALS}. */
   readonly refusals?: readonly Refusal[];
 }
 
@@ -69,8 +69,8 @@ export async function withOpenPage(
       ]);
     }
     const page = await context.newPage();
-    const anonymous = visitor.cookie === undefined ? ANONYMOUS_REFUSALS : [];
-    watches.push(await watchPage(page, [...anonymous, ...(visitor.refusals ?? [])]));
+    const known = visitor.cookie === undefined ? ANONYMOUS_REFUSALS : SIGNED_IN_REFUSALS;
+    watches.push(await watchPage(page, [...known, ...(visitor.refusals ?? [])]));
     return page;
   });
   await Promise.all(opened.map((context) => context.close()));

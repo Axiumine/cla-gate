@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { z } from 'zod';
+import { defineRoute } from './contract.ts';
 import { githubIdSchema } from './github-id.ts';
 
 /** Where the operator lists the installations of the instance (E11-S08). The route, its tests and the operator screen (E18) share it. */
@@ -44,3 +45,14 @@ const operatorInstallationSchema = z.object({
 
 /** `GET /api/operator/installations` (E11-S08): every installation the instance knows, oldest GitHub installation first. */
 export const operatorInstallationsResponseSchema = z.object({ installations: z.array(operatorInstallationSchema) });
+
+/**
+ * `GET /api/operator/installations` (E11-S08), as the operator screen of E18-S13 calls it: the method, the path and the schema of
+ * the answer are those the server registers. Anyone who is not the operator gets the `404 not_found` of a route that does not exist
+ * (the client reads it with the standard error body), a visitor with no session a `401`.
+ */
+export const operatorInstallationsRoute = defineRoute({
+  method: 'GET',
+  path: OPERATOR_INSTALLATIONS_PATH,
+  responses: { 200: operatorInstallationsResponseSchema },
+});

@@ -186,6 +186,10 @@ export const ROUTES_WITHOUT_SCREEN: ReadonlyMap<string, string> = new Map([
   ],
   ['/setup/callback', 'the return from GitHub of the first-run setup (E19-S07), reachable only in setup mode'],
   [
+    '/operator/installations',
+    'the operator screen (E18-S13) is for the person who operates the instance, and the application under test has no operator (no GitHub App and no OPERATOR_GITHUB_IDS), so it is the not-found page there; its screen is held by the unit tests and the route coverage guard',
+  ],
+  [
     '/installations/$installationId/',
     'the home of a tenant is the repository list of `/installations/$installationId`, which has a screen',
   ],

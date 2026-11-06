@@ -52,6 +52,7 @@ test('the access of every route: the pages of a visitor (front page, failed logi
     '/installations/$installationId/signatures': 'authenticated',
     '/installations/$installationId/pending': 'authenticated',
     '/installations/$installationId/audit': 'authenticated',
+    '/operator/installations': 'authenticated',
   });
 });
 

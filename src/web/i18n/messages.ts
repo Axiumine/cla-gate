@@ -4,6 +4,7 @@ import { allowlistMessages } from './messages-allowlist.ts';
 import { auditMessages } from './messages-audit.ts';
 import { documentMessages } from './messages-documents.ts';
 import { historyMessages } from './messages-history.ts';
+import { operatorMessages } from './messages-operator.ts';
 import { pendingMessages } from './messages-pending.ts';
 import { repositoryMessages } from './messages-repositories.ts';
 import { signatureMessages } from './messages-signatures.ts';
@@ -72,6 +73,7 @@ export const messages = {
   ...auditMessages,
   ...documentMessages,
   ...historyMessages,
+  ...operatorMessages,
   ...pendingMessages,
   ...repositoryMessages,
   ...signatureMessages,
@@ -323,6 +325,7 @@ export const messages = {
   'states.retryIn.other': 'You can try again in {count} seconds.',
   'status.active': 'Active',
   'status.cancelled': 'Cancelled',
+  'status.deleted': 'Deleted',
   'status.disabled': 'Disabled',
   'status.draft': 'Draft',
   'status.enabled': 'Enabled',
@@ -331,6 +334,7 @@ export const messages = {
   'status.outdated': 'Outdated',
   'status.passed': 'Passed',
   'status.pending': 'Pending',
+  'status.rejected': 'Rejected',
   'status.repo_admin': 'Repo admin',
   'status.revoked': 'Revoked',
   'status.suspended': 'Suspended',

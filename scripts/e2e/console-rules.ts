@@ -30,6 +30,12 @@ export const ANONYMOUS_REFUSALS: readonly Refusal[] = [
   { status: 401, path: '/api/sign', within: true },
 ];
 
+/**
+ * The one request every signed-in page makes that most people are refused: the user menu asks the operator endpoint whether the person
+ * operates the instance (E18-S13), which answers `404 not_found` to everyone else. The page treats the 404 as the answer "no".
+ */
+export const SIGNED_IN_REFUSALS: readonly Refusal[] = [{ status: 404, path: '/api/operator/installations' }];
+
 function covers(refusal: Refusal, status: number, pathname: string): boolean {
   const same = pathname === refusal.path;
   const below = refusal.within === true && pathname.startsWith(`${refusal.path}/`);

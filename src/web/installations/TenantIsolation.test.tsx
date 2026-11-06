@@ -96,7 +96,7 @@ test("every query of a tenant is kept under ['installation', its id]; the list o
       .map((key) => key[0])
       .filter((first) => first !== 'installation' && first !== 'installations')
       .toSorted((a, b) => String(a).localeCompare(String(b))),
-  ).toEqual(['auth', 'meta']);
+  ).toEqual(['auth', 'meta', 'operator']);
 });
 
 test('the data of A is gone from the cache of the tenant when the cache of A is dropped: it is one prefix', async () => {

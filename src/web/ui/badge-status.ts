@@ -11,6 +11,7 @@ export type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
 export const BADGE_STATUSES = [
   'active',
   'cancelled',
+  'deleted',
   'disabled',
   'draft',
   'enabled',
@@ -19,6 +20,7 @@ export const BADGE_STATUSES = [
   'outdated',
   'passed',
   'pending',
+  'rejected',
   'repo_admin',
   'revoked',
   'suspended',
@@ -30,6 +32,7 @@ export type BadgeStatus = (typeof BADGE_STATUSES)[number];
 export const BADGE_VARIANTS: Record<BadgeStatus, BadgeVariant> = {
   active: 'success',
   cancelled: 'neutral',
+  deleted: 'neutral',
   disabled: 'neutral',
   draft: 'info',
   enabled: 'success',
@@ -38,6 +41,7 @@ export const BADGE_VARIANTS: Record<BadgeStatus, BadgeVariant> = {
   outdated: 'warning',
   passed: 'success',
   pending: 'info',
+  rejected: 'danger',
   repo_admin: 'neutral',
   revoked: 'danger',
   suspended: 'warning',

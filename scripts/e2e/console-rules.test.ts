@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
-import { ANONYMOUS_REFUSALS, isExpectedRefusal, type Refusal } from './console-rules.ts';
+import { ANONYMOUS_REFUSALS, isExpectedRefusal, type Refusal, SIGNED_IN_REFUSALS } from './console-rules.ts';
 
 const line = (status: number, reason: string): string =>
   `Failed to load resource: the server responded with a status of ${String(status)} (${reason})`;
@@ -45,4 +45,19 @@ test('a refusal a spec names covers the path and everything below it, with that 
 
 test('nothing is expected when the spec names nothing', () => {
   expect(isExpectedRefusal(REFUSED, '/api/auth/session', [])).toBe(false);
+});
+
+test('a signed-in page expects the 404 of the operator probe of the user menu, and nothing else', () => {
+  const answer = line(404, 'Not Found');
+  expect(isExpectedRefusal(answer, 'http://127.0.0.1:1/api/operator/installations', SIGNED_IN_REFUSALS)).toBe(true);
+  expect(isExpectedRefusal(answer, 'http://127.0.0.1:1/api/operator/installations/1', SIGNED_IN_REFUSALS)).toBe(false);
+  expect(isExpectedRefusal(answer, 'http://127.0.0.1:1/api/installations/9003', SIGNED_IN_REFUSALS)).toBe(false);
+  expect(isExpectedRefusal(line(500, 'Internal Server Error'), '/api/operator/installations', SIGNED_IN_REFUSALS)).toBe(
+    false,
+  );
+  expect(isExpectedRefusal(line(401, 'Unauthorized'), '/api/operator/installations', SIGNED_IN_REFUSALS)).toBe(false);
+});
+
+test('a visitor with no session does not expect the operator probe: the menu does not ask without a session', () => {
+  expect(isExpectedRefusal(line(404, 'Not Found'), '/api/operator/installations', ANONYMOUS_REFUSALS)).toBe(false);
 });

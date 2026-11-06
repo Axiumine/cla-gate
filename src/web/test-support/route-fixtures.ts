@@ -7,6 +7,7 @@ import { serveDocuments } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { globex, serveTenants, summary, tenantOf } from '../installations/test-support.ts';
 import { item, serveOnePage } from '../me/test-support.ts';
+import { installationOf, operatorList, rejectedOf, serveOperator } from '../operator/test-support.ts';
 import { servePending } from '../pending/test-support.ts';
 import { serveRepositories } from '../repositories/test-support.ts';
 import { CODE, STATE, serveSetup } from '../setup/test-support.ts';
@@ -190,6 +191,16 @@ export const ROUTE_FIXTURES: ReadonlyMap<string, RouteFixture> = new Map<string,
         serveAudit();
       },
       ready: table(messages['audit.caption']),
+    },
+  ],
+  [
+    '/operator/installations',
+    {
+      address: '/operator/installations',
+      serve: () => {
+        serveOperator(operatorList([installationOf(), rejectedOf()]));
+      },
+      ready: table(messages['operator.caption']),
     },
   ],
 ]);

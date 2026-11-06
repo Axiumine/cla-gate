@@ -20,6 +20,7 @@ import { tenantPage } from './installations/tenant-page.tsx';
 import { AppShell } from './layout/AppShell.tsx';
 import { MySignaturesPage } from './me/MySignaturesPage.tsx';
 import { mySignaturesSearchSchema } from './me/signatures-search.ts';
+import { OperatorPage } from './operator/OperatorPage.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
 import { pendingSearchSchema } from './pending/pending-search.ts';
@@ -249,6 +250,15 @@ const auditRoute = createRoute({
   component: AuditRoute,
 });
 
+// The installations of the instance (E18-S13), for its operator: `authenticated` like every screen behind a login; the server answers `404` to
+// everyone who is not the operator, and the page is then the not-found page. The operator is no tenant role and opens no tenant.
+const operatorInstallationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/operator/installations',
+  ...withAccess('authenticated', { title: 'operator.title' }),
+  component: OperatorPage,
+});
+
 // type-coverage:ignore-next-line -- TanStack Router's route tree type holds any in its own definition (RouteWithChildren)
 const routeTree = rootRoute.addChildren([
   landingRoute,
@@ -269,6 +279,7 @@ const routeTree = rootRoute.addChildren([
     pendingRoute,
     auditRoute,
   ]),
+  operatorInstallationsRoute,
 ]);
 
 /**
