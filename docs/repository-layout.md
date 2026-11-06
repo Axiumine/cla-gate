@@ -215,11 +215,18 @@ Items marked (planned) do not exist yet.
 │                                signature-export.ts, erasure.ts and data-export.ts (paths, shapes and limits of the compliance routes); E14: installations.ts,
 │                                repository-document.ts, repository-enabled.ts and allowlist.ts (paths, queries and answers))
 │                                E15: signature-search.ts, signature-revoke.ts, signature-invalidate.ts, commit-override.ts and pending-prs.ts (paths, queries, bodies, pages)
+│                                E18: the route descriptors of the screens, built on the paths and schemas above so that the SPA and the server cannot drift apart:
+│                                cla-routes.ts, repository-routes.ts, allowlist-routes.ts, signature-routes.ts, signature-invalidate-routes.ts, pending-routes.ts,
+│                                audit-log-routes.ts and erasure-routes.ts
 ├── src/web/                     the React 19 SPA (Vite 8, Tailwind CSS 4); built to dist/web and served by the server; tests co-located
 │   ├── main.tsx  zod-config.ts  index.html
 │   │                            the entry (kept logic-free; zod-config.ts turns off Zod's eval probe and is its first import) and the page
 │   ├── App.tsx  providers.tsx  router.tsx  route-access.ts
 │   │                            the app, the providers (I18nProvider outermost), the code-based routes and the access each declares (`withAccess`)
+│   ├── root-route.ts  tenant-routes.tsx  signed-in-routes.tsx
+│   │                            the route tree in three parts, so that `router.tsx` stays under the fta cap: the root and the public routes, the tenant frame
+│   │                            (`/installations/$installationId/...`, each page through `tenantPage`) and the routes of a signed-in person outside it (the settings
+│   │                            of a repository, the own signatures, the list of installations, the operator's list)
 │   ├── public/                  files copied as they are to the root of dist/web (favicon.svg)
 │   ├── api/                     the typed client over the shared route descriptors: client.ts (`createApiClient`), exchange.ts, request.ts,
 │   │                            response.ts, errors.ts (ApiError, ContractError, NetworkError), retry-after.ts, query-client.ts, index.ts;
@@ -227,10 +234,38 @@ Items marked (planned) do not exist yet.
 │   ├── auth/                    session.ts (the query ['auth','session']), auth.ts, guard.ts, hooks.ts, navigate.ts, return-to.ts, use-logout.ts,
 │   │                            UserMenu, Avatar, LoginLink, LogoutButton, SessionEndedBanner, index.ts
 │   ├── i18n/                    messages.ts (the English catalog), translate.ts (`t`, `t.plural`), interpolate.ts, format.ts (`formatUtc`),
-│   │                            context.ts, I18nProvider.tsx, Timestamp.tsx, index.ts; test-support.ts is test only
+│   │                            context.ts, I18nProvider.tsx, Timestamp.tsx, index.ts; messages-<screen>.ts hold the sentences of one screen (spread into messages.ts); test-support.ts is test only
 │   ├── layout/                  AppShell (skip link, header, main landmark, live region), PrimaryNav, nav-items.ts, SourceFooter (the AGPL
-│   │                            section 13 offer), use-page.ts, use-focus-on-navigation.ts
-│   ├── meta/                    meta.ts (the `GET /api/meta` query) and source-link.ts (an https link only)
+│   │                            section 13 offer), use-page.ts, page-subject.ts (`usePageSubject`), use-focus-on-navigation.ts
+│   ├── meta/                    meta.ts (the `GET /api/meta` query), source-link.ts (an https link only) and install-link.ts
+│   ├── components/markdown/     
+│   │                            the one place a CLA text is drawn (E18-S01): MarkdownView over `renderClaTree` and `drawTree` (hast-react.tsx, heading-level.ts);
+│   │                            a text over 4096 characters is rendered in a module Web Worker with a 4 s budget (render-limits.ts, render-protocol.ts, render-worker.ts,
+│   │                            start-render-worker.ts, use-budgeted-tree.ts) and falls back to the source in a `<pre>`
+│   ├── sign/                    
+│   │                            the contributor's page `/sign/$githubRepoId` (E18-S01, S02): SignPage, sign-situation.ts (the states), ConsentForm and its
+│   │                            fields, and a panel for each of login, already signed, resign, stale text, blocked and no CLA; Confirmation, Fingerprint
+│   ├── me/                      
+│   │                            the own signatures `/me/signatures` (E18-S03): page, table, status cell, notice of what maintainers see, data download, search
+│   ├── installations/           
+│   │                            the list of installations, the tenant frame and the switcher (E18-S04): TenantLayout, TenantNav (tenant-sections.ts),
+│   │                            TenantSwitcher (use-dismiss.ts), SuspendedBanner, tenant-page.tsx (`tenantPage`), TenantOverview, installation-queries.ts
+│   ├── documents/               
+│   │                            the CLA documents (E18-S05, S11, S14): list, editor with draft and preview, publish dialog and its outcomes, history/ (versions,
+│   │                            comparison, rollback), invalidate/ (admin-run invalidation), use-single-flight.ts (one request at a time per form)
+│   ├── allowlist/               
+│   │                            the allowlist manager (E18-S06): scope select, entries, add and remove dialogs
+│   ├── signatures/              
+│   │                            the signatures table of a maintainer (E18-S07): search, filters, revoke, CSV export; erase/ (admin-run erasure, E18-S14)
+│   ├── pending/                 
+│   │                            pending pull requests and commit overrides (E18-S08)
+│   ├── audit/                   
+│   │                            the audit log viewer (E18-S09): filters held in the address, table, metadata cell, audit-actions.ts (one label per action)
+│   ├── repositories/            
+│   │                            the repository list and its actions (E18-S10): enable, disable, attach a CLA, the link to the settings of E22-S03;
+│   │                            RepositoryGate (a screen about one repository is drawn only after the installation in the path has claimed it)
+│   ├── operator/                
+│   │                            the operator's list of installations `/operator/installations` (E18-S13) and OperatorLink
 │   ├── pages/                   LandingPage, LoginFailedPage
 │   ├── setup/                   the first-run setup page (E19-S07): SetupPage (unlock, App form, credentials), SetupCallbackPage, SetupGate,
 │   │                            setup-api.ts, github-links.ts (only github.com addresses), credential-items.ts, download-file.ts
@@ -243,10 +278,12 @@ Items marked (planned) do not exist yet.
 │   ├── ui/                      the primitives, the only place that imports radix-ui: Button, Field, TextInput, Textarea, Checkbox, RadioGroup,
 │   │                            Select, Tabs, Badge (badge-status.ts), StatusMessage, Heading, Dialog, AlertDialog (AlertDialogActions),
 │   │                            DataTable (DataTableHeading, data-table-columns), CursorPager (cursor-trail, use-cursor-trail), overlay.tsx,
-│   │                            use-keep-focus, UserText and user-text.ts (the safe text step), field-context, index.ts
+│   │                            use-keep-focus, UserText and user-text.ts (the safe text step), field-context, index.ts; the parts the paged screens share (PagedResults,
+│   │                            PagedListing, ResultsPager, use-paged-list, use-held-dialog, use-vanished), DebouncedSearch and search-text.ts
 │   └── test-support/            test only: render.tsx, router.tsx (`TestRoutes`), app-routes.tsx, routes.ts, server.ts (MSW), session.ts,
 │                                location.ts, pager.tsx, a11y.ts (axe), hostile.ts, layout.ts, css.ts, contrast.ts, colour-literals.ts,
-│                                theme.ts, tailwind.ts and vitest.setup.ts
+│                                theme.ts, tailwind.ts and vitest.setup.ts; route-fixtures.ts (one fixture per route: route-coverage.test.tsx fails for a route without),
+│                                default-prevented.ts (`watchDefault`: the default action of an event, seen at the document) and fake-render-worker.ts
 ├── migrations/                  forward-only SQL, never edited after merge (001 to 005: initial schema, audit metadata allowlist, installation and repository state, account type Other, session verified emails; 007: the ledger of org admins; 008: the evaluation result `cancelled`; 9: `erase_signer_pii` per installation; 10: `purge_signer_network_metadata`; 11: the drafts table `cla_drafts`; 12: `allowlist_entries.login_snapshot`; 13: `erase_signer_pii` reaches an allowlisted account that never signed; 14: `signer_pii.ip_address` and `user_agent`; 15: the index `signatures_user_signed_at_idx`; 16: `pr_evaluations.pr_state`; 17: the index `signer_pii_login_lower_idx`; 18: the table `merge_group_evaluations`; 19: `repositories.public_verification`; the numbers 006 and later go to the epics in order of merge)
 ├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
@@ -277,8 +314,8 @@ Items marked (planned) do not exist yet.
 │                                holds its logic and the tests of the Semgrep wiring
 ├── scripts/trivy-gate/          Trivy wiring: trivy.yaml, .trivyignore expiry, version pin, hook and CI job tests
 ├── scripts/mutation-gate/       the Stryker shards (shards.ts), the runner behind `yarn mutate` (mutate*.ts), the check that deletes an unreadable incremental file (check-incremental.ts, incremental-file.ts), the skip decision of the nightly run (decide-skip.ts, skip-cli.ts, skip-decision.ts, skip-github.ts, skip-http.ts), and the tests of the configs, the shards and the `mutation` job
-├── scripts/e2e/  scripts/e2e-pin.test.ts   Playwright settings, container guards, spec rules; the version and digest pin test
-├── scripts/leaks/               memlab wrapper logic (runner, outcome, exit guard, fixture server) and tests
+├── scripts/e2e/  scripts/e2e-pin.test.ts   Playwright settings, container guards, spec rules, console-rules.ts (the browser lines that are not errors of the page); the version and digest pin test
+├── scripts/leaks/               memlab wrapper logic (runner, outcome, exit guard, fixture server), app-server.ts (serves dist/web with the made-up API of app-answers.ts) and tests
 ├── scripts/qodana-gate/         tests of qodana.yaml, the token gate of the `qodana` job and the exclude-comment rule
 ├── scripts/ci-contract.test.ts  the CI contract test; scripts/ci-contract/ holds its parts (uses, workflow, required,
 │                                package-scripts, dependabot, test-support)
@@ -299,8 +336,9 @@ Items marked (planned) do not exist yet.
 │                                serving-wiring, theme-wiring, theme-init-build, zod-jitless and biome
 ├── .local/                      (git-ignored) the port that yarn db:up chose, and the passwords of the test role
 ├── types/                       ambient .d.ts for tools without types (eslint-plugin-no-unsanitized)
-├── e2e/                         Playwright specs (smoke, canary), global-setup.ts, fixtures and visual baselines in __screenshots__/
-├── tests/leaks/                 memlab scenarios, the control fixtures and the @memlab/api wrapper (run.ts)
+├── e2e/                         Playwright specs (smoke, canary, flow, axe, screens.visual), global-setup.ts, fixtures and visual baselines in __screenshots__/;
+│                                support/ (screens.ts, the watched pages, axe), support/steps/ (the steps of flow.spec.ts) and support/world/ (the rows the specs start from)
+├── tests/leaks/                 memlab scenarios (scenarios/: dialog, tenant switch, two navigations), support/, the control fixtures and the @memlab/api wrapper (run.ts)
 ├── tests/smoke/                 the scenarios of the container smoke test (boot, compose files, hardening, roles, configured mode, failure, backup, TLS)
 ├── LICENSE                      AGPL-3.0-only
 ├── rules/                       Semgrep rules cache, created by `yarn semgrep:rules` (git-ignored, never committed)

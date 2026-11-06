@@ -4,7 +4,7 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 
 **Licence: AGPL-3.0-only**; every source file starts with `// SPDX-License-Identifier: AGPL-3.0-only`. AGPL section 13: the web UI offers every network user the corresponding source (a visible dashboard footer link to the exact repository and commit).
 
-**Status:** server foundation built, product not built, no placeholders ([details](docs/development.md#status)).
+**Status:** server and screens built (E18-S12 open), no placeholders ([details](docs/development.md#status)).
 
 ## Where things are
 
