@@ -8,6 +8,7 @@ import { parseCsv } from '../../domain/csv-fixture/test-support.ts';
 import { CORPORATE_EXPORT_BATCH_SIZE, openCorporateExport } from './corporate-export.ts';
 import {
   corporationOf,
+  EXPORTER,
   runCorporateExport,
   seedUserApprovals,
   signFor,
@@ -115,7 +116,10 @@ test('the batches are read in one read-only repeatable read transaction', async 
 test('a batch that fails destroys the stream after the rows already sent and gives the connection back', async () => {
   const { db, scope } = await world(2500);
   probe.failOnBatch = 2;
-  const stream = await openCorporateExport(db, scope, 'approvals', () => undefined);
+  const stream = await openCorporateExport(db, scope, 'approvals', {
+    actor: EXPORTER,
+    onReleaseError: () => undefined,
+  });
   const received: Buffer[] = [];
   stream.on('data', (chunk: unknown) => {
     received.push(z.instanceof(Buffer).parse(chunk));
@@ -132,7 +136,10 @@ test('a batch that fails destroys the stream after the rows already sent and giv
 
 test('a reader that goes away after the first chunk leaves the connection free', async () => {
   const { db, scope } = await world(2500);
-  const stream = await openCorporateExport(db, scope, 'approvals', () => undefined);
+  const stream = await openCorporateExport(db, scope, 'approvals', {
+    actor: EXPORTER,
+    onReleaseError: () => undefined,
+  });
   const first = await new Promise<unknown>((resolve) => {
     stream.once('data', resolve);
   });
@@ -144,7 +151,10 @@ test('a reader that goes away after the first chunk leaves the connection free',
 
 test('a stream destroyed before anything was read still gives the connection back', async () => {
   const { db, scope } = await world(5);
-  const stream = await openCorporateExport(db, scope, 'approvals', () => undefined);
+  const stream = await openCorporateExport(db, scope, 'approvals', {
+    actor: EXPORTER,
+    onReleaseError: () => undefined,
+  });
   stream.destroy();
   expect(await db.selectFrom('corporate_approvals').select('id').limit(1).execute()).toHaveLength(1);
   expect(probe.batches).toEqual([]);

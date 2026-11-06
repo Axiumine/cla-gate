@@ -7,6 +7,7 @@ import { CORPORATE_AGREEMENTS_CSV_PATH, CORPORATE_APPROVALS_CSV_PATH } from '../
 import { type CorporateExportKind, openCorporateExport } from '../../services/export/corporate-export.ts';
 import type { Clock } from '../../services/ports/clock.ts';
 import type { Database } from '../db/schema.ts';
+import { requireAuth } from './auth-request.ts';
 import { setAttachment } from './csv-attachment.ts';
 import { setNoStore } from './no-store.ts';
 import { RATE_LIMITS, userRateLimit } from './rate-limit.ts';
@@ -55,12 +56,10 @@ export const corporateExportRoutes: FastifyPluginCallbackZod<CorporateExportRout
       async (request, reply) => {
         parseInput(noQuery, request.query);
         // nosemgrep: ajinabraham.njsscan.xss.xss_node.express_xss -- the answer is a text/csv attachment and never HTML, nosniff is set by helmet, and domain/csv.ts guards every cell (E21-S05)
-        const file = await openCorporateExport(
-          db,
-          requireTenant(request),
-          kind,
-          logReleaseFailure(request.log, 'corporate_export_release_failed'),
-        );
+        const file = await openCorporateExport(db, requireTenant(request), kind, {
+          actor: requireAuth(request).user.githubId,
+          onReleaseError: logReleaseFailure(request.log, 'corporate_export_release_failed'),
+        });
         setNoStore(reply);
         setAttachment(reply, fileNameOf(kind, clock));
         // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write -- the answer is a text/csv attachment and never HTML, nosniff is set by helmet, and domain/csv.ts guards every cell (E21-S05)

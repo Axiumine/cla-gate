@@ -271,6 +271,12 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { state: 'revoked', row_count: 1001 },
     },
   ],
+  'services/export/corporate-export-record.ts#corporate_agreements.exported|corporate_approvals.exported': [
+    { action: 'corporate_agreements.exported', metadata: { row_count: 0 } },
+    { action: 'corporate_agreements.exported', metadata: { row_count: 40 } },
+    { action: 'corporate_approvals.exported', metadata: { row_count: 0 } },
+    { action: 'corporate_approvals.exported', metadata: { row_count: 2500 } },
+  ],
   'services/export/own-data.ts#data_export.created': [
     { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 0 } },
     { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 3 } },

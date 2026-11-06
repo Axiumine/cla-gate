@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { buffer } from 'node:stream/consumers';
 import { type Kysely, sql } from 'kysely';
+import { type GithubId, parseGithubId } from '../../../../shared/github-id.ts';
 import {
   type Corporation,
   insertApprovalRow,
@@ -25,14 +26,21 @@ export interface CorporateExportRun {
   readonly releaseErrors: readonly unknown[];
 }
 
-/** Opens the export of `kind` for the tenant and reads it to the end. */
+/** The person who exports in the tests, unless a test names another. */
+export const EXPORTER = parseGithubId(9999);
+
+/** Opens the export of `kind` for the tenant, as `actor`, and reads it to the end. */
 export async function runCorporateExport(
   db: Kysely<Database>,
   scope: TenantScope,
   kind: CorporateExportKind,
+  actor: GithubId = EXPORTER,
 ): Promise<CorporateExportRun> {
   const releaseErrors: unknown[] = [];
-  const stream = await openCorporateExport(db, scope, kind, releaseErrors.push.bind(releaseErrors));
+  const stream = await openCorporateExport(db, scope, kind, {
+    actor,
+    onReleaseError: releaseErrors.push.bind(releaseErrors),
+  });
   const text = (await buffer(stream)).toString('utf8');
   // The snapshot is committed when the stream closes, which is just after the last byte was read.
   await new Promise((resolve) => setImmediate(resolve));

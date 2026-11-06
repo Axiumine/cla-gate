@@ -75,6 +75,10 @@ export const AUDIT_ACTIONS = [
   // manager approved) matched, so a `user` approval was derived for them. The subject is the new approval; the metadata holds `kind`
   // `user`, the numeric GitHub id of the employee, the signature of the agreement and no login, address, domain or company.
   'corporate_approval.derived',
+  // Added by E21: an org admin downloaded the file of the corporate agreements or the file of the approvals of a tenant, as the export of the
+  // signatures is recorded. The row is committed before the first byte; the metadata holds the number of rows and nothing from the file.
+  'corporate_agreements.exported',
+  'corporate_approvals.exported',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import type { Database } from '../../adapters/db/schema.ts';
 import type { TenantScope } from '../../adapters/db/tenant-scope.ts';
 import type { KeysetPage } from './signature-queries.ts';
@@ -68,3 +68,23 @@ export function approvalExportBatch(db: Kysely<Database>, scope: TenantScope, pa
 
 /** One row of {@link approvalExportBatch}. */
 export type ApprovalExportRow = Awaited<ReturnType<typeof approvalExportBatch>>[number];
+
+/** How many agreements the tenant has: what the file of the agreements holds, as the reading `db` sees them. */
+export async function countAgreementRows(db: Kysely<Database>, scope: TenantScope): Promise<number> {
+  const { count } = await db
+    .selectFrom('corporate_agreements as a')
+    .select(sql<number>`count(*)::int`.as('count'))
+    .where('a.installation_id', '=', scope.installationId)
+    .executeTakeFirstOrThrow();
+  return count;
+}
+
+/** How many approvals the tenant has, whatever their state: what the file of the approvals holds, as the reading `db` sees them. */
+export async function countApprovalRows(db: Kysely<Database>, scope: TenantScope): Promise<number> {
+  const { count } = await db
+    .selectFrom('corporate_approvals as p')
+    .select(sql<number>`count(*)::int`.as('count'))
+    .where('p.installation_id', '=', scope.installationId)
+    .executeTakeFirstOrThrow();
+  return count;
+}

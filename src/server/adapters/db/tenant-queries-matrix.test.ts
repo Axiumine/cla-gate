@@ -172,6 +172,8 @@ const SCOPED_QUERY_NAMES = [
   'services/corporate-claim-queries.ts listCorporateRepositoryIds',
   'services/corporate-coverage-queries.ts listCorporateCoverRows',
   'services/corporate-agreement-of-signature.ts findAgreementOfSignature',
+  'services/export/corporate-export-queries.ts countAgreementRows',
+  'services/export/corporate-export-queries.ts countApprovalRows',
   'services/export/corporate-export-queries.ts agreementExportBatch',
   'services/export/corporate-export-queries.ts approvalExportBatch',
 ];

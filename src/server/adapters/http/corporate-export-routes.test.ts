@@ -162,13 +162,15 @@ test.each(FILES)('for %s a query string the route does not define is a 400', asy
   expect(failureOf(response)).toEqual([400, 'bad_request']);
 });
 
-test('a refused or invalid call changes no row of any tenant table: the export writes nothing, not even an audit row', async () => {
+test('a refused or invalid call changes no row of any tenant table: not even an audit row, which only a file that was sent leaves', async () => {
   const { world } = await twoTenantWorld();
   const before = await checksumsWithoutAdminVisits(world);
-  await download(world, 'admin1', CORPORATE_AGREEMENTS_CSV_PATH, world.t1.installationId);
-  await download(world, 'admin1', CORPORATE_APPROVALS_CSV_PATH, world.t1.installationId);
   await download(world, 'admin2', CORPORATE_APPROVALS_CSV_PATH, world.t1.installationId);
   await download(world, null, CORPORATE_AGREEMENTS_CSV_PATH, world.t1.installationId);
+  await world.ask('admin1', {
+    method: 'GET',
+    url: `${urlOf(CORPORATE_AGREEMENTS_CSV_PATH, world.t1.installationId)}?limit=10`,
+  });
   expect(await checksumsWithoutAdminVisits(world)).toEqual(before);
 });
 
