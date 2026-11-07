@@ -26,8 +26,9 @@ import {
 // field and the form stays as it was; every other failure is the error state, and the typed values stay then too.
 
 /** The form filled and sent once; the page is left showing what the server answered. */
-function sendOnce(answers: Parameters<typeof serveSign>[0], name = 'Ada Lovelace') {
-  return signUp(serveSign(answers), undefined, name);
+async function sendOnce(answers: Parameters<typeof serveSign>[0], name = 'Ada Lovelace') {
+  const calls = serveSign(answers);
+  return { ...(await signUp(calls, undefined, name)), calls };
 }
 
 test('422 invalid_name is shown on the name field, and everything typed stays', async () => {
@@ -91,10 +92,12 @@ test.each([
   [400, 'bad_request', messages['errors.bad_request']],
   [403, 'csrf_invalid', messages['errors.csrf_invalid']],
 ])('%i %s is the error state with the request id, and the typed values stay', async (status, code, message) => {
-  await sendOnce({ sign: failure(status, code) });
+  const { calls } = await sendOnce({ sign: failure(status, code) });
   const alert = await screen.findByRole('alert', {}, { timeout: 3000 });
   expect(within(alert).getByText(message)).toBeInTheDocument();
   expect(within(alert).getByText('req-00000001')).toBeInTheDocument();
+  // A refused CSRF token is the one refusal the client answers by sending the request once more (client-csrf.test.ts).
+  expect(calls.sign).toHaveLength(code === 'csrf_invalid' ? 2 : 1);
   expect(nameInput()).toHaveValue('Ada Lovelace');
   expect(consentBox()).toBeChecked();
   expect(emailChoice('ada@example.org')).toBeChecked();

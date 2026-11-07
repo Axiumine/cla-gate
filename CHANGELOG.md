@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `src/web/sign/SignFailures.test.tsx` failed once on `main` (run 42341550808, `postgres (4/4)`): after a `403 csrf_invalid` the client sends the request once more, and the second request could arrive before the helper's first poll, which waited for exactly one. The helper now waits for at least one, and the test states the count it expects (two for `csrf_invalid`, one for every other refusal).
 - Qodana `RegExpRedundantEscape` in `scripts/ci-contract/workflow.ts`: the expression pattern no longer escapes the two closing braces.
 - `coverage` shard 3 of pull request 41 failed on `app1-gio-home-github-ci` because `scripts/escape-hatches/entry.test.ts` scanned the whole repository (2 900 files, 64 seconds against its 60). That test now runs the real entry script on the tool's own directory; the repository-wide gate is `yarn lint:hatches` (the `static` job and the pre-commit hook), unchanged.
 - Container image build with the E18 tree: `yarn build` (and so the Dockerfile `build` stage) compiled the web tests, one of which reads `e2e/`, which the image build context leaves out, so the `container` job failed at `docker compose up`. The web project is now built without its tests and test helpers (`tsconfig.web.build.json`); `yarn typecheck` still checks them, and a test lists the files of the build project and fails on a test, a test helper or a file outside `src`.

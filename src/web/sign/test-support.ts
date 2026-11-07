@@ -250,12 +250,16 @@ export async function releaseAndConfirm(held: ReturnType<typeof serveHeldSign>):
   expect(held.received).toHaveLength(1);
 }
 
-/** The form filled and the button pressed, once the server has the request. */
+/**
+ * The form filled and the button pressed, once the server has the request. "Has the request" is at least one: after a
+ * 403 csrf_invalid the client refreshes the session and sends the request once more (client-csrf.test.ts), and that second
+ * request can arrive before the first poll, so a wait for exactly one is a race. A test that counts says how many it expects.
+ */
 export async function signUp(calls: SignCalls, route = SIGN_ROUTE, name = 'Ada Lovelace') {
   const opened = await openFilled(route, name);
   await opened.user.click(signButton());
   await waitFor(() => {
-    expect(calls.sign).toHaveLength(1);
+    expect(calls.sign.length).toBeGreaterThan(0);
   });
   return opened;
 }
