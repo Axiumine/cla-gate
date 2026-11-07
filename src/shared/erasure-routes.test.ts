@@ -36,8 +36,11 @@ test.each([
 });
 
 test('the preview answers with counts and the id only, and the erasure with how many rows it removed', () => {
-  const counts = { githubUserId: 4711, signatures: 2, signerPiiRows: 2, allowlistEntries: 1 };
+  const counts = { githubUserId: 4711, signatures: 2, signerPiiRows: 2, allowlistEntries: 1, corporateApprovals: 3 };
   expect(erasurePreviewRoute.responses[200].safeParse(counts).success).toBe(true);
+  expect(erasurePreviewRoute.responses[200].safeParse({ ...counts, corporateApprovals: undefined }).success).toBe(
+    false,
+  );
   expect(erasuresRoute.responses[200].safeParse({ erasedRows: 2 }).success).toBe(true);
   expect(erasuresRoute.responses[200].safeParse({ erasedRows: -1 }).success).toBe(false);
 });

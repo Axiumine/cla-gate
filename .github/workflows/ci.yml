@@ -69,6 +69,7 @@ on:
           - services-installation
           - services-a
           - services-b-d
+          - services-co
           - services-e-q
           - services-r
           - services-s
@@ -832,7 +833,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","shared-cla","config","http-a-d","http-e-o","http-p-r","http-s","http-rest","db","root-reporting-ports","domain-a-o","domain-rest","github-a-n","github-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-a","services-b-d","services-e-q","services-r","services-s","services-other","jobs-adapter","evaluate-pr","job-handlers","sweep","scripts"]') }}
+        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.shard != 'all' && format('["{0}"]', inputs.shard) || '["shared","shared-cla","config","http-a-d","http-e-o","http-p-r","http-s","http-rest","db","root-reporting-ports","domain-a-o","domain-rest","github-a-n","github-o","github-rest","evaluation-a-l","evaluation-rest","services-installation","services-a","services-b-d","services-co","services-e-q","services-r","services-s","services-other","jobs-adapter","evaluate-pr","job-handlers","sweep","scripts"]') }}
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs.
       - name: Preflight (runner capabilities)

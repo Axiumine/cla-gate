@@ -24,10 +24,7 @@ export const VERSION_PATH = `${VERSIONS_PATH}/:versionId`;
 /** The documents a repository admin sees for one repository (E12-S01). */
 export const REPOSITORY_DOCUMENTS_PATH = '/api/installations/:installationId/repositories/:repositoryId/documents';
 
-/**
- * Who signs under a document. The schema accepts both; the corporate kind is switched on since E21-S02.
- * @internal exported for the tests of the schema
- */
+/** Who signs under a document. The schema accepts both; the corporate kind is switched on since E21-S02. */
 export const CLA_DOCUMENT_KINDS = ['individual', 'corporate'] as const;
 
 const claDocumentKindSchema = z.enum(CLA_DOCUMENT_KINDS);

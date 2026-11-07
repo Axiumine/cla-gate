@@ -97,8 +97,11 @@ export const SERVER_SHARDS: readonly Shard[] = [
   // budget stopping Stryker after 93.4 minutes of mutants.
   // 19 files, 642 mutants.
   { name: 'services-a', mutate: ['src/server/services/a*.ts'] },
-  // 35 files, 882 mutants: `cla-*` (the CLA document code of E12) and the few `d*`.
-  { name: 'services-b-d', mutate: ['src/server/services/[b-d]*.ts'] },
+  // 26 files, 722 mutants: `cla-*` (the CLA document code of E12), the other names that start with `b`, `c` but not `co`, or `d`.
+  { name: 'services-b-d', mutate: ['src/server/services/[bd]*.ts', 'src/server/services/c[!o]*.ts'] },
+  // 41 files, 1314 mutants: `commit-override-*` (E15) and `corporate-*` (E21). The corporate code (31 files, 1133 mutants) took the shard
+  // above, then `[b-d]*`, to 2036 mutants, so the names that start with `co` are a shard of their own.
+  { name: 'services-co', mutate: ['src/server/services/co*.ts'] },
   // 36 files, 1067 mutants.
   { name: 'services-e-q', mutate: ['src/server/services/[e-hj-q]*.ts'] },
   // 40 files, 1024 mutants.
