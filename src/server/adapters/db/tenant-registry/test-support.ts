@@ -24,6 +24,7 @@ import type { Database } from '../schema.ts';
 import { EXPORT_TENANT_QUERIES } from '../tenant-export-fixture/test-support.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { JOB_TENANT_QUERIES } from '../tenant-jobs-fixture/test-support.ts';
+import { LATER_TENANT_MODULES, LATER_TENANT_QUERIES } from '../tenant-later-fixture/test-support.ts';
 import { LINK_TENANT_QUERIES } from '../tenant-links-fixture/test-support.ts';
 import {
   ledgerOwnersOf,
@@ -50,7 +51,6 @@ import {
   VERSION_READS,
   VERSION_WRITES,
 } from '../tenant-registry-versions/test-support.ts';
-import { E15_TENANT_MODULES, E15_TENANT_QUERIES } from '../tenant-revocation-fixture/test-support.ts';
 import type { TenantScope } from '../tenant-scope.ts';
 import { SIGN_TENANT_QUERIES } from '../tenant-sign-fixture/test-support.ts';
 
@@ -113,7 +113,7 @@ export const TENANT_MODULES = [
   'services/sweep/sweep-rows.ts',
   'services/sweep/sweep-state-rows.ts',
   'services/tenant-queries.ts',
-  ...E15_TENANT_MODULES,
+  ...LATER_TENANT_MODULES,
 ] as const;
 
 /** The one file that writes `audit_log`: rows are appended in the transaction of the change they record, naming the installation the entry carries (E04-S09); nothing else inserts them, and reads of the table belong to a tenant module. */
@@ -451,7 +451,7 @@ export const TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string, Ten
   // The statements of the public signature check (E22-S02), and those of the instance operator (E05-S07, E22-S05).
   ...PUBLIC_TENANT_QUERIES,
   ...OPERATOR_TENANT_QUERIES,
-  ...E15_TENANT_QUERIES,
+  ...LATER_TENANT_QUERIES,
 };
 
 /** What a call of a scoped query came to: the owners of the rows it read or changed, or that it was turned away. */

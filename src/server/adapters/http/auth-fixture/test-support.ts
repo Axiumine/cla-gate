@@ -138,6 +138,7 @@ export async function authWorld(
     | 'allowlistGitHub'
     | 'commitGitHub'
     | 'publicGitHub'
+    | 'corporateGitHub'
     | 'operators'
     | 'enqueuer'
   > = {},

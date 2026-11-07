@@ -3,7 +3,13 @@
 import { type RawBuilder, sql } from 'kysely';
 import { expect, test } from 'vitest';
 import { StubRoleLookup } from '../../services/role-table-fixture/test-support.ts';
-import { TENANT_TABLES, type TenantTable, tenantChecksums, twoTenants } from './tenant-fixture/test-support.ts';
+import {
+  CORPORATE_TABLES,
+  TENANT_TABLES,
+  type TenantTable,
+  tenantChecksums,
+  twoTenants,
+} from './tenant-fixture/test-support.ts';
 import { migratedTestDatabase } from './test-support.ts';
 
 // The fixture of the cross-tenant tests (E11-S06): what `twoTenants` stores, and the checksums that tell a denied call
@@ -46,6 +52,16 @@ const ROWS_OF: readonly (readonly [TenantTable, (installationId: number) => RawB
 
 test('the table of queries names every tenant table', () => {
   expect(ROWS_OF.map(([table]) => table)).toEqual([...TENANT_TABLES]);
+});
+
+test('the corporate tables the scan knows are the corporate tables the migrations create, and none is a tenant table of the fixture yet', async () => {
+  const { db } = await migratedTestDatabase();
+  const { rows } = await sql<{ table_name: string }>`
+    select table_name from information_schema.tables
+    where table_schema = 'public' and table_name like 'corporate\_%' order by table_name`.execute(db);
+  expect(rows.map((row) => row.table_name)).toEqual([...CORPORATE_TABLES].toSorted((a, b) => a.localeCompare(b)));
+  const tenantNames = new Set<string>(TENANT_TABLES);
+  expect(CORPORATE_TABLES.filter((table) => tenantNames.has(table))).toEqual([]);
 });
 
 test.each(ROWS_OF)('%s holds at least one row of each of the two tenants', async (_table, rowsOf) => {

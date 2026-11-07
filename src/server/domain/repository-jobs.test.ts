@@ -6,7 +6,7 @@ import { SWEEP_REPOSITORY_REASONS, sweepRepositoryCoalesceKey } from './reposito
 
 // The rules of the repository-level jobs (E07-S09): the closed set of reasons and the coalesce key.
 
-test('the reasons are the seven of the story, in the order the story names them', () => {
+test('the reasons are the seven of E07-S09 in the order the story names them, then the two of E21 (S04 and S05)', () => {
   expect(SWEEP_REPOSITORY_REASONS).toEqual([
     'repository_enabled',
     'cla_version_published',
@@ -15,6 +15,8 @@ test('the reasons are the seven of the story, in the order the story names them'
     'signature_revoked',
     'signatures_invalidated',
     'override_changed',
+    'corporate_claim',
+    'corporate_approval_revoked',
   ]);
 });
 

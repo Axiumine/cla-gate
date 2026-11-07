@@ -15,7 +15,7 @@ import type { Situation } from './report-situation.ts';
 // behind, so either would otherwise fail or hold the run of a pull request that is open and fine for good.
 
 /** What the counts of a passing run say when no row can tell them: nobody is named, so the sentence is `0 contributors covered.` */
-const NO_COVERAGE: CoverageCounts = { signature: 0, allowlist: 0, override: 0 };
+const NO_COVERAGE: CoverageCounts = { signature: 0, allowlist: 0, corporate: 0, override: 0 };
 
 /**
  * The other pull requests whose rows decide the Check Run of the head SHA of `target`: the rows at the SHA of pull requests other

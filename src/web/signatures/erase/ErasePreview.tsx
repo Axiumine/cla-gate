@@ -33,8 +33,8 @@ function Effects({ title, items }: { readonly title: string; readonly items: rea
 
 /**
  * What the erasure of one person would do in this installation (E18-S14), from the counts the server made when the question opened and
- * no personal data: what is removed (the name, email address and login the person gave, the login shown on allowlist entries that
- * name them, and their sessions when no other installation holds data about them) and what stays (the signatures, as legal evidence, and the
+ * no personal data: what is removed (the name, email address and login the person gave, the login shown on allowlist entries and kept with corporate
+ * approvals that name them (E21), and their sessions when no other installation holds data about them) and what stays (the signatures, as legal evidence, and the
  * person's right to sign again). While the counts are on their way, and again while they are read anew after `count_changed`, the
  * place shows the loading state; a failure is the error banner with "Try again" where it can help; an installation that holds nothing of the
  * person says so.
@@ -56,6 +56,7 @@ export function ErasePreview({ preview, nothingHeld }: ErasePreviewProps) {
   const removed = [
     t.plural('erase.removes.pii', counts.signerPiiRows),
     ...(counts.allowlistEntries === 0 ? [] : [t.plural('erase.removes.allowlist', counts.allowlistEntries)]),
+    ...(counts.corporateApprovals === 0 ? [] : [t.plural('erase.removes.corporate', counts.corporateApprovals)]),
     t('erase.removes.sessions'),
   ];
   const kept = [t.plural('erase.stays.signatures', counts.signatures), t('erase.stays.again')];

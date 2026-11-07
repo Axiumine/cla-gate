@@ -7,8 +7,14 @@ import { NO_NETWORK_METADATA } from '../../../services/network-metadata.ts';
 import { ownSignatureRows } from '../../../services/own-signatures-queries.ts';
 import { findSignDocument, findSignRepository, listViewerSignatures } from '../../../services/sign-context-queries.ts';
 import { attachDocument, storeFailure } from '../../../services/sign-evaluations-fixture/test-support.ts';
-import { findLiveSignature, insertSignature, insertSignerPii } from '../../../services/sign-record-queries.ts';
+import {
+  findLiveSignature,
+  insertCorporateSignature,
+  insertSignature,
+  insertSignerPii,
+} from '../../../services/sign-record-queries.ts';
 import type { Database } from '../schema.ts';
+import { arrangeTo, corporateDocumentOf } from '../tenant-corporate-fixture/test-support.ts';
 import type { TenantWorld } from '../tenant-fixture/test-support.ts';
 import { ownersOfDocuments, ownersOfGithubIds, ownersOfSignatures } from '../tenant-owners/test-support.ts';
 import type { ScopedQuery, TenantQuery } from '../tenant-registry/test-support.ts';
@@ -157,6 +163,23 @@ export const SIGN_TENANT_QUERIES: Readonly<Record<string, Readonly<Record<string
           sourcePrNumber: 7,
         });
         return written === null ? [] : ownersOfSignatures(db, [written.id]);
+      },
+    }),
+    insertCorporateSignature: scoped({
+      // The corporate document of another tenant selects no row for this tenant, which the caller (who has just read it) never meets.
+      refusal: isNoResult,
+      arrange: arrangeTo('document'),
+      run: async (db, scope, ids) => {
+        const document = await corporateDocumentOf(db, ids);
+        const written = await insertCorporateSignature(db, scope, {
+          userId: ids.publisherId,
+          documentId: document.documentId,
+          versionId: document.versionId,
+          consentTextId: 'corporate-v1',
+          sourceRepositoryId: ids.plain.repositoryId,
+          sourcePrNumber: null,
+        });
+        return ownersOfSignatures(db, [written.id]);
       },
     }),
     insertSignerPii: scoped({

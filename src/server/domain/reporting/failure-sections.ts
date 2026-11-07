@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { signUrl } from '../../../shared/sign-link.ts';
+import { corporateLine } from './check-output.ts';
 import { renderName } from './encode.ts';
 import { unlinkedCommits } from './failure-commits.ts';
 import type { FailureRequest, ReportedEvaluation } from './failure-input.ts';
@@ -54,6 +55,18 @@ export function peopleSections(request: FailureRequest): PeopleSections {
     parts.push(overrideLine(commits.overridden));
   }
   return { parts, unsigned: people.count, unlinked: commits.count, signUrl: link };
+}
+
+/**
+ * The sentence about the people an approval of a corporate CLA covers in a pull request that still fails (E21-S05): how many, never
+ * whom, and never by which company, domain or organisation. Empty when a corporate CLA covers nobody.
+ */
+export function corporateParts(evaluation: ReportedEvaluation): OutputPart[] {
+  const covered = evaluation.actors.filter(
+    (actor) => actor.covered && actor.basis?.kind === 'corporate_approval',
+  ).length;
+  const line = corporateLine(covered);
+  return line === null ? [] : [{ kind: 'text', text: line }];
 }
 
 /** The sentences for the failure codes that no person fixes by signing or linking. */

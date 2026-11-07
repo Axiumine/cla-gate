@@ -19,7 +19,11 @@ const request = (evaluation: typeof PASSING) => ({ ...requestOf({ names: NO_NAME
 
 test('a passing pull request with no other row passes, with the counts of its own verdict', () => {
   const { view, signUrl } = runReport(request(PASSING), []);
-  expect(view).toEqual({ kind: 'success', headSha: HEAD, covered: { signature: 1, allowlist: 0, override: 0 } });
+  expect(view).toEqual({
+    kind: 'success',
+    headSha: HEAD,
+    covered: { signature: 1, allowlist: 0, corporate: 0, override: 0 },
+  });
   expect(signUrl).toBeNull();
 });
 
@@ -60,7 +64,7 @@ test.each([[[]], [['success']], [['in_progress']], [['failure']], [['cancelled',
 test.each([[[]], [['failure']], [['in_progress']], [['success', 'cancelled']]] as const)(
   'the comment of a passing pull request says it passed, whatever the others at the SHA are doing (%j)',
   (others: readonly RowResult[]) => {
-    expect(runReport(request(PASSING), others).comment).toEqual({ kind: 'success', headSha: HEAD });
+    expect(runReport(request(PASSING), others).comment).toEqual({ kind: 'success', headSha: HEAD, corporate: 0 });
   },
 );
 
@@ -74,7 +78,7 @@ test.each([[[]], [['success']], [['failure', 'in_progress']]] as const)(
   },
 );
 
-const COVERED = { signature: 2, allowlist: 1, override: 3 };
+const COVERED = { signature: 2, allowlist: 1, corporate: 4, override: 3 };
 
 test.each([
   [[], { kind: 'success', headSha: HEAD, covered: COVERED }],

@@ -218,7 +218,7 @@ test('the error names every offending route, one per line, and its name is Route
 });
 
 /** The routes the application registers itself, in the order it registers them (the order of `registerRoutes` in app.ts). */
-const REGISTERED_ROUTES = [
+const REGISTERED_ROUTES: readonly string[] = [
   'GET /healthz',
   'GET /readyz',
   'GET /api/operator/installations',
@@ -266,6 +266,20 @@ const REGISTERED_ROUTES = [
   'GET /api/sign/:githubRepoId',
   'POST /api/sign',
   'GET /api/me/signatures',
+  'GET /api/corporate/repositories/:githubRepoId/document',
+  'POST /api/corporate/agreements',
+  'GET /api/corporate/agreements',
+  'GET /api/corporate/agreements/:agreementId',
+  'GET /api/corporate/agreements/:agreementId/approvals',
+  'POST /api/corporate/agreements/:agreementId/approvals',
+  'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
+  'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
+  'GET /api/corporate/repositories/:githubRepoId/availability',
+  'POST /api/corporate/repositories/:githubRepoId/claims',
+  'PUT /api/installations/:installationId/repositories/:repositoryId/corporate-document',
+  'GET /api/installations/:installationId/corporate-agreements',
+  'GET /api/installations/:installationId/corporate-agreements.csv',
+  'GET /api/installations/:installationId/approvals.csv',
   'POST /webhooks/github',
 ];
 

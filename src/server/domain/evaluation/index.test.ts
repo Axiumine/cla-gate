@@ -24,6 +24,7 @@ test('the engine exposes exactly its vocabulary so far, and nothing it did not m
     'FIX_CODES',
     'GITHUB_WEB_FLOW_ID',
     'IGNORED_TRAILER_IDENTITIES',
+    'indexCorporateCover',
     'isMergeCommit',
     'listingStateOf',
     'matchAllowlist',

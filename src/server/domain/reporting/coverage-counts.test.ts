@@ -11,6 +11,7 @@ test('only the actors and the findings are read: a name in a finding changes not
   expect(coverageCounts({ actors: [], findings: [finding, { ...finding, role: 'committer' }] })).toEqual({
     signature: 0,
     allowlist: 0,
+    corporate: 0,
     override: 1,
   });
 });

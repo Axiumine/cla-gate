@@ -23,6 +23,8 @@ function storedBasis(basis: CoveringBasis | null): StoredActor['basis'] {
       return { kind: 'signature', signatureId: basis.signatureId, versionId: basis.versionId, major: basis.major };
     case 'allowlist':
       return { kind: 'allowlist', entryId: basis.entryId, entryKind: basis.entryKind, scope: basis.scope };
+    case 'corporate_approval':
+      return { kind: 'corporate_approval', agreementId: basis.agreementId, approvalId: basis.approvalId };
   }
 }
 

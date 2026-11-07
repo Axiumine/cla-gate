@@ -94,6 +94,19 @@ test('several allowlist entries are said in the plural', async () => {
   expect(listed()[1]).toBe('The login shown on 4 allowlist entries. The entries stay, kept by GitHub id.');
 });
 
+test('an approval of a corporate agreement that names the person is counted among what is removed, after the allowlist entries', async () => {
+  await openErase({ erase: { preview: [previewOf(1, 1, 1, { corporateApprovals: 1 })] } });
+  expect(listed().slice(1, 3)).toEqual([
+    'The login shown on 1 allowlist entry. The entry stays, kept by GitHub id.',
+    'The login kept with 1 corporate approval. The approval stays, kept by GitHub id.',
+  ]);
+});
+
+test('several approvals of a corporate agreement are said in the plural', async () => {
+  await openErase({ erase: { preview: [previewOf(1, 0, 0, { corporateApprovals: 3 })] } });
+  expect(listed()[1]).toBe('The login kept with 3 corporate approvals. The approvals stay, kept by GitHub id.');
+});
+
 test('Escape cancels the question with no request, as Cancel does, and focus returns to the button of the row', async () => {
   const { erased, user } = await openErase();
   await user.keyboard('{Escape}');

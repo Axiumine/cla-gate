@@ -28,11 +28,22 @@ const allowlistBasisSchema = z.strictObject({
   scope: z.enum(ALLOWLIST_SCOPES),
 });
 
+/** An approval of a corporate agreement covers the person (E21-S05): two numeric ids, never a company, a domain or a login. */
+const corporateApprovalBasisSchema = z.strictObject({
+  kind: z.literal('corporate_approval'),
+  agreementId: idSchema,
+  approvalId: idSchema,
+});
+
 /**
- * Why an actor is covered, as stored. A discriminated union on `kind`: E21 adds `corporate_approval` here as one more
- * member and no existing member changes.
+ * Why an actor is covered, as stored. A discriminated union on `kind`: E21-S05 added `corporate_approval` as one more
+ * member and no existing member changed, so a row written before it still parses.
  */
-const coveringBasisSchema = z.discriminatedUnion('kind', [signatureBasisSchema, allowlistBasisSchema]);
+const coveringBasisSchema = z.discriminatedUnion('kind', [
+  signatureBasisSchema,
+  allowlistBasisSchema,
+  corporateApprovalBasisSchema,
+]);
 
 /**
  * One person or account of the pull request, as stored. `bot` is present, and `true`, only for an account GitHub reported as a Bot

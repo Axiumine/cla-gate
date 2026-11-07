@@ -9,7 +9,12 @@ import type { TestGitHubKey } from '../../../config/test-support.ts';
 import { CheckRunStore, type CheckRunWriteRecord } from '../../../services/fake-check-runs/test-support.ts';
 import { CommentIds, commentsOfIssue, postedComment } from '../../../services/fake-comments/test-support.ts';
 import type { MembersProbeAnswer } from '../../../services/fake-github/test-support.ts';
-import { scriptInto, type UserAccounts } from '../../../services/fake-user-accounts/test-support.ts';
+import {
+  type PublicMembers,
+  scriptInto,
+  scriptPublicMemberInto,
+  type UserAccounts,
+} from '../../../services/fake-user-accounts/test-support.ts';
 import type { GitHubWorld } from '../../../services/github-contract/test-support.ts';
 import type {
   GitHubClient,
@@ -42,7 +47,7 @@ import { guardPublicMembers } from '../public-members-guard/test-support.ts';
 import { type Stall, stallNext } from '../stall-fixture/test-support.ts';
 import { startGitHubApp } from '../start.ts';
 import { APP_ID, appBody, hourlyTokens, jwtSignedBy, START } from '../test-support.ts';
-import { userAccountRoute } from '../user-account-fixture/test-support.ts';
+import { organizationAccountRoute, publicMemberRoute, userAccountRoute } from '../user-account-fixture/test-support.ts';
 
 // A GitHub at the HTTP boundary that behaves like the real one for the routes of the client port (E05-S04): MSW answers
 // what the Octokit adapter sends, from state a test scripts through the same GitHubWorld the fake implements. Installation
@@ -72,6 +77,7 @@ interface State {
   readonly permissions: Map<string, GitHubRepositoryPermission>;
   readonly membersProbes: Map<GithubId, MembersProbeAnswer>;
   readonly userAccounts: UserAccounts;
+  readonly publicMembers: PublicMembers;
   readonly pullRequests: Map<string, GitHubPullRequest>;
   readonly pullCommits: Map<string, readonly GitHubCommit[]>;
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
@@ -345,6 +351,7 @@ function conversationRoutes(state: State) {
 
 /** Starts MSW with these routes until the test ends; every request is noted in `state.requests`. */
 function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
+  const heldToken = (request: Request): boolean => installationOf(state, request) !== undefined;
   const server = setupServer(
     http.all('*', ({ request }) => {
       const url = new URL(request.url);
@@ -358,7 +365,9 @@ function serve(state: State, signer: TestGitHubKey, clock: FakeClock): void {
       answers: state.membersProbes,
       reached: (request) => installationOf(state, request)?.installation,
     }),
-    userAccountRoute({ accounts: state.userAccounts, known: (req) => installationOf(state, req) !== undefined }),
+    userAccountRoute({ accounts: state.userAccounts, known: heldToken }),
+    organizationAccountRoute({ accounts: state.userAccounts, known: heldToken }),
+    publicMemberRoute({ members: state.publicMembers, known: heldToken }),
     ...pullRoutes(state),
     commitRoute({
       scripted: state,
@@ -402,6 +411,7 @@ function scripting(state: State, gate: FakeGate): Omit<GitHubWorld, 'client'> {
       state.membersProbes.set(githubInstallationId, answer);
     },
     scriptUserAccount: scriptInto(state.userAccounts),
+    scriptPublicMember: scriptPublicMemberInto(state.publicMembers),
     addPullRequest: (githubInstallationId, fullName, pullRequest) => {
       state.pullRequests.set(`${keyOf(githubInstallationId, fullName)}#${pullRequest.number}`, pullRequest);
     },
@@ -442,6 +452,7 @@ async function startWorld(
     permissions: new Map(),
     membersProbes: new Map(),
     userAccounts: new Map(),
+    publicMembers: new Map(),
     pullRequests: new Map(),
     pullCommits: new Map(),
     repositoryCommits: new Map(),

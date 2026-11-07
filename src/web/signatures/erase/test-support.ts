@@ -18,9 +18,19 @@ import { openSignatures, type ServeSignatures, SIGNATURES_ROUTE } from '../test-
 // data, every request recorded. The values are made up. They sit on top of the signatures screen's own server (`../test-support.ts`),
 // whose default page holds Ada Lovelace (GitHub id 4711, signature 900) and Grace Hopper (583231, signature 901) of the installation 5.
 
-/** The answer of the preview: the person has `signatures` signatures, `signerPiiRows` rows of personal data and `allowlistEntries` allowlist entries. */
-export function previewOf(signatures = 2, signerPiiRows = 2, allowlistEntries = 0, githubUserId = 4711): Response {
-  return json(erasurePreviewSchema.parse({ githubUserId, signatures, signerPiiRows, allowlistEntries }));
+/**
+ * The answer of the preview: the person has `signatures` signatures, `signerPiiRows` rows of personal data, `allowlistEntries` allowlist
+ * entries and `corporateApprovals` approvals of a corporate agreement (E21) that name them.
+ */
+export function previewOf(
+  signatures = 2,
+  signerPiiRows = 2,
+  allowlistEntries = 0,
+  { githubUserId = 4711, corporateApprovals = 0 }: { githubUserId?: number; corporateApprovals?: number } = {},
+): Response {
+  return json(
+    erasurePreviewSchema.parse({ githubUserId, signatures, signerPiiRows, allowlistEntries, corporateApprovals }),
+  );
 }
 
 /** The `200` of an erasure. */

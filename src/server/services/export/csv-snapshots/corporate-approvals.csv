@@ -1,0 +1,6 @@
+approval_id,agreement_id,kind,subject,source,approved_at,expires_at,revoked_at
+1,1,user,7001,manager,2026-10-15T09:00:00.000Z,,
+2,1,github_org,9100,manager,2026-10-15T10:00:00.000Z,,
+3,1,email_domain,acme.example,manager,2026-10-15T11:00:00.000Z,,
+4,1,user,7002,rule,2026-10-15T12:00:00.000Z,2027-10-15T12:00:00.000Z,
+5,1,user,7003,manager,2026-10-15T13:00:00.000Z,,2026-10-15T14:00:00.000Z

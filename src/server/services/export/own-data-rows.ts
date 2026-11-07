@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { DATA_EXPORT_AUDIT_LIMIT, DATA_EXPORT_SCHEMA_VERSION, type DataExport } from '../../../shared/data-export.ts';
+import { type AgreementRow, type ApprovalRow, agreementOf, approvalOf } from './own-corporate-rows.ts';
 import type { ownAllowlistEntries, ownAuditEntries } from './own-data-queries.ts';
 import type { ownSignatures } from './own-signatures-query.ts';
 
@@ -24,6 +25,8 @@ export interface OwnData {
   readonly now: Date;
   readonly user: ExportedUser;
   readonly signatures: readonly SignatureRow[];
+  readonly corporateAgreements: readonly AgreementRow[];
+  readonly corporateApprovals: readonly ApprovalRow[];
   readonly allowlistEntries: readonly AllowlistRow[];
   /** At most {@link DATA_EXPORT_AUDIT_LIMIT} + 1 rows: the extra one only says that older rows exist. */
   readonly auditEntries: readonly AuditRow[];
@@ -81,6 +84,8 @@ export function buildDataExport(data: OwnData): DataExport {
       createdAt: data.user.createdAt.toISOString(),
     },
     signatures: data.signatures.map(signatureOf),
+    corporateAgreements: data.corporateAgreements.map(agreementOf),
+    corporateApprovals: data.corporateApprovals.map(approvalOf),
     allowlistEntries: data.allowlistEntries.map(allowlistEntryOf),
     auditEntries: data.auditEntries.slice(0, DATA_EXPORT_AUDIT_LIMIT).map(auditEntryOf),
     truncated: data.auditEntries.length > DATA_EXPORT_AUDIT_LIMIT,

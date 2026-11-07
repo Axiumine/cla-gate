@@ -67,6 +67,26 @@ export const DOCUMENTED_MUTATIONS: readonly DocumentedMutation[] = [
   registered(audited(`POST ${REPOSITORY}/commit-overrides`, 'E15-S05', 'commit_override.created')),
   registered(audited(`DELETE ${REPOSITORY}/commit-overrides/:overrideId`, 'E15-S06', 'commit_override.deleted')),
   { ...audited(`POST ${INSTALLATION}/erasures`, 'E16-S04', 'signer_pii.erased'), built: true },
+  registered(audited('POST /api/corporate/agreements', 'E21-S02', 'corporate_agreement.signed')),
+  registered(
+    audited(
+      `PUT ${INSTALLATION}/repositories/:repositoryId/corporate-document`,
+      'E21-S02',
+      'repository.corporate_document_set',
+    ),
+  ),
+  registered(audited('POST /api/corporate/agreements/:agreementId/approvals', 'E21-S03', 'corporate_approval.added')),
+  registered(
+    audited(
+      'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
+      'E21-S03',
+      'corporate_approval.revoked',
+    ),
+  ),
+  registered(
+    audited('POST /api/corporate/agreements/:agreementId/approvals/carry-over', 'E21-S03', 'corporate_approval.added'),
+  ),
+  registered(audited('POST /api/corporate/repositories/:githubRepoId/claims', 'E21-S04', 'corporate_approval.derived')),
   exempt('POST /api/setup/unlock', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/manifest', 'E19-S06', 'setup', true),
   exempt('POST /api/setup/convert', 'E19-S11', 'setup', true),

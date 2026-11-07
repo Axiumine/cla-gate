@@ -63,16 +63,33 @@ function failureTitle(unsigned: number, unlinked: number): string {
   return phrases.length === 0 ? TITLES.failure : `CLA signature required: ${phrases.join(', ')}`;
 }
 
-/** `4 contributors covered: 2 by signature, 1 by allowlist rule, 1 by maintainer override.`, a zero count left out. */
+/**
+ * `4 contributors covered: 2 by signature, 1 by allowlist rule, 1 by corporate CLA, 1 by maintainer override.`, a zero count left
+ * out. The corporate CLA is told by its kind only: no company, domain or organisation is ever part of a sentence (E21-S05).
+ */
 export function coverageSentence(covered: CoverageCounts): string {
   const reasons = countedPhrases([
     [covered.signature, 'by signature'],
     [covered.allowlist, 'by allowlist rule'],
+    [covered.corporate, 'by corporate CLA'],
     [covered.override, 'by maintainer override'],
   ]);
-  const total = covered.signature + covered.allowlist + covered.override;
+  const total = covered.signature + covered.allowlist + covered.corporate + covered.override;
   const covering = `${renderCount(total)} ${total === 1 ? 'contributor' : 'contributors'} covered`;
   return reasons.length === 0 ? `${covering}.` : `${covering}: ${reasons.join(', ')}.`;
+}
+
+/**
+ * The sentence about the people a corporate CLA covers (E21-S05), or `null` when it covers nobody: how many, and not whose, which
+ * company approved them, nor by which domain or organisation. Check Run and comment repeat it, so both say the same words.
+ * @throws InvalidIdError for a count that is negative, fractional or not a safe integer.
+ */
+export function corporateLine(count: number): string | null {
+  const shown = renderCount(count);
+  if (count === 0) {
+    return null;
+  }
+  return `${shown} ${count === 1 ? 'contributor is' : 'contributors are'} covered by a corporate CLA.`;
 }
 
 /** A finished check: its conclusion, title and summary, and the text when there is one. */
@@ -91,6 +108,13 @@ function failureOutput(view: Extract<CheckView, { kind: 'failure' }>): CheckOutp
   return completed('failure', failureTitle(view.unsigned, view.unlinked), summary, renderParts(view.text ?? []));
 }
 
+/** The summary of a passing check: who is covered and why, the corporate line when a corporate CLA covers someone, and the commit. */
+function successSummary(view: Extract<CheckView, { kind: 'success' }>): string {
+  const corporate = corporateLine(view.covered.corporate);
+  const lines = [coverageSentence(view.covered), ...(corporate === null ? [] : [corporate])];
+  return `${lines.join(' ')}\n\nChecked commit ${shortSha(view.headSha)}.`;
+}
+
 /**
  * The Check Run output of a view. Names no one except through the sections of a failure, which are encoded by E09-S01
  * before they get here. @throws InvalidShaError for a head SHA that is not a full lower-case SHA, InvalidIdError for a count
@@ -99,11 +123,7 @@ function failureOutput(view: Extract<CheckView, { kind: 'failure' }>): CheckOutp
 export function renderCheckOutput(view: CheckView): CheckOutput {
   switch (view.kind) {
     case 'success':
-      return completed(
-        'success',
-        TITLES.success,
-        `${coverageSentence(view.covered)}\n\nChecked commit ${shortSha(view.headSha)}.`,
-      );
+      return completed('success', TITLES.success, successSummary(view));
     case 'failure':
       return failureOutput(view);
     case 'in_progress':

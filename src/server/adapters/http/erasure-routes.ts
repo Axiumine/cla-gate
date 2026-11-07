@@ -27,7 +27,7 @@ export interface ErasureRoutesOptions {
  * personal data of a person spans documents, so a repository admin gets a `403` and a viewer with no role the uniform `404`.
  * `GET …/erasure-preview?githubUserId=` counts what an erasure would remove; `POST …/erasures` removes it through the SQL
  * function `erase_signer_pii`, which writes the audit row `signer_pii.erased` itself. A person with no signature in the
- * installation and no allowlist entry there is a `404` on both, and an `expectedRows` that is no longer the number of rows
+ * installation, no allowlist entry there and no approval of a corporate agreement of it (E21-S03) is a `404` on both, and an `expectedRows` that is no longer the number of rows
  * is a `409 count_changed` that changes nothing. The log line of an erasure holds numeric ids and counts only, never a name, a login or an email.
  */
 export const erasureRoutes: FastifyPluginCallbackZod<ErasureRoutesOptions> = (app, options, done) => {

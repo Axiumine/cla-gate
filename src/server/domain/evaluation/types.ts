@@ -110,9 +110,23 @@ export interface AllowlistEntry {
 }
 
 /**
+ * The approval that covers a person under a corporate agreement (E21-S05): the agreement and the approval, by their
+ * ids. The loader hands over one for a person, the one of the lowest approval id when several are in force, so the
+ * basis the engine records does not depend on the order of any list.
+ */
+export interface CorporateCover {
+  readonly agreementId: number;
+  readonly approvalId: number;
+}
+
+/**
  * Every fact the engine needs, handed over as data (E07-S04 builds it). `orgMembers` maps an organisation id to the user
  * ids known to belong to it; an organisation without an entry has no known members. `overrides` maps a commit SHA to the
- * `commit_overrides` id that waives its unlinked identities.
+ * `commit_overrides` id that waives its unlinked identities. `corporateCovered` maps the numeric id of a person to the
+ * approval that covers them under a corporate agreement in force (E21-S05: not revoked, not expired, the agreement's
+ * signature not revoked, its major the active one of the repository's corporate document); `corporateOutdated` holds the
+ * people who hold an approval in force under an agreement of an earlier major, which covers nobody, so the report can
+ * tell them to ask the CLA manager to sign the current version. Neither holds a name, a domain or a company.
  */
 export interface EvaluationInput {
   readonly headSha: string;
@@ -124,6 +138,8 @@ export interface EvaluationInput {
   readonly allowlist: readonly AllowlistEntry[];
   readonly orgMembers: ReadonlyMap<number, ReadonlySet<number>>;
   readonly overrides: ReadonlyMap<string, number>;
+  readonly corporateCovered: ReadonlyMap<number, CorporateCover>;
+  readonly corporateOutdated: ReadonlySet<number>;
 }
 
 export interface SignatureBasis {
@@ -140,8 +156,15 @@ export interface AllowlistBasis {
   readonly scope: AllowlistScope;
 }
 
+/** An approval of a corporate agreement covers the person (E21-S05); the ids are numeric and name no company, domain or login. */
+export interface CorporateApprovalBasis {
+  readonly kind: 'corporate_approval';
+  readonly agreementId: number;
+  readonly approvalId: number;
+}
+
 /**
- * Why an actor is covered. A union discriminated on `kind`, one interface per member, so E21 adds `corporate_approval`
+ * Why an actor is covered. A union discriminated on `kind`, one interface per member: E21-S05 added `corporate_approval`
  * as a new member without touching a branch that already exists.
  */
-export type CoveringBasis = SignatureBasis | AllowlistBasis;
+export type CoveringBasis = SignatureBasis | AllowlistBasis | CorporateApprovalBasis;

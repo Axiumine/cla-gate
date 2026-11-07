@@ -208,4 +208,16 @@ export const ROUTES_WITHOUT_SCREEN: ReadonlyMap<string, string> = new Map([
     '/installations/$installationId/',
     'the home of a tenant is the repository list of `/installations/$installationId`, which has a screen',
   ],
+  [
+    '/corporate/sign/$githubRepoId',
+    'the page where an authorised signatory signs for a company (E21-S02) needs a repository with a corporate CLA in force, and the seeded world of the browser specs has none; the page is held by its unit tests (axe, hostile names, the signing and every refusal) and the route coverage guard',
+  ],
+  [
+    '/corporate/claim/$githubRepoId',
+    'the claim of an employee (E21-S04) is offered only for a repository with a corporate agreement in force, which the seeded world does not have, so the page would show only its one unavailable line; the same entry is embedded in the sign page (E18-S01) and both are held by unit tests (axe, keyboard, hostile names) and the route coverage guard',
+  ],
+  [
+    '/corporate/agreements',
+    'the list of the corporate agreements a person signed (E21-S02) is empty in the seeded world, which has no corporate agreement; the page is held by its unit tests (axe, hostile names, paging) and the route coverage guard',
+  ],
 ]);

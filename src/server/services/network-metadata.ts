@@ -17,7 +17,6 @@ export interface NetworkMetadata {
 
 /**
  * The value of a signing when recording is off, and of one with nothing to record.
- * @internal Exported for the tests (Knip ignores `@internal` exports in production mode).
  */
 export const NO_NETWORK_METADATA: NetworkMetadata = { ipAddress: null, userAgent: null };
 

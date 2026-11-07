@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { z } from 'zod';
 import { LOGIN_FAILED_PATH, loginFailureReasonSchema } from '../shared/auth.ts';
 import { SETUP_CALLBACK_PATH, SETUP_PATH } from '../shared/routes.ts';
+import { corporateAgreementsRoute, corporateClaimRoute, corporateSignRoute } from './corporate/corporate-routes.tsx';
 import { AppShell } from './layout/AppShell.tsx';
 import { LandingPage } from './pages/LandingPage.tsx';
 import { LoginFailedPage } from './pages/LoginFailedPage.tsx';
@@ -25,7 +26,8 @@ import { tenantRoutes } from './tenant-routes.tsx';
 
 // The route tree of the app (E17-S08), written in code: no generator, no generated file. Every route spreads
 // `withAccess(...)`, which is where it says who may see it. The sign page and the setup pages (E19-S07) are below; the screens of a
-// signed-in person are in signed-in-routes.tsx and the screens of one tenant in tenant-routes.tsx.
+// signed-in person are in signed-in-routes.tsx, the screens of one tenant in tenant-routes.tsx and the corporate routes (E21) in
+// corporate/corporate-routes.tsx.
 
 const landingRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -96,6 +98,9 @@ const routeTree = rootRoute.addChildren([
   installationsRoute,
   tenantRoutes,
   operatorInstallationsRoute,
+  corporateSignRoute,
+  corporateClaimRoute,
+  corporateAgreementsRoute,
 ]);
 
 /**

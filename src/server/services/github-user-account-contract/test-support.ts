@@ -103,3 +103,69 @@ export const USER_ACCOUNT_CASES: readonly ContractCase[] = [
     },
   ],
 ];
+
+const GLOBEX: GitHubUserAccount = { id: id(9001), login: 'Globex', type: 'Organization' };
+
+// The lookup of an organisation by login (E21-S03): the same accounts and failures, asked on `GET /orgs/{org}`, which has no person.
+export const ORGANIZATION_ACCOUNT_CASES: readonly ContractCase[] = [
+  [
+    'getOrganizationAccount returns the id, the login and the type of an organisation, without regard to the case of the login',
+    async ({ client, addInstallation, scriptUserAccount }) => {
+      addInstallation(installation(11, 'acme'));
+      scriptUserAccount('Globex', GLOBEX);
+      expect(await client.getOrganizationAccount(id(11), 'globex')).toEqual(GLOBEX);
+      expect(await client.getOrganizationAccount(id(11), 'GLOBEX')).toEqual(GLOBEX);
+    },
+  ],
+  [
+    'getOrganizationAccount resolves null for a login nobody has and for the login of a person or a bot',
+    async ({ client, addInstallation, scriptUserAccount }) => {
+      addInstallation(installation(11, 'acme'));
+      scriptUserAccount('ada', ADA);
+      scriptUserAccount('dependabot[bot]', DEPENDABOT);
+      for (const login of ['grace', 'ada', 'dependabot[bot]']) {
+        expect(await client.getOrganizationAccount(id(11), login), login).toBeNull();
+      }
+    },
+  ],
+  [
+    'getOrganizationAccount resolves null for a login that cannot be an organisation, even when an account was scripted under that text',
+    async ({ client, addInstallation, scriptUserAccount }) => {
+      addInstallation(installation(11, 'acme'));
+      for (const login of [
+        '../app',
+        'acme corp',
+        '<b>acme</b>',
+        'acme/../globex',
+        'acme_corp',
+        '-acme',
+        '',
+        'acme[bot]',
+      ]) {
+        scriptUserAccount(login, ACME);
+        expect(await client.getOrganizationAccount(id(11), login), `the login ${JSON.stringify(login)}`).toBeNull();
+      }
+    },
+  ],
+  ...FAILURES.map(
+    ([failure, error]): ContractCase => [
+      `getOrganizationAccount rejects with ${error.name} when GitHub answers "${failure}"`,
+      async ({ client, addInstallation, scriptUserAccount }) => {
+        addInstallation(installation(11, 'acme'));
+        scriptUserAccount('acme', failure);
+        await expect(client.getOrganizationAccount(id(11), 'acme')).rejects.toBeInstanceOf(error);
+      },
+    ],
+  ),
+  [
+    'getOrganizationAccount is refused for an installation the gate refuses, gone for one GitHub no longer has, and suspended for a suspended one',
+    async ({ client, addInstallation, scriptUserAccount, ...world }) => {
+      addInstallation(installation(11, 'acme'));
+      addInstallation(installation(12, 'globex'));
+      scriptUserAccount('acme', ACME);
+      await expectInstallationRefusals(world, (installationId) => [
+        () => client.getOrganizationAccount(id(installationId), 'acme'),
+      ]);
+    },
+  ],
+];

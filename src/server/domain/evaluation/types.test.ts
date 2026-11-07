@@ -12,6 +12,8 @@ import {
   type AllowlistBasis,
   type AllowlistEntry,
   type CommitFacts,
+  type CorporateApprovalBasis,
+  type CorporateCover,
   type CoveringBasis,
   type EvaluationInput,
   FAILURE_CODES,
@@ -73,8 +75,20 @@ test('a commit has no personal data except the two display-only raw identities',
 
 test('the input is readonly data: lists, a membership map and an override map', () => {
   expectTypeOf<keyof EvaluationInput>().toEqualTypeOf<
-    'headSha' | 'opener' | 'commits' | 'listing' | 'policy' | 'signatures' | 'allowlist' | 'orgMembers' | 'overrides'
+    | 'headSha'
+    | 'opener'
+    | 'commits'
+    | 'listing'
+    | 'policy'
+    | 'signatures'
+    | 'allowlist'
+    | 'orgMembers'
+    | 'overrides'
+    | 'corporateCovered'
+    | 'corporateOutdated'
   >();
+  expectTypeOf<EvaluationInput['corporateCovered']>().toEqualTypeOf<ReadonlyMap<number, CorporateCover>>();
+  expectTypeOf<EvaluationInput['corporateOutdated']>().toEqualTypeOf<ReadonlySet<number>>();
   expectTypeOf<EvaluationInput['commits']>().toEqualTypeOf<readonly CommitFacts[]>();
   expectTypeOf<EvaluationInput['listing']>().toEqualTypeOf<'complete' | 'exceeded'>();
   expectTypeOf<EvaluationInput['policy']>().toEqualTypeOf<Policy | null>();
@@ -95,30 +109,26 @@ test('the covering basis is the shape the stored details accept, modulo readonly
   expectTypeOf<StoredBasis>().toExtend<CoveringBasis>();
   expectTypeOf<Extract<CoveringBasis, { kind: 'signature' }>>().toEqualTypeOf<SignatureBasis>();
   expectTypeOf<Extract<CoveringBasis, { kind: 'allowlist' }>>().toEqualTypeOf<AllowlistBasis>();
+  expectTypeOf<Extract<CoveringBasis, { kind: 'corporate_approval' }>>().toEqualTypeOf<CorporateApprovalBasis>();
 });
 
-// E21 adds `corporate_approval` as one more member. The union below stands in for that future type: the two branches that
-// exist today are written exactly as the engine will write them, and they compile and behave the same with the new member.
-interface CorporateApprovalBasis {
-  readonly kind: 'corporate_approval';
-  readonly approvalId: number;
-}
-
-function describeBasis(basis: CoveringBasis | CorporateApprovalBasis): string {
+// E21-S05 added `corporate_approval` as one more member: the two branches that existed before are written as they were, and they
+// behave the same with the new member, which a switch over the kind alone tells apart.
+function describeBasis(basis: CoveringBasis): string {
   switch (basis.kind) {
     case 'signature':
       return `signature ${basis.signatureId} v${basis.versionId} major ${basis.major}`;
     case 'allowlist':
       return `allowlist ${basis.entryId} ${basis.entryKind} ${basis.scope}`;
     case 'corporate_approval':
-      return `approval ${basis.approvalId}`;
+      return `approval ${basis.approvalId} of agreement ${basis.agreementId}`;
   }
 }
 
 test.each([
   [{ kind: 'signature', signatureId: 5, versionId: 3, major: 2 } as const, 'signature 5 v3 major 2'],
   [{ kind: 'allowlist', entryId: 9, entryKind: 'bot', scope: 'repository' } as const, 'allowlist 9 bot repository'],
-  [{ kind: 'corporate_approval', approvalId: 4 } as const, 'approval 4'],
+  [{ kind: 'corporate_approval', agreementId: 6, approvalId: 4 } as const, 'approval 4 of agreement 6'],
 ])('basis %j is told apart by its kind alone', (basis, expected) => {
   expect(describeBasis(basis)).toBe(expected);
 });
@@ -128,7 +138,14 @@ test('the builders produce the shapes the types describe', () => {
   expect(input.commits.map((commit) => commit.parents)).toEqual([[sha(1)], []]);
   expect(input.policy).toEqual({ documentId: 1, activeMajor: 1 });
   expect(input.listing).toBe('complete');
-  expect(input.orgMembers.size + input.overrides.size + input.allowlist.length + input.signatures.length).toBe(0);
+  expect(
+    input.orgMembers.size +
+      input.overrides.size +
+      input.allowlist.length +
+      input.signatures.length +
+      input.corporateCovered.size +
+      input.corporateOutdated.size,
+  ).toBe(0);
 });
 
 test('a builder SHA is lower-case hex of the length the database accepts', () => {

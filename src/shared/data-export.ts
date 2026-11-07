@@ -56,6 +56,41 @@ const signatureSchema = z.object({
   personalData: personalDataSchema.nullable(),
 });
 
+/**
+ * A corporate CLA the person signed as the authorised signatory of a company (E21). The signature itself is also in `signatures`
+ * with `signerType` `corporate`. `personalData` is the company and the title the person gave, and `null` once they were erased
+ * (E16-S04): the agreement stays. Who is approved under it is not included, because those are other people.
+ */
+const corporateAgreementSchema = z.object({
+  id,
+  signatureId: id,
+  installation: z.object({ githubInstallationId: id, accountLogin: z.string() }),
+  document: z.object({ id, name: z.string() }),
+  major: z.int().nonnegative(),
+  signedAt: instant,
+  revokedAt: instant.nullable(),
+  personalData: z.object({ companyName: z.string(), signatoryTitle: z.string() }).nullable(),
+});
+
+/**
+ * An approval that names the person by their numeric GitHub id, under a corporate CLA of a company: given by a CLA manager
+ * (`source` `manager`) or derived from a domain or organisation approval (`rule`, which then expires). Approvals of a domain or
+ * of an organisation name no person and are not here. `login` is the snapshot kept for display, `null` once erased. Who approved,
+ * who revoked and the free text of the reason are not included: the first two are other people, and the third is typed by one.
+ */
+const corporateApprovalSchema = z.object({
+  id,
+  agreementId: id,
+  installation: z.object({ githubInstallationId: id, accountLogin: z.string() }),
+  document: z.object({ id, name: z.string() }),
+  major: z.int().nonnegative(),
+  source: z.enum(['manager', 'rule']),
+  approvedAt: instant,
+  expiresAt: instant.nullable(),
+  revokedAt: instant.nullable(),
+  login: z.string().nullable(),
+});
+
 /** An allowlist entry that names the person (by the numeric GitHub id): where it applies and what kind it is, not who made it. */
 const allowlistEntrySchema = z.object({
   installation: z.object({ accountLogin: z.string() }),
@@ -85,6 +120,8 @@ export const dataExportSchema = z.object({
   exportedAt: instant,
   user: z.object({ githubId: id, login: z.string(), name: z.string().nullable(), createdAt: instant }),
   signatures: z.array(signatureSchema),
+  corporateAgreements: z.array(corporateAgreementSchema),
+  corporateApprovals: z.array(corporateApprovalSchema),
   allowlistEntries: z.array(allowlistEntrySchema),
   auditEntries: z.array(auditEntrySchema),
   truncated: z.boolean(),

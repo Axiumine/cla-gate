@@ -40,7 +40,7 @@ async function openDialog(serve: Parameters<typeof serveDocuments>[0] = {}) {
   return { served, ...rendered };
 }
 
-test('the dialog has a required name, a scope with the whole installation first, and a kind with only "Individual"', async () => {
+test('the dialog has a required name, a scope with the whole installation first, and a kind that is "Individual" unless "Corporate" (E21) is chosen', async () => {
   await openDialog();
   expect(nameField()).toHaveValue('');
   expect(nameField()).toHaveAccessibleDescription(messages['documents.new.nameHelp']);
@@ -56,8 +56,19 @@ test('the dialog has a required name, a scope with the whole installation first,
     within(kindField())
       .getAllByRole('option')
       .map((option) => option.textContent),
-  ).toEqual([messages['documents.kind.individual']]);
+  ).toEqual([messages['documents.kind.individual'], messages['documents.kind.corporate']]);
   expect(kindField()).toHaveValue('individual');
+});
+
+test('a corporate CLA is created by choosing the kind, which is sent with the name', async () => {
+  const { served, user } = await openDialog();
+  await user.type(nameField(), 'Corporate CLA');
+  await user.selectOptions(kindField(), 'corporate');
+  await user.click(create());
+  await waitFor(() => {
+    expect(served.create).toHaveLength(1);
+  });
+  expect(bodyOf(served.create[0])).toEqual({ name: 'Corporate CLA', kind: 'corporate' });
 });
 
 test('the repositories are asked for when the dialog opens, and not before: the first hundred of this tenant', async () => {

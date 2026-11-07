@@ -62,6 +62,23 @@ export const AUDIT_ACTIONS = [
   // Added by E22-S04: a run of the retention sweep deleted webhook deliveries or expired sessions (metadata the two counts, numbers
   // only). Instance-wide and written by a schedule, so it has neither an installation nor an actor.
   'retention.swept',
+  // Added by E21-S02: a company signed a corporate CLA through its signatory (metadata ids and the major only, never the company, the
+  // title, the name or an address), and a maintainer chose or removed the corporate CLA document of a repository (ids only).
+  'corporate_agreement.signed',
+  'repository.corporate_document_set',
+  // Added by E21-S03: the CLA manager of a corporate agreement approved an employee, a domain or an organisation, or revoked an approval
+  // (one row for each approval that was revoked with it). The subject is the approval; the metadata holds the kind, the numeric GitHub
+  // id, the signature of the agreement and a code, never a login, an address, a domain or the reason of a revocation.
+  'corporate_approval.added',
+  'corporate_approval.revoked',
+  // Added by E21-S04: an employee claimed coverage under an employer's agreement and a rule (an e-mail domain or an organisation the CLA
+  // manager approved) matched, so a `user` approval was derived for them. The subject is the new approval; the metadata holds `kind`
+  // `user`, the numeric GitHub id of the employee, the signature of the agreement and no login, address, domain or company.
+  'corporate_approval.derived',
+  // Added by E21: an org admin downloaded the file of the corporate agreements or the file of the approvals of a tenant, as the export of the
+  // signatures is recorded. The row is committed before the first byte; the metadata holds the number of rows and nothing from the file.
+  'corporate_agreements.exported',
+  'corporate_approvals.exported',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

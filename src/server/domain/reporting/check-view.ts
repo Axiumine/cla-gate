@@ -14,10 +14,14 @@ type CheckStatus = 'in_progress' | 'completed';
  */
 export type CheckConclusion = 'success' | 'failure' | 'neutral' | 'cancelled';
 
-/** How many contributors each covering basis accounts for: `override` counts commits whose unlinked identity a maintainer waived. */
+/**
+ * How many contributors each covering basis accounts for: `corporate` counts people an approval of a corporate CLA covers (E21-S05),
+ * as a number and nothing else, and `override` counts commits whose unlinked identity a maintainer waived.
+ */
 export interface CoverageCounts {
   readonly signature: number;
   readonly allowlist: number;
+  readonly corporate: number;
   readonly override: number;
 }
 

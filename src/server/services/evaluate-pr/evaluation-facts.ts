@@ -13,14 +13,16 @@ import type { GitHubPullRequest } from '../ports/github.ts';
 import type { RepositoryRow } from '../repository-rows.ts';
 import { commitFacts } from './commit-facts.ts';
 import type { Listed } from './commit-listing.ts';
+import { readCorporateFacts } from './corporate-facts.ts';
 import { readOrgMemberFacts } from './org-members.ts';
 import { type PolicyScope, readAllowlist, readOverrides, readPolicy } from './policy-facts.ts';
 import { readSignatures } from './signature-facts.ts';
 
 // The facts of one evaluation as the engine takes them (E07-S04, steps 5 and 6): the policy of the repository, then the
-// organisation membership of the people who still need it, and the signatures last. A signature is the one fact that a
-// person can create while the job runs (they sign in another tab), so it is read after everything that takes time, and as
-// late as possible before the verdict. Everything is read as plain data by numeric id: a login reaches no rule.
+// organisation membership of the people who still need it, and the signatures and the corporate approvals last. A
+// signature is the one fact that a person can create while the job runs (they sign in another tab), and a corporate approval
+// (E21-S05) another, so they are read after everything that takes time, and as late as possible before the verdict.
+// Everything is read as plain data by numeric id: a login reaches no rule.
 
 /** The stored tenant an evaluation is for: the installation and the repository, as the job loaded them. */
 export interface Tenant {
@@ -45,10 +47,33 @@ export interface FactsRequest {
 /** The numeric ids of `actors`: whose signatures are read. */
 const idsOf = (actors: readonly ExtractedActor[]): number[] => actors.map((actor) => actor.account.id);
 
+/** What is read before the actors are known: the input of the engine with no signature, no membership and no corporate cover yet. */
+interface Read {
+  readonly commits: EvaluationInput['commits'];
+  readonly policy: EvaluationInput['policy'];
+  readonly allowlist: EvaluationInput['allowlist'];
+  readonly overrides: EvaluationInput['overrides'];
+}
+
+/** The input of the engine from the pull request and what was read first; the reads that need the actors fill the rest. */
+function draftOf({ pr, listed }: FactsRequest, read: Read): EvaluationInput {
+  return {
+    headSha: pr.headSha,
+    opener: { id: pr.opener.id, type: pr.opener.type },
+    listing: listed.listing,
+    signatures: [],
+    orgMembers: new Map(),
+    corporateCovered: new Map(),
+    corporateOutdated: new Set(),
+    ...read,
+  };
+}
+
 /**
  * The input of the engine for one pull request, read in this order: the CLA in force, the allowlist, the overrides of the
- * collected commits, the organisation membership, and the signatures last, in one query for the distinct actors on the
- * active document that are not revoked. Every read filters by the installation of the tenant.
+ * collected commits, the organisation membership, the signatures (one query for the distinct actors on the active document that
+ * are not revoked) and last the corporate approvals (E21-S05, one query for the same actors). Every read filters by the
+ * installation of the tenant.
  */
 export async function readEvaluationInput(deps: FactsDeps, request: FactsRequest): Promise<EvaluationInput> {
   const { tenant, pr, listed } = request;
@@ -64,17 +89,7 @@ export async function readEvaluationInput(deps: FactsDeps, request: FactsRequest
     scope,
     commits.map((commit) => commit.sha),
   );
-  const draft: EvaluationInput = {
-    headSha: pr.headSha,
-    opener: { id: pr.opener.id, type: pr.opener.type },
-    commits,
-    listing: listed.listing,
-    policy,
-    signatures: [],
-    allowlist,
-    orgMembers: new Map(),
-    overrides,
-  };
+  const draft = draftOf(request, { commits, policy, allowlist, overrides });
   const { actors } = addCoAuthors(extractActors(draft), commits);
   const members = await readOrgMemberFacts({
     membership: deps.orgMembership,
@@ -88,5 +103,16 @@ export async function readEvaluationInput(deps: FactsDeps, request: FactsRequest
     actors,
   });
   const signatures = policy === null ? [] : await readSignatures(scope, policy.documentId, idsOf(actors));
-  return { ...draft, orgMembers: members, signatures };
+  const corporate = await readCorporateFacts(scope, {
+    policy,
+    corporateDocumentId: tenant.repository.corporate_document_id,
+    githubIds: idsOf(actors),
+  });
+  return {
+    ...draft,
+    orgMembers: members,
+    signatures,
+    corporateCovered: corporate.covered,
+    corporateOutdated: corporate.outdated,
+  };
 }

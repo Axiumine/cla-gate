@@ -23,6 +23,10 @@ export const eraseMessages = {
   'erase.removes': 'What is removed',
   'erase.removes.allowlist.one': 'The login shown on {count} allowlist entry. The entry stays, kept by GitHub id.',
   'erase.removes.allowlist.other': 'The login shown on {count} allowlist entries. The entries stay, kept by GitHub id.',
+  'erase.removes.corporate.one':
+    'The login kept with {count} corporate approval. The approval stays, kept by GitHub id.',
+  'erase.removes.corporate.other':
+    'The login kept with {count} corporate approvals. The approvals stay, kept by GitHub id.',
   'erase.removes.pii.one': 'The name, email address and GitHub login the person gave when signing ({count} record).',
   'erase.removes.pii.other': 'The name, email address and GitHub login the person gave when signing ({count} records).',
   'erase.removes.sessions':

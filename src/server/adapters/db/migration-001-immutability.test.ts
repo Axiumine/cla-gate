@@ -23,7 +23,7 @@ test.each([
   ['DELETE', sql`delete from cla_versions`, 'cla_versions is immutable: DELETE'],
   [
     'TRUNCATE (with every table that references it, so the foreign keys do not object first)',
-    sql`truncate cla_versions, cla_documents, cla_drafts, repositories, signatures, signer_pii, commit_overrides, allowlist_entries, pr_evaluations, merge_group_evaluations`,
+    sql`truncate cla_versions, cla_documents, cla_drafts, repositories, signatures, signer_pii, commit_overrides, allowlist_entries, pr_evaluations, merge_group_evaluations, corporate_agreements, corporate_agreement_pii, corporate_approvals, corporate_approval_pii`,
     'cla_versions is immutable: TRUNCATE',
   ],
   ['TRUNCATE of a parent table with CASCADE', sql`truncate cla_documents cascade`, 'is immutable: TRUNCATE'],
@@ -65,7 +65,10 @@ test('signatures rejects DELETE, even when no signer_pii row holds a foreign key
 });
 
 test.each([
-  ['TRUNCATE (with its signer_pii, the only table that references it)', sql`truncate signatures, signer_pii`],
+  [
+    'TRUNCATE (with every table that references it)',
+    sql`truncate signatures, signer_pii, corporate_agreements, corporate_agreement_pii, corporate_approvals, corporate_approval_pii`,
+  ],
   ['TRUNCATE of users with CASCADE', sql`truncate users cascade`],
 ])('signatures rejects %s', async (_operation, statement) => {
   const { db } = await seeded();

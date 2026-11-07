@@ -5,7 +5,6 @@ import { type GithubId, parseGithubId } from '../../shared/github-id.ts';
 import type { AuditEntry } from './audit-entry.ts';
 import { lacksConclusion, type StoredCheckRun } from './fake-check-runs/test-support.ts';
 import {
-  abortable,
   COMMIT_SHA,
   commentKey,
   commentsPage,
@@ -25,13 +24,13 @@ import {
   reachable,
   repositoryKey,
   rewriteComment,
-  takeFirst,
 } from './fake-github/test-support.ts';
 
 export type { GitHubMethod, RecordedCall };
 
+import { abortable, takeFirst } from './fake-abortable/test-support.ts';
 import { findCommit } from './fake-commits/test-support.ts';
-import { userAccountOf } from './fake-user-accounts/test-support.ts';
+import { orgAccountOf, publicMemberOf, userAccountOf } from './fake-user-accounts/test-support.ts';
 import type { Clock } from './ports/clock.ts';
 import type {
   CheckRunWrite,
@@ -206,6 +205,16 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
     return this.#serveInstallation('getUserAccount', id, () => userAccountOf(this.state.userAccounts, login));
   }
 
+  getOrganizationAccount(id: GithubId, login: string): Promise<GitHubUserAccount | null> {
+    return this.#serveInstallation('getOrganizationAccount', id, () => orgAccountOf(this.state.userAccounts, login));
+  }
+
+  isPublicOrgMember(id: GithubId, org: string, login: string): Promise<boolean> {
+    return this.#serveInstallation('isPublicOrgMember', id, () =>
+      publicMemberOf(this.state.publicMembers, { org, login }),
+    );
+  }
+
   probeMembersPermission(id: GithubId): Promise<boolean> {
     return this.#serveInstallation('probeMembersPermission', id, (entry) => membersProbeOf(this.state, entry));
   }
@@ -293,36 +302,25 @@ export class FakeGitHub extends FakeWorld implements GitHubClient {
   }
 
   listIssueComments(
-    githubInstallationId: GithubId,
+    id: GithubId,
     fullName: string,
     issueNumber: number,
     page: number,
   ): Promise<GitHubIssueCommentPage> {
-    return this.#serveInstallation('listIssueComments', githubInstallationId, (entry) =>
+    return this.#serveInstallation('listIssueComments', id, (entry) =>
       commentsPage(this.state, { entry, fullName, issueNumber }, page),
     );
   }
 
-  createIssueComment(
-    githubInstallationId: GithubId,
-    fullName: string,
-    issueNumber: number,
-    body: string,
-  ): Promise<GitHubIssueComment> {
-    return this.#serveInstallation('createIssueComment', githubInstallationId, (entry) =>
+  createIssueComment(id: GithubId, fullName: string, issueNumber: number, body: string): Promise<GitHubIssueComment> {
+    return this.#serveInstallation('createIssueComment', id, (entry) =>
       postComment(this.state, { entry, fullName, issueNumber }, body),
     );
   }
 
-  listPullRequestsForCommit(
-    githubInstallationId: GithubId,
-    fullName: string,
-    headSha: string,
-  ): Promise<GitHubPullRequestRef[]> {
-    return this.#serveInstallation('listPullRequestsForCommit', githubInstallationId, () => [
-      ...(COMMIT_SHA.test(headSha)
-        ? (this.state.commitPulls.get(commitKey(githubInstallationId, fullName, headSha)) ?? [])
-        : []),
+  listPullRequestsForCommit(id: GithubId, fullName: string, headSha: string): Promise<GitHubPullRequestRef[]> {
+    return this.#serveInstallation('listPullRequestsForCommit', id, () => [
+      ...(COMMIT_SHA.test(headSha) ? (this.state.commitPulls.get(commitKey(id, fullName, headSha)) ?? []) : []),
     ]);
   }
 

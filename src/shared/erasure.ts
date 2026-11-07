@@ -19,13 +19,15 @@ export const ERASURES_PATH = '/api/installations/:installationId/erasures';
 /**
  * What an erasure of the person would remove from the installation: how many signatures the person has there (they stay,
  * valid), how many rows of personal data are held for them (`signer_pii`), which is what the admin confirms, and how many
- * allowlist entries name them (they stay, and the login shown with each is cleared).
+ * allowlist entries name them (they stay, and the login shown with each is cleared), and how many approvals of a corporate agreement
+ * name them (they stay, and the login snapshot kept with each is deleted).
  */
 export const erasurePreviewSchema = z.object({
   githubUserId: githubIdSchema,
   signatures: z.int().nonnegative(),
   signerPiiRows: z.int().nonnegative(),
   allowlistEntries: z.int().nonnegative(),
+  corporateApprovals: z.int().nonnegative(),
 });
 
 /**

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { type Ref, useState } from 'react';
 import type { SignContextResponse } from '../../shared/sign-context.ts';
+import { EmployerClaim } from '../corporate/EmployerClaim.tsx';
 import { CannotSign, NoVerifiedEmail } from './BlockedPanel.tsx';
 import { Confirmation, type Signed } from './Confirmation.tsx';
 import { ConsentForm } from './ConsentForm.tsx';
@@ -26,29 +27,38 @@ export interface SignActionProps {
 /**
  * What the person can do about the CLA on screen (E18-S01, E18-S02): the consent form, which the confirmation replaces once the
  * signature is recorded; instructions for a person with no verified address; or nothing at all, for a person who already signed.
+ * Under the form and under the instructions for a missing address stands the entry "Contributing for an employer?" (E21-S04), which is there only when the
+ * repository offers the claim; it is asked for the repository of the context, and a person who signed, or who is covered already, has no use for it.
  */
 export function SignAction({ context, action, headingRef, review, reload, reloading, onNoActiveCla }: SignActionProps) {
   const [signed, setSigned] = useState<Signed | undefined>(undefined);
+  const claim = <EmployerClaim githubRepoId={context.repository.githubRepoId} />;
   switch (action) {
     case 'form':
       return signed === undefined ? (
-        <ConsentForm
-          context={context}
-          headingRef={headingRef}
-          reloading={reloading}
-          handlers={{ onSigned: setSigned, onNoActiveCla, review }}
-        />
+        <>
+          <ConsentForm
+            context={context}
+            headingRef={headingRef}
+            reloading={reloading}
+            handlers={{ onSigned: setSigned, onNoActiveCla, review }}
+          />
+          {claim}
+        </>
       ) : (
         <Confirmation signed={signed} prUrl={context.prUrl} />
       );
     case 'blocked':
       return (
-        <NoVerifiedEmail
-          headingRef={headingRef}
-          reload={reload}
-          reloading={reloading}
-          returnTo={signReturnTo(context.repository.githubRepoId, context.pr ?? undefined)}
-        />
+        <>
+          <NoVerifiedEmail
+            headingRef={headingRef}
+            reload={reload}
+            reloading={reloading}
+            returnTo={signReturnTo(context.repository.githubRepoId, context.pr ?? undefined)}
+          />
+          {claim}
+        </>
       );
     case 'cannot':
       return <CannotSign headingRef={headingRef} reload={reload} reloading={reloading} />;

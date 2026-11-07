@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { HttpResponse, http } from 'msw';
 import type { z } from 'zod';
-import type {
-  UserAccountAnswer,
-  UserAccountFailure,
-  UserAccounts,
+import {
+  type PublicMembers,
+  publicMemberKey,
+  type UserAccountAnswer,
+  type UserAccountFailure,
+  type UserAccounts,
 } from '../../../services/fake-user-accounts/test-support.ts';
 import { GITHUB_API_ORIGIN } from '../github-http.ts';
 import type { userAccountSchema } from '../user-account-schema.ts';
@@ -191,4 +193,47 @@ export function userAccountRoute({ accounts, known }: UserAccountRouteOptions) {
       ? responseFor(accounts.get(String(params['login']).toLowerCase()))
       : HttpResponse.json({ message: 'Bad credentials' }, { status: 401 }),
   );
+}
+
+/**
+ * `GET /orgs/{org}` (E21-S03) as GitHub answers it to an installation token: a 401 for a token nobody holds, a 404 for a login nobody
+ * has and for one that belongs to a person or a bot, and for an organisation the account (or failure) scripted for the login.
+ */
+export function organizationAccountRoute({ accounts, known }: UserAccountRouteOptions) {
+  return http.get(`${GITHUB_API_ORIGIN}/orgs/:org`, ({ request, params }) => {
+    if (!known(request)) {
+      return HttpResponse.json({ message: 'Bad credentials' }, { status: 401 });
+    }
+    const answer = accounts.get(String(params['org']).toLowerCase());
+    return responseFor(typeof answer === 'object' && answer.type !== 'Organization' ? undefined : answer);
+  });
+}
+
+/** What the mocked GitHub of the HTTP world needs to answer the check of a public membership. */
+export interface PublicMemberRouteOptions {
+  /** What each pair of organisation and login is scripted to answer; a pair absent here is a 404, as for anyone who does not show a membership. */
+  readonly members: PublicMembers;
+  /** Whether the request's token was minted for an installation the world holds. */
+  readonly known: (request: Request) => boolean;
+}
+
+/**
+ * `GET /orgs/{org}/public_members/{username}` (E21-S04) as GitHub answers it to an installation token: a 401 for a token nobody holds, and
+ * for a pair a test scripted a 204 (a member who shows it), a 404 (anyone else) or the failure. A pair nobody scripted is a 404 too. The
+ * route is served before the guard of the public-members endpoints (E07-S10), which keeps failing every other mocked GitHub that is asked.
+ */
+export function publicMemberRoute({ members, known }: PublicMemberRouteOptions) {
+  return http.get(`${GITHUB_API_ORIGIN}/orgs/:org/public_members/:username`, ({ request, params }) => {
+    if (!known(request)) {
+      return HttpResponse.json({ message: 'Bad credentials' }, { status: 401 });
+    }
+    const answer = members.get(publicMemberKey(String(params['org']), String(params['username'])));
+    if (typeof answer === 'string') {
+      const { status, headers, body } = failureOf(answer).response;
+      return HttpResponse.json(body, { status, headers });
+    }
+    return answer
+      ? new HttpResponse(null, { status: 204 })
+      : HttpResponse.json({ message: 'Not Found' }, { status: 404 });
+  });
 }

@@ -4,6 +4,8 @@ import { screen } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { expect, test } from 'vitest';
 import { sessionRoute } from '../shared/auth-contract.ts';
+import { CORPORATE_AGREEMENTS_PAGE_PATH, CORPORATE_SIGN_PAGE_PATH } from '../shared/corporate.ts';
+import { CORPORATE_CLAIM_PAGE_PATH } from '../shared/corporate-claims.ts';
 import { createQueryClient } from './api/index.ts';
 import { messages } from './i18n/index.ts';
 import type { RouterContext } from './route-access.ts';
@@ -32,7 +34,7 @@ test('every route of the tree names its page title, and it is a key of the catal
   expect(routeTitleProblems(routerFor().tree, messages)).toEqual([]);
 });
 
-test('the access of every route: the pages of a visitor (front page, failed login, first-run setup, sign page) are public, every screen of a signed-in person needs a login', () => {
+test('the access of every route: the pages of a visitor (front page, failed login, first-run setup, sign page) are public, every screen of a signed-in person, and those of corporate signing (E21), needs a login', () => {
   expect(accessById(routerFor().tree)).toEqual({
     __root__: 'public',
     '/': 'public',
@@ -53,7 +55,17 @@ test('the access of every route: the pages of a visitor (front page, failed logi
     '/installations/$installationId/pending': 'authenticated',
     '/installations/$installationId/audit': 'authenticated',
     '/operator/installations': 'authenticated',
+    '/corporate/sign/$githubRepoId': 'authenticated',
+    '/corporate/claim/$githubRepoId': 'authenticated',
+    '/corporate/agreements': 'authenticated',
   });
+});
+
+test('the corporate pages are at the addresses the shared contract names, the parameter spelled the way the router spells it', () => {
+  const ids = Object.keys(accessById(routerFor().tree));
+  expect(ids).toContain(CORPORATE_SIGN_PAGE_PATH.replace(':githubRepoId', '$githubRepoId'));
+  expect(ids).toContain(CORPORATE_CLAIM_PAGE_PATH.replace(':githubRepoId', '$githubRepoId'));
+  expect(ids).toContain(CORPORATE_AGREEMENTS_PAGE_PATH);
 });
 
 test('the router context is the query client it was made for', () => {

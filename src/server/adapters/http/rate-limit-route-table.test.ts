@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type * as FastifyModule from 'fastify';
 import { expect, test, vi } from 'vitest';
+import { CORPORATE_AGREEMENTS_CSV_PATH, CORPORATE_APPROVALS_CSV_PATH } from '../../../shared/corporate-export.ts';
 import { DATA_EXPORT_PATH } from '../../../shared/data-export.ts';
 import { SIGNATURES_CSV_PATH } from '../../../shared/signature-export.ts';
 import { SIGNATURES_PATH } from '../../../shared/signature-search.ts';
@@ -65,19 +66,49 @@ test('every route of the table that switches the limit off is on the RATE_LIMIT_
 /** `expect.any` is typed `any`; as `unknown` it can sit in an object literal. */
 const anyFunction: unknown = expect.any(Function);
 
-test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
+/** A budget of `max` in `timeWindow` ms counted after the guard and keyed on the person (E21-S02: 10 corporate signings a minute; E21-S03: 60 approval changes a minute; E21-S04: 10 claims an hour; not on the address). */
+const perPerson = (max: number, timeWindow = 60_000): unknown => ({
+  max,
+  timeWindow,
+  cache: 10_000,
+  hook: 'preHandler',
+  keyGenerator: anyFunction,
+});
+
+/** E21-S03: the three routes that change the approvals of an agreement, 60 changes a minute for each person, counted after the guard and kept for each route. */
+const APPROVAL_ROUTES = [
+  'POST /api/corporate/agreements/:agreementId/approvals',
+  'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
+  'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
+] as const;
+const APPROVAL_BUDGETS = Object.fromEntries(APPROVAL_ROUTES.map((name) => [name, perPerson(60)]));
+
+/** E21-S04: the claim of an employee, 10 an hour for each person, counted after the guard like the other corporate routes. */
+const CLAIM_ROUTE = 'POST /api/corporate/repositories/:githubRepoId/claims';
+/** The routes of the corporate flow that follow the approvals, with the budget of each. */
+const CORPORATE_ROUTES = [...APPROVAL_ROUTES, CLAIM_ROUTE] as const;
+const CORPORATE_BUDGETS = { ...APPROVAL_BUDGETS, [CLAIM_ROUTE]: perPerson(10, 3_600_000) };
+
+const csv = `GET ${SIGNATURES_CSV_PATH}`;
+/** The two corporate exports (E21-S05), which have the budget of the signature CSV. */
+const corporateCsv = [`GET ${CORPORATE_AGREEMENTS_CSV_PATH}`, `GET ${CORPORATE_APPROVALS_CSV_PATH}`];
+const mine = `GET ${DATA_EXPORT_PATH}`;
+/** True for the routes of the corporate exports, whose budget has a test of its own below. */
+const isCorporateCsv = (route: SeenRoute): boolean => names(route).some((name) => corporateCsv.includes(name));
+const search = `GET ${SIGNATURES_PATH}`;
+
+test('the routes with a budget of their own are the four of the login, the save of a draft, the sign request, the corporate signing, the three changes of the approvals of an agreement, the claim of an employee, the signature search, the signature CSV and the export of the own data, each with the key cap, and none answers HEAD', async () => {
   const table = await tableOfTheApp();
-  const own = table.filter((route) => typeof limitOf(route) === 'object');
+  const own = table.filter((route) => typeof limitOf(route) === 'object' && !isCorporateCsv(route));
   const budgets = Object.fromEntries(own.flatMap((route) => names(route).map((name) => [name, limitOf(route)])));
-  const csv = `GET ${SIGNATURES_CSV_PATH}`;
-  const mine = `GET ${DATA_EXPORT_PATH}`;
-  const search = `GET ${SIGNATURES_PATH}`;
   expect(Object.keys(budgets).toSorted((a, b) => a.localeCompare(b))).toEqual(
     [
       'GET /api/auth/callback',
       'GET /api/auth/login',
       'GET /api/auth/session',
       'POST /api/auth/logout',
+      'POST /api/corporate/agreements',
+      ...CORPORATE_ROUTES,
       'POST /api/sign',
       'PUT /api/installations/:installationId/documents/:documentId/draft',
       csv,
@@ -100,6 +131,8 @@ test('the routes with a budget of their own are the four of the login, the save 
     },
     // E13-S04: 10 sign requests a minute for each person, counted after the guard and keyed on the person, not on the address.
     'POST /api/sign': { max: 10, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
+    'POST /api/corporate/agreements': perPerson(10),
+    ...CORPORATE_BUDGETS,
     // E15-S02: 30 searches of signatures a minute for each person, counted after the guard and keyed on the person.
     [search]: { max: 30, timeWindow: 60_000, cache: 10_000, hook: 'preHandler', keyGenerator: anyFunction },
   });
@@ -113,4 +146,23 @@ test('the routes with a budget of their own are the four of the login, the save 
     expect.objectContaining({ max: 5, timeWindow: 3_600_000, cache: 10_000, hook: 'preHandler' }),
   ]);
   expect(own.flatMap((route) => names(route)).filter((name) => name.startsWith('HEAD '))).toEqual([]);
+});
+
+test('the two corporate CSV exports (E21-S05) have the budget of the signature CSV, six a minute for each person after the guard, and neither answers HEAD', async () => {
+  const table = await tableOfTheApp();
+  const own = table.filter(isCorporateCsv);
+  expect(own.flatMap(names).toSorted((a, b) => a.localeCompare(b))).toEqual(
+    corporateCsv.toSorted((a, b) => a.localeCompare(b)),
+  );
+  for (const route of own) {
+    expect(limitOf(route)).toEqual(
+      expect.objectContaining({
+        max: 6,
+        timeWindow: 60_000,
+        cache: 10_000,
+        hook: 'preHandler',
+        keyGenerator: anyFunction,
+      }),
+    );
+  }
 });

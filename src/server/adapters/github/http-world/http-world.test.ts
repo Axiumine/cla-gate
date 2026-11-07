@@ -38,6 +38,15 @@ test.each([
   ['members', '/orgs/acme/members?per_page=1', 'a token of an installation nobody has', 'Bearer ghs_made-up-999-1'],
   ['users', '/users/ada', 'no token', undefined],
   ['users', '/users/ada', 'a token of an installation nobody has', 'Bearer ghs_made-up-999-1'],
+  ['organisations', '/orgs/acme', 'no token', undefined],
+  ['organisations', '/orgs/acme', 'a token of an installation nobody has', 'Bearer ghs_made-up-999-1'],
+  ['public members', '/orgs/acme/public_members/ada', 'no token', undefined],
+  [
+    'public members',
+    '/orgs/acme/public_members/ada',
+    'a token of an installation nobody has',
+    'Bearer ghs_made-up-999-1',
+  ],
 ])('the %s route (%s) refuses %s with a 401', async (_route, path, _name, authorization) => {
   const world = await httpWorld(signer);
   world.addInstallation(installation(11, 'acme'));

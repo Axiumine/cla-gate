@@ -3,7 +3,14 @@
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import { CheckRunStore, type CheckRunWriteRecord } from '../fake-check-runs/test-support.ts';
 import { CommentIds, commentsOfIssue, pageOfComments, postedComment } from '../fake-comments/test-support.ts';
-import { scriptInto, type UserAccountAnswer, type UserAccounts } from '../fake-user-accounts/test-support.ts';
+import {
+  type PublicMemberAnswer,
+  type PublicMembers,
+  scriptInto,
+  scriptPublicMemberInto,
+  type UserAccountAnswer,
+  type UserAccounts,
+} from '../fake-user-accounts/test-support.ts';
 import type {
   GitHubAppInfo,
   GitHubCheckRun,
@@ -36,38 +43,6 @@ const FAKE_APP: GitHubAppInfo = {
   owner: { id: parseGithubId(9001), type: 'Organization' },
   permissions: { checks: 'write', metadata: 'read', pull_requests: 'read' },
 };
-
-/**
- * What `work` returns, or a rejection with the reason of `signal` as soon as it aborts, whichever comes first. `work` starts
- * at once, aborted or not; it is a function so that the promise it makes is returned, never left dangling.
- */
-export function abortable<T>(signal: AbortSignal | undefined, work: () => Promise<T>): Promise<T> {
-  if (signal === undefined) {
-    return work();
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
-      try {
-        signal.throwIfAborted();
-      } catch (reason) {
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the reason of a signal is whatever the aborter passed, and the caller must get exactly that
-        reject(reason);
-      }
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    work()
-      .then(resolve, reject)
-      .finally(() => {
-        signal.removeEventListener('abort', onAbort);
-      });
-  });
-}
-
-/** Removes and returns the first scripted entry for `method`, or undefined. */
-export function takeFirst<T extends { readonly method: string }>(queue: T[], method: string): T | undefined {
-  const index = queue.findIndex((entry) => entry.method === method);
-  return index === -1 ? undefined : queue.splice(index, 1)[0];
-}
 
 /** A commit id GitHub can hold: the adapter sends nothing else in a path or a query, and so the fake knows nothing else. */
 export const COMMIT_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
@@ -207,6 +182,8 @@ export type GitHubMethod =
   | 'getRepositoryPermission'
   | 'probeMembersPermission'
   | 'getUserAccount'
+  | 'getOrganizationAccount'
+  | 'isPublicOrgMember'
   | 'getPullRequest'
   | 'getCommit'
   | 'listPullRequestCommits'
@@ -245,6 +222,8 @@ export interface FakeState {
   readonly membersProbes: Map<GithubId, MembersProbeAnswer>;
   /** What each login answers to the account lookup (E14-S06); a login absent here has no account. */
   readonly userAccounts: UserAccounts;
+  /** What the check of a public membership answers per organisation and login (E21-S04); a pair absent here is not a member. */
+  readonly publicMembers: PublicMembers;
   readonly pullRequests: Map<string, GitHubPullRequest>;
   readonly pullCommits: Map<string, readonly GitHubCommit[]>;
   readonly repositoryCommits: Map<string, readonly GitHubCommit[]>;
@@ -269,6 +248,7 @@ function freshState(): FakeState {
     permissions: new Map(),
     membersProbes: new Map(),
     userAccounts: new Map(),
+    publicMembers: new Map(),
     pullRequests: new Map(),
     pullCommits: new Map(),
     repositoryCommits: new Map(),
@@ -333,6 +313,11 @@ export class FakeWorld {
   /** Scripts what the lookup of the account with `login` (E14-S06) answers from now on: the account, or a failure. */
   scriptUserAccount(login: string, answer: UserAccountAnswer): void {
     scriptInto(this.state.userAccounts)(login, answer);
+  }
+
+  /** Scripts what the check of the public membership of `login` in `org` (E21-S04) answers from now on: a verdict, or a failure. */
+  scriptPublicMember(org: string, login: string, answer: PublicMemberAnswer): void {
+    scriptPublicMemberInto(this.state.publicMembers)(org, login, answer);
   }
 
   /** Scripts what the members probe (E14-S05) answers for an installation, from now on; without a script it is granted. */

@@ -75,7 +75,7 @@ function headersOf(
  */
 export async function matrixWorld(
   env: Readonly<Record<string, string>> = {},
-  app: Pick<TestAppOptions, 'enqueuer' | 'allowlistGitHub' | 'commitGitHub'> = {},
+  app: Pick<TestAppOptions, 'enqueuer' | 'allowlistGitHub' | 'commitGitHub' | 'corporateGitHub'> = {},
 ) {
   const roles = new StubRoleLookup();
   const fakeGitHub = new FakeGitHub();

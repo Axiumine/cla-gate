@@ -11,6 +11,7 @@ import { requireAuditedRoutes } from './adapters/http/audit-routes.ts';
 import { registerAuth } from './adapters/http/auth.ts';
 import { noStoreForAuth } from './adapters/http/auth-no-store.ts';
 import { commitOverrideRoutes } from './adapters/http/commit-override-routes.ts';
+import { corporateRoutes } from './adapters/http/corporate-routes.ts';
 import { dataExportRoutes } from './adapters/http/data-export-routes.ts';
 import { documentRoutes } from './adapters/http/document-routes.ts';
 import { erasureRoutes } from './adapters/http/erasure-routes.ts';
@@ -53,6 +54,7 @@ import { authSettings } from './config/auth.ts';
 import type { AppConfig } from './config/env.ts';
 import { type AllowlistGitHub, allowlistGitHubNotWired } from './services/allowlist-account.ts';
 import { type CommitGitHub, commitGitHubNotWired } from './services/commit-override-lookup.ts';
+import { type CorporateGitHub, corporateGitHubNotWired } from './services/corporate-approval-lookup.ts';
 import { notWiredEnqueuer } from './services/jobs-not-wired.ts';
 import { createOperatorPolicies, type OperatorPolicies } from './services/operator-policies.ts';
 import { type Clock, systemClock } from './services/ports/clock.ts';
@@ -107,6 +109,12 @@ export interface AppOptions {
    * fails every call as an outage, so a server with no GitHub App answers `502 github_unavailable` and never stores a commit unchecked.
    */
   readonly commitGitHub?: CommitGitHub | undefined;
+  /**
+   * Where a corporate approval looks up the account or organisation it names (E21-S03), and the claim of an employee checks who they are and
+   * whether they show a membership (E21-S04): the GitHub client port, by numeric id. Defaults to one that fails every call as an outage, so a
+   * server with no GitHub App answers `503 upstream_unavailable` and never stores a login unchecked.
+   */
+  readonly corporateGitHub?: CorporateGitHub | undefined;
   /**
    * Who operates the instance (E11-S08): `boot` passes the policy it built with the owner of the App. Defaults to the one
    * `OPERATOR_GITHUB_IDS` names, or to none when it is unset (the owner of the App is not known without the GitHub client).
@@ -218,6 +226,12 @@ async function registerRoutes(
   await app.register(signContextRoutes, { db });
   await app.register(signRoutes, { db, enqueuer, recordNetworkMetadata: config.recordNetworkMetadata });
   await app.register(ownSignaturesRoutes, { db });
+  await app.register(corporateRoutes, {
+    db,
+    github: options.corporateGitHub ?? corporateGitHubNotWired,
+    enqueuer,
+    clock,
+  });
   await app.register(webhookRoutes, {
     secrets: { current: config.github.webhookSecret, previous: config.github.previousWebhookSecret },
     clock,

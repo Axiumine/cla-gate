@@ -9,8 +9,8 @@ import { outcomeOf, sortedUniqueCodes } from './outcome.ts';
 import { indexCoveringSignatures, type SignatureIndex } from './signatures.ts';
 import type { Account, CoveringBasis, FailureCode } from './types.ts';
 
-// E08-S04: is every actor covered, and by what. An actor is covered by a signature or by an allowlist entry, nothing
-// else. Both are looked up by numeric id; the account type decides which of the two can apply.
+// E08-S04: is every actor covered, and by what. An actor is covered by a signature, by an allowlist entry or (E21-S05) by
+// a corporate approval, nothing else. All are looked up by numeric id; the account type decides which can apply.
 
 /**
  * Only a person can consent. A bot cannot, and neither can an organisation or a mannequin (an unclaimed placeholder
@@ -19,26 +19,37 @@ import type { Account, CoveringBasis, FailureCode } from './types.ts';
  */
 const CAN_CONSENT: readonly AccountClass[] = ['human', 'unknown'];
 
+/** No one: the outdated set of an evaluation without an active CLA, where nothing is read of corporate agreements. */
+const NOBODY: ReadonlySet<number> = new Set();
+
 /** The facts, indexed once per evaluation, so the cost of an actor does not grow with the number of signatures. */
 interface Lookups {
   readonly signatures: SignatureIndex;
   readonly allowlist: AllowlistIndex;
   readonly orgMembers: CoverageFacts['orgMembers'];
+  readonly corporateCovered: CoverageFacts['corporateCovered'];
 }
 
 /**
- * The first basis that applies. A signature wins over an allowlist match: explicit consent is the stronger basis and it
- * survives the entry being removed later. Then comes the allowlist match of E08-S03.
+ * The first basis that applies, in a fixed order so the stored basis is deterministic. A signature wins over an allowlist
+ * match: explicit consent is the stronger basis and it survives the entry being removed later. Then comes the allowlist
+ * match of E08-S03, and last the approval of a corporate agreement (E21-S05), which only a person can hold: it covers a
+ * contributor who did not consent for themselves, so it is the basis of last resort and never hides one of the others.
  */
 function coveringBasis(account: Account, lookups: Lookups): CoveringBasis | null {
-  if (CAN_CONSENT.includes(classifyAccount(account))) {
-    const signature = lookups.signatures.get(account.id);
-    if (signature !== undefined) {
-      return signature;
-    }
+  const person = CAN_CONSENT.includes(classifyAccount(account));
+  const signature = person ? lookups.signatures.get(account.id) : undefined;
+  if (signature !== undefined) {
+    return signature;
   }
   const entry = matchIndexedAllowlist(account, lookups.allowlist, lookups.orgMembers);
-  return entry === null ? null : { kind: 'allowlist', entryId: entry.id, entryKind: entry.kind, scope: entry.scope };
+  if (entry !== null) {
+    return { kind: 'allowlist', entryId: entry.id, entryKind: entry.kind, scope: entry.scope };
+  }
+  const cover = person ? lookups.corporateCovered.get(account.id) : undefined;
+  return cover === undefined
+    ? null
+    : { kind: 'corporate_approval', agreementId: cover.agreementId, approvalId: cover.approvalId };
 }
 
 interface Shortfall {
@@ -68,8 +79,11 @@ function compareFixes(a: ActorFix, b: ActorFix): number {
   return compareText(a.code, b.code) || a.githubId - b.githubId;
 }
 
-function withBasis(actor: ExtractedActor, basis: CoveringBasis | null): CoveredActor {
-  return { ...actor, covered: basis !== null, basis };
+/** The actor with its basis; an uncovered person with an approval under an outdated agreement carries the mark of E21-S05. */
+function withBasis(actor: ExtractedActor, basis: CoveringBasis | null, outdated: ReadonlySet<number>): CoveredActor {
+  const marked =
+    basis === null && outdated.has(actor.account.id) && CAN_CONSENT.includes(classifyAccount(actor.account));
+  return { ...actor, covered: basis !== null, basis, ...(marked ? { corporateOutdated: true } : {}) };
 }
 
 /**
@@ -85,7 +99,7 @@ export function assessCoverage(facts: CoverageFacts, actors: readonly ExtractedA
     return {
       outcome: 'failure',
       failureCodes: ['no_active_cla'],
-      actors: actors.map((actor) => withBasis(actor, null)),
+      actors: actors.map((actor) => withBasis(actor, null, NOBODY)),
       fixes: [],
     };
   }
@@ -93,8 +107,11 @@ export function assessCoverage(facts: CoverageFacts, actors: readonly ExtractedA
     signatures: indexCoveringSignatures(policy, facts.signatures),
     allowlist: indexAllowlist(facts.allowlist),
     orgMembers: facts.orgMembers,
+    corporateCovered: facts.corporateCovered,
   };
-  const assessed = actors.map((actor) => withBasis(actor, coveringBasis(actor.account, lookups)));
+  const assessed = actors.map((actor) =>
+    withBasis(actor, coveringBasis(actor.account, lookups), facts.corporateOutdated),
+  );
   const shortfalls = assessed.filter((actor) => !actor.covered).map((actor) => shortfallOf(actor.account));
   const failureCodes = sortedUniqueCodes(shortfalls.map((shortfall) => shortfall.failureCode));
   return {

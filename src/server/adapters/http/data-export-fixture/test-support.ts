@@ -77,6 +77,8 @@ export function rawDocument(body: unknown) {
   return {
     keys: Object.keys(document),
     signatures: z.array(rawObject).parse(document['signatures']),
+    corporateAgreements: z.array(rawObject).parse(document['corporateAgreements']),
+    corporateApprovals: z.array(rawObject).parse(document['corporateApprovals']),
     allowlistEntries: z.array(rawObject).parse(document['allowlistEntries']),
     auditEntries: z.array(rawObject).parse(document['auditEntries']),
   };

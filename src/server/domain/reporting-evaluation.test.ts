@@ -28,14 +28,14 @@ test('each actor is counted once, under the basis that covers it', () => {
     }),
   );
   expect(evaluation.outcome).toBe('success');
-  expect(coverageCounts(evaluation)).toEqual({ signature: 2, allowlist: 1, override: 0 });
+  expect(coverageCounts(evaluation)).toEqual({ signature: 2, allowlist: 1, corporate: 0, override: 0 });
 });
 
 test('an actor with a signature and an allowlist entry is counted once, under the signature that wins', () => {
   const evaluation = evaluatePullRequest(
     evaluationInput({ signatures: [signatureFact(1, 1)], allowlist: [allowlistEntry(1, 'user', 1)] }),
   );
-  expect(coverageCounts(evaluation)).toEqual({ signature: 1, allowlist: 0, override: 0 });
+  expect(coverageCounts(evaluation)).toEqual({ signature: 1, allowlist: 0, corporate: 0, override: 0 });
 });
 
 test('a commit whose author and committer are both unlinked and overridden counts as one override', () => {
@@ -47,7 +47,7 @@ test('a commit whose author and committer are both unlinked and overridden count
     }),
   );
   expect(evaluation.outcome).toBe('success');
-  expect(coverageCounts(evaluation)).toEqual({ signature: 1, allowlist: 0, override: 1 });
+  expect(coverageCounts(evaluation)).toEqual({ signature: 1, allowlist: 0, corporate: 0, override: 1 });
 });
 
 test('an unlinked commit without an override is not counted as covered', () => {
@@ -61,5 +61,5 @@ test('an unlinked commit without an override is not counted as covered', () => {
 test('an actor that is not covered counts under no basis', () => {
   const evaluation = evaluatePullRequest(evaluationInput());
   expect(evaluation.outcome).toBe('failure');
-  expect(coverageCounts(evaluation)).toEqual({ signature: 0, allowlist: 0, override: 0 });
+  expect(coverageCounts(evaluation)).toEqual({ signature: 0, allowlist: 0, corporate: 0, override: 0 });
 });

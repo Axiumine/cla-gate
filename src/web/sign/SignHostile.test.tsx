@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
 import { HOSTILE_NAMES } from '../../shared/hostile-names.ts';
 import { signerInputSchema } from '../../shared/signer-input.ts';
+import { answerAvailability, answerClaim, claimBox, claimButton } from '../corporate/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { expectNoA11yViolations } from '../test-support/a11y.ts';
 import { activeContent } from '../test-support/hostile.ts';
@@ -73,3 +74,26 @@ test('the sign page with a hostile document name and typed name passes axe', asy
   await screen.findByRole('heading', { level: 2, name: messages['sign.done.title'] });
   await expectNoA11yViolations(container);
 });
+
+test.each(HOSTILE_NAMES)(
+  'the hostile name %j is inert on a page that offers the claim of an employee, and nothing of it is sent with the claim',
+  async (name) => {
+    serveSign();
+    answerAvailability(true);
+    const posted = answerClaim('covered');
+    const { user, container } = renderWithProviders(
+      <SignView context={viewWith(name)} reload={reloaded} reloading={false} />,
+      { session: ALICE },
+    );
+    await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(name);
+    expect(activeContent(container)).toEqual([]);
+
+    await user.click(claimBox());
+    await user.click(claimButton());
+    await screen.findByText(messages['corporate.claim.done']);
+    expect(posted.map((request) => request.body)).toEqual([{ confirm: true }]);
+    expect(activeContent(container)).toEqual([]);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  },
+);

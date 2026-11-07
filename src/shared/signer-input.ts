@@ -10,7 +10,6 @@ import { cleanName } from './clean-name.ts';
 
 /**
  * The most code points a typed name has once cleaned.
- * @internal exported for the tests of the limit
  */
 export const SIGNER_NAME_MAX_CODE_POINTS = 200;
 
@@ -33,7 +32,7 @@ export type SignerRule = keyof typeof SIGNER_RULE_STATUS;
  * and the four Hangul fillers (letters in Unicode, but blank on a screen). A name made only of these reads as empty although
  * it is not.
  */
-const HAS_VISIBLE_CHARACTER =
+export const HAS_VISIBLE_CHARACTER =
   /[^\p{Cf}\p{Z}\p{M}\p{Default_Ignorable_Code_Point}\u{2800}\u{115F}\u{1160}\u{3164}\u{FFA0}]/u;
 
 /**

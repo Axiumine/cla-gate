@@ -94,6 +94,8 @@ export interface TestAppOptions {
   readonly commitGitHub?: AppOptions['commitGitHub'];
   /** Where the public signature check looks a login up (E22-S02); defaults to the app's own, which fails every call as an outage. */
   readonly publicGitHub?: AppOptions['publicGitHub'];
+  /** Where a corporate approval looks up the account or organisation (E21-S03); defaults to the app's own, which fails every call as an outage. */
+  readonly corporateGitHub?: AppOptions['corporateGitHub'];
   /** Who operates the instance (E11-S08); defaults to the app's own, from `OPERATOR_GITHUB_IDS` in `env`. */
   readonly operators?: OperatorPolicies;
   /** The job queue the app reports on and stops (E07-S01). Defaults to none. */

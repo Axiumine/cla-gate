@@ -14,9 +14,10 @@
 // old one: old ids stay resolvable forever because old signatures reference them.
 
 /**
- * The kinds of signer a consent sentence is written for. Corporate signing (E21) adds its own kind and its own sentence.
+ * The kinds of signer a consent sentence is written for: an individual contributor, and the authorised signatory of a company
+ * who signs a corporate CLA (E21-S02).
  */
-export type ConsentKind = 'individual';
+export type ConsentKind = 'individual' | 'corporate';
 
 /**
  * One consent sentence: who it is for and the plain text shown beside the checkbox (never Markdown, never HTML).
@@ -41,6 +42,13 @@ export const CONSENT_TEXTS = Object.freeze({
       'I have read the Contributor License Agreement version shown on this page and I agree to be bound by it. ' +
       'I understand that the full name I type and the verified email address I select are stored together with my signature.',
   }),
+  'corporate-v1': Object.freeze<ConsentText>({
+    kind: 'corporate',
+    text:
+      'I am authorised to sign for the company named in this form and I have read the Corporate Contributor License ' +
+      'Agreement version shown on this page. On behalf of the company I agree to be bound by it. I understand that the ' +
+      'company name, my title, the full name I type and my primary verified email address are stored together with the agreement.',
+  }),
 });
 
 /** An id of {@link CONSENT_TEXTS}. */
@@ -51,6 +59,7 @@ export type ConsentTextId = keyof typeof CONSENT_TEXTS;
  */
 export const CURRENT_CONSENT_ID: Readonly<Record<ConsentKind, ConsentTextId>> = Object.freeze({
   individual: 'individual-v1',
+  corporate: 'corporate-v1',
 });
 
 /** The same entries as a `Map`, so a lookup never walks the prototype chain: `__proto__` and `constructor` are not keys. */
@@ -69,4 +78,9 @@ export function getConsentText(id: string): ConsentText | undefined {
 /** The consent sentence offered to an individual today with its id: what the sign page shows and the sign request sends back (E13-S02). */
 export function currentIndividualConsent(): { readonly id: ConsentTextId; readonly text: string } {
   return { id: CURRENT_CONSENT_ID.individual, text: CONSENT_TEXTS[CURRENT_CONSENT_ID.individual].text };
+}
+
+/** The consent sentence offered to the signatory of a corporate CLA today with its id (E21-S02): what the corporate sign page shows and what the signature stores. */
+export function currentCorporateConsent(): { readonly id: ConsentTextId; readonly text: string } {
+  return { id: CURRENT_CONSENT_ID.corporate, text: CONSENT_TEXTS[CURRENT_CONSENT_ID.corporate].text };
 }

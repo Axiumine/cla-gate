@@ -24,7 +24,11 @@ import { APP, BASE_URL, FULL_NAME, INSTALLATION, REPOSITORY, START } from './tes
 const SHA = commitSha(2);
 const LOCATOR: RunLocator = { githubInstallationId: INSTALLATION, owner: 'org-1', repo: 'repo', headSha: SHA };
 const IN_PROGRESS = { kind: 'in_progress', headSha: SHA } as const;
-const SUCCESS = { kind: 'success', headSha: SHA, covered: { signature: 1, allowlist: 0, override: 0 } } as const;
+const SUCCESS = {
+  kind: 'success',
+  headSha: SHA,
+  covered: { signature: 1, allowlist: 0, corporate: 0, override: 0 },
+} as const;
 
 function world() {
   const fake = new FakeGitHub();

@@ -106,7 +106,33 @@ export const parametersOf = (request: Seen): string[] => [...new URL(request.url
 /** The exact personal address that the export of the fixture holds: `zzzz` cannot appear in a hexadecimal request id. */
 export const EXPORTED_EMAIL = 'zzzz-person@example.org';
 
-/** The document `GET /api/me/export` sends for the made-up person of the session: one signature with personal data. */
+/** The corporate agreement that the export of the fixture holds: the person signed it as the signatory of a company (E21). */
+const EXPORTED_AGREEMENT = {
+  id: 3,
+  signatureId: 901,
+  installation: { githubInstallationId: 5, accountLogin: 'acme' },
+  document: { id: 11, name: 'Corporate CLA' },
+  major: 1,
+  signedAt: '2026-11-03T09:30:00.000Z',
+  revokedAt: null,
+  personalData: { companyName: 'Example Company', signatoryTitle: 'General Counsel' },
+};
+
+/** The approval that names the person, which the export of the fixture holds: derived from a rule, so it expires (E21). */
+const EXPORTED_APPROVAL = {
+  id: 8,
+  agreementId: 3,
+  installation: { githubInstallationId: 5, accountLogin: 'acme' },
+  document: { id: 11, name: 'Corporate CLA' },
+  major: 1,
+  source: 'rule',
+  approvedAt: '2026-11-03T10:00:00.000Z',
+  expiresAt: '2027-11-03T10:00:00.000Z',
+  revokedAt: null,
+  login: 'octocat',
+};
+
+/** The document `GET /api/me/export` sends for the made-up person of the session: one signature with personal data, and one corporate agreement and approval (E21). */
 export function exportDocument(): DataExport {
   return dataExportSchema.parse({
     schemaVersion: 1,
@@ -133,6 +159,8 @@ export function exportDocument(): DataExport {
         },
       },
     ],
+    corporateAgreements: [EXPORTED_AGREEMENT],
+    corporateApprovals: [EXPORTED_APPROVAL],
     allowlistEntries: [],
     auditEntries: [],
     truncated: false,

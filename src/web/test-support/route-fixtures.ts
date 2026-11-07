@@ -4,6 +4,14 @@ import { screen } from '@testing-library/react';
 import { serveAllowlist } from '../allowlist/test-support.ts';
 import { answer } from '../api/test-support.ts';
 import { serveAudit } from '../audit/test-support.ts';
+import {
+  agreementWith,
+  answerAgreements,
+  answerAvailability,
+  answerDocument,
+  DOCUMENT,
+  REPO_ID,
+} from '../corporate/test-support.ts';
 import { serveDocuments } from '../documents/test-support.ts';
 import { messages } from '../i18n/index.ts';
 import { globex, serveTenants, summary, tenantOf } from '../installations/test-support.ts';
@@ -13,7 +21,7 @@ import { servePending } from '../pending/test-support.ts';
 import { serveRepositories } from '../repositories/test-support.ts';
 import { on, SETTINGS_ADDRESS } from '../repository-settings/test-support.ts';
 import { CODE, STATE, serveSetup } from '../setup/test-support.ts';
-import { serveSign } from '../sign/test-support.ts';
+import { consentBox, serveSign } from '../sign/test-support.ts';
 import { serveSignatures } from '../signatures/test-support.ts';
 
 // The table of the route coverage guard (E18-S09): one entry for every route of the router tree, with the address it is rendered at, the
@@ -101,8 +109,13 @@ export const ROUTE_FIXTURES: ReadonlyMap<string, RouteFixture> = new Map<string,
       address: '/sign/123?pr=45',
       serve: () => {
         serveSign();
+        answerAvailability(true);
       },
-      ready: () => screen.findByRole('checkbox'),
+      // The entry of an employee (E21-S04) comes after the form, and the repository offers it, so the guard checks it with the form.
+      ready: async () => {
+        await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
+        return consentBox();
+      },
     },
   ],
   [
@@ -213,6 +226,36 @@ export const ROUTE_FIXTURES: ReadonlyMap<string, RouteFixture> = new Map<string,
         serveOperator(operatorList([installationOf(), rejectedOf()]));
       },
       ready: table(messages['operator.caption']),
+    },
+  ],
+  [
+    '/corporate/sign/$githubRepoId',
+    {
+      address: `/corporate/sign/${String(REPO_ID)}`,
+      serve: () => {
+        answerDocument(DOCUMENT);
+      },
+      ready: () => screen.findByText(DOCUMENT.consent.text),
+    },
+  ],
+  [
+    '/corporate/claim/$githubRepoId',
+    {
+      address: `/corporate/claim/${String(REPO_ID)}`,
+      serve: () => {
+        answerAvailability(true);
+      },
+      ready: () => screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] }),
+    },
+  ],
+  [
+    '/corporate/agreements',
+    {
+      address: '/corporate/agreements',
+      serve: () => {
+        answerAgreements([{ items: [agreementWith(9), agreementWith(8)], nextCursor: null }]);
+      },
+      ready: table(messages['corporate.agreements.caption']),
     },
   ],
 ]);

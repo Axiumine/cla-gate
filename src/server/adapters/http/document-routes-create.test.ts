@@ -177,13 +177,17 @@ test('a suspended tenant refuses the creation with 409 installation_suspended, a
   expect(await auditRows(world, 'cla_document.created')).toEqual([]);
 });
 
-test('the corporate kind is accepted by the schema and refused by the service while it is off: 422 kind_not_supported, nothing stored', async () => {
+test('the corporate kind is created like any other since E21-S02: 201 with the kind, and one audit row that names the kind and not the name', async () => {
   const world = await documentWorld();
-  const before = await documentCount(world);
   const response = await createAs(world, 'admin1', world.t1.installationId, { name: 'Corporate', kind: 'corporate' });
-  expect(response.statusCode).toBe(422);
-  expect(errorCodeOf(response)).toBe('kind_not_supported');
-  expect(await documentCount(world)).toBe(before);
+  expect(response.statusCode).toBe(201);
+  const { document } = parsed(response, documentResponseSchema);
+  expect(document).toMatchObject({ name: 'Corporate', kind: 'corporate', scope: 'installation', activeVersion: null });
+  const audit = await auditRows(world, 'cla_document.created');
+  expect(audit.at(-1)).toMatchObject({
+    subject_id: document.id,
+    metadata: { document_id: document.id, repository_id: null, kind: 'corporate' },
+  });
 });
 
 test.each([

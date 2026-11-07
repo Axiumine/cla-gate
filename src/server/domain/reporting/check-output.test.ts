@@ -9,7 +9,7 @@ import { InvalidIdError, InvalidShaError } from './encode.ts';
 // reads and the guards on the data that is printed. The length rules are in check-output-limits.test.ts.
 
 const HEAD = '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b';
-const NONE: CoverageCounts = { signature: 0, allowlist: 0, override: 0 };
+const NONE: CoverageCounts = { signature: 0, allowlist: 0, corporate: 0, override: 0 };
 
 type Success = Extract<CheckView, { kind: 'success' }>;
 type Failure = Extract<CheckView, { kind: 'failure' }>;

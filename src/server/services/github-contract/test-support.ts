@@ -3,7 +3,7 @@
 import { expect } from 'vitest';
 import { type GithubId, parseGithubId } from '../../../shared/github-id.ts';
 import type { MembersProbeAnswer } from '../fake-github/test-support.ts';
-import type { UserAccountAnswer } from '../fake-user-accounts/test-support.ts';
+import type { PublicMemberAnswer, UserAccountAnswer } from '../fake-user-accounts/test-support.ts';
 import type {
   GitHubCheckRun,
   GitHubClient,
@@ -51,6 +51,8 @@ export interface GitHubWorld {
   readonly scriptMembersProbe: (githubInstallationId: GithubId, answer: MembersProbeAnswer) => void;
   /** What the lookup of an account by login (E14-S06) answers from now on: the account that has the login, or a failure. No script: no such account. */
   readonly scriptUserAccount: (login: string, answer: UserAccountAnswer) => void;
+  /** What the check of a public membership (E21-S04) answers for a login in an organisation from now on: a member who shows it (true), anyone else (false, the default) or a failure. */
+  readonly scriptPublicMember: (org: string, login: string, answer: PublicMemberAnswer) => void;
   /** A pull request of a repository (`owner/name`) of an installation. */
   readonly addPullRequest: (githubInstallationId: GithubId, fullName: string, pullRequest: GitHubPullRequest) => void;
   /** What `listPullRequestCommits` lists for a pull request, in order. */
@@ -128,37 +130,20 @@ export function fakeWorld(): GitHubWorld & { readonly fake: FakeGitHub } {
   return {
     fake,
     client: fake,
-    addInstallation: (installationToAdd, repositoriesToAdd) => {
-      fake.addInstallation(installationToAdd, repositoriesToAdd);
-    },
-    suspend: (githubInstallationId, at) => {
-      fake.suspend(githubInstallationId, at);
-    },
+    addInstallation: fake.addInstallation.bind(fake),
+    suspend: fake.suspend.bind(fake),
     addMembership: fake.addMembership.bind(fake),
     addRepositoryPermission: fake.addRepositoryPermission.bind(fake),
     scriptMembersProbe: fake.setMembersProbe.bind(fake),
     scriptUserAccount: fake.scriptUserAccount.bind(fake),
-    addPullRequest: (githubInstallationId, fullName, pullRequest) => {
-      fake.addPullRequest(githubInstallationId, fullName, pullRequest);
-    },
-    setPullRequestCommits: (githubInstallationId, fullName, prNumber, commits) => {
-      fake.setPullRequestCommits(githubInstallationId, fullName, prNumber, commits);
-    },
-    setRepositoryCommits: (githubInstallationId, fullName, commits) => {
-      fake.setRepositoryCommits(githubInstallationId, fullName, commits);
-    },
-    setMergeBase: (githubInstallationId, fullName, commits, mergeBaseSha) => {
-      fake.setMergeBase(githubInstallationId, fullName, commits, mergeBaseSha);
-    },
-    addIssueComment: (githubInstallationId, fullName, comment) => {
-      fake.addIssueComment(githubInstallationId, fullName, comment);
-    },
-    setCommitPullRequests: (githubInstallationId, fullName, headSha, pulls) => {
-      fake.setCommitPullRequests(githubInstallationId, fullName, headSha, pulls);
-    },
-    addCheckRun: (githubInstallationId, fullName, run) => {
-      fake.addCheckRun(githubInstallationId, fullName, run);
-    },
+    scriptPublicMember: fake.scriptPublicMember.bind(fake),
+    addPullRequest: fake.addPullRequest.bind(fake),
+    setPullRequestCommits: fake.setPullRequestCommits.bind(fake),
+    setRepositoryCommits: fake.setRepositoryCommits.bind(fake),
+    setMergeBase: fake.setMergeBase.bind(fake),
+    addIssueComment: fake.addIssueComment.bind(fake),
+    setCommitPullRequests: fake.setCommitPullRequests.bind(fake),
+    addCheckRun: fake.addCheckRun.bind(fake),
     refuse: (githubInstallationId, reason) => {
       gate.refuse(githubInstallationId, reason);
     },

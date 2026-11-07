@@ -38,6 +38,18 @@ function overrideFixtures(action: 'commit_override.created' | 'commit_override.d
   );
 }
 
+/** The four rows an approval call site writes (E21-S03): a person, an organisation and a domain, and a person written because of the approval it derives from or was copied from. */
+function approvalFixtures(action: 'corporate_approval.added' | 'corporate_approval.revoked'): readonly AuditFixture[] {
+  const subject = { type: 'corporate_approval', id: 51 } as const;
+  const because = action === 'corporate_approval.added' ? 'carried_over' : 'parent_revoked';
+  return [
+    { kind: 'user', github_id: 4711, reason_code: null },
+    { kind: 'github_org', github_id: 9100, reason_code: null },
+    { kind: 'email_domain', github_id: null, reason_code: null },
+    { kind: 'user', github_id: 4711, reason_code: because },
+  ].map((fields): AuditFixture => ({ action, subject, metadata: { ...fields, signature_id: 31 } }));
+}
+
 /** The three entries an allowlist call site writes a row for (E14-S06, E14-S07): one that covers the installation, one of a repository, and `org_members`. */
 function allowlistFixtures(action: 'allowlist_entry.created' | 'allowlist_entry.deleted'): readonly AuditFixture[] {
   return [
@@ -135,6 +147,36 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       metadata: { document_id: 12, version_id: 22, major: 2, source_repository_id: 9, source_pr_number: null },
     },
   ],
+  'services/corporate-agreement-write.ts#corporate_agreement.signed': [
+    {
+      action: 'corporate_agreement.signed',
+      subject: { type: 'corporate_agreement', id: 41 },
+      metadata: { document_id: 12, version_id: 21, signature_id: 31, major: 1, source_repository_id: 9 },
+    },
+  ],
+  'services/corporate-approval-audit.ts#corporate_approval.added|corporate_approval.derived|corporate_approval.revoked':
+    [
+      ...approvalFixtures('corporate_approval.added'),
+      ...approvalFixtures('corporate_approval.revoked'),
+      // E21-S04: the approval derived for an employee who claimed coverage is always a person's, and carries no cause.
+      {
+        action: 'corporate_approval.derived',
+        subject: { type: 'corporate_approval', id: 51 },
+        metadata: { kind: 'user', github_id: 4711, signature_id: 31, reason_code: null },
+      },
+    ],
+  'services/repository-corporate-document.ts#repository.corporate_document_set': [
+    {
+      action: 'repository.corporate_document_set',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: 3, previous_document_id: null },
+    },
+    {
+      action: 'repository.corporate_document_set',
+      subject: REPOSITORY,
+      metadata: { repository_id: 12, document_id: null, previous_document_id: 3 },
+    },
+  ],
   'services/signature-revoke-audit.ts#signature.revoked': [
     {
       action: 'signature.revoked',
@@ -228,6 +270,12 @@ export const SITE_FIXTURES: Readonly<Record<string, readonly AuditFixture[]>> = 
       subject: { type: 'document', id: 12 },
       metadata: { state: 'revoked', row_count: 1001 },
     },
+  ],
+  'services/export/corporate-export-record.ts#corporate_agreements.exported|corporate_approvals.exported': [
+    { action: 'corporate_agreements.exported', metadata: { row_count: 0 } },
+    { action: 'corporate_agreements.exported', metadata: { row_count: 40 } },
+    { action: 'corporate_approvals.exported', metadata: { row_count: 0 } },
+    { action: 'corporate_approvals.exported', metadata: { row_count: 2500 } },
   ],
   'services/export/own-data.ts#data_export.created': [
     { action: 'data_export.created', subject: { type: 'user', id: ACTOR }, metadata: { signature_count: 0 } },

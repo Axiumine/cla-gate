@@ -17,12 +17,21 @@ interface EnforcingRepository {
   readonly githubRepoId: GithubId;
 }
 
-/** The repositories of the tenant that enforce the document `documentId`, as a query to select from: attached to it, enabled, and not removed. */
+/**
+ * The repositories of the tenant that enforce the document `documentId`, as a query to select from: attached to it as the CLA of individuals
+ * or (E21-S05) as the corporate CLA, enabled, and not removed. A new major of a corporate document, or a revoked corporate signature, changes
+ * what covers the people of the pull requests of its repositories just as one of an individual document does.
+ */
 function enforcing(db: Kysely<Database>, scope: TenantScope, documentId: number) {
   return db
     .selectFrom('repositories as r')
     .where('r.installation_id', '=', scope.installationId)
-    .where('r.cla_document_id', '=', documentId)
+    .where((condition) =>
+      condition.or([
+        condition('r.cla_document_id', '=', documentId),
+        condition('r.corporate_document_id', '=', documentId),
+      ]),
+    )
     .where('r.enabled', '=', true)
     .where('r.removed_at', 'is', null);
 }

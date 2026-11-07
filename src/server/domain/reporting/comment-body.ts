@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { CHECK_RUN_NAME } from '../../../shared/check.ts';
+import { corporateLine } from './check-output.ts';
 import { shortSha } from './encode.ts';
 import { type OutputPart, renderParts } from './output-parts.ts';
 
@@ -27,26 +28,37 @@ const CHECK_LINE: OutputPart = {
 
 /**
  * What the comment of a pull request says about its latest evaluation: the parts of the failure report (E09-S03), or that the
- * contributors of the commit have signed.
+ * contributors of the commit are covered. `corporate` is how many of them an approval of a corporate CLA covers (E21-S05; none when
+ * left out): a number, never a name, a company, a domain or an organisation.
  */
 export type CommentContent =
   | { readonly kind: 'failure'; readonly summary: readonly OutputPart[] }
-  | { readonly kind: 'success'; readonly headSha: string };
+  | { readonly kind: 'success'; readonly headSha: string; readonly corporate?: number };
 
 /** The body of the comment of a repository whose enforcement is off: the marker line, then the one-line notice. */
 export function disabledCommentBody(): string {
   return `${COMMENT_MARKER}\n${DISABLED_NOTICE}`;
 }
 
+/** The sentence of a passing comment: that the contributors signed, and, when a corporate CLA covers some, the count of those. */
+function successSentence(content: Extract<CommentContent, { kind: 'success' }>): string {
+  const commit = shortSha(content.headSha);
+  const corporate = corporateLine(content.corporate ?? 0);
+  return corporate === null
+    ? `All contributors have signed the CLA for commit ${commit}.`
+    : `All contributors have signed the CLA or are covered by a corporate CLA for commit ${commit}. ${corporate}`;
+}
+
 /**
  * The body of the comment of a pull request: the marker line first, then, for a failure, the heading, the parts of the report (the
  * sign link, the sections, the fix steps, the closing line) and a last line that names the check, cut at an entry boundary
- * when the whole would pass 60 000 UTF-16 code units; or, for a success, the sentence that the contributors have signed.
+ * when the whole would pass 60 000 UTF-16 code units; or, for a success, the sentence that the contributors have signed, or
+ * (when a corporate CLA covers some of them) that they have signed or are covered by a corporate CLA, with the count.
  * @throws InvalidShaError for a head SHA that is not a full SHA, OutputTooLongError when the fixed text alone does not fit.
  */
 export function commentBody(content: CommentContent): string {
   if (content.kind === 'success') {
-    return `${COMMENT_MARKER}\nAll contributors have signed the CLA for commit ${shortSha(content.headSha)}.`;
+    return `${COMMENT_MARKER}\n${successSentence(content)}`;
   }
   return renderParts([{ kind: 'text', text: `${COMMENT_MARKER}\n${FAILURE_HEADING}` }, ...content.summary, CHECK_LINE]);
 }

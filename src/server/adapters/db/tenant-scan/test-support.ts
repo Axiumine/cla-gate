@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import { TENANT_TABLES } from '../tenant-fixture/test-support.ts';
+import { CORPORATE_TABLES, TENANT_TABLES } from '../tenant-fixture/test-support.ts';
 import { AUDIT_WRITER } from '../tenant-registry/test-support.ts';
 
 // The source scan of E11-S06: which files of the server run a statement over a tenant table, and which functions they
@@ -29,7 +29,7 @@ export interface TableUse {
   readonly via: string;
 }
 
-const TENANT_NAMES: readonly string[] = TENANT_TABLES;
+const TENANT_NAMES: readonly string[] = [...TENANT_TABLES, ...CORPORATE_TABLES];
 
 /** A table named after the word that starts a clause of SQL that names one. */
 const RAW_TABLE = /\b(?:from|join|into|update|truncate)\s+([\w.]+)/gi;
@@ -80,7 +80,7 @@ function parse(fileName: string, source: string): ts.SourceFile {
 }
 
 /**
- * Every statement of `source` over a tenant table (`TENANT_TABLES`), and every builder call whose table is not a string
+ * Every statement of `source` over a tenant table (`TENANT_TABLES` and `CORPORATE_TABLES`), and every builder call whose table is not a string
  * literal: `selectFrom(name)` cannot be checked, so it counts as a use of the table `?`. Other tables are not reported.
  */
 export function tenantTableUses(fileName: string, source: string): TableUse[] {

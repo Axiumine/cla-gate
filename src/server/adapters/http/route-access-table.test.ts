@@ -147,22 +147,32 @@ test('the route declared webhook is exactly POST /webhooks/github', async () => 
   expect(declared).toEqual(['POST /webhooks/github']);
 });
 
-test('the authenticated routes are the session read, the logout, the export of the own data, the list of the installations the person administers, the sign context and the sign request, and none has a tenant parameter', async () => {
+test('the authenticated routes are the session read, the logout, the export of the own data, the list of the installations the person administers, the sign context and the sign request, the four of corporate signing, the four of the approvals of an agreement, and the two of the claim of an employee (E21-S04), and none has a tenant parameter', async () => {
   const { table } = await tableOfTheApp();
   const authenticated = table.filter((entry) => entry.access === 'authenticated');
   expect(sorted(authenticated.map(nameOf))).toEqual([
+    'DELETE /api/corporate/agreements/:agreementId/approvals/:approvalId',
     'GET /api/auth/session',
+    'GET /api/corporate/agreements',
+    'GET /api/corporate/agreements/:agreementId',
+    'GET /api/corporate/agreements/:agreementId/approvals',
+    'GET /api/corporate/repositories/:githubRepoId/availability',
+    'GET /api/corporate/repositories/:githubRepoId/document',
     'GET /api/installations',
     'GET /api/me/export',
     'GET /api/me/signatures',
     'GET /api/sign/:githubRepoId',
     'POST /api/auth/logout',
+    'POST /api/corporate/agreements',
+    'POST /api/corporate/agreements/:agreementId/approvals',
+    'POST /api/corporate/agreements/:agreementId/approvals/carry-over',
+    'POST /api/corporate/repositories/:githubRepoId/claims',
     'POST /api/sign',
   ]);
   expect(authenticated.filter((entry) => TENANT_PARAMETER.test(entry.url)).map(nameOf)).toEqual([]);
 });
 
-test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the search for signatures, the revocation of one and the invalidation of a major of a document with its preview, the list of the pending pull requests, the choice of the CLA of a repository, the two switches of its enforcement, and the adds, the two lists and the removal of an allowlist entry, and the record, the list and the removal of a per-commit override, and the opt-in of a repository to the public signature check with the snippet of its badge', async () => {
+test('the operator routes are exactly the list of the operator, and the tenant routes are the eleven of the documents, their draft and their versions, the four of the audit log, the signature export and the erasure, the list of the repositories of an installation, the search for signatures, the revocation of one and the invalidation of a major of a document with its preview, the list of the pending pull requests, the choice of the CLA of a repository, the two switches of its enforcement, and the adds, the two lists and the removal of an allowlist entry, and the record, the list and the removal of a per-commit override, and the opt-in of a repository to the public signature check with the snippet of its badge, and the choice of the corporate CLA of a repository with the list of the corporate agreements of a tenant and its two corporate CSV exports', async () => {
   const { table } = await tableOfTheApp();
   expect(table.filter((entry) => entry.access === 'operator').map(nameOf)).toEqual(['GET /api/operator/installations']);
   expect(sorted(table.filter((entry) => typeof entry.access === 'object').map(nameOf))).toEqual(
@@ -201,6 +211,10 @@ test('the operator routes are exactly the list of the operator, and the tenant r
       'DELETE /api/repositories/:repositoryId/commit-overrides/:overrideId',
       'PUT /api/installations/:installationId/repositories/:repositoryId/public-verification',
       'GET /api/installations/:installationId/repositories/:repositoryId/badge-snippet',
+      'PUT /api/installations/:installationId/repositories/:repositoryId/corporate-document',
+      'GET /api/installations/:installationId/corporate-agreements',
+      'GET /api/installations/:installationId/corporate-agreements.csv',
+      'GET /api/installations/:installationId/approvals.csv',
     ]),
   );
 });
