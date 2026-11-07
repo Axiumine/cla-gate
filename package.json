@@ -21,7 +21,7 @@
     "type-coverage": "type-coverage --strict --at-least 100 -p tsconfig.server.json && type-coverage --strict --at-least 100 -p tsconfig.server.test.json && type-coverage --strict --at-least 100 -p tsconfig.web.json && type-coverage --strict --at-least 100 -p tsconfig.scripts.json && type-coverage --strict --at-least 100 -p tsconfig.e2e.json && type-coverage --strict --at-least 100 -p tsconfig.node.json",
     "lint": "yarn lint:biome && yarn lint:eslint && yarn lint:hatches",
     "lint:biome": "biome ci --error-on-warnings .",
-    "lint:eslint": "eslint . --max-warnings 0 --no-warn-ignored",
+    "lint:eslint": "NODE_OPTIONS=--max-old-space-size=8192 eslint . --max-warnings 0 --no-warn-ignored",
     "lint:hatches": "node scripts/check-escape-hatches.ts",
     "format": "biome check --write .",
     "test": "vitest run",
