@@ -36,6 +36,16 @@ async function fillIn(user: ReturnType<typeof renderWithProviders>['user']): Pro
   await user.type(fieldOf(messages['corporate.sign.typedName']), 'Ada Lovelace');
 }
 
+/** Opens the page as ALICE, fills the form, ticks the authority box and presses the button; the answer is the caller's to read. */
+async function signFilledForm(): Promise<ReturnType<typeof renderWithProviders>['user']> {
+  const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
+  await screen.findByText(DOCUMENT.consent.text);
+  await fillIn(user);
+  await user.click(authorityBox());
+  await user.click(screen.getByRole('button', { name: messages['corporate.sign.submit'] }));
+  return user;
+}
+
 test('the page shows the corporate CLA of the repository in the main landmark of the shell, above the form, and passes axe', async () => {
   answerDocument(DOCUMENT);
   const { container } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
@@ -62,11 +72,7 @@ test('a visitor without a session is sent to the login with the page as return_t
 test('signing sends the version and the hash on screen with the typed texts and the CSRF token, and then points at the list', async () => {
   answerDocument(DOCUMENT);
   const posted = answerSigning();
-  const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
-  await screen.findByText(DOCUMENT.consent.text);
-  await fillIn(user);
-  await user.click(authorityBox());
-  await user.click(screen.getByRole('button', { name: messages['corporate.sign.submit'] }));
+  await signFilledForm();
   expect(await screen.findByText(messages['corporate.sign.done'])).toBeInTheDocument();
   expect(posted).toEqual([
     {
@@ -125,11 +131,7 @@ test.each([
   async (status, code, words) => {
     answerDocument(DOCUMENT);
     answerSigning({ status, code });
-    const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
-    await screen.findByText(DOCUMENT.consent.text);
-    await fillIn(user);
-    await user.click(authorityBox());
-    await user.click(screen.getByRole('button', { name: messages['corporate.sign.submit'] }));
+    await signFilledForm();
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText(words)).toBeInTheDocument();
     expect(within(alert).queryByRole('button')).toBeNull();
@@ -151,11 +153,7 @@ test.each([
       }),
     );
     answerSigning({ status, code });
-    const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
-    await screen.findByText(DOCUMENT.consent.text);
-    await fillIn(user);
-    await user.click(authorityBox());
-    await user.click(screen.getByRole('button', { name: messages['corporate.sign.submit'] }));
+    const user = await signFilledForm();
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText(words)).toBeInTheDocument();
     expect(reads).toBe(1);
@@ -168,11 +166,7 @@ test.each([
 test('a failure with no corporate code is shown by the generic state, with its request ID', async () => {
   answerDocument(DOCUMENT);
   answerSigning({ status: 500, code: 'internal_server_error' });
-  const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
-  await screen.findByText(DOCUMENT.consent.text);
-  await fillIn(user);
-  await user.click(authorityBox());
-  await user.click(screen.getByRole('button', { name: messages['corporate.sign.submit'] }));
+  await signFilledForm();
   expect(await screen.findByText(messages['errors.internal_server_error'])).toBeInTheDocument();
   expect(screen.getByText('req-sign')).toBeInTheDocument();
 });
