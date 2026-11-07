@@ -21,7 +21,7 @@ import { servePending } from '../pending/test-support.ts';
 import { serveRepositories } from '../repositories/test-support.ts';
 import { on, SETTINGS_ADDRESS } from '../repository-settings/test-support.ts';
 import { CODE, STATE, serveSetup } from '../setup/test-support.ts';
-import { serveSign } from '../sign/test-support.ts';
+import { consentBox, serveSign } from '../sign/test-support.ts';
 import { serveSignatures } from '../signatures/test-support.ts';
 
 // The table of the route coverage guard (E18-S09): one entry for every route of the router tree, with the address it is rendered at, the
@@ -109,8 +109,13 @@ export const ROUTE_FIXTURES: ReadonlyMap<string, RouteFixture> = new Map<string,
       address: '/sign/123?pr=45',
       serve: () => {
         serveSign();
+        answerAvailability(true);
       },
-      ready: () => screen.findByRole('checkbox'),
+      // The entry of an employee (E21-S04) comes after the form, and the repository offers it, so the guard checks it with the form.
+      ready: async () => {
+        await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
+        return consentBox();
+      },
     },
   ],
   [

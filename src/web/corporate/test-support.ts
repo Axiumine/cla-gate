@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import type { QueryClient } from '@tanstack/react-query';
+import { screen } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
+import { expect, vi } from 'vitest';
 import {
   CORPORATE_AGREEMENTS_PATH,
   CORPORATE_DOCUMENT_PATH,
@@ -9,6 +12,7 @@ import {
   type CorporateDocumentResponse,
 } from '../../shared/corporate.ts';
 import { CORPORATE_AVAILABILITY_PATH, CORPORATE_CLAIMS_PATH } from '../../shared/corporate-claims.ts';
+import { messages } from '../i18n/index.ts';
 import { server } from '../test-support/server.ts';
 
 // Made-up answers and handlers for the tests of the two corporate pages (E21-S02). Nothing here is a real company or person.
@@ -119,6 +123,35 @@ export function answerAvailability(answer: boolean | { status: number; code: str
           ),
     ),
   );
+}
+
+/** The box that says the person contributes for an employer; its name ends in "(required)". */
+export const claimBox = () =>
+  screen.getByRole('checkbox', { name: (name) => name.startsWith(messages['corporate.claim.confirm']) });
+
+/** The button that sends the claim. */
+export const claimButton = () => screen.getByRole('button', { name: messages['corporate.claim.submit'] });
+
+/** Answers the availability route for every repository and records the id of each repository it is asked about, in order. */
+export function recordAvailability(offered: boolean): number[] {
+  const asked: number[] = [];
+  server.use(
+    http.get(CORPORATE_AVAILABILITY_PATH, ({ params }) => {
+      const { githubRepoId } = params;
+      asked.push(Number(githubRepoId));
+      return HttpResponse.json({ corporateAvailable: offered });
+    }),
+  );
+  return asked;
+}
+
+/** Waits until the question whether the repository offers the claim has been asked and settled, whatever the answer was. */
+export async function availabilitySettled(queryClient: QueryClient): Promise<void> {
+  await vi.waitFor(() => {
+    const asked = queryClient.getQueryCache().findAll({ queryKey: ['corporate', 'availability'] });
+    expect(asked.map((query) => query.state.fetchStatus)).toEqual(['idle']);
+    expect(asked.map((query) => query.state.status)).not.toContain('pending');
+  });
 }
 
 /** What the claim route answers: a status of the success (`201 covered`, `200 already_covered`), or a failure with this status and code. */

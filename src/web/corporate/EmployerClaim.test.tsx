@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { screen } from '@testing-library/react';
-import { expect, test, vi } from 'vitest';
+import { expect, test } from 'vitest';
 import { messages } from '../i18n/index.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { ALICE } from '../test-support/session.ts';
 import { EmployerClaim } from './EmployerClaim.tsx';
-import { answerAvailability, REPO_ID } from './test-support.ts';
+import { answerAvailability, availabilitySettled, REPO_ID } from './test-support.ts';
 
 // E21-S04: the entry "Contributing for an employer?" as the page where a contributor signs embeds it: there only when the repository offers it.
 
@@ -23,10 +23,6 @@ test.each([
 ] as const)('no trace of the entry is shown when the repository %s offer it', async (_why, answer) => {
   answerAvailability(answer);
   const { container, queryClient } = renderWithProviders(<EmployerClaim githubRepoId={REPO_ID} />, { session: ALICE });
-  await vi.waitFor(() => {
-    const asked = queryClient.getQueryCache().findAll({ queryKey: ['corporate', 'availability'] });
-    expect(asked.map((query) => query.state.fetchStatus)).toEqual(['idle']);
-    expect(asked.map((query) => query.state.status)).not.toContain('pending');
-  });
+  await availabilitySettled(queryClient);
   expect(container).toBeEmptyDOMElement();
 });

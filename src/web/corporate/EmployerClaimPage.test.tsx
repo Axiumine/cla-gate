@@ -8,7 +8,7 @@ import { expectNoA11yViolations } from '../test-support/a11y.ts';
 import { spyOnPageNavigation } from '../test-support/location.ts';
 import { renderWithProviders } from '../test-support/render.tsx';
 import { ALICE, CSRF_TOKEN } from '../test-support/session.ts';
-import { answerAvailability, answerClaim, REPO_ID } from './test-support.ts';
+import { answerAvailability, answerClaim, claimBox, claimButton, REPO_ID } from './test-support.ts';
 
 // E21-S04: the page at /corporate/claim/:githubRepoId in the shell of the app, and the form it holds.
 
@@ -18,12 +18,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** The box that says the person contributes for an employer; its name ends in "(required)". */
-const confirmBox = () =>
-  screen.getByRole('checkbox', { name: (name) => name.startsWith(messages['corporate.claim.confirm']) });
-
-const submitButton = () => screen.getByRole('button', { name: messages['corporate.claim.submit'] });
-
 test('a repository that offers the claim shows the entry, the box and the button in the main landmark, and passes axe', async () => {
   answerAvailability(true);
   const { container } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
@@ -32,7 +26,7 @@ test('a repository that offers the claim shows the entry, the box and the button
   expect(screen.getByRole('main')).toContainElement(entry);
   expect(screen.getByRole('main')).toContainElement(page);
   expect(screen.getByText(messages['corporate.claim.intro'])).toBeInTheDocument();
-  expect(confirmBox()).not.toBeChecked();
+  expect(claimBox()).not.toBeChecked();
   expect(document.title).toBe(`${messages['corporate.claim.pageTitle']} · CLA`);
   await expectNoA11yViolations(container);
 });
@@ -60,8 +54,8 @@ test('the claim sends the confirmation and the CSRF token, and the success says 
   const posted = answerClaim('covered');
   const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
   await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
-  await user.click(confirmBox());
-  await user.click(submitButton());
+  await user.click(claimBox());
+  await user.click(claimButton());
   expect(await screen.findByText('Covered by a corporate CLA')).toBeInTheDocument();
   expect(screen.getByText(messages['corporate.claim.doneDetail'])).toBeInTheDocument();
   expect(posted).toEqual([{ csrf: CSRF_TOKEN, body: { confirm: true } }]);
@@ -73,8 +67,8 @@ test('a person who is covered already is told the same words as one who got cove
   answerClaim('already_covered');
   const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
   await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
-  await user.click(confirmBox());
-  await user.click(submitButton());
+  await user.click(claimBox());
+  await user.click(claimButton());
   expect(await screen.findByText(messages['corporate.claim.done'])).toBeInTheDocument();
 });
 
@@ -84,7 +78,7 @@ test('the button with the box unticked names what is missing and asks the server
   const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
   await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
   expect(screen.queryByText(messages['corporate.claim.confirmRequired'])).toBeNull();
-  await user.click(submitButton());
+  await user.click(claimButton());
   expect(await screen.findByText(messages['corporate.claim.confirmRequired'])).toBeInTheDocument();
   expect(posted).toEqual([]);
 });
@@ -101,12 +95,12 @@ test.each([
     const posted = answerClaim({ status, code });
     const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
     await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
-    await user.click(confirmBox());
-    await user.click(submitButton());
+    await user.click(claimBox());
+    await user.click(claimButton());
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText(words)).toBeInTheDocument();
     expect(within(alert).queryByRole('button')).toBeNull();
-    await user.click(submitButton());
+    await user.click(claimButton());
     await vi.waitFor(() => {
       expect(posted).toHaveLength(2);
     });
@@ -118,8 +112,8 @@ test('a limit or a failure with no corporate code is shown by the generic state,
   answerClaim({ status: 500, code: 'internal_server_error' });
   const { user } = renderWithProviders(<AppRouter />, { route: ROUTE, session: ALICE });
   await screen.findByRole('heading', { level: 2, name: messages['corporate.claim.title'] });
-  await user.click(confirmBox());
-  await user.click(submitButton());
+  await user.click(claimBox());
+  await user.click(claimButton());
   expect(await screen.findByText(messages['errors.internal_server_error'])).toBeInTheDocument();
   expect(screen.getByText('req-claim')).toBeInTheDocument();
 });
