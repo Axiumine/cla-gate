@@ -54,31 +54,37 @@ function toOperatorIds(value: string, ctx: z.core.$RefinementCtx<string>): reado
 const operatorIdsField = z.string().transform(toOperatorIds);
 
 /** A webhook secret: at least 16 characters, as a Secret (E06-S01). GitHub's own advice is a long random string. */
-const webhookSecretField = z
-  .string()
-  .min(16)
-  .transform((value) => new Secret(value));
+function webhookSecretField() {
+  return z
+    .string()
+    .min(16)
+    .transform((value) => new Secret(value));
+}
 
 /**
  * The GitHub App settings. Each is optional here: production needs all five of the App id, the key, the webhook secret and
  * the client id and secret, or none of them (`resolveMode`, mode.ts). The previous key and the previous webhook secret are
  * the ones kept during a rotation (E05-S02, E06-S01). The client id and secret are the App's OAuth credentials for the login (E10-S05); production
- * requires them through `authProblems` (auth-fields.ts), which also owns the session secret.
+ * requires them through `authProblems` (auth-fields.ts), which also owns the session secret. Built on each call and not once at
+ * import, so that the mutation gate's tests exercise these rules (see "Module-level code" in docs/quality-gates.md); the key order
+ * is the order in which the issues of a failed parse are reported.
  */
-export const githubFields = {
-  GITHUB_APP_ID: z
-    .string()
-    .regex(/^\d{1,20}$/)
-    .optional(),
-  GITHUB_APP_PRIVATE_KEY: privateKeyField.optional(),
-  GITHUB_APP_PRIVATE_KEY_PREVIOUS: privateKeyField.optional(),
-  GITHUB_ALLOWED_ACCOUNT_IDS: allowedAccountIdsField.optional(),
-  OPERATOR_GITHUB_IDS: operatorIdsField.optional(),
-  GITHUB_WEBHOOK_SECRET: webhookSecretField.optional(),
-  GITHUB_WEBHOOK_SECRET_PREVIOUS: webhookSecretField.optional(),
-  GITHUB_CLIENT_ID: z.string().min(1).optional(),
-  GITHUB_CLIENT_SECRET: secretField.optional(),
-};
+export function githubFields() {
+  return {
+    GITHUB_APP_ID: z
+      .string()
+      .regex(/^\d{1,20}$/)
+      .optional(),
+    GITHUB_APP_PRIVATE_KEY: privateKeyField.optional(),
+    GITHUB_APP_PRIVATE_KEY_PREVIOUS: privateKeyField.optional(),
+    GITHUB_ALLOWED_ACCOUNT_IDS: allowedAccountIdsField.optional(),
+    OPERATOR_GITHUB_IDS: operatorIdsField.optional(),
+    GITHUB_WEBHOOK_SECRET: webhookSecretField().optional(),
+    GITHUB_WEBHOOK_SECRET_PREVIOUS: webhookSecretField().optional(),
+    GITHUB_CLIENT_ID: z.string().min(1).optional(),
+    GITHUB_CLIENT_SECRET: secretField().optional(),
+  };
+}
 
 /**
  * The text of a secret that parsed. The cross-field rules run over the partly parsed environment, where a field that
@@ -89,7 +95,7 @@ function secretText(value: Secret | undefined): string | undefined {
   return value instanceof Secret ? value.reveal() : undefined;
 }
 
-export type GithubVariables = z.output<z.ZodObject<typeof githubFields>>;
+export type GithubVariables = z.output<z.ZodObject<ReturnType<typeof githubFields>>>;
 
 /**
  * The cross-field rules of the GitHub settings: a previous key or webhook secret that is the current one again is a rotation

@@ -2,9 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import type { SweepInterval } from '../domain/sweep.ts';
 import { ConfigError } from './config-error.ts';
-import type { ConfigIssue } from './config-issue.ts';
 import { issuesOf } from './env-rules.ts';
-import { envSchema, type ValidEnv } from './env-schema.ts';
+import { buildEnvSchema, type ValidEnv } from './env-schema.ts';
 import { type GithubConfig, toGithubConfig } from './github-config.ts';
 import { type Mode, resolveMode } from './mode.ts';
 import type { Secret } from './secret.ts';
@@ -90,8 +89,6 @@ function withoutEmpty(env: Env): Env {
   return Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ''));
 }
 
-const byVariable = (a: ConfigIssue, b: ConfigIssue): number => a.variable.localeCompare(b.variable);
-
 /**
  * Validates `env` or throws a {@link ConfigError} naming every invalid variable with the rule it failed. The `N_FILE`
  * variants of the secrets are read first (secret-files.ts), so the schema parses a secret the same way whether it came
@@ -99,10 +96,10 @@ const byVariable = (a: ConfigIssue, b: ConfigIssue): number => a.variable.locale
  */
 export function loadConfig(env: Env): AppConfig {
   const secrets = resolveSecretFiles(env);
-  const result = envSchema.safeParse(withoutEmpty(secrets.env));
+  const result = buildEnvSchema().safeParse(withoutEmpty(secrets.env));
   if (secrets.issues.length === 0 && result.success) {
     return toAppConfig(result.data);
   }
   const parsed = result.success ? [] : issuesOf(result.error).filter((issue) => !secrets.failed.has(issue.variable));
-  throw new ConfigError([...secrets.issues, ...parsed].toSorted(byVariable));
+  throw new ConfigError([...secrets.issues, ...parsed].toSorted((a, b) => a.variable.localeCompare(b.variable)));
 }

@@ -26,13 +26,13 @@ import type { Clock } from './ports/clock.ts';
 const DAY = 86_400_000;
 const BOTH: NetworkValues = { ip: '198.51.100.23', userAgent: 'Browser/9.0 (test)' };
 const NONE: NetworkValues = { ip: null, userAgent: null };
-/** The retention a configuration without the variable gets. */
-const DEFAULT_RETENTION_DAYS = loadConfig({
-  DATABASE_URL: 'postgres://cla_app:pw@db.internal:5432/cla',
-}).networkMetadataRetentionDays;
+/** The retention a configuration without the variable gets. Read when a test runs: the configuration is not loaded at import. */
+function defaultRetentionDays(): number {
+  return loadConfig({ DATABASE_URL: 'postgres://cla_app:pw@db.internal:5432/cla' }).networkMetadataRetentionDays;
+}
 
 /** A migrated database with the two columns and one signature whose values were stored at `storedAt`; `at(iso)` moves the clock and `run()` runs the job. */
-async function world(storedAt: string, retentionDays = DEFAULT_RETENTION_DAYS) {
+async function world(storedAt: string, retentionDays = defaultRetentionDays()) {
   const { db } = await migratedTestDatabase();
   const { signatureId } = await seedSignature(db, await seedTenant(db), 111);
   await setNetwork(db, signatureId, storedAt, BOTH);
@@ -55,7 +55,7 @@ async function world(storedAt: string, retentionDays = DEFAULT_RETENTION_DAYS) {
 test('the default retention is 30 days and the job removes values stored at signing once they are older than that', async () => {
   const storedAt = '2026-10-01T08:00:00.000Z';
   const { db, signatureId, run, at } = await world(storedAt);
-  expect(DEFAULT_RETENTION_DAYS).toBe(30);
+  expect(defaultRetentionDays()).toBe(30);
 
   at(shifted(storedAt, 29 * DAY + 23 * 3_600_000));
   expect(await run()).toBe(0);

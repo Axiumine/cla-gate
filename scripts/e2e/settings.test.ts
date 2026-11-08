@@ -158,7 +158,7 @@ test('the GitHub App variables are blank, so the application starts without an A
 
 test('every GitHub App variable and the session secret of the server configuration is set, so none is inherited', () => {
   const env = appEnvironment({ ...OPTIONS, randomHex: counting });
-  expect(Object.keys(env)).toEqual(expect.arrayContaining([...Object.keys(githubFields), 'SESSION_SECRET']));
+  expect(Object.keys(env)).toEqual(expect.arrayContaining([...Object.keys(githubFields()), 'SESSION_SECRET']));
 });
 
 test('the first-run token and the _FILE variant of every secret the application reads are blank, so none is inherited (E19-S02)', () => {

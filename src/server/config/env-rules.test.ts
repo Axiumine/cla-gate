@@ -3,18 +3,21 @@
 import { expect, test } from 'vitest';
 import { z } from 'zod';
 import { addConfigIssue, issuesOf, ruleOf } from './env-rules.ts';
-import { envSchema } from './env-schema.ts';
+import { buildEnvSchema } from './env-schema.ts';
 
 // E19-S02: the rule that a variable failed is written in env-rules.ts, one per variable of the schema, and never taken from
 // the input or from the message of a validator.
 
-const NAMES = Object.keys(envSchema.shape);
-
-test.each(NAMES)('%s has a rule that is a sentence of its own, with no value in it', (name) => {
-  const rule = ruleOf(name);
-  expect(rule).not.toBe(ruleOf('NOT_A_VARIABLE'));
-  expect(rule).toMatch(/^[a-z]/);
-  expect(rule.length).toBeGreaterThan(8);
+// The names are read from the schema inside the test, not in a table at import: the schema is built when a test asks for it.
+test('every variable of the schema has a rule that is a sentence of its own, with no value in it', () => {
+  const names = Object.keys(buildEnvSchema().shape);
+  expect(names).toContain('PORT');
+  for (const name of names) {
+    const rule = ruleOf(name);
+    expect(rule, `the rule of ${name} is the fallback`).not.toBe(ruleOf('NOT_A_VARIABLE'));
+    expect(rule, `the rule of ${name} starts with a lower case letter`).toMatch(/^[a-z]/);
+    expect(rule.length, `the rule of ${name} is a sentence`).toBeGreaterThan(8);
+  }
 });
 
 test('a name that is not in the schema gets the plain fallback', () => {
@@ -28,7 +31,7 @@ test('the rule of PUBLIC_BASE_URL is the one the story gives as its example', ()
 });
 
 test('the issues of a failed parse are one per variable, with the rule of the variable and not the message of the validator', () => {
-  const result = envSchema.safeParse({ PORT: 'LEAKCANARY', LOG_LEVEL: 'LEAKCANARY' });
+  const result = buildEnvSchema().safeParse({ PORT: 'LEAKCANARY', LOG_LEVEL: 'LEAKCANARY' });
   expect(result.success).toBe(false);
   expect(result.error && issuesOf(result.error)).toEqual([
     { variable: 'PORT', rule: ruleOf('PORT') },

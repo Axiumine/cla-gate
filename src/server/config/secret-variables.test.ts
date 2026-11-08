@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { loadConfig } from './env.ts';
-import { envSchema } from './env-schema.ts';
+import { buildEnvSchema } from './env-schema.ts';
 import { loadMigrateConfig } from './migrate-config.ts';
 import { Secret } from './secret.ts';
 import { SECRET_VARIABLES } from './secret-files.ts';
@@ -18,7 +18,6 @@ const MIGRATION_ONLY: readonly string[] = ['MIGRATION_DATABASE_URL'];
 const LISTED: readonly string[] = SECRET_VARIABLES;
 const byName = (a: string, b: string): number => a.localeCompare(b);
 const SAMPLE = sampleEnvironment();
-const FIELDS = Object.keys(envSchema.shape);
 
 /** The properties of an object, typed as what they are for a walk that knows nothing about them. */
 function entriesOf(value: object): [string, unknown][] {
@@ -44,10 +43,20 @@ function revealed(value: unknown): unknown {
   return value;
 }
 
-const parsed = envSchema.parse(SAMPLE);
-const producers = entriesOf(parsed)
-  .filter(([, value]) => producesSecret(value))
-  .map(([name]) => name);
+/** The fields of the schema, read when a test runs: the schema is built then and not at import. */
+function fields(): string[] {
+  return Object.keys(buildEnvSchema().shape);
+}
+
+/** The fields whose value is a Secret, or holds one, once the sample environment is parsed. */
+function producers(): string[] {
+  return entriesOf(buildEnvSchema().parse(SAMPLE))
+    .filter(([, value]) => producesSecret(value))
+    .map(([name]) => name);
+}
+
+/** The listed names the server's schema reads. The tests below pin that they are exactly the fields that produce a Secret. */
+const SERVER_SECRETS = LISTED.filter((name) => !MIGRATION_ONLY.includes(name));
 
 test('the list is pinned, in the order the operator guides use, without a duplicate', () => {
   expect(SECRET_VARIABLES).toEqual([
@@ -65,17 +74,20 @@ test('the list is pinned, in the order the operator guides use, without a duplic
 });
 
 test('the sample environment gives a value to every field of the schema, so the walk below sees all of them', () => {
-  expect(Object.keys(SAMPLE).toSorted(byName)).toEqual(FIELDS.toSorted(byName));
+  expect(Object.keys(SAMPLE).toSorted(byName)).toEqual(fields().toSorted(byName));
 });
 
 test('every field that produces a Secret has a _FILE entry in SECRET_VARIABLES', () => {
-  expect(producers.length).toBeGreaterThanOrEqual(7);
-  expect(producers.filter((name) => !LISTED.includes(name))).toEqual([]);
+  const found = producers();
+  expect(found.length).toBeGreaterThanOrEqual(7);
+  expect(found.filter((name) => !LISTED.includes(name))).toEqual([]);
 });
 
 test('every entry has a schema field that produces a Secret, except the one the migration command reads', () => {
-  expect(SECRET_VARIABLES.filter((name) => !producers.includes(name)).toSorted(byName)).toEqual(MIGRATION_ONLY);
-  expect(SECRET_VARIABLES.filter((name) => !FIELDS.includes(name)).toSorted(byName)).toEqual(MIGRATION_ONLY);
+  const found = producers();
+  const schemaFields = fields();
+  expect(SECRET_VARIABLES.filter((name) => !found.includes(name)).toSorted(byName)).toEqual(MIGRATION_ONLY);
+  expect(SECRET_VARIABLES.filter((name) => !schemaFields.includes(name)).toSorted(byName)).toEqual(MIGRATION_ONLY);
 });
 
 test('the migration-only entry is a variable of the migration command, which reads its _FILE too', () => {
@@ -85,7 +97,7 @@ test('the migration-only entry is a variable of the migration command, which rea
   expect(config.databaseUrl.reveal()).toBe(url);
 });
 
-test.each(producers)('%s from a file gives the same configuration as the value itself', (name) => {
+test.each(SERVER_SECRETS)('%s from a file gives the same configuration as the value itself', (name) => {
   const files = secretDirectory();
   const { [name]: value = '', ...rest } = SAMPLE;
   // The editor's line break after the value is part of the file and not of the secret.
