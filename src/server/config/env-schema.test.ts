@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { afterEach, expect, test, vi } from 'vitest';
 import { sessionFields } from './auth-fields.ts';
+import { TEST_SESSION_SECRET } from './auth-fixture/test-support.ts';
 import { loadConfig } from './env.ts';
 import { portField } from './env-fields.ts';
 import { githubFields } from './env-github.ts';
@@ -98,7 +99,7 @@ test('neither the schema nor loadConfig reads process.env: only the environment 
   vi.stubEnv('PORT', '4000');
   vi.stubEnv('HOST', 'stubbed.example.test');
   vi.stubEnv('WEB_ROOT', '/stubbed/web');
-  vi.stubEnv('SESSION_SECRET', 'stubbed-session-secret-0123456789abcd');
+  vi.stubEnv('SESSION_SECRET', TEST_SESSION_SECRET);
   const config = loadConfig({ DATABASE_URL: SAMPLE_DATABASE_URL });
   expect(config).toMatchObject({ port: 3000, host: '127.0.0.1', webRoot: defaultWebRoot(), sessionSecret: undefined });
   expect(buildEnvSchema().parse({ DATABASE_URL: SAMPLE_DATABASE_URL })).toMatchObject({
