@@ -19,7 +19,6 @@ const PROFILE: GithubLoginProfile = {
   avatarUrl: null,
   verifiedEmails: [{ email: 'alice@example.org', primary: true }],
 };
-const TOKEN = new Secret('ghu_made-up-token');
 
 interface Script {
   exchange?: () => Promise<Secret>;
@@ -30,21 +29,23 @@ interface Script {
 /** A service over a migrated database and a port whose calls are scripted; `calls` lists what it was asked, in order. */
 async function setup(script: Script = {}, open = migratedTestDatabase) {
   const { db } = await open();
+  // Made here and not at import: the mutation gate counts whatever runs at import as static.
+  const token = new Secret('ghu_made-up-token');
   const calls: string[] = [];
   const revoked: Secret[] = [];
   const warnings: { fields: object; message: string }[] = [];
   const github: GithubLogin = {
     exchange: (code, verifier) => {
       calls.push(`exchange ${code} ${verifier}`);
-      return script.exchange?.() ?? Promise.resolve(TOKEN);
+      return script.exchange?.() ?? Promise.resolve(token);
     },
-    identity: (token) => {
-      calls.push(`identity ${token === TOKEN}`);
+    identity: (presented) => {
+      calls.push(`identity ${presented === token}`);
       return script.identity?.() ?? Promise.resolve(PROFILE);
     },
-    revoke: (token) => {
+    revoke: (presented) => {
       calls.push('revoke');
-      revoked.push(token);
+      revoked.push(presented);
       return script.revoke?.() ?? Promise.resolve({ ok: true });
     },
   };
@@ -55,17 +56,18 @@ async function setup(script: Script = {}, open = migratedTestDatabase) {
     clock: new FakeClock('2026-11-02T10:00:00.000Z'),
     log: { warn: (fields, message) => warnings.push({ fields, message }) },
   };
-  return { db, context, calls, revoked, warnings };
+  return { db, context, calls, revoked, warnings, token };
 }
 
 const ATTEMPT = { code: 'the-code', verifier: 'the-verifier', presentedSessionRowId: undefined };
 
 test('a login runs the exchange, the identity and the revocation in that order, with the same Secret', async () => {
-  const { context, calls, revoked } = await setup();
+  const { context, calls, revoked, token } = await setup();
   const result = await completeLogin(context, ATTEMPT);
   expect(result.ok).toBe(true);
   expect(calls).toEqual(['exchange the-code the-verifier', 'identity true', 'revoke']);
-  expect(revoked).toEqual([TOKEN]);
+  expect(revoked).toHaveLength(1);
+  expect(revoked[0]).toBe(token);
 });
 
 test('it creates the user, a session of that user and returns the plain id for the cookie only', async () => {

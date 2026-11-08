@@ -9,7 +9,10 @@ import { type GithubLoginOptions, LOGIN_TIMEOUT_MS } from './user-login-transpor
 // The login's GitHub calls (E10-S05) against a scripted `fetch`: the shape of what is sent, which the callback tests see
 // only through a mocked GitHub, and the failures of the transport itself.
 
-const TOKEN = new Secret('ghu_made-up-token');
+/** Made when a test asks and not at import: the mutation gate counts whatever runs at import as static. */
+function madeUpToken(): Secret {
+  return new Secret('ghu_made-up-token');
+}
 
 interface Sent {
   readonly url: string;
@@ -53,8 +56,8 @@ test('every call refuses redirects and carries a timeout, so a token never follo
   );
   const github = loginOver(send);
   await github.exchange('code', 'verifier');
-  await github.identity(TOKEN);
-  await github.revoke(TOKEN);
+  await github.identity(madeUpToken());
+  await github.revoke(madeUpToken());
   expect(sent.map((call) => call.init.method)).toEqual(['POST', 'GET', 'GET', 'DELETE']);
   expect(sent.map((call) => call.init.redirect)).toEqual(['error', 'error', 'error', 'error']);
   for (const call of sent) {
@@ -64,13 +67,13 @@ test('every call refuses redirects and carries a timeout, so a token never follo
 
 test('the client id is a path segment: it is escaped, so it cannot change the route', async () => {
   const { sent, send } = scripted(new Response(null, { status: 204 }));
-  await loginOver(send, { clientId: 'a/b c?d' }).revoke(TOKEN);
+  await loginOver(send, { clientId: 'a/b c?d' }).revoke(madeUpToken());
   expect(sent[0]?.url).toBe('https://api.github.com/applications/a%2Fb%20c%3Fd/token');
 });
 
 test('the token goes into the Authorization header of the identity calls and nowhere in a URL', async () => {
   const { sent, send } = scripted(Response.json({ id: 1, login: 'a', type: 'User' }), Response.json([]));
-  await loginOver(send).identity(TOKEN);
+  await loginOver(send).identity(madeUpToken());
   expect(sent.map((call) => call.url)).toEqual([
     'https://api.github.com/user',
     'https://api.github.com/user/emails?per_page=100',
@@ -101,7 +104,7 @@ test('without a fetch of its own the adapter uses the global one, read when a ca
   const { sent, send } = scripted(new Response(null, { status: 204 }));
   vi.stubGlobal('fetch', send);
   try {
-    expect(await github.revoke(TOKEN)).toEqual({ ok: true });
+    expect(await github.revoke(madeUpToken())).toEqual({ ok: true });
   } finally {
     vi.unstubAllGlobals();
   }
@@ -144,5 +147,5 @@ test.each([
   ['success', new Response(null, { status: 204 }), { ok: true }],
   ['a 200 that is not the 204 GitHub sends', new Response('{}', { status: 200 }), { ok: false, status: 200 }],
 ])('the revocation meets %s and reports %j without throwing', async (_label, answer, expected) => {
-  expect(await loginOver(scripted(answer).send).revoke(TOKEN)).toEqual(expected);
+  expect(await loginOver(scripted(answer).send).revoke(madeUpToken())).toEqual(expected);
 });

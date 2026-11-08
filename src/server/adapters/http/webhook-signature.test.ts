@@ -14,8 +14,13 @@ import {
 import { matchWebhookSignature, sameDigest } from './webhook-signature.ts';
 
 const BODY = Buffer.from('{"action":"opened","number":7}');
-const BOTH = { current: new Secret(SECRET_CURRENT), previous: new Secret(SECRET_PREVIOUS) };
-const ONLY_CURRENT = { current: new Secret(SECRET_CURRENT), previous: undefined };
+// Built when a test asks and not at import: the mutation gate counts whatever runs at import as static.
+function both() {
+  return { current: new Secret(SECRET_CURRENT), previous: new Secret(SECRET_PREVIOUS) };
+}
+function onlyCurrent() {
+  return { current: new Secret(SECRET_CURRENT), previous: undefined };
+}
 
 test('GitHub documented example: the known secret, body and header match', () => {
   const secrets = { current: new Secret(GITHUB_EXAMPLE.secret), previous: undefined };
@@ -23,16 +28,16 @@ test('GitHub documented example: the known secret, body and header match', () =>
 });
 
 test('the signature that matches the current secret says current, and the previous one says previous', () => {
-  expect(matchWebhookSignature(BODY, sign(SECRET_CURRENT, BODY), BOTH)).toBe('current');
-  expect(matchWebhookSignature(BODY, sign(SECRET_PREVIOUS, BODY), BOTH)).toBe('previous');
+  expect(matchWebhookSignature(BODY, sign(SECRET_CURRENT, BODY), both())).toBe('current');
+  expect(matchWebhookSignature(BODY, sign(SECRET_PREVIOUS, BODY), both())).toBe('previous');
 });
 
 test('a body signed by the previous secret is refused once that secret is removed', () => {
-  expect(matchWebhookSignature(BODY, sign(SECRET_PREVIOUS, BODY), ONLY_CURRENT)).toBe('none');
+  expect(matchWebhookSignature(BODY, sign(SECRET_PREVIOUS, BODY), onlyCurrent())).toBe('none');
 });
 
 test('a body signed by neither secret is refused', () => {
-  expect(matchWebhookSignature(BODY, sign('some-other-secret-value', BODY), BOTH)).toBe('none');
+  expect(matchWebhookSignature(BODY, sign('some-other-secret-value', BODY), both())).toBe('none');
 });
 
 test('the previous secret alone, with no current one, still matches', () => {
@@ -51,16 +56,16 @@ test('a signature is over the exact bytes: one flipped byte or different whitesp
   const flipped = Buffer.from(BODY);
   flipped[3] = (flipped[3] ?? 0) ^ 0x01;
   const reserialised = Buffer.from(JSON.stringify(JSON.parse(BODY.toString()), null, 2));
-  expect(matchWebhookSignature(flipped, signature, BOTH)).toBe('none');
-  expect(matchWebhookSignature(reserialised, signature, BOTH)).toBe('none');
-  expect(matchWebhookSignature(Buffer.concat([BODY, Buffer.from('\n')]), signature, BOTH)).toBe('none');
-  expect(matchWebhookSignature(BODY.subarray(1), signature, BOTH)).toBe('none');
+  expect(matchWebhookSignature(flipped, signature, both())).toBe('none');
+  expect(matchWebhookSignature(reserialised, signature, both())).toBe('none');
+  expect(matchWebhookSignature(Buffer.concat([BODY, Buffer.from('\n')]), signature, both())).toBe('none');
+  expect(matchWebhookSignature(BODY.subarray(1), signature, both())).toBe('none');
 });
 
 test('the signature of the empty body is the one HMAC of the empty string, and matches the empty body only', () => {
   const signature = sign(SECRET_CURRENT, '');
-  expect(matchWebhookSignature(Buffer.alloc(0), signature, BOTH)).toBe('current');
-  expect(matchWebhookSignature(BODY, signature, BOTH)).toBe('none');
+  expect(matchWebhookSignature(Buffer.alloc(0), signature, both())).toBe('current');
+  expect(matchWebhookSignature(BODY, signature, both())).toBe('none');
 });
 
 const GOOD = sign(SECRET_CURRENT, BODY);
@@ -89,35 +94,35 @@ test.each([
   ['null', null],
   ['an object', { toString: () => GOOD }],
 ])('a header that is %s is refused even for a body it would otherwise match', (_label, header) => {
-  expect(matchWebhookSignature(BODY, header, BOTH)).toBe('none');
+  expect(matchWebhookSignature(BODY, header, both())).toBe('none');
 });
 
 test('both secrets are always computed and compared, whichever matches', () => {
   const hmac = watchCreateHmac();
   const compare = watchTimingSafeEqual();
-  expect(matchWebhookSignature(BODY, sign(SECRET_CURRENT, BODY), BOTH)).toBe('current');
+  expect(matchWebhookSignature(BODY, sign(SECRET_CURRENT, BODY), both())).toBe('current');
   expect(hmac).toHaveBeenCalledTimes(3);
   expect(compare).toHaveBeenCalledTimes(2);
 });
 
 test('a refusal compares both secrets as well, and a missing secret costs no comparison', () => {
   const compare = watchTimingSafeEqual();
-  expect(matchWebhookSignature(BODY, sign('x'.repeat(16), BODY), BOTH)).toBe('none');
+  expect(matchWebhookSignature(BODY, sign('x'.repeat(16), BODY), both())).toBe('none');
   expect(compare).toHaveBeenCalledTimes(2);
   compare.mockClear();
-  expect(matchWebhookSignature(BODY, sign('x'.repeat(16), BODY), ONLY_CURRENT)).toBe('none');
+  expect(matchWebhookSignature(BODY, sign('x'.repeat(16), BODY), onlyCurrent())).toBe('none');
   expect(compare).toHaveBeenCalledTimes(1);
 });
 
 test('a header that is not the right shape is refused before any secret is touched', () => {
   const compare = watchTimingSafeEqual();
-  expect(matchWebhookSignature(BODY, `${GOOD} `, BOTH)).toBe('none');
+  expect(matchWebhookSignature(BODY, `${GOOD} `, both())).toBe('none');
   expect(compare).not.toHaveBeenCalled();
 });
 
 test('the digests are compared with crypto.timingSafeEqual on buffers of the same length', () => {
   const compare = watchTimingSafeEqual();
-  matchWebhookSignature(BODY, GOOD, ONLY_CURRENT);
+  matchWebhookSignature(BODY, GOOD, onlyCurrent());
   const [expected, claimed] = compare.mock.calls[0] ?? [];
   expect(expected).toBeInstanceOf(Buffer);
   expect(claimed).toBeInstanceOf(Buffer);

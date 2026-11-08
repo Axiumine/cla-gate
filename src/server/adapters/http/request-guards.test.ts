@@ -12,13 +12,15 @@ import { CsrfRouteError, registerRequestGuards } from './request-guards.ts';
 // whatever a test hook says it is.
 
 const ORIGIN = 'https://app.example.com';
-const KEY = new Secret('test-session-secret-0123456789ab');
 
 /** A Fastify instance with the guards. `login` false is an app whose login settings are missing: no session secret. */
 function bare(login = true): FastifyInstance {
   const app = Fastify();
   registerErrorHandlers(app);
-  registerRequestGuards(app, { publicBaseUrl: `${ORIGIN}/`, sessionSecret: login ? KEY : undefined });
+  registerRequestGuards(app, {
+    publicBaseUrl: `${ORIGIN}/`,
+    sessionSecret: login ? new Secret('test-session-secret-0123456789ab') : undefined,
+  });
   return app;
 }
 

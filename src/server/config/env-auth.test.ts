@@ -65,6 +65,19 @@ test('a session secret under 32 characters is refused by name in every environme
 });
 
 test.each([
+  { length: 31, accepted: false },
+  { length: 32, accepted: true },
+  { length: 64, accepted: true },
+])('a session secret of $length characters is accepted: $accepted', ({ length, accepted }) => {
+  const env = { ...AUTH_ENV, SESSION_SECRET: 's'.repeat(length) };
+  if (accepted) {
+    expect(loadConfig({ DATABASE_URL: DB, ...env }).sessionSecret?.reveal()).toBe('s'.repeat(length));
+  } else {
+    expect(capture(env).lines).toEqual(['SESSION_SECRET: must be at least 32 characters']);
+  }
+});
+
+test.each([
   ['development', {}],
   ['test', { NODE_ENV: 'test' }],
   ['development with one of the three', { SESSION_SECRET: TEST_SESSION_SECRET }],
@@ -139,4 +152,12 @@ test.each([
   for (const value of Object.values(env).filter((given) => given.length >= 4)) {
     expect(error.message).not.toContain(value);
   }
+});
+
+test('an idle limit above the absolute one is reported as two lines, each naming the other variable', () => {
+  const error = capture({ SESSION_IDLE_SECONDS: '5001', SESSION_ABSOLUTE_SECONDS: '5000' });
+  expect(error.lines).toEqual([
+    'SESSION_ABSOLUTE_SECONDS: must not be below SESSION_IDLE_SECONDS',
+    'SESSION_IDLE_SECONDS: must not be above SESSION_ABSOLUTE_SECONDS',
+  ]);
 });
