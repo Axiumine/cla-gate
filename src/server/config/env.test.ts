@@ -7,7 +7,7 @@ import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError } from './config-error.ts';
 import { loadConfig } from './env.ts';
 import { loadMigrateConfig } from './migrate-config.ts';
-import { MASK, Secret } from './secret.ts';
+import { mask, Secret } from './secret.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 const KEY = testRsaKey();
@@ -128,7 +128,7 @@ test('secrets in the loaded config cannot be printed', () => {
     expect(printed).not.toContain('whsec-bytes');
     expect(printed).not.toContain('old-whsec-bytes');
   }
-  expect(JSON.stringify(config)).toContain(MASK);
+  expect(JSON.stringify(config)).toContain(mask());
 });
 
 test.each([

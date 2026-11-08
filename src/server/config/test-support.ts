@@ -66,8 +66,18 @@ export interface TestGitHubKey {
   readonly publicKey: KeyObject;
 }
 
-/** A fresh key in the shape of {@link GitHubPrivateKey}: what `parseGitHubPrivateKey` would return for it. */
+/**
+ * A fresh key in the shape of {@link GitHubPrivateKey}: what `parseGitHubPrivateKey` would return for it. The fingerprint is
+ * worked out when it is read and not when the key is made, because many test files make their key at import and the
+ * mutation gate counts whatever runs at import as static (see "Module-level code" in docs/quality-gates.md).
+ */
 export function testGitHubKey(): TestGitHubKey {
   const { pkcs8, publicKey } = testRsaKey();
-  return { key: { pem: new Secret(pkcs8), fingerprint: publicKeyFingerprint(publicKey) }, pem: pkcs8, publicKey };
+  const key: GitHubPrivateKey = {
+    pem: new Secret(pkcs8),
+    get fingerprint(): string {
+      return publicKeyFingerprint(publicKey);
+    },
+  };
+  return { key, pem: pkcs8, publicKey };
 }

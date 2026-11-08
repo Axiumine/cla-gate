@@ -5,9 +5,6 @@ import { type GithubId, githubIdSchema } from '../../shared/github-id.ts';
 /** The most account ids `GITHUB_ALLOWED_ACCOUNT_IDS` may name, once duplicates are collapsed (E05-S07). */
 const MAX_ACCOUNT_IDS = 100;
 
-/** Digits only and no leading zero: `0`, `007`, `-5`, `1.5`, `+3`, `1e3` and a login are all refused. */
-const POSITIVE_INTEGER = /^[1-9]\d*$/;
-
 /**
  * A comma-separated list of numeric GitHub ids: whitespace around each trimmed, duplicates collapsed (the first spelling
  * keeps its place), at most `maxIds` distinct ids. The identity of an account is its number and never its login, so a login
@@ -19,7 +16,9 @@ export function parseGithubIdList(value: string, maxIds: number): readonly Githu
   const ids = new Set<GithubId>();
   for (const part of value.split(',')) {
     const text = part.trim();
-    const parsed = POSITIVE_INTEGER.test(text) ? githubIdSchema.safeParse(Number(text)) : undefined;
+    // Digits only and no leading zero: `0`, `007`, `-5`, `1.5`, `+3`, `1e3` and a login are all refused. The pattern is
+    // written here, not in a module-level constant: see "Module-level code" in docs/quality-gates.md.
+    const parsed = /^[1-9]\d*$/.test(text) ? githubIdSchema.safeParse(Number(text)) : undefined;
     if (parsed?.success !== true) {
       return undefined;
     }

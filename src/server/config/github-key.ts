@@ -7,7 +7,10 @@ import { Secret } from './secret.ts';
 /** GitHub refuses smaller keys for an App, and so do we (E05-S01). */
 const MIN_MODULUS_BITS = 2048;
 
-const RsaDetails = z.object({ modulusLength: z.number().min(MIN_MODULUS_BITS) });
+/** The one detail of a key that the size rule reads. Built when a key is parsed and not at import (see "Module-level code" in docs/quality-gates.md). */
+function rsaDetails() {
+  return z.object({ modulusLength: z.number().min(MIN_MODULUS_BITS) });
+}
 
 /** A GitHub App signing key as the configuration holds it: validated once, and unprintable. */
 export interface GitHubPrivateKey {
@@ -48,7 +51,7 @@ function readPrivateKey(pem: string): KeyObject | undefined {
 export function parseGitHubPrivateKey(text: string): GitHubPrivateKey | undefined {
   const pem = text.replaceAll(String.raw`\n`, '\n').trim();
   const key = readPrivateKey(pem);
-  if (key?.asymmetricKeyType !== 'rsa' || !RsaDetails.safeParse(key.asymmetricKeyDetails).success) {
+  if (key?.asymmetricKeyType !== 'rsa' || !rsaDetails().safeParse(key.asymmetricKeyDetails).success) {
     return undefined;
   }
   return { pem: new Secret(pem), fingerprint: publicKeyFingerprint(createPublicKey(key)) };

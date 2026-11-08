@@ -6,7 +6,7 @@ import { expect, test } from 'vitest';
 import { createLogger } from '../adapters/http/logger.ts';
 import { captureLogs } from '../test-support.ts';
 import { type GitHubPrivateKey, parseGitHubPrivateKey, publicKeyFingerprint } from './github-key.ts';
-import { MASK } from './secret.ts';
+import { mask } from './secret.ts';
 import { escapeNewlines, testRsaKey, testUnsuitableKeys } from './test-support.ts';
 
 const KEY = testRsaKey();
@@ -73,7 +73,7 @@ test.each([
 ])('a parsed key printed with %s shows the mask, never the key', (_label, print) => {
   const parsed = parseGitHubPrivateKey(KEY.pkcs8);
   const printed = parsed === undefined ? '' : print(parsed);
-  expect(printed).toContain(MASK);
+  expect(printed).toContain(mask());
   expect(printed).not.toContain('PRIVATE KEY');
   expect(printed).not.toContain(KEY.pkcs8.split('\n')[1] ?? 'missing');
 });

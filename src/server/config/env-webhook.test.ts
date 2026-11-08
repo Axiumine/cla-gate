@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError } from './config-error.ts';
 import { loadConfig } from './env.ts';
-import { MASK, Secret } from './secret.ts';
+import { mask, Secret } from './secret.ts';
 import { TEST_WEBHOOK_SECRET, testRsaKey } from './test-support.ts';
 
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
@@ -118,5 +118,5 @@ test('neither webhook secret can be printed from the loaded configuration', () =
     expect(printed).not.toContain(CURRENT);
     expect(printed).not.toContain(PREVIOUS);
   }
-  expect(JSON.stringify(config.github)).toContain(MASK);
+  expect(JSON.stringify(config.github)).toContain(mask());
 });

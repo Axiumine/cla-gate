@@ -14,13 +14,13 @@ function withoutTrailingSlash(value: string): string {
 /** `SOURCE_URL`: an https address without credentials, query or fragment. */
 export const sourceUrlField = z.string().transform(withoutTrailingSlash).pipe(sourceUrlSchema);
 
-/** What a build that does not know its commit passes (`docker build --build-arg SOURCE_COMMIT=unknown`), and what a blank value means. */
-const UNKNOWN_COMMIT = 'unknown';
-
-/** @returns the commit id in lower case, or `null` for a blank value and for `unknown`; anything else is left for the schema to refuse. */
+/**
+ * @returns the commit id in lower case, or `null` for a blank value and for `unknown` (what a build that does not know its
+ * commit passes: `docker build --build-arg SOURCE_COMMIT=unknown`); anything else is left for the schema to refuse.
+ */
 function commitOrNull(value: string): string | null {
   const trimmed = value.trim();
-  return trimmed === '' || trimmed === UNKNOWN_COMMIT ? null : trimmed.toLowerCase();
+  return trimmed === '' || trimmed === 'unknown' ? null : trimmed.toLowerCase();
 }
 
 /** `SOURCE_COMMIT`: 40 hexadecimal characters, or nothing (unset, empty, blank or `unknown`), which is `null`. */
