@@ -63,8 +63,8 @@ test('run from a directory outside the repository, the entry script measures its
   });
   expect(expected.err.join('\n')).not.toContain('huge.ts');
   // It measures the whole repository twice (in this process and in a child), which takes longer as the repository grows:
-  // the default 5 s timeout fails on a loaded machine.
-}, 60_000);
+  // the default 5 s timeout fails on a loaded machine, and 60 s failed too (CI run 42499056748: 83 s on a shared runner).
+}, 240_000);
 
 test('run from a directory outside the repository, the entry script finds the baseline of its own repository', () => {
   // `--init` writes a baseline only where there is none: the check below keeps this test from writing one into the repository.
