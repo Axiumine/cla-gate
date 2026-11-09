@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { act, screen, waitFor } from '@testing-library/react';
-import { delay, HttpResponse, http } from 'msw';
+import { HttpResponse, http } from 'msw';
 import { StrictMode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { setupConvertRoute } from '../../shared/setup.ts';
@@ -143,15 +143,18 @@ test('two clicks in the same instant, before the page has drawn the busy button,
 
 test('while the session is being read the page shows the loading state and no button', async () => {
   serveSetup();
+  // The answer is held until the checks of the loading state are done: a delay would end first on a slow machine.
+  const held = Promise.withResolvers<true>();
   server.use(
     http.get('/api/setup/session', async () => {
-      await delay(50);
+      await held.promise;
       return HttpResponse.json({ csrfToken: SETUP_CSRF });
     }),
   );
   renderWithProviders(<AppRouter />, { route: ROUTE });
   expect(await screen.findByText(messages['states.loading'])).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: messages['setup.callback.get'] })).toBeNull();
+  held.resolve(true);
   await getButton();
 });
 
