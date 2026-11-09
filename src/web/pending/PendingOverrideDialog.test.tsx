@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { screen, waitFor, within } from '@testing-library/react';
-import { delay, HttpResponse } from 'msw';
+import { HttpResponse } from 'msw';
 import { expect, test } from 'vitest';
 import { messages } from '../i18n/index.ts';
 import { summary, tenantOf } from '../installations/test-support.ts';
@@ -165,10 +165,12 @@ test('when the row stays, focus returns to its button', async () => {
 });
 
 test('the dialog stays open while the request is out, the button is busy, and a second submit sends no second request', async () => {
+  // The request is held until the checks of the open state are done: a delay would end first on a slow machine.
+  const held = Promise.withResolvers<true>();
   const { served, user } = await open({
     record: [
       async () => {
-        await delay(60);
+        await held.promise;
         return recordedAs();
       },
     ],
@@ -178,6 +180,7 @@ test('the dialog stays open while the request is out, the button is busy, and a 
   await user.click(submitButton());
   expect(submitButton()).toHaveAttribute('aria-busy', 'true');
   expect(recordDialog()).toBeInTheDocument();
+  held.resolve(true);
   await waitFor(() => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
