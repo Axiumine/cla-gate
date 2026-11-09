@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { screen, waitFor, within } from '@testing-library/react';
-import { delay } from 'msw';
 import { expect, test } from 'vitest';
 import { envelope } from '../api/test-support.ts';
 import { messages } from '../i18n/index.ts';
@@ -200,10 +199,12 @@ test('a dialog opened again starts with no error of the attempt before', async (
 });
 
 test('the dialog stays open while the request is out, Cancel does not close it, and a second confirm sends no second request', async () => {
+  // The request is held until the checks of the open state are done: a delay would end first on a slow machine.
+  const held = Promise.withResolvers<true>();
   const { served, user } = await openOverrides(ROUTE, {
     remove: [
       async () => {
-        await delay(60);
+        await held.promise;
         return noContent();
       },
     ],
@@ -215,6 +216,7 @@ test('the dialog stays open while the request is out, Cancel does not close it, 
   await user.click(cancel());
   expect(confirmRemoval()).toHaveAttribute('aria-busy', 'true');
   expect(removeDialog()).toBeInTheDocument();
+  held.resolve(true);
   await waitFor(() => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });

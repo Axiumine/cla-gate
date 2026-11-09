@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { screen, waitFor } from '@testing-library/react';
-import { delay, HttpResponse, http } from 'msw';
+import { HttpResponse, http } from 'msw';
 import { expect, test, vi } from 'vitest';
 import { logoutRoute } from '../../shared/auth-contract.ts';
 import { ContractError } from '../api/index.ts';
@@ -80,11 +80,13 @@ test.each([
 
 test('a second click while the first is pending sends nothing, and the button says it is busy and keeps the focus', async () => {
   let sent = 0;
+  // The request is held until the checks of the busy button are done: a delay would end first on a slow machine.
+  const held = Promise.withResolvers<true>();
   const { user } = renderWithProviders(<AppRouter />, { session: ALICE });
   server.use(
     http.post(logoutRoute.path, async () => {
       sent += 1;
-      await delay(80);
+      await held.promise;
       return noContent();
     }),
   );
@@ -94,6 +96,7 @@ test('a second click while the first is pending sends nothing, and the button sa
   await user.dblClick(button);
   expect(button).toHaveAttribute('aria-busy', 'true');
   expect(button).toHaveFocus();
+  held.resolve(true);
   await screen.findAllByRole('link', { name: messages['auth.login'] });
   expect(sent).toBe(1);
 });
