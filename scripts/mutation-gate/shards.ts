@@ -50,7 +50,8 @@ export const SERVER_SHARDS: readonly Shard[] = [
   // The CLA text code of E12: the Markdown pipeline (`cla-markdown*`), `cla-text`, `cla-version`, `cla-name`, `cla-history`. 11 files,
   // 774 mutants. It is cut out by a negation in `shared` and not by a letter range, so that a name no pattern foresaw is in `shared`.
   { name: 'shared-cla', mutate: ['src/shared/cla-*.ts'] },
-  // 23 files, 776 mutants.
+  // 23 files, 798 mutants (776 on the tree of 2026-11-06, before the modules built their schemas and patterns when called and not at
+  // import, which had 373 static mutants: docs/quality-gates.md, Testing, "Module-level code").
   { name: 'config', mutate: ['src/server/config/**/*.ts'] },
   // The HTTP adapter (115 files and 2829 mutants with the setup routes, the webhook intake and the public verification) is cut into
   // five by file name. The nightly run 42014893309 had it whole (`http-a-v`, 2664 mutants over 108 files at e9cc6bc): 31 minutes of

@@ -57,7 +57,7 @@ function probePort(env: Readonly<Record<string, string | undefined>>): number | 
   if (value === undefined || value === '') {
     return PROBE_DEFAULT_PORT;
   }
-  const parsed = portField.safeParse(value);
+  const parsed = portField().safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
 

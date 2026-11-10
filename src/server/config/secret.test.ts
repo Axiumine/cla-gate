@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { inspect } from 'node:util';
 import { expect, test } from 'vitest';
-import { MASK, Secret } from './secret.ts';
+import { mask, Secret } from './secret.ts';
 
 const VALUE = 'ghs_super-secret-value';
 
@@ -28,7 +28,7 @@ test.each([
 });
 
 test('the mask is the literal [REDACTED]', () => {
-  expect(MASK).toBe('[REDACTED]');
+  expect(mask()).toBe('[REDACTED]');
   expect(String(new Secret(VALUE))).toBe('[REDACTED]');
   expect(JSON.stringify({ secret: new Secret(VALUE) })).toBe('{"secret":"[REDACTED]"}');
 });
@@ -39,5 +39,5 @@ test.each([
   ['inspect', (secret: Secret) => inspect(secret)],
   ['String()', (secret: Secret) => String(secret)],
 ])('%s returns the mask', (_name, print) => {
-  expect(print(new Secret(VALUE))).toBe(MASK);
+  expect(print(new Secret(VALUE))).toBe(mask());
 });

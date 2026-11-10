@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test } from 'vitest';
 import { loadConfig } from './env.ts';
-import { envSchema } from './env-schema.ts';
+import { buildEnvSchema } from './env-schema.ts';
 import { SECRET_VARIABLES } from './secret-files.ts';
 
 // `.env.example` lists every variable the server reads (E10-S01), so a setting added to the schema cannot be forgotten.
@@ -39,7 +39,9 @@ const assignments = text
 
 test('every variable of the environment schema is in .env.example, and nothing else is but what the stack reads', () => {
   const documented = assignments.map(([name]) => name).toSorted(byName);
-  expect(documented).toEqual([...Object.keys(envSchema.shape), ...MIGRATION_ONLY, ...COMPOSE_ONLY].toSorted(byName));
+  expect(documented).toEqual(
+    [...Object.keys(buildEnvSchema().shape), ...MIGRATION_ONLY, ...COMPOSE_ONLY].toSorted(byName),
+  );
 });
 
 test('no variable is listed twice', () => {

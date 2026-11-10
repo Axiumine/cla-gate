@@ -34,7 +34,7 @@ export function loadMigrateConfig(env: Env): { readonly databaseUrl: Secret } {
     throw new ConfigError(runtime.issues);
   }
   const name = useOwner ? 'MIGRATION_DATABASE_URL' : 'DATABASE_URL';
-  const result = databaseUrlField.safeParse(new Map(Object.entries(runtime.env)).get(name));
+  const result = databaseUrlField().safeParse(new Map(Object.entries(runtime.env)).get(name));
   if (!result.success) {
     const rule = useOwner ? 'must be a postgres:// or postgresql:// connection string' : ruleOf('DATABASE_URL');
     throw new ConfigError([{ variable: name, rule }]);

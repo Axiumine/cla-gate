@@ -98,3 +98,14 @@ test('a variable that holds a value that failed its own check still counts as se
     'GITHUB_CLIENT_SECRET',
   ]);
 });
+
+test('the issues are made on each call, so a caller that changes one cannot change what the next call says', () => {
+  const missingToken = resolveMode(NONE).problems;
+  const partial = resolveMode({ NODE_ENV: 'production', GITHUB_APP_ID: '1' }).problems;
+  for (const issue of [...missingToken, ...partial]) {
+    Object.assign(issue, { rule: 'changed by a caller' });
+  }
+  expect(resolveMode(NONE).problems).not.toBe(missingToken);
+  expect(resolveMode(NONE).problems[0]?.rule).toMatch(/^required while no GitHub App/);
+  expect(resolveMode({ NODE_ENV: 'production', GITHUB_APP_ID: '1' }).problems[0]?.rule).toMatch(/^required: some/);
+});

@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { ConfigError } from '../config/config-error.ts';
-import { loadConfig } from '../config/env.ts';
-import { envSchema } from '../config/env-schema.ts';
+import { type AppConfig, loadConfig } from '../config/env.ts';
+import { buildEnvSchema } from '../config/env-schema.ts';
 import { durationSeconds, markedTable, readPrivacyDoc, unquote } from './privacy-doc/test-support.ts';
 
 // The retention table of docs/privacy.md against the defaults and limits of the code (E16-S07): the number in the document is
@@ -19,8 +19,6 @@ const rows = table.rows.map(([data = '', fallback = '', limit = '', setting = ''
   limit,
   setting: unquote(setting),
 }));
-const config = loadConfig({ DATABASE_URL });
-
 const rowOf = (setting: string) => rows.find((row) => row.setting === setting);
 
 test('the retention table has the header and the separator of the document', () => {
@@ -29,14 +27,15 @@ test('the retention table has the header and the separator of the document', () 
   expect(table.rows.map((cells) => cells.length)).toEqual(table.rows.map(() => 4));
 });
 
+// The configuration is loaded inside each test and not in a table at import: nothing of the configuration runs before a test.
 test.each([
-  ['NETWORK_METADATA_RETENTION_DAYS', config.networkMetadataRetentionDays * SECONDS_PER_DAY],
-  ['SESSION_IDLE_SECONDS', config.session.idleSeconds],
-  ['SESSION_ABSOLUTE_SECONDS', config.session.absoluteSeconds],
-])('the default of %s in the document is the default of the environment schema', (setting, seconds) => {
+  ['NETWORK_METADATA_RETENTION_DAYS', (config: AppConfig) => config.networkMetadataRetentionDays * SECONDS_PER_DAY],
+  ['SESSION_IDLE_SECONDS', (config: AppConfig) => config.session.idleSeconds],
+  ['SESSION_ABSOLUTE_SECONDS', (config: AppConfig) => config.session.absoluteSeconds],
+])('the default of %s in the document is the default of the environment schema', (setting, defaultSeconds) => {
   const row = rowOf(setting);
   expect(row, `${setting} has no row in the retention table`).toBeDefined();
-  expect(durationSeconds(row?.fallback ?? '')).toBe(seconds);
+  expect(durationSeconds(row?.fallback ?? '')).toBe(defaultSeconds(loadConfig({ DATABASE_URL })));
 });
 
 test('the limit of the network metadata retention in the document is the largest value the schema accepts', () => {
@@ -49,7 +48,7 @@ test('the limit of the network metadata retention in the document is the largest
 test('every setting the table names is a variable of the environment schema', () => {
   const named = rows.map((row) => row.setting).filter((setting) => /^[A-Z][A-Z0-9_]*$/.test(setting));
   expect(named.length).toBeGreaterThan(0);
-  expect(named.filter((setting) => !Object.hasOwn(envSchema.shape, setting))).toEqual([]);
+  expect(named.filter((setting) => !Object.hasOwn(buildEnvSchema().shape, setting))).toEqual([]);
 });
 
 test.each([
@@ -62,7 +61,7 @@ test.each([
 });
 
 test('the only retention settings in the environment schema are the network metadata one and the two of the operational rows (E22-S04)', () => {
-  const retention = Object.keys(envSchema.shape).filter((name) => /RETENTION|PURGE|AUDIT|SIGNATURE/.test(name));
+  const retention = Object.keys(buildEnvSchema().shape).filter((name) => /RETENTION|PURGE|AUDIT|SIGNATURE/.test(name));
   expect(retention.toSorted((a, b) => a.localeCompare(b))).toEqual([
     'NETWORK_METADATA_RETENTION_DAYS',
     'RETENTION_BATCH_SIZE',

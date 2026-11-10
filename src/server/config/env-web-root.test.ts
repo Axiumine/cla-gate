@@ -4,7 +4,7 @@ import path from 'node:path';
 import { expect, test } from 'vitest';
 import { ConfigError } from './config-error.ts';
 import { loadConfig } from './env.ts';
-import { DEFAULT_WEB_ROOT } from './web-root.ts';
+import { defaultWebRoot } from './web-root.ts';
 
 // E17-S03: WEB_ROOT, the directory of the single-page app that the server serves.
 
@@ -12,12 +12,12 @@ const DB = 'postgres://cla_app:pw@db.internal:5432/cla';
 
 test('the default is the web directory next to the server directory: dist/web beside dist/server once built', () => {
   const serverDirectory = path.resolve(import.meta.dirname, '..');
-  expect(DEFAULT_WEB_ROOT).toBe(path.join(path.dirname(serverDirectory), 'web'));
-  expect(loadConfig({ DATABASE_URL: DB }).webRoot).toBe(DEFAULT_WEB_ROOT);
+  expect(defaultWebRoot()).toBe(path.join(path.dirname(serverDirectory), 'web'));
+  expect(loadConfig({ DATABASE_URL: DB }).webRoot).toBe(defaultWebRoot());
 });
 
 test.each([[undefined], ['']])('WEB_ROOT=%j is unset, so the default applies', (value) => {
-  expect(loadConfig({ DATABASE_URL: DB, WEB_ROOT: value }).webRoot).toBe(DEFAULT_WEB_ROOT);
+  expect(loadConfig({ DATABASE_URL: DB, WEB_ROOT: value }).webRoot).toBe(defaultWebRoot());
 });
 
 test('an absolute WEB_ROOT is kept, and a path with dots in it is cleaned', () => {

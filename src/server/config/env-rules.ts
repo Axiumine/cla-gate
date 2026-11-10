@@ -46,12 +46,12 @@ const FIELD_RULES = {
 
 const RULES: ReadonlyMap<string, string> = new Map(Object.entries(FIELD_RULES));
 
-/** What to say about a variable that failed a rule nobody wrote down. Unreachable for the schema; the type check keeps it so. */
-const UNKNOWN_RULE = 'is invalid';
-
-/** @returns the rule of `variable`; for a name that is not in the schema, {@link UNKNOWN_RULE}. */
+/**
+ * @returns the rule of `variable`; for a name that is not in the schema, the plain `is invalid`: what to say about a
+ * variable that failed a rule nobody wrote down, which the type check keeps unreachable for the schema.
+ */
 export function ruleOf(variable: string): string {
-  return RULES.get(variable) ?? UNKNOWN_RULE;
+  return RULES.get(variable) ?? 'is invalid';
 }
 
 /**

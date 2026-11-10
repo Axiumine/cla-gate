@@ -5,9 +5,6 @@ import { isIP } from 'node:net';
 /** Fastify's `trustProxy` setting: all hops, no proxy, a number of hops, or a list of trusted addresses/CIDRs. */
 export type TrustProxy = boolean | number | readonly string[];
 
-const HOPS = /^\d{1,3}$/;
-const PREFIX = /^\d{1,3}$/;
-
 function isAddressOrCidr(entry: string): boolean {
   // Stryker disable next-line StringLiteral: split() always returns at least one element, so the default is never used (the compiler wants it)
   const [address = '', prefix, ...rest] = entry.split('/');
@@ -17,7 +14,8 @@ function isAddressOrCidr(entry: string): boolean {
   }
   // A /0 prefix would trust every address, and the proxy-addr library behind Fastify refuses it: reject it here, by name.
   return (
-    prefix === undefined || (PREFIX.test(prefix) && Number(prefix) >= 1 && Number(prefix) <= (family === 4 ? 32 : 128))
+    prefix === undefined ||
+    (/^\d{1,3}$/.test(prefix) && Number(prefix) >= 1 && Number(prefix) <= (family === 4 ? 32 : 128))
   );
 }
 
@@ -31,7 +29,7 @@ export function parseTrustProxy(raw: string): TrustProxy | undefined {
   if (value === 'true' || value === 'false') {
     return value === 'true';
   }
-  if (HOPS.test(value)) {
+  if (/^\d{1,3}$/.test(value)) {
     return Number(value);
   }
   const entries = raw.split(',').map((entry) => entry.trim());

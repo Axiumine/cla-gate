@@ -29,7 +29,9 @@ export const SECRET_VARIABLES = [
 ] as const;
 
 /** No credential is anywhere near this long (a 4096-bit RSA key in PEM is about 3.3 KiB); a bigger file is not one. */
-const MAX_BYTES = 64 * 1024;
+function maxBytes(): number {
+  return 64 * 1024;
+}
 
 /** What {@link resolveSecretFiles} makes of an environment. */
 export interface ResolvedSecrets {
@@ -70,12 +72,12 @@ function readSecretFile(file: string): { readonly text: string } | { readonly ru
     if (!stats.isFile()) {
       return { rule: `cannot read ${printable(file)} (${stats.isDirectory() ? 'EISDIR' : 'ENOTSUP'})` };
     }
-    if (stats.size > MAX_BYTES) {
+    if (stats.size > maxBytes()) {
       return tooLarge;
     }
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- the operator's own N_FILE setting, read once at start-up
     const content = fs.readFileSync(file);
-    return content.length > MAX_BYTES ? tooLarge : { text: withoutFinalLineBreak(content.toString('utf8')) };
+    return content.length > maxBytes() ? tooLarge : { text: withoutFinalLineBreak(content.toString('utf8')) };
   } catch (error) {
     return { rule: `cannot read ${printable(file)} (${systemCode(error)})` };
   }

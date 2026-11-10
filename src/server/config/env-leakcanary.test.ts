@@ -4,10 +4,10 @@ import { inspect } from 'node:util';
 import { expect, test, vi } from 'vitest';
 import { ConfigError } from './config-error.ts';
 import { loadConfig } from './env.ts';
-import { envSchema } from './env-schema.ts';
+import { buildEnvSchema } from './env-schema.ts';
 import { loadMigrateConfig } from './migrate-config.ts';
 import { SECRET_VARIABLES } from './secret-files.ts';
-import { SAMPLE_DATABASE_URL, secretDirectory } from './secret-fixture/test-support.ts';
+import { SAMPLE_DATABASE_URL, sampleEnvironment, secretDirectory } from './secret-fixture/test-support.ts';
 
 // E19-S02, the hostile test: for every variable the value `LEAKCANARY-<name>` is either refused, or (for the variables that
 // accept any text of that length) accepted and then unprintable. Whichever way it goes, the canary never appears in an
@@ -15,6 +15,11 @@ import { SAMPLE_DATABASE_URL, secretDirectory } from './secret-fixture/test-supp
 
 const CANARY = 'LEAKCANARY';
 const LISTED: readonly string[] = SECRET_VARIABLES;
+/**
+ * Every variable of the schema: the sample environment names one value for each. The schema itself is built inside a test, not
+ * here, because a table made at import runs before any test; the first test checks that the two agree.
+ */
+const VARIABLES = Object.keys(sampleEnvironment());
 
 /** The variables for which the canary is a valid value as it is: any text of that length (and, for HOST and WEB_ROOT, any text). */
 const ACCEPTS_THE_CANARY = [
@@ -60,22 +65,25 @@ function expectNoCanaryIn(error: ConfigError): void {
   expect(everything.join('\n')).not.toContain(CANARY);
 }
 
-test.each(Object.keys(envSchema.shape))(
-  'LEAKCANARY as the value of %s is refused, or accepted and never printed',
-  (name) => {
-    const outcome = attempt(() => loadConfig({ DATABASE_URL: SAMPLE_DATABASE_URL, [name]: `${CANARY}-${name}` }));
-    if ('error' in outcome) {
-      expect(ACCEPTS_THE_CANARY).not.toContain(name);
-      expect(outcome.error.variables.length).toBeGreaterThan(0);
-      expectNoCanaryIn(outcome.error);
-      return;
-    }
-    expect(ACCEPTS_THE_CANARY).toContain(name);
-    if (LISTED.includes(name)) {
-      expect(shown(outcome.config)).not.toContain(CANARY);
-    }
-  },
-);
+test('the variables tried below are the variables of the schema', () => {
+  expect(VARIABLES.toSorted((a, b) => a.localeCompare(b))).toEqual(
+    Object.keys(buildEnvSchema().shape).toSorted((a, b) => a.localeCompare(b)),
+  );
+});
+
+test.each(VARIABLES)('LEAKCANARY as the value of %s is refused, or accepted and never printed', (name) => {
+  const outcome = attempt(() => loadConfig({ DATABASE_URL: SAMPLE_DATABASE_URL, [name]: `${CANARY}-${name}` }));
+  if ('error' in outcome) {
+    expect(ACCEPTS_THE_CANARY).not.toContain(name);
+    expect(outcome.error.variables.length).toBeGreaterThan(0);
+    expectNoCanaryIn(outcome.error);
+    return;
+  }
+  expect(ACCEPTS_THE_CANARY).toContain(name);
+  if (LISTED.includes(name)) {
+    expect(shown(outcome.config)).not.toContain(CANARY);
+  }
+});
 
 test.each(SECRET_VARIABLES.filter((name) => name !== 'MIGRATION_DATABASE_URL'))(
   'LEAKCANARY as the content of the file of %s is refused, or accepted and never printed',

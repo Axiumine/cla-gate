@@ -16,16 +16,24 @@ const DEFAULT_SESSION_ABSOLUTE_SECONDS = 604_800;
 const MIN_SESSION_SECONDS = 300;
 
 /** Whole seconds, digits only: at most nine of them (about 31 years), far beyond any lifetime and safe in a cookie and a date. */
-const sessionSecondsField = z
-  .string()
-  .regex(/^\d{1,9}$/)
-  .transform(Number)
-  .pipe(z.number().min(MIN_SESSION_SECONDS));
+function sessionSecondsField() {
+  return z
+    .string()
+    .regex(/^\d{1,9}$/)
+    .transform(Number)
+    .pipe(z.number().min(MIN_SESSION_SECONDS));
+}
 
-export const sessionFields = {
-  SESSION_IDLE_SECONDS: sessionSecondsField.default(DEFAULT_SESSION_IDLE_SECONDS),
-  SESSION_ABSOLUTE_SECONDS: sessionSecondsField.default(DEFAULT_SESSION_ABSOLUTE_SECONDS),
-};
+/**
+ * The two session lifetimes, in the order their issues are reported. Built on each call and not once at import, so that the
+ * mutation gate's tests exercise these rules (see "Module-level code" in docs/quality-gates.md).
+ */
+export function sessionFields() {
+  return {
+    SESSION_IDLE_SECONDS: sessionSecondsField().default(DEFAULT_SESSION_IDLE_SECONDS),
+    SESSION_ABSOLUTE_SECONDS: sessionSecondsField().default(DEFAULT_SESSION_ABSOLUTE_SECONDS),
+  };
+}
 
 interface AuthEnv {
   readonly NODE_ENV: string;

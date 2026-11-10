@@ -3,7 +3,7 @@
 import path from 'node:path';
 import { expect, test } from 'vitest';
 import { loadConfig } from '../../src/server/config/env.ts';
-import { envSchema } from '../../src/server/config/env-schema.ts';
+import { buildEnvSchema } from '../../src/server/config/env-schema.ts';
 import { loadMigrateConfig } from '../../src/server/config/migrate-config.ts';
 import { SECRET_VARIABLES } from '../../src/server/config/secret-files.ts';
 import { readText } from '../ci/lib/test-support.ts';
@@ -35,7 +35,7 @@ const NOT_FOR_COMPOSE: ReadonlyMap<string, string> = new Map([
   ['WEB_ROOT', 'the image keeps the built single-page app where the server looks for it by default'],
 ]);
 
-const FIELDS = Object.keys(envSchema.shape);
+const FIELDS = Object.keys(buildEnvSchema().shape);
 /** The variables the schema reads as secrets: each has a `_FILE` variant. The migration command's own variable is one of them. */
 const SECRETS: readonly string[] = SECRET_VARIABLES;
 const EXEMPT = new Set(NOT_FOR_COMPOSE.keys());

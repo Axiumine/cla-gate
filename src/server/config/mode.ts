@@ -27,19 +27,27 @@ export interface ModeEnv {
   readonly GITHUB_CLIENT_SECRET?: unknown;
 }
 
-/** What the setup mode needs and cannot do without: the one-time token that unlocks the first-run flow. */
-const SETUP_TOKEN_REQUIRED: ConfigIssue = {
-  variable: 'SETUP_TOKEN',
-  rule: 'required while no GitHub App is configured; set it, or set the GITHUB_* variables',
-};
-
 /** The App variables that are not set, in the order of {@link GITHUB_APP_VARIABLES}; none when the App is configured. */
 export function missingAppVariables(env: ModeEnv): readonly (typeof GITHUB_APP_VARIABLES)[number][] {
   const values = new Map<string, unknown>(Object.entries(env));
   return GITHUB_APP_VARIABLES.filter((name) => values.get(name) === undefined);
 }
 
-const PARTIAL_RULE = 'required: some GitHub App variables are set, so all five are needed (or none, for setup mode)';
+/** What the setup mode needs and cannot do without: the one-time token that unlocks the first-run flow. */
+function setupTokenRequired(): ConfigIssue {
+  return {
+    variable: 'SETUP_TOKEN',
+    rule: 'required while no GitHub App is configured; set it, or set the GITHUB_* variables',
+  };
+}
+
+/** The issue of one App variable that is missing while others are set. */
+function partialIssue(variable: string): ConfigIssue {
+  return {
+    variable,
+    rule: 'required: some GitHub App variables are set, so all five are needed (or none, for setup mode)',
+  };
+}
 
 /**
  * The mode, and what is wrong with the settings that decide it.
@@ -59,8 +67,7 @@ export function resolveMode(env: ModeEnv): { readonly mode: Mode; readonly probl
     if (env.SETUP_TOKEN !== undefined) {
       return { mode: 'setup', problems: [] };
     }
-    return production ? { mode: 'setup', problems: [SETUP_TOKEN_REQUIRED] } : { mode: 'normal', problems: [] };
+    return production ? { mode: 'setup', problems: [setupTokenRequired()] } : { mode: 'normal', problems: [] };
   }
-  const partial = production ? missing.map((variable) => ({ variable, rule: PARTIAL_RULE })) : [];
-  return { mode: 'normal', problems: partial };
+  return { mode: 'normal', problems: production ? missing.map(partialIssue) : [] };
 }

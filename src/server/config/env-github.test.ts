@@ -6,7 +6,7 @@ import { AUTH_ENV } from './auth-fixture/test-support.ts';
 import { ConfigError } from './config-error.ts';
 import { loadConfig } from './env.ts';
 import { publicKeyFingerprint } from './github-key.ts';
-import { MASK } from './secret.ts';
+import { mask } from './secret.ts';
 import { escapeNewlines, TEST_WEBHOOK_SECRET, testRsaKey, testUnsuitableKeys } from './test-support.ts';
 
 const DB = 'postgres://cla_app:s3cr3t-pw@db.internal:5432/cla';
@@ -147,7 +147,7 @@ test('the keys in the loaded config print as the mask in every way, and the fing
     expect(printed).not.toContain(body);
     expect(printed).not.toContain(otherBody);
     expect(printed).not.toContain('PRIVATE KEY');
-    expect(printed).toContain(MASK);
+    expect(printed).toContain(mask());
   }
   expect(JSON.stringify(github)).toContain(publicKeyFingerprint(KEY.publicKey));
   expect(github.privateKey?.pem.reveal()).toBe(KEY.pkcs8.trim());
