@@ -107,7 +107,7 @@ A least-privilege App: Pull requests read and write, Checks write; Issues, Membe
 
 ## Quality gates
 
-Everything is strict by default: 100% coverage and type coverage, zero lint findings, no unused code, ratcheted structural caps. CI is authoritative; `yarn gate` runs its `static` and `coverage` jobs locally. Thresholds: [`docs/quality-gates.md`](docs/quality-gates.md). Tools, hooks, CI jobs: [`docs/toolchain.md`](docs/toolchain.md).
+Everything is strict by default: 100% coverage and type coverage, zero lint findings, no unused code, ratcheted structural caps. CI is authoritative (required: `static`, `coverage`, `qodana`, `codeql`); `yarn gate` runs the first two locally. Thresholds: [`docs/quality-gates.md`](docs/quality-gates.md). Tools, hooks, CI jobs: [`docs/toolchain.md`](docs/toolchain.md).
 
 ## Documentation map
 
@@ -122,7 +122,7 @@ Everything is strict by default: 100% coverage and type coverage, zero lint find
 | [docs/repository-layout.md](docs/repository-layout.md) | The directory tree |
 | [docs/data-model.md](docs/data-model.md) | Tables, immutability, erasure, roles |
 | [docs/security.md](docs/security.md) | Auth model, role matrix, privacy |
-| [docs/privacy.md](docs/privacy.md) | Privacy notes for operators: inventory, retention, erasure, backups |
+| [docs/privacy.md](docs/privacy.md) | Privacy for operators: inventory, retention, erasure, backups |
 | [docs/github-app.md](docs/github-app.md) | Permissions, events, check name, rules |
 | [docs/legacy-status-coexistence.md](docs/legacy-status-coexistence.md) | Moving a repository from another CLA tool |
 | [docs/operations.md](docs/operations.md) | Key rotation, backups, poison jobs |
@@ -142,7 +142,7 @@ Everything is strict by default: 100% coverage and type coverage, zero lint find
 2. **Core**: GitHub App, webhook intake, PR evaluation, Check Run and comment.
 3. **Signing**: login, CLA versions, consent flow, signature storage.
 4. **Dashboard**: repos, signatures, CSV export, revoke, audit log.
-5. **Hardening**: promote the stable CI jobs to required checks, raise the mutation floor, e2e and visual baselines for every screen, memlab nightly, Qodana once licensed.
+5. **Hardening**: promote the other stable CI jobs to required checks, raise the mutation floor, e2e and visual baselines for every screen, memlab nightly.
 6. **Corporate CLA** (in progress).
 
 ## License

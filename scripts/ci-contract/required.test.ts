@@ -2,13 +2,13 @@
 // Copyright (C) 2026 Giovanni Manzoni
 import { expect, test } from 'vitest';
 import { expression } from '../ci/lib/test-support.ts';
-import { requiredJobNames } from './required.ts';
+import { requiredChecksProblems, requiredJobNames, requiredJobProblems } from './required.ts';
 import { workflowWithJobs } from './test-support.ts';
-import { requiredJobProblems } from './workflow.ts';
 
-// E20-S09: reading the required checks out of the project document, and judging ci.yml against them.
+// E20-S09: reading the required checks out of the project document, and judging the workflow files against them.
 
 const FILE = '.github/workflows/ci.yml';
+const CODEQL_FILE = '.github/workflows/codeql.yml';
 
 test.each([
   [
@@ -244,5 +244,82 @@ test.each([
 ])('%s leaves the required check missing', (_label, workflow) => {
   expect(requiredJobProblems(FILE, workflow, ['static'])).toEqual([
     `${FILE}: the required check "static" has no job with that exact name`,
+  ]);
+});
+
+// The required checks live in more than one workflow file: `static`, `coverage` and `qodana` in ci.yml, `codeql` in codeql.yml.
+// A check is known by its job name alone, so a name may be held by a job of any file.
+
+const CODEQL_JOB = [
+  '  codeql:',
+  '    name: codeql',
+  '    needs: analyze',
+  `    if: ${expression('always()')}`,
+  '    runs-on: ubuntu-24.04',
+  '    steps:',
+  '      - run: test "$RESULT" = success',
+  '        env:',
+  `          RESULT: ${expression('needs.analyze.result')}`,
+];
+const CI_TEXT = workflowWithJobs('push', ...STATIC_JOB, ...COVERAGE_JOB);
+const CODEQL_TEXT = workflowWithJobs('push', '  analyze:', '    runs-on: ubuntu-24.04', ...CODEQL_JOB);
+const CI_ONLY = [{ file: FILE, text: CI_TEXT }];
+
+/** ci.yml and a codeql.yml with the given text, in that order. */
+function both(codeql: string) {
+  return [...CI_ONLY, { file: CODEQL_FILE, text: codeql }];
+}
+
+test('a required name held by a job of the second file is found: codeql.yml carries codeql, ci.yml the rest', () => {
+  expect(requiredChecksProblems(both(CODEQL_TEXT), ['static', 'coverage', 'codeql'])).toEqual([]);
+  expect(requiredChecksProblems(both(CODEQL_TEXT).reverse(), ['codeql', 'static'])).toEqual([]);
+});
+
+test('with one file, the names of the other file are missing: the check has no job there', () => {
+  expect(requiredChecksProblems(CI_ONLY, ['static', 'codeql'])).toEqual([
+    `${FILE}: the required check "codeql" has no job with that exact name`,
+  ]);
+  expect(requiredJobProblems(FILE, CI_TEXT, ['codeql'])).toEqual([
+    `${FILE}: the required check "codeql" has no job with that exact name`,
+  ]);
+});
+
+test('a name held by no file is reported once, naming every file that was searched', () => {
+  expect(requiredChecksProblems(both(CODEQL_TEXT), ['static', 'semgrep', 'codeql', 'trivy'])).toEqual([
+    `${FILE}, ${CODEQL_FILE}: the required check "semgrep" has no job with that exact name`,
+    `${FILE}, ${CODEQL_FILE}: the required check "trivy" has no job with that exact name`,
+  ]);
+});
+
+test('a renamed codeql job is a missing required check, even when its id is still codeql', () => {
+  const renamed = CODEQL_TEXT.replace('    name: codeql', '    name: CodeQL');
+  expect(requiredChecksProblems(both(renamed), ['codeql'])).toEqual([
+    `${FILE}, ${CODEQL_FILE}: the required check "codeql" has no job with that exact name`,
+  ]);
+});
+
+test('a required job of the second file with a job-level if is reported under that file', () => {
+  const condition = expression("github.event_name == 'push'");
+  const skippable = CODEQL_TEXT.replace(`    if: ${expression('always()')}`, `    if: ${condition}`);
+  expect(requiredChecksProblems(both(skippable), ['static', 'codeql'])).toEqual([
+    `${CODEQL_FILE}: the required job "codeql" (codeql) has a job-level if:, so it can be skipped and never report`,
+  ]);
+});
+
+test('a required aggregator that does not run always(), or never reads the result of analyze, is reported in its file', () => {
+  const withoutIf = CODEQL_TEXT.replace(`    if: ${expression('always()')}\n`, '');
+  const blind = CODEQL_TEXT.replace(expression('needs.analyze.result'), 'success');
+  expect(requiredChecksProblems(both(withoutIf), ['codeql'])).toEqual([
+    `${CODEQL_FILE}: the required job "codeql" (codeql) needs analyze ${SKIPPED}`,
+  ]);
+  expect(requiredChecksProblems(both(blind), ['codeql'])).toEqual([
+    `${CODEQL_FILE}: the required job "codeql" (codeql) runs with always() but no step reads needs.analyze.result, so it passes when analyze fails`,
+  ]);
+});
+
+test('a job-level if on a twin of a required name in the other file is reported too: the check name is shared', () => {
+  const twin = workflowWithJobs('push', '  other:', '    name: static', '    if: false', '    runs-on: ubuntu-24.04');
+  expect(requiredChecksProblems(both(twin), ['static'])).toEqual([
+    `${CODEQL_FILE}: the required job "static" (other) has a job-level if:, so it can be skipped and never report`,
   ]);
 });

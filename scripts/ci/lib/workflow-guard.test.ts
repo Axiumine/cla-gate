@@ -9,6 +9,7 @@ import { checkWorkflow, formatViolation } from './workflow-guard.ts';
 const SELF = '[self-hosted, Linux, X64]';
 const CI = '.github/workflows/ci.yml';
 const RELEASE = '.github/workflows/release.yml';
+const CODEQL = '.github/workflows/codeql.yml';
 
 /** A workflow whose parts can be replaced; everything not replaced is valid for ci.yml. */
 function workflow(parts: { on?: string; permissions?: string; job?: string; id?: string } = {}): string {
@@ -89,7 +90,7 @@ test.each([
   ['the self-hosted list', SELF, ['R2']],
   ['ubuntu-latest', 'ubuntu-latest', ['R2']],
   ['an expression', expression('matrix.os'), ['R2']],
-])('R2 in release and scorecard files: %s gives %j', (_what, runner, rules) => {
+])('R2 in release, scorecard and CodeQL files: %s gives %j', (_what, runner, rules) => {
   const text = workflow({ job: `    runs-on: ${runner}\n    timeout-minutes: 5` });
   for (const file of [
     RELEASE,
@@ -97,6 +98,9 @@ test.each([
     '.github/workflows/scorecard.yml',
     '.github/workflows/scorecard.yaml',
     '.github/workflows/Release.YML',
+    CODEQL,
+    '.github/workflows/codeql.yaml',
+    '.github/workflows/CodeQL.YML',
   ]) {
     expect(lines(file, text).map((line) => /: (R\d) /.exec(line)?.[1])).toEqual(rules);
   }
@@ -109,7 +113,9 @@ test.each([
   ['publish-release.yaml'],
   ['scorecards.yml'],
   ['Scorecard-Weekly.YML'],
-])('R2 also applies when release or scorecard is only part of the name: %s', (name) => {
+  ['codeql-analysis.yml'],
+  ['advanced-CodeQL.YAML'],
+])('R2 also applies when release, scorecard or codeql is only part of the name: %s', (name) => {
   const text = workflow({ job: `    runs-on: ${SELF}\n    timeout-minutes: 5` });
   expect(lines(`.github/workflows/${name}`, text).map((line) => /: (R\d) /.exec(line)?.[1])).toEqual(['R2']);
 });

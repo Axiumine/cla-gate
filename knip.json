@@ -48,6 +48,7 @@
     "!scripts/ci/**!",
     "!scripts/compose/test-support.ts!",
     "!scripts/ci-contract/**!",
+    "!scripts/codeql-gate/**!",
     "!scripts/dev/**!",
     "!scripts/docker/test-support.ts!",
     "!scripts/docs/test-support.ts!",

@@ -3,7 +3,7 @@
 import { printable } from '../../code-caps/types.ts';
 import { describe, isMapping, type Mapping, type Violation } from './guard-types.ts';
 
-/** What release and scorecard workflows may hold on top of `contents: read`. */
+/** What the hosted-only workflows (release, scorecard and CodeQL files) may hold on top of `contents: read`. */
 const EXTRA_PERMISSIONS: ReadonlyMap<string, string> = new Map([
   ['security-events', 'write'],
   ['id-token', 'write'],

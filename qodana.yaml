@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Giovanni Manzoni
 #
-# E20-S08. Qodana is an optional, maintainer-side check: it needs a paid licence and the secret QODANA_TOKEN, and a fork
-# pull request gets no secrets, so the `qodana` job of .github/workflows/ci.yml skips itself without a token and is never
-# a required check. The job runs the linter below pinned by digest as well (`--linter <tag>@sha256:...` in the workflow);
-# a test keeps the two in step.
+# E20-S08. Qodana is a required check that fails closed: it needs a paid licence and the secret QODANA_TOKEN, and the
+# `qodana` job of .github/workflows/ci.yml turns red, never skipped, on any run without that token (a fork pull request
+# gets no secrets, so it is red until a maintainer pushes the branch into the repository). The job runs the linter below
+# pinned by digest as well (`--linter <tag>@sha256:...` in the workflow); a test keeps the two in step.
 #
 # There is no baseline file. A finding is fixed in the code, or excluded here with a comment that says why, or silenced
 # in the source with `//noinspection <Name> -- <reason>` (the escape-hatch gate, `yarn lint:hatches`, rejects one

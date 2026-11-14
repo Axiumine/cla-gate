@@ -16,7 +16,7 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 | [`docs/architecture.md`](docs/architecture.md) | Stack, layering, PR check flow, rules |
 | [`docs/data-model.md`](docs/data-model.md) | Tables, immutability, erasure, database roles |
 | [`docs/security.md`](docs/security.md) | Auth model, role matrix, security and privacy |
-| [`docs/privacy.md`](docs/privacy.md) | Privacy notes: data inventory, retention, erasure, backups |
+| [`docs/privacy.md`](docs/privacy.md) | Data inventory, retention, erasure, backups |
 | [`docs/github-app.md`](docs/github-app.md) | App permissions, events, check name, rules |
 | [`docs/operations.md`](docs/operations.md) | Key rotation, backups, poison jobs |
 | [`docs/decisions.md`](docs/decisions.md) | Decisions and reasons, open questions (legal) |
@@ -55,7 +55,7 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 ## Branch protection
 
 - No direct pushes to `main`: every change goes through a PR whose checks pass.
-- Required checks: `static` and `coverage` (exact job names; renaming one breaks the rule).
-- Flow, emergency unblock, commit policy, when a job may become required (`leaks`, `qodana` never): [`CONTRIBUTING.md`](CONTRIBUTING.md); runners and fork approval: [`docs/ci-runners.md`](docs/ci-runners.md).
+- Required checks: `static`, `coverage`, `qodana` and `codeql` (exact job names; renaming one breaks the rule; `qodana` fails closed).
+- Flow, emergency unblock, commit policy, when a job may become required (`leaks` never): [`CONTRIBUTING.md`](CONTRIBUTING.md); runners and fork approval: [`docs/ci-runners.md`](docs/ci-runners.md).
 
 A changed decision updates the owning document above in the same PR.

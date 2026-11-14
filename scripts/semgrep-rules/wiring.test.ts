@@ -67,11 +67,26 @@ test('.gitignore keeps rules/ out of the repository: the Semgrep Rules License v
   expect(lines).not.toContain('rules/');
 });
 
-test('no workflow uploads SARIF, and none uploads or caches rules/ outside the repository', () => {
-  const steps = workflows().flatMap((flow) => Object.values(flow.jobs).flatMap((job) => job.steps));
+// The one code scanning upload of the repository: CodeQL's own results, from the `analyze` action of codeql.yml. Nothing of
+// Semgrep goes there, and no step of any file uploads a SARIF file by hand (`upload-sarif`).
+const CODEQL_FILE = 'codeql.yml';
+const CODEQL_ACTION = /^github\/codeql-action\/(?:init|analyze)@[0-9a-f]{40}$/;
+
+test('no step uploads SARIF by hand, only the CodeQL init and analyze actions of codeql.yml are used, and nothing uploads or caches rules/', () => {
+  const flows = workflows();
+  const steps = flows.flatMap((flow) => Object.values(flow.jobs).flatMap((job) => job.steps));
   expect(steps.length).toBeGreaterThan(0);
   const used = steps.flatMap((step) => (step.uses === undefined ? [] : [step.uses]));
-  expect(used.filter((action) => /upload-sarif|codeql-action/.test(action))).toEqual([]);
+  expect(used.filter((action) => action.includes('upload-sarif'))).toEqual([]);
+  const codeql = flows.flatMap((flow) =>
+    Object.values(flow.jobs).flatMap((job) =>
+      job.steps.flatMap((step) =>
+        step.uses?.includes('codeql-action') === true ? [{ file: flow.name, action: step.uses }] : [],
+      ),
+    ),
+  );
+  expect(codeql.length).toBeGreaterThan(0);
+  expect(codeql.filter(({ file, action }) => file !== CODEQL_FILE || !CODEQL_ACTION.test(action))).toEqual([]);
   // E20-S04 uploads the mutation report as an artifact, so an upload is allowed as long as it is not the rules.
   const paths = (action: string) =>
     steps.filter((step) => step.uses?.startsWith(action) === true).map((step) => z.string().parse(step.with?.['path']));
