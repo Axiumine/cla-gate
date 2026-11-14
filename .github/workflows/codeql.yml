@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Giovanni Manzoni
+#
+# CodeQL code scanning, advanced setup, and a required check on main: `codeql` (the job below) joins `static`, `coverage` and
+# `qodana`. The names are what branch protection lists (CONTRIBUTING.md, "Repository protection"): renaming a job breaks the
+# rule. scripts/codeql-gate/ci-job.test.ts pins this file.
+#
+# Why a file of its own, on GitHub-hosted runners only: the analysis uploads its results to code scanning, which needs a token
+# with security-events: write, and docs/ci-runners.md keeps every write token off the shared self-hosted runners. The runner
+# guard (`yarn ci:runners`) therefore treats a file named codeql* like release and scorecard files: literal ubuntu-24.04 on
+# every job, and security-events: write allowed here and nowhere else.
+#
+# Why pull_request and never pull_request_target: a fork's or Dependabot's pull request gets a read-only token and no secrets,
+# and code scanning still accepts the upload on the pull_request event, so the check can be required for every pull request.
+# pull_request_target would hand a fork's code a write token, and the guard rejects it.
+#
+# Why no paths filter and no job-level `if`: a required check that does not run on a pull request never reports, and the pull
+# request waits for it forever.
+#
+# Why GitHub's default setup stays off: it analyses the same code under check names of its own, skips pull requests from forks,
+# and refuses the upload of this workflow while it is on ("CodeQL analyses from advanced configurations cannot be processed
+# when the default setup is enabled"). Never enable it next to this file.
+#
+# Why one aggregator job is the required context: the matrix jobs `analyze (<language>)` change with the languages, and
+# a required name that no job reports blocks every merge. `codeql` is stable, and it fails closed: it is red unless every
+# language was analysed and uploaded, so a cancelled or skipped analysis cannot pass as a skipped (and so green) check.
+#
+# Every third-party action is pinned to a full commit SHA (the version is in the comment); Dependabot bumps them.
+# No secrets, no pull_request_target, and no untrusted input is interpolated into a `run:` block.
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Weekly run on the default branch: new CodeQL queries find old code that no pull request touched.
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Another prefix than ci.yml's (`ci-`): groups are repository-wide, and a CI run must never cancel a CodeQL run.
+concurrency:
+  group: codeql-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # One run per language. build-mode none: both languages are analysed from the source, with no build. The category keeps the
+  # results of the two languages apart in code scanning, and security-extended adds the lower-precision security queries to
+  # the default suite.
+  analyze:
+    name: analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - name: Analyze and upload the results to code scanning
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  # The required check. It runs always() and reads the result of `analyze`: a job that needs another is skipped when that one
+  # fails or is cancelled, and a skipped required check counts as passing (scripts/ci-contract/required.ts keeps both).
+  codeql:
+    name: codeql
+    needs: analyze
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every language to have been analysed and uploaded
+        shell: bash
+        env:
+          RESULT: ${{ needs.analyze.result }}
+        run: |
+          set -eu
+          if [ "$RESULT" != "success" ]; then
+            echo "::error title=CodeQL::the analysis ended with: $RESULT, so the check fails (it passes only when every language was analysed and uploaded)"
+            exit 1
+          fi
+          echo "CodeQL analysed and uploaded every language"

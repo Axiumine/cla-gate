@@ -8,20 +8,25 @@ import { compareNames } from '../code-caps/types.ts';
 import { ciJob, ciTextOnSharedRunners, repoText, withoutQodanaJob } from '../semgrep-rules/test-support.ts';
 import { yamlOf } from '../trivy-gate/test-support.ts';
 
-// E20-S08: the `qodana` job of .github/workflows/ci.yml and the lcov upload of the `coverage` job. The two steps with shell
-// logic run for real in bash (token-gate.test.ts); here are the job's place in the runner policy (docs/ci-runners.md), its
-// steps, its pins and the one place where a secret may appear.
+// E20-S08: the `qodana` job of .github/workflows/ci.yml and the lcov upload of the `coverage` job. The job is a required
+// check that fails closed: a missing token, a fork pull request or a coverage job that did not pass is red, never skipped.
+// The job runs `if: always()` (a job that needs another is skipped when that one fails, and a skipped required check counts
+// as a pass) and no step but the SARIF upload is conditional. The steps with shell logic run for real in bash
+// (token-gate.test.ts); here are the job's place in the runner policy (docs/ci-runners.md), its steps, its pins and the one
+// place where a secret may appear.
 
 const CI_FILE = '.github/workflows/ci.yml';
 const job = ciJob('qodana');
 const ciText = repoText(CI_FILE);
-const AVAILABLE = expression("steps.gate.outputs.available == 'true'");
-const GATE = 'Check whether Qodana can run (a token, and not a fork pull request)';
+// The text of the job itself: from its key to the end of the file (the job is the last one).
+const jobText = ciText.slice(ciText.indexOf('\n  qodana:\n'));
+const GATE = 'Require QODANA_TOKEN (fail closed)';
+const COVERAGE = 'Require the coverage job to have passed (fail closed)';
 const DOWNLOAD = 'Download the lcov report of the coverage job';
 const CHECK = 'Check the lcov report (present, and paths relative to the repository)';
 const SCAN = 'Qodana scan';
 const UPLOAD = 'Upload the Qodana findings (SARIF)';
-const ALWAYS_AVAILABLE = expression("always() && steps.gate.outputs.available == 'true'");
+const UPLOAD_CONDITION = expression("always() && steps.scan.outcome != 'skipped'");
 
 function step(name: string) {
   const found = job.steps.find((candidate) => candidate.name === name);
@@ -41,15 +46,19 @@ test('the job is named qodana, waits for coverage, runs on GitHub-hosted ubuntu-
   expect(job['timeout-minutes']).toBe(30);
 });
 
-test('the job asks for contents: read and nothing else, has no condition of its own and no job-level variable', () => {
+test('the job asks for contents: read and nothing else, runs always() and has no job-level variable', () => {
   expect(job.permissions).toEqual({ contents: 'read' });
   expect(ciText).toMatch(/^permissions:\n {2}contents: read\n/m);
-  expect(job.if).toBeUndefined();
+  // A required job that is skipped counts as a pass for branch protection, and a job with `needs` is skipped when the job
+  // it needs fails or is cancelled: the one condition the job may have is the one that cannot skip it, the same as the
+  // `coverage` job, and scripts/ci-contract requires it (and a step that reads needs.coverage.result).
+  expect(job.if).toBe(expression('always()'));
   expect(job.env).toBeUndefined();
 });
 
 test('the job has no container, no services and no environment, so rule R7 is met', () => {
   expect(Object.keys(workflow.jobs['qodana'] ?? {}).sort(compareNames)).toEqual([
+    'if',
     'name',
     'needs',
     'permissions',
@@ -65,9 +74,10 @@ test('the runner guard accepts ci.yml as it is: qodana is the only job on a GitH
   expect(hosted.map(([id]) => id)).toEqual(['qodana']);
 });
 
-test('the steps are the gate, the standard setup, the download, the lcov check, the scan and the SARIF upload, in that order', () => {
+test('the steps are the two gates, the standard setup, the download, the lcov check, the scan and the SARIF upload, in that order', () => {
   expect(job.steps.map((each) => each.name)).toEqual([
     GATE,
+    COVERAGE,
     'Check out the repository',
     'Set up Node.js (version from .nvmrc)',
     'Enable Corepack',
@@ -77,19 +87,37 @@ test('the steps are the gate, the standard setup, the download, the lcov check, 
     SCAN,
     UPLOAD,
   ]);
-  expect(step(GATE).id).toBe('gate');
+  expect(step(SCAN).id).toBe('scan');
   expect(step('Install dependencies').run).toBe('yarn install --immutable --mode=skip-build');
   expect(step('Check out the repository').with).toMatchObject({ 'persist-credentials': false, clean: true });
 });
 
-test('every step after the gate is skipped unless the gate said the job can run, and none may fail softly', () => {
-  expect(step(GATE).if).toBeUndefined();
-  for (const each of job.steps.slice(1)) {
-    // The SARIF upload also runs after a failed scan, which is when the findings are wanted.
-    expect(each.if).toBe(each.name === UPLOAD ? ALWAYS_AVAILABLE : AVAILABLE);
+test('fail closed and nothing conditional: the gates come first, only the SARIF upload has an `if`, and nothing fails softly', () => {
+  expect(job.steps.slice(0, 2).map((each) => each.name)).toEqual([GATE, COVERAGE]);
+  for (const each of job.steps) {
+    // The SARIF upload also runs after a failed scan, which is when the findings are wanted, and never when the scan
+    // did not run (a gate failed, or an earlier step did). Every other step runs only after the ones before it succeeded.
+    expect(each.if).toBe(each.name === UPLOAD ? UPLOAD_CONDITION : undefined);
   }
   expect(job.steps.filter((each) => each['continue-on-error'] !== undefined)).toEqual([]);
   expect(job.steps.filter((each) => (each.run ?? '').includes('${{'))).toEqual([]);
+  // The raw text of the job, so that no spelling of a soft failure hides in a key the parser does not model. The job-level
+  // `if` is the only one at its indent, and no step reads an output of a gate step any more.
+  expect(jobText).not.toContain('continue-on-error');
+  expect(jobText).not.toContain('|| true');
+  expect(jobText.match(/^ {4}if:.*$/gm)).toEqual([`    if: ${expression('always()')}`]);
+  expect(jobText).not.toMatch(/steps\.gate|outputs\.available/);
+});
+
+test('the job reads the result of the coverage job it needs, as the contract of the required checks asks', () => {
+  expect(step(COVERAGE).env).toEqual({ COVERAGE_RESULT: expression('needs.coverage.result') });
+  expect(step(COVERAGE).run).toMatch(/"\$\{COVERAGE_RESULT:-\}" != "success"/);
+});
+
+test('the SARIF upload runs only when the scan ran, and then also after its failure, and it only warns for a missing file', () => {
+  expect(step(SCAN).id).toBe('scan');
+  expect(step(UPLOAD).if).toBe(UPLOAD_CONDITION);
+  expect(step(UPLOAD).with).toMatchObject({ 'if-no-files-found': 'warn', name: 'qodana-sarif' });
 });
 
 test('every action is pinned to a full commit SHA with its version in a comment', () => {
@@ -126,7 +154,7 @@ test('the linter image is the tag of qodana.yaml and also pinned by digest in th
   expect(args.startsWith(`--linter ${linter}@sha256:`)).toBe(true);
 });
 
-test('the coverage job uploads coverage/lcov.info as coverage-lcov, kept one day, after the merge of the shard reports', () => {
+test('the coverage job uploads coverage/lcov.info as coverage-lcov, kept seven days, after the merge of the shard reports', () => {
   const coverage = ciJob('coverage');
   const names = coverage.steps.map((each) => each.name);
   const upload = coverage.steps.find((each) => each.name === 'Upload the lcov report for Qodana');
@@ -136,7 +164,7 @@ test('the coverage job uploads coverage/lcov.info as coverage-lcov, kept one day
   expect(upload?.with).toEqual({
     name: 'coverage-lcov',
     path: 'coverage/lcov.info',
-    'retention-days': 1,
+    'retention-days': 7,
     'if-no-files-found': 'error',
   });
   expect(coverage.name).toBe('coverage');
@@ -157,7 +185,7 @@ test('QODANA_TOKEN is read in two places only, the gate and the scan, and no oth
     ),
   });
   expect(step(SCAN).env).toEqual({ QODANA_TOKEN: expression('secrets.QODANA_TOKEN') });
-  expect(job.steps.filter((each) => each.env !== undefined).map((each) => each.name)).toEqual([GATE, SCAN]);
+  expect(job.steps.filter((each) => each.env !== undefined).map((each) => each.name)).toEqual([GATE, COVERAGE, SCAN]);
 });
 
 test('the jobs on the shared runners never see a secret: ci.yml without the qodana job has none', () => {
@@ -188,11 +216,26 @@ test('the helper that cuts the job out stops at the next job, or at the end of t
   expect(withoutQodanaJob('jobs:\n  a:\n    x: 1\n')).toBe('jobs:\n  a:\n    x: 1\n');
 });
 
-test('the workflow comment records why the job is GitHub-hosted and that it is never required', () => {
+test('the workflow comment records why the job is GitHub-hosted, and that it is a required check that fails closed', () => {
   const header = ciText.slice(0, ciText.indexOf('\nname: CI'));
   expect(header).toContain('The exception is `qodana`');
   expect(header).toContain('QODANA_TOKEN');
+  expect(header).toContain('`static`, `coverage` and `qodana` are the exact job names that branch protection requires');
+  expect(header).toContain('required check that fails closed');
   const comment = ciText.slice(ciText.lastIndexOf('# E20-S08: Qodana'), ciText.indexOf('\n  qodana:\n'));
   expect(comment).toContain('one job on a GitHub-hosted runner');
-  expect(comment).toContain('maintainer-side check that is never a required check');
+  expect(comment).toContain('a required check that fails closed');
+  expect(comment).toContain('a skipped job counts as a pass for a required check');
+  expect(comment).toContain('it runs `if: always()` and fails by itself');
+  // The old wording said the opposite: an optional check that a missing token skips and leaves green.
+  for (const old of ['optional', 'never a required check', 'maintainer-side', 'ends green', 'never blocked']) {
+    expect(comment).not.toContain(old);
+  }
+});
+
+test('qodana.yaml says the same: a required check that fails closed, never skipped', () => {
+  const text = repoText('qodana.yaml');
+  expect(text).toContain('Qodana is a required check that fails closed');
+  expect(text).toContain('never skipped');
+  expect(text).not.toMatch(/optional|never a required check|skips itself/);
 });

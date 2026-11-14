@@ -14,10 +14,13 @@ export { type Violation, WorkflowError };
 // exists.
 
 /**
- * Case-insensitive and anywhere in the name on purpose: `Release.YML`, `release-please.yml` and `scorecards.yml` must not
- * dodge the stricter rules. The cost is a false positive for a harmless `release-notes.yml`, which can be renamed.
+ * The files whose jobs hold a write token (release, scorecard, and the code scanning upload of codeql.yml): they run on
+ * GitHub-hosted runners only (R2), and only they may ask for `security-events: write` or `id-token: write` (R5).
+ * Case-insensitive and anywhere in the name on purpose: `Release.YML`, `release-please.yml`, `scorecards.yml` and
+ * `codeql-analysis.yml` must not dodge the stricter rules. The cost is a false positive for a harmless `release-notes.yml`,
+ * which can be renamed.
  */
-const HOSTED_ONLY_FILE = /release|scorecard/i;
+const HOSTED_ONLY_FILE = /release|scorecard|codeql/i;
 
 function checkJob(file: string, id: string, job: unknown, hostedOnly: boolean): Violation[] {
   if (!isMapping(job)) {

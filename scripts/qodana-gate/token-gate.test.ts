@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
 import { spawnSync } from 'node:child_process';
-import path from 'node:path';
 import process from 'node:process';
 import { expect, test } from 'vitest';
-import { findOnPath, readText } from '../ci/lib/test-support.ts';
+import { findOnPath } from '../ci/lib/test-support.ts';
 import { makeRepo, tempDir } from '../code-caps/test-support.ts';
 import { ciJob } from '../semgrep-rules/test-support.ts';
 
-// E20-S08: the two steps of the `qodana` job that hold shell logic, run for real in bash: the first step, which decides
-// whether Qodana can run at all, and the check of the lcov report. The variables are the ones the workflow expressions
-// produce: HAS_TOKEN and FORK_PR are the text 'true' or 'false'.
+// E20-S08: the steps of the `qodana` job that hold shell logic, run for real in bash: the first step, which requires the
+// token and fails closed, the second, which requires the coverage job to have passed, and the check of the lcov report. The variables are the ones the workflow expressions produce:
+// HAS_TOKEN and FORK_PR are the text 'true' or 'false'. The gate must never end green without a token, on any event: a
+// required job that is skipped, or ends green, would let a pull request merge without the scan.
 
 const job = ciJob('qodana');
+const GATE = 'Require QODANA_TOKEN';
 
 function script(prefix: string): string {
   const found = job.steps.find((candidate) => candidate.name.startsWith(prefix))?.run;
@@ -22,62 +23,133 @@ function script(prefix: string): string {
   return found;
 }
 
-/** Runs the gate step and returns what it printed and what it wrote to GITHUB_OUTPUT. */
+/** Runs the gate step in bash, as the runner does (`set -e` and pipefail), with exactly the variables given. */
 function gate(variables: Readonly<Record<string, string>>) {
-  const directory = tempDir();
-  const output = path.join(directory, 'github-output');
-  makeRepo(directory, { 'github-output': '' });
-  const result = spawnSync(
-    findOnPath('bash'),
-    ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script('Check whether Qodana can run')],
-    { env: { PATH: String(process.env['PATH']), GITHUB_OUTPUT: output, ...variables }, encoding: 'utf8' },
-  );
-  return { status: result.status, out: result.stdout, written: readText(output) };
+  const result = spawnSync(findOnPath('bash'), ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script(GATE)], {
+    env: { PATH: String(process.env['PATH']), ...variables },
+    encoding: 'utf8',
+  });
+  return { status: result.status, out: result.stdout, err: result.stderr };
 }
 
-test('a token and a branch of this repository: Qodana can run, and the step says nothing', () => {
-  const result = gate({ HAS_TOKEN: 'true', FORK_PR: 'false' });
-  expect(result).toEqual({ status: 0, out: '', written: 'available=true\n' });
+/** Runs the step that requires the coverage job to have passed, with exactly the variables given. */
+function coverageGuard(variables: Readonly<Record<string, string>>) {
+  const result = spawnSync(
+    findOnPath('bash'),
+    ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script('Require the coverage job')],
+    { env: { PATH: String(process.env['PATH']), ...variables }, encoding: 'utf8' },
+  );
+  return { status: result.status, out: result.stdout, err: result.stderr };
+}
+
+/** The annotation lines of the output: the step prints exactly one, or nothing. */
+function lines(out: string): string[] {
+  return out.split('\n').filter((line) => line !== '');
+}
+
+test('a token and a branch of this repository: the gate passes, and the step says nothing', () => {
+  expect(gate({ HAS_TOKEN: 'true', FORK_PR: 'false' })).toEqual({ status: 0, out: '', err: '' });
 });
 
-test('no token: every later step is skipped, a notice names QODANA_TOKEN, and the step itself succeeds', () => {
+test('no token: the step fails with one error annotation that names QODANA_TOKEN and says the job fails closed', () => {
   const result = gate({ HAS_TOKEN: 'false', FORK_PR: 'false' });
-  expect(result.status).toBe(0);
-  expect(result.written).toBe('available=false\n');
-  expect(result.out).toMatch(/^::notice title=Qodana skipped::the secret QODANA_TOKEN is not set /);
-  expect(result.out).toContain('this is not a failure');
-  expect(result.out.trim().split('\n')).toHaveLength(1);
+  expect(result.status).toBe(1);
+  expect(result.err).toBe('');
+  expect(lines(result.out)).toHaveLength(1);
+  expect(result.out).toMatch(/^::error title=Qodana token missing::the secret QODANA_TOKEN is empty or not visible /);
+  expect(result.out).toContain('Dependabot secret');
+  expect(result.out).toContain('fails closed');
+  expect(result.out).toContain('red instead of skipped');
 });
 
-test('a fork pull request: skipped with a notice that says why, even when a token were visible', () => {
-  const result = gate({ HAS_TOKEN: 'true', FORK_PR: 'true' });
-  expect(result.status).toBe(0);
-  expect(result.written).toBe('available=false\n');
-  expect(result.out).toMatch(/^::notice title=Qodana skipped::this pull request comes from a fork /);
-  expect(result.out).toContain('never blocks a contributor');
-});
-
-test('a fork pull request without a token gets the fork notice, and only one notice', () => {
+test('a fork pull request: red, and the error says that forks get no secrets and what a maintainer does', () => {
   const result = gate({ HAS_TOKEN: 'false', FORK_PR: 'true' });
-  expect(result.written).toBe('available=false\n');
-  expect(result.out.trim().split('\n')).toHaveLength(1);
-  expect(result.out).toContain('comes from a fork');
+  expect(result.status).toBe(1);
+  expect(lines(result.out)).toHaveLength(1);
+  expect(result.out).toMatch(/^::error title=Qodana fork pull request::this pull request comes from a fork /);
+  expect(result.out).toContain('no secrets');
+  expect(result.out).toContain('QODANA_TOKEN');
+  expect(result.out).toContain('push the branch into the repository');
+  expect(result.out).not.toContain('token missing');
+});
+
+test('a fork pull request is red even when a token were visible: the fork rule does not depend on the token', () => {
+  const result = gate({ HAS_TOKEN: 'true', FORK_PR: 'true' });
+  expect(result.status).toBe(1);
+  expect(lines(result.out)).toHaveLength(1);
+  expect(result.out).toContain('title=Qodana fork pull request::');
 });
 
 test.each([
   ['an empty value', ''],
   ['the word yes', 'yes'],
+  ['the number one', '1'],
   ['a capital letter', 'True'],
   ['a trailing space', 'true '],
+  ['a leading space', ' true'],
+  ['a line end', 'true\n'],
 ])('a HAS_TOKEN that is not exactly true (%s) never counts as a token', (_what, value) => {
   const result = gate({ HAS_TOKEN: value, FORK_PR: 'false' });
-  expect(result.written).toBe('available=false\n');
-  expect(result.out).toContain('QODANA_TOKEN is not set');
+  expect(result.status).toBe(1);
+  expect(lines(result.out)).toHaveLength(1);
+  expect(result.out).toMatch(/^::error title=Qodana token missing::/);
 });
 
-test('a FORK_PR that is not exactly true is not a fork, and the token decides', () => {
-  expect(gate({ HAS_TOKEN: 'true', FORK_PR: '' }).written).toBe('available=true\n');
-  expect(gate({ HAS_TOKEN: 'true', FORK_PR: 'false' }).written).toBe('available=true\n');
+test('unset variables are red with the same clear message, not "unbound variable" from set -u', () => {
+  for (const variables of [{}, { FORK_PR: 'false' }, { HAS_TOKEN: 'false' }]) {
+    const result = gate(variables);
+    expect(result.status).toBe(1);
+    expect(result.err).toBe('');
+    expect(lines(result.out)).toHaveLength(1);
+    expect(result.out).toMatch(/^::error title=Qodana token missing::the secret QODANA_TOKEN /);
+  }
+});
+
+test('a FORK_PR that is not exactly true is not a fork: the token decides', () => {
+  for (const fork of ['', 'false', 'True', '1', 'true ']) {
+    expect(gate({ HAS_TOKEN: 'true', FORK_PR: fork })).toEqual({ status: 0, out: '', err: '' });
+    expect(gate({ HAS_TOKEN: 'false', FORK_PR: fork }).out).toContain('title=Qodana token missing::');
+  }
+  expect(gate({ HAS_TOKEN: 'true' })).toEqual({ status: 0, out: '', err: '' });
+});
+
+test('the step has no way to end green without a token: no notice, no output file, no soft exit', () => {
+  const text = script(GATE);
+  expect(text).not.toContain('::notice');
+  expect(text).not.toContain('::warning');
+  expect(text).not.toContain('GITHUB_OUTPUT');
+  expect(text).not.toMatch(/exit 0|\|\| true/);
+  // Every error path exits non-zero, so the number of `exit 1` equals the number of error annotations.
+  expect(text.match(/::error/g)).toHaveLength(2);
+  expect(text.match(/exit 1/g)).toHaveLength(2);
+});
+
+test('the coverage job succeeded: the guard passes and says nothing', () => {
+  expect(coverageGuard({ COVERAGE_RESULT: 'success' })).toEqual({ status: 0, out: '', err: '' });
+});
+
+test.each([
+  ['failure', 'failure'],
+  ['cancelled', 'cancelled'],
+  ['skipped', 'skipped'],
+  ['an empty result', ''],
+  ['a capital letter', 'Success'],
+  ['a trailing space', 'success '],
+])('the coverage job ended as %s: the guard is red with one error that names the result', (_what, value) => {
+  const result = coverageGuard({ COVERAGE_RESULT: value });
+  expect(result.status).toBe(1);
+  expect(result.err).toBe('');
+  expect(lines(result.out)).toHaveLength(1);
+  expect(result.out).toBe(
+    `::error title=Qodana needs coverage::the coverage job ended as '${value}', not 'success', so there is no lcov report to scan; qodana is a required check and fails closed\n`,
+  );
+});
+
+test('an unset result is red with the same message, not "unbound variable" from set -u', () => {
+  const result = coverageGuard({});
+  expect(result.status).toBe(1);
+  expect(result.err).toBe('');
+  expect(result.out).toContain("the coverage job ended as '', not 'success'");
 });
 
 /** Runs the lcov check in a directory that holds `files`. */

@@ -327,7 +327,8 @@ Items marked (planned) do not exist yet.
 ├── scripts/mutation-gate/       the Stryker shards (shards.ts), the runner behind `yarn mutate` (mutate*.ts), the check that deletes an unreadable incremental file (check-incremental.ts, incremental-file.ts), the skip decision of the nightly run (decide-skip.ts, skip-cli.ts, skip-decision.ts, skip-github.ts, skip-http.ts), and the tests of the configs, the shards and the `mutation` job
 ├── scripts/e2e/  scripts/e2e-pin.test.ts   Playwright settings, container guards, spec rules, console-rules.ts (the browser lines that are not errors of the page); the version and digest pin test
 ├── scripts/leaks/               memlab wrapper logic (runner, outcome, exit guard, fixture server), app-server.ts (serves dist/web with the made-up API of app-answers.ts) and tests
-├── scripts/qodana-gate/         tests of qodana.yaml, the token gate of the `qodana` job and the exclude-comment rule
+├── scripts/qodana-gate/         tests of qodana.yaml, the token gate of the `qodana` job (it fails closed) and the exclude-comment rule
+├── scripts/codeql-gate/         tests of .github/workflows/codeql.yml: triggers, matrix, permissions, pinned actions and the `codeql` aggregator job
 ├── scripts/ci-contract.test.ts  the CI contract test; scripts/ci-contract/ holds its parts (uses, workflow, required,
 │                                package-scripts, dependabot, test-support)
 ├── src/server/docs/             tests that keep docs/privacy.md true (privacy-inventory, privacy-retention, privacy-sections; privacy-doc/ is test only)
@@ -354,7 +355,9 @@ Items marked (planned) do not exist yet.
 ├── LICENSE                      AGPL-3.0-only
 ├── rules/                       Semgrep rules cache, created by `yarn semgrep:rules` (git-ignored, never committed)
 ├── .github/workflows/ci.yml     jobs static, coverage, postgres, semgrep, trivy, mutation, e2e, caddy, container, leaks (self-hosted runners)
-│                                and qodana (GitHub-hosted); .github/dependabot.yml
+│                                and qodana (GitHub-hosted, required, fails closed); .github/dependabot.yml
+├── .github/workflows/codeql.yml CodeQL code scanning (advanced setup): the matrix `analyze (<language>)` and the required job `codeql`,
+│                                all GitHub-hosted
 ├── .code-caps-baseline.json
 ├── lefthook.yml  biome.json  eslint.config.mjs  fta.json  knip.json  vitest.config.ts
 ├── stryker.config.mjs  vitest.projects.ts  vitest.stryker.config.ts  vitest.stryker-scripts.config.ts

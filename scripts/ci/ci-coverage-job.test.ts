@@ -175,7 +175,7 @@ test('the merge applies the thresholds of vitest.config.ts to the merged blobs a
   expect(stepOf(merge, UPLOAD_LCOV).with).toEqual({
     name: 'coverage-lcov',
     path: 'coverage/lcov.info',
-    'retention-days': 1,
+    'retention-days': 7,
     'if-no-files-found': 'error',
   });
 });

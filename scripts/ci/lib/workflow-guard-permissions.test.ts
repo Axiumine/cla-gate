@@ -7,6 +7,7 @@ import { checkWorkflow, formatViolation, WorkflowError } from './workflow-guard.
 const CI = '.github/workflows/ci.yml';
 const RELEASE = '.github/workflows/release.yml';
 const SCORECARD = '.github/workflows/scorecard.yaml';
+const CODEQL = '.github/workflows/codeql.yml';
 const JOB = '  build:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n';
 const TOP = `${CI}: workflow: R5 top-level`;
 const PACKAGES = 'packages';
@@ -23,6 +24,12 @@ test.each([
   ['security-events: write in release', 'permissions:\n  contents: read\n  security-events: write', RELEASE],
   ['id-token: write in scorecard', 'permissions:\n  contents: read\n  id-token: write', SCORECARD],
   ['both extras in release', 'permissions:\n  contents: read\n  security-events: write\n  id-token: write', RELEASE],
+  ['security-events: write in codeql.yml', 'permissions:\n  contents: read\n  security-events: write', CODEQL],
+  [
+    'security-events: write in a differently named CodeQL file',
+    'permissions:\n  contents: read\n  security-events: write',
+    '.github/workflows/CodeQL-analysis.yaml',
+  ],
 ])('R5 accepts %s', (_what, permissions, file) => {
   expect(lines(file, permissions)).toEqual([]);
 });
@@ -57,24 +64,28 @@ test.each([
   ['security-events: read', 'permissions:\n  contents: read\n  security-events: read', 'security-events: "read"'],
   // The permission is built from parts: scripts/docker/no-publication.test.ts (E19-S01) fails on it anywhere under scripts/.
   ['packages', `permissions:\n  contents: read\n  ${PACKAGES}: write`, `${PACKAGES}: "write"`],
-])('R5 rejects %s even in release files', (_what, permissions, shown) => {
-  expect(lines(RELEASE, permissions)).toEqual([
-    `${RELEASE}: workflow: R5 top-level permission ${shown} is not allowed`,
-  ]);
+])('R5 rejects %s even in release and CodeQL files', (_what, permissions, shown) => {
+  for (const file of [RELEASE, CODEQL]) {
+    expect(lines(file, permissions)).toEqual([`${file}: workflow: R5 top-level permission ${shown} is not allowed`]);
+  }
 });
 
 test.each([
   ['an ordinary file', CI],
   ['a release file', RELEASE],
+  ['a CodeQL file', CODEQL],
 ])('R5 rejects actions: read at the workflow level of %s: only a job may read the Actions API', (_what, file) => {
   expect(lines(file, 'permissions:\n  contents: read\n  actions: read')).toEqual([
     `${file}: workflow: R5 top-level permission actions: "read" is not allowed`,
   ]);
 });
 
-test('R5 still wants contents: read in a release file that only lists the extras', () => {
-  expect(lines(RELEASE, 'permissions:\n  security-events: write')).toEqual([
-    `${RELEASE}: workflow: R5 top-level permissions need contents: read, found nothing`,
+test.each([
+  ['a release file', RELEASE],
+  ['a CodeQL file', CODEQL],
+])('R5 still wants contents: read in %s that only lists the extras', (_what, file) => {
+  expect(lines(file, 'permissions:\n  security-events: write')).toEqual([
+    `${file}: workflow: R5 top-level permissions need contents: read, found nothing`,
   ]);
 });
 
@@ -104,6 +115,11 @@ test.each([
   ],
   ['actions: write', '    permissions:\n      actions: write\n', 'permission actions: "write" is not allowed'],
   ['actions: none', '    permissions:\n      actions: none\n', 'permission actions: "none" is not allowed'],
+  [
+    'security-events: write in an ordinary file',
+    '    permissions:\n      contents: read\n      security-events: write\n',
+    'permission security-events: "write" is not allowed',
+  ],
 ])('R5 rejects a job-level override that is %s', (_what, permissions, message) => {
   expect(lines(CI, GOOD, jobWith(permissions))).toEqual([`${CI}: job "build": R5 ${message}`]);
 });
@@ -111,6 +127,34 @@ test.each([
 test('R5 lets a release job hold the release-only permissions', () => {
   const job = jobWith('    permissions:\n      id-token: write\n      security-events: write\n');
   expect(lines(RELEASE, GOOD, job)).toEqual([]);
+});
+
+// The code scanning upload of codeql.yml (docs/ci-runners.md): the job holds security-events: write, the workflow level stays
+// contents: read, and no other file gets the permission.
+test('R5 lets a job of codeql.yml hold contents: read and security-events: write under a read-only top level', () => {
+  const job = jobWith('    permissions:\n      contents: read\n      security-events: write\n');
+  expect(lines(CODEQL, GOOD, job)).toEqual([]);
+});
+
+test.each([
+  ['ci.yml', CI],
+  ['a file that only mentions code scanning', '.github/workflows/scanning.yml'],
+  ['a file in a directory called codeql: only the file name counts', '.github/codeql/analysis.yml'],
+])('R5 rejects security-events: write at the workflow level and in a job of %s', (_what, file) => {
+  const permissions = 'permissions:\n  contents: read\n  security-events: write';
+  const job = jobWith('    permissions:\n      security-events: write\n');
+  expect(lines(file, permissions, job)).toEqual([
+    `${file}: workflow: R5 top-level permission security-events: "write" is not allowed`,
+    `${file}: job "build": R5 permission security-events: "write" is not allowed`,
+  ]);
+});
+
+test('R5 holds the jobs of codeql.yml to the same set: contents: write and packages are refused there too', () => {
+  const job = jobWith(`    permissions:\n      contents: write\n      ${PACKAGES}: write\n`);
+  expect(lines(CODEQL, GOOD, job)).toEqual([
+    `${CODEQL}: job "build": R5 permission contents: "write" is not allowed`,
+    `${CODEQL}: job "build": R5 permission ${PACKAGES}: "write" is not allowed`,
+  ]);
 });
 
 test.each([
