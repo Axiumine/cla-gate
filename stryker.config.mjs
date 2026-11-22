@@ -24,7 +24,9 @@
 //
 // `--logLevel debug` is never used: it crashes with Vitest 5 (Stryker issue 6272).
 
+import os from 'node:os';
 import process from 'node:process';
+import { concurrencyFor } from './scripts/mutation-gate/concurrency.ts';
 import { STRYKER_NODE_ARGS } from './scripts/mutation-gate/node-args.ts';
 import {
   incrementalFileOf,
@@ -98,6 +100,10 @@ export function strykerOptions(scope, shard) {
     testRunner: 'vitest',
     checkers: ['typescript'],
     coverageAnalysis: 'perTest',
+    // As many processes as this machine's CPUs and available memory allow (scripts/mutation-gate/concurrency.ts has the reason:
+    // Stryker's default counts CPUs only, and seven processes of 2 GB and more ended a 32 GB runner). `--concurrency` on the
+    // command line overrides it.
+    concurrency: concurrencyFor({ cpus: os.availableParallelism(), availableBytes: process.availableMemory() }),
     // Never lowered (E20-S04): a score below `break` fails the run.
     thresholds: { high: 95, low: 90, break: 90 },
     incremental: true,
