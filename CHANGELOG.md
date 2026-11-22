@@ -79,5 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Dependencies: `@fastify/static` 10.1.8 to 10.1.12 (CVE-2026-130811, via `glob` 14 and its small transitives, all MIT or BlueOak-1.0.0 like the ones they replace) and `parse5` 8.1.0 to 8.1.1 (CVE-2026-133245). Qodana's `VulnerableLibrariesLocal` reported both, and since `qodana` is a required check that fails closed, it stopped every pull request until they were bumped.
 - Knip 6.44.1 to 6.45.1, the fix for CVE-2026-120325 (medium): a path traversal in the writeFile of Knip's issue fixer. Qodana reported it as a vulnerable declared dependency and failed the scan on `main` from 2026-11-10; Knip is a dev tool and runs here without `--fix`.
 - Fastify 5.12.7 to 5.12.8, the fix for GHSA-3qgw-9275-xf8w (CVE-2026-120216, medium): with a nonzero `handlerTimeout`, a streaming response that outlived the timeout crashed the process. CLA Gate sets no `handlerTimeout` (the default 0 is not affected), so it was not exposed; the update clears the finding Qodana reported on every branch.
