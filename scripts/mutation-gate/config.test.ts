@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 Giovanni Manzoni
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
@@ -13,6 +14,7 @@ import vitestStrykerScriptsConfig from '../../vitest.stryker-scripts.config.ts';
 import { exists } from '../ci/lib/test-support.ts';
 import { activeLines, ROOT, repoText, SCRIPTS, workflows } from '../semgrep-rules/test-support.ts';
 import { compareVersions, parseVersion } from '../trivy-gate/versions.ts';
+import { concurrencyFor } from './concurrency.ts';
 import { runChild } from './mutate-run.ts';
 import { STRYKER_NODE_ARGS } from './node-args.ts';
 import { MUTATE_EXCLUSIONS, SCRIPTS_SHARD, SERVER_SHARDS, SHARD_NAMES } from './shards.ts';
@@ -32,6 +34,7 @@ const strykerSchema = z
     checkers: z.array(z.string()),
     tsconfigFile: z.string(),
     coverageAnalysis: z.string(),
+    concurrency: z.number(),
     mutate: z.array(z.string()),
     thresholds: z.object({ high: z.number(), low: z.number(), break: z.number() }).strict(),
     incremental: z.boolean(),
@@ -112,6 +115,16 @@ test('the checker and the test runner processes start with the flag that keeps a
   // The Node of this run must accept it: a Node that drops the flag fails here and not in the nightly run.
   const accepted = await runChild(process.execPath, [...STRYKER_NODE_ARGS, '-e', '0'], {}, undefined);
   expect(accepted).toEqual({ code: 0, timedOut: false });
+});
+
+test('the processes of a run follow the CPUs and the available memory of the machine, in every scope and shard', () => {
+  const expected = concurrencyFor({ cpus: os.availableParallelism(), availableBytes: process.availableMemory() });
+  // The memory moves between two reads, so the count of the config may differ from this one by what a few hundred MiB change.
+  for (const options of [strykerConfig, scriptsConfig, scopeOptions(undefined, 'http-a-d')]) {
+    expect(Number.isInteger(options.concurrency)).toBe(true);
+    expect(options.concurrency).toBeGreaterThanOrEqual(1);
+    expect(Math.abs(options.concurrency - expected)).toBeLessThanOrEqual(1);
+  }
 });
 
 test('the thresholds are 95, 90 and a break at 90, which is never lowered', () => {
