@@ -40,11 +40,11 @@ function readYaml(file: string): unknown {
 }
 
 const CI_FILE = '.github/workflows/ci.yml';
-// `mutation` is a matrix job (E20-S04): each shard's job may take 180 minutes, the one cap above 60 that the runner guard
+// `mutation` is a matrix job (E20-S04): each shard's job may take 300 minutes, the one cap above 60 that the runner guard
 // allows (scripts/ci/lib/runner-rules.ts, R4, named by file and job). Every shard repeats Stryker's initial run of the
 // whole server suite: 7003 tests took 12 minutes 37 seconds on a development machine on 2026-11-03 and more than the 20
-// minutes it was given on a shared runner, and the suite is planned to reach 25 000 tests, which is 120 minutes on a runner
-// three times slower, before the mutants; see the comment on the job in ci.yml, stryker.config.mjs and docs/quality-gates.md
+// minutes it was given on a shared runner, and the biggest shard (15 338 tests) is 240 minutes at the slowest rate the shared
+// runners showed in the nightly run of 2026-11-23, before the mutants; see the comment on the job in ci.yml, stryker.config.mjs and docs/quality-gates.md
 // (Testing, Stryker), which have the arithmetic and the measurements. `postgres` and `coverage-shard` are matrices of four
 // legs that each run a quarter of the suite (`vitest run --shard=i/4`): the whole suite (26 000 tests) did not fit the 60
 // minutes of `postgres` or the 45 of `coverage` on the slowest shared runner (2026-11-06), which is about four times slower
@@ -54,7 +54,7 @@ const CI_FILE = '.github/workflows/ci.yml';
 // `leaks` runs memlab on four screen scenarios (E18-S12), 5 to 10 minutes each on a loaded development machine on 2026-11-06,
 // next to the canary and the positive control, so it gets the 60 minutes the guard allows.
 const LONG_JOBS = new Map([
-  ['mutation', 180],
+  ['mutation', 300],
   ['postgres', 60],
   ['coverage-shard', 40],
   ['coverage', 15],

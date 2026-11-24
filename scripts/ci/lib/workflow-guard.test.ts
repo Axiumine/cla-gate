@@ -179,26 +179,27 @@ test.each([['1'], ['15'], ['0.5'], ['60']])('R4 accepts timeout-minutes: %s', (m
 });
 
 // The one job with a longer cap (E20-S04): each shard of the mutation job repeats Stryker's initial run of the whole server
-// suite, planned at 120 minutes for 25 000 tests, plus the mutants. The cap is named by file and job, so nothing else gets it.
+// suite, up to 240 minutes for the biggest shard on the slowest runner (stryker.config.mjs), plus the mutants. The cap is named
+// by file and job, so nothing else gets it.
 const OTHER = '.github/workflows/other.yml';
 const timeout = (minutes: string) => `    runs-on: ${SELF}\n    timeout-minutes: ${minutes}`;
 const tooLong = (file: string, id: string, cap: number, found: string) =>
   `${file}: job "${id}": R4 timeout-minutes must be a positive number of at most ${cap}, found ${found}`;
 
-test.each([['61'], ['120'], ['180']])('R4 accepts timeout-minutes: %s for the mutation job of ci.yml', (minutes) => {
+test.each([['61'], ['180'], ['300']])('R4 accepts timeout-minutes: %s for the mutation job of ci.yml', (minutes) => {
   expect(lines(CI, workflow({ id: 'mutation', job: timeout(minutes) }))).toEqual([]);
 });
 
-test.each([['181'], ['360'], ['0'], ['-1'], ['"180"']])(
-  'R4 rejects timeout-minutes: %s for the mutation job of ci.yml, at most 180',
+test.each([['301'], ['360'], ['0'], ['-1'], ['"300"']])(
+  'R4 rejects timeout-minutes: %s for the mutation job of ci.yml, at most 300',
   (minutes) => {
     expect(lines(CI, workflow({ id: 'mutation', job: timeout(minutes) }))).toEqual([
-      tooLong(CI, 'mutation', 180, minutes),
+      tooLong(CI, 'mutation', 300, minutes),
     ]);
   },
 );
 
-test.each([['61'], ['180']])(
+test.each([['61'], ['300']])(
   'R4 holds every other job of ci.yml, and a job named mutation in another file, to 60 even at timeout-minutes: %s',
   (minutes) => {
     expect(lines(CI, workflow({ id: 'build', job: timeout(minutes) }))).toEqual([tooLong(CI, 'build', 60, minutes)]);
