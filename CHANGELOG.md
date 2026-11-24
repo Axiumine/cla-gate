@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CLAUDE.md` is now a short operating contract; commands, quality gates, architecture rules, tooling notes and the contributing flow moved to `docs/` and `CONTRIBUTING.md`.
 - `README.md` is now a landing page (product, scope, quick start, documentation map); the architecture, repository layout, auth and security, data model, GitHub App, operations, toolchain, decisions and configuration sections moved to `docs/`, and `scripts/docs/doc-size.test.ts` fails when `README.md` (10240 bytes) or `CLAUDE.md` (6144 bytes) outgrows its ceiling.
 - Epic E19 (self-hosting kit) is Done: E19-S12 closed on the evidence of the `container` job, green on the self-hosted runners in pull request runs (all scenarios in about three minutes) with the compose logs uploaded when a scenario failed; `docs/epics/E19.md` records what was and was not shown.
+- Dependencies: `vitest` and `@vitest/coverage-v8` 5.0.5 to 5.1.0 (Dependabot's `vitest` group, which has to move together because the coverage provider must match the exact Vitest version); `@stryker-mutator/vitest-runner` accepts any Vitest from 2.0.
 
 ### Fixed
 
