@@ -825,13 +825,14 @@ jobs:
       actions: read
       contents: read
     runs-on: [self-hosted, Linux, X64]
-    # 180 minutes, the one job that the runner guard lets run longer than the 60 minutes of every other (R4, docs/ci-runners.md).
+    # 300 minutes, the one job that the runner guard lets run longer than the 60 minutes of every other (R4, docs/ci-runners.md).
     # Every shard repeats Stryker's initial test run of the whole server suite, serially in one process
-    # (dryRunTimeoutMinutes of stryker.config.mjs: 120 minutes for a suite of 25 000 tests on a runner three times slower than
-    # the development machine), and then needs the mutants (about 18 minutes for the slowest shard here, 54 on such a runner):
-    # 50 more minutes at least. Stryker is stopped 10 minutes before the job (MUTATE_BUDGET_MINUTES below) so that the save
-    # and upload steps always get to run. A test keeps the three numbers in line.
-    timeout-minutes: 180
+    # (dryRunTimeoutMinutes of stryker.config.mjs: 240 minutes, the 15 338 tests of the biggest shard at the 930 ms per test
+    # that the Hetzner runner showed in the nightly run of 2026-11-23, which ran other jobs at the same time), and then needs
+    # the mutants (about 18 minutes for the slowest shard on the development machine): 50 more minutes at least. Stryker is
+    # stopped 10 minutes before the job (MUTATE_BUDGET_MINUTES below) so that the save and upload steps always get to run. A
+    # test keeps the three numbers in line.
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -931,7 +932,7 @@ jobs:
         env:
           MUTATE_FORCE: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force == true) }}
           STRYKER_SHARD: ${{ matrix.shard }}
-          MUTATE_BUDGET_MINUTES: "170"
+          MUTATE_BUDGET_MINUTES: "290"
         run: |
           set -eu
           if [ "$MUTATE_FORCE" = "true" ]; then

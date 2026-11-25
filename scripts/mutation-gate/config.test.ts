@@ -321,26 +321,25 @@ test('with no shard the server scope is the whole of it in one run, which is wha
   expect(strykerConfig.mutate).toEqual(['src/server/**/*.ts', 'src/shared/**/*.ts', ...MUTATE_EXCLUSIONS]);
 });
 
-test('the initial test run has a timeout of 120 minutes: the suite of 25 000 tests the epics lead to, on a runner three times slower than the development machine', () => {
+test('the initial test run has a timeout of 240 minutes: the most tests a shard runs, at the slowest rate the shared runners showed', () => {
   // Stryker's default is 5 minutes, and the shared runner needed longer for the whole suite (a run on main stopped there on
-  // 2026-11-02; the first scheduled run, 2026-11-03, died at the 20 minutes this test used to pin). Every shard repeats the
-  // initial run of the tests that reach its files, serially in one process, which is nearly the whole server project for most
-  // shards. Measured on 2026-11-03 for `shared`: 7003 tests in 12 min 37 s on the development machine at a low load, which is
-  // 108 ms per test. The arithmetic is stryker.config.mjs's: 20 000 server tests (80% of a suite of 25 000; 74% now) x 108 ms
-  // x 3 (the slowest runner assumed, docs/quality-gates.md) = 108 minutes, 120 on top of it; and 7003 tests today are 38
-  // minutes on that runner, so 120 is 3.2 times what the run needs now.
-  const MEASURED_TESTS = 7003;
-  const MEASURED_SECONDS = 12 * 60 + 37;
-  const SERVER_TESTS_AT_THE_CEILING = 20_000;
-  const RUNNER_SLOWDOWN = 3;
-  const needed = (tests: number) => (tests * (MEASURED_SECONDS / MEASURED_TESTS) * RUNNER_SLOWDOWN) / 60;
-  expect(needed(SERVER_TESTS_AT_THE_CEILING)).toBeCloseTo(108, 0);
-  expect(needed(MEASURED_TESTS)).toBeCloseTo(37.85, 1);
-  expect(strykerConfig.dryRunTimeoutMinutes).toBe(120);
-  expect(strykerConfig.dryRunTimeoutMinutes).toBeGreaterThan(needed(SERVER_TESTS_AT_THE_CEILING));
-  expect(scriptsConfig.dryRunTimeoutMinutes).toBe(120);
+  // 2026-11-02; the first scheduled run, 2026-11-03, died at the 20 minutes the option had then; the nightly run of 2026-11-23
+  // and 24 died at the 120 minutes it had after that, in four shards on the Hetzner runner). Every shard repeats the initial
+  // run of the tests that reach its files, serially in one process, which is nearly the whole server project for most shards.
+  // Measured in that nightly run, cold: `http-a-d` ran 7124 tests in 6 627 105 ms of test time on the Hetzner runner, which is
+  // 930 ms per test, the slowest rate seen (the development machine had 108 ms per test on 2026-11-03: the shared runners
+  // run other jobs at the same time). `shared` ran 15 338 tests, the most a shard runs. At the slowest rate that is 238
+  // minutes, so 240 is the limit; it ends a run that hangs and nothing else.
+  const SLOWEST_MS_PER_TEST = 6_627_105 / 7124;
+  const MOST_TESTS_OF_A_SHARD = 15_338;
+  const needed = (tests: number) => (tests * SLOWEST_MS_PER_TEST) / 1000 / 60;
+  expect(SLOWEST_MS_PER_TEST).toBeCloseTo(930, 0);
+  expect(needed(MOST_TESTS_OF_A_SHARD)).toBeCloseTo(237.8, 1);
+  expect(strykerConfig.dryRunTimeoutMinutes).toBe(240);
+  expect(strykerConfig.dryRunTimeoutMinutes).toBeGreaterThan(needed(MOST_TESTS_OF_A_SHARD));
+  expect(scriptsConfig.dryRunTimeoutMinutes).toBe(240);
   for (const shard of SERVER_SHARDS) {
-    expect(shardOptions(shard.name).dryRunTimeoutMinutes).toBe(120);
+    expect(shardOptions(shard.name).dryRunTimeoutMinutes).toBe(240);
   }
 });
 

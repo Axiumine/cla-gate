@@ -115,12 +115,15 @@ export function strykerOptions(scope, shard) {
     // per test; file start-up is 62 s of it, so the pool and isolation settings could save 8% at most, and 1117 tests that
     // each build the app over a fresh PGlite, about 0.5 s apiece, take 92%), and more than 20
     // minutes at a load average of 50 to 77 here and on the shared runner (the first scheduled run, also 2026-11-03:
-    // "Initial test run timed out!" after exactly the 20 minutes this option had). The ceiling is a suite of 25 000
-    // tests, of which the server project is about 80% (74% now): 20 000 tests x 108 ms = 36 minutes, times 3, the slowest
-    // the shared runners are assumed to be (docs/quality-gates.md, Testing), = 108 minutes, and 120 leaves 11% on top. Today
-    // that is 3.2 times the time the run needs on a runner (7003 x 108 ms x 3 = 38 minutes). The option only ends a run that
-    // hangs; MUTATE_BUDGET_MINUTES and the job timeout (ci.yml) are kept 50 and 60 minutes above it, for the mutants.
-    dryRunTimeoutMinutes: 120,
+    // "Initial test run timed out!" after exactly the 20 minutes this option had). The shared runners are far slower than
+    // the 3 times the development machine that this option was first sized on (120 minutes), because they run other jobs at
+    // the same time. The nightly run 45176752726 (2026-11-23 and 24, cold, on the two runners) measured: `shared` 15 338 tests in
+    // 98 min 13 s on app1 (359 ms per test), `http-s` 6954 tests in 87 min 31 s on app1, `http-a-d` 7124 tests in 117 min
+    // 24 s on the Hetzner runner (930 ms per test) and four more shards there that did not finish in the 120 minutes. The most
+    // a shard needs is the 15 338 tests of `shared`, and at the slowest rate seen that is 15 338 x 930 ms = 238 minutes, so
+    // 240 is the limit. The option only ends a run that hangs; MUTATE_BUDGET_MINUTES and the job timeout (ci.yml) are kept 50
+    // and 60 minutes above it, for the mutants.
+    dryRunTimeoutMinutes: 240,
     reporters: ['clear-text', 'html', 'json'],
     // The Node flag of every child process (scripts/mutation-gate/node-args.ts has the reason: without it a message of more than
     // 134 or 268 million characters between Stryker and its checker aborts the process with "Zone Allocation failed"). The main

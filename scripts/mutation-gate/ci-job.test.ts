@@ -79,22 +79,21 @@ function quoted(file: string): string {
   return `'${file}'`;
 }
 
-test('the job is named after its shard, waits for static, runs on the shared self-hosted runners and may take three hours', () => {
+test('the job is named after its shard, waits for static, runs on the shared self-hosted runners and may take five hours', () => {
   expect(job.name).toBe(`mutation (${SHARD})`);
   expect(job.needs).toBe('static');
   expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
-  // 180 is the cap the runner guard (rule R4, scripts/ci/lib/runner-rules.ts) gives this job and no other: the initial test
-  // run of a shard is up to 120 minutes (stryker.config.mjs, which has the arithmetic: 25 000 tests on a runner three times
-  // slower than the development machine, where 7003 tests took 12 min 37 s on 2026-11-03 and the 20 minutes of the first
-  // scheduled run were not enough), and the mutants need up to 50 more. The budget below leaves the save and upload steps
-  // their time. It was 60 until 2026-11-03.
-  expect(job['timeout-minutes']).toBe(180);
+  // 300 is the cap the runner guard (rule R4, scripts/ci/lib/runner-rules.ts) gives this job and no other: the initial test
+  // run of a shard is up to 240 minutes (stryker.config.mjs, which has the arithmetic and the measurements of the nightly run
+  // of 2026-11-23: 15 338 tests at 930 ms each on the slowest shared runner), and the mutants need up to 50 more. The budget
+  // below leaves the save and upload steps their time. It was 60 until 2026-11-03 and 180 until 2026-11-24.
+  expect(job['timeout-minutes']).toBe(300);
 });
 
 test('the matrix runs every shard, one failed shard does not stop the others, and only one runs at a time on the shared runners', () => {
   expect(strategy['fail-fast']).toBe(false);
   // 1 since 2026-11-03 (it was 2): the first scheduled run held two of the three runners for hours and the pull request jobs
-  // queued behind it, a leg may now take three hours, and the nightly run's own coverage, postgres and leaks jobs need runners
+  // queued behind it, a leg may now take five hours, and the nightly run's own coverage, postgres and leaks jobs need runners
   // too. The cost is a cold run of twenty-nine shards that takes about twice as long, which follows the maintainer's decision of
   // 2026-11-02 not to mind the total time of the mutation gate (docs/ci-runners.md, Known unknowns and risks).
   expect(strategy['max-parallel']).toBe(1);
@@ -317,8 +316,8 @@ test('the shard reaches the run as STRYKER_SHARD, and the run is stopped by a bu
 
 test('the three time limits of a shard nest: the initial test run, then the Stryker budget with the time of the mutants, then the job', () => {
   // The initial test run may take the whole of dryRunTimeoutMinutes (stryker.config.mjs) and the mutants need up to 50 minutes
-  // after it (the slowest shard here needed about 18 minutes for them, 54 on a runner three times slower; 120 minutes is the
-  // timeout, and the longest initial run planned is 108, which leaves 62). A budget
+  // after it (the slowest shard on the development machine needed about 18 minutes for them; 240 minutes is the timeout, and
+  // the longest initial run measured is 238, at the slowest rate of the nightly run of 2026-11-23). A budget
   // that a slow but healthy initial run leaves without that time would stop a good shard before its first mutant, every
   // night: the nightly run is forced, so it never continues from a partial file.
   const option = repoText('stryker.config.mjs')
@@ -326,7 +325,7 @@ test('the three time limits of a shard nest: the initial test run, then the Stry
     .find((line) => line.trimStart().startsWith('dryRunTimeoutMinutes:'));
   const dryRun = Number(option?.replaceAll(/\D/g, ''));
   const budget = Number(z.record(z.string(), z.string()).parse(step(RUN).env)['MUTATE_BUDGET_MINUTES']);
-  expect(dryRun).toBe(120);
+  expect(dryRun).toBe(240);
   expect(budget).toBe(dryRun + 50);
   expect(job['timeout-minutes']).toBe(budget + 10);
 });
