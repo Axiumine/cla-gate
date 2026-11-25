@@ -268,7 +268,12 @@ test('the Back button of the browser returns to the filters of the address befor
     expect(actorField()).toHaveValue('');
   });
   expect(window.location.search).toBe('');
-  expect(paramsOf(served.log.at(-1))).toEqual({ limit: '50' });
+  // The field is empty as soon as the address is read; the request for the list follows a tick later. Reading the log in the same
+  // tick as the field found the second request (`actorGithubId=4711`) on a loaded runner, so wait for the third.
+  await waitFor(() => {
+    expect(served.log).toHaveLength(3);
+  });
+  expect(paramsOf(served.log[2])).toEqual({ limit: '50' });
 });
 
 test('a filter that finds nothing says so, and not that nothing was recorded', async () => {
