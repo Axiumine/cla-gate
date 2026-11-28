@@ -299,7 +299,7 @@ Items marked (planned) do not exist yet.
 ├── docker/Caddyfile             the configuration of the optional reverse proxy with automatic TLS (compose profile `tls`, E19-S05)
 ├── .env.example                 every environment variable with its default or an empty value (env-example.test.ts keeps it complete)
 ├── docker-compose.yml           the operator stack (E19-S04): postgres, a one-shot migrate and app, and caddy in the profile `tls`; `docker compose up --build`
-├── docker-compose.dev.yml       the development database: PostgreSQL 18 on a random free loopback port (POSTGRES_PORT, set by yarn db:up)
+├── docker-compose.dev.yml       a Docker PostgreSQL 18 (yarn db:up); not for development, which uses postgres.gio.lan (development.md)
 ├── .dockerignore                what the build context leaves out (secret-bearing files, tool state, e2e, sources of other builds)
 ├── docs/ci-runners.md           CI runner policy: shared self-hosted runners, fork approval, ports, job rules
 ├── docs/development.md          status, setup and run, and the package.json scripts (exists or deferred)

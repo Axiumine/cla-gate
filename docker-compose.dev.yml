@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Giovanni Manzoni
 #
+# DO NOT USE FOR DEVELOPMENT: never Docker on a development machine. The development database is the PostgreSQL on
+# postgres.gio.lan (docs/development.md, "Never Docker").
+#
 # Local development database (E04, E19-S04). The operator stack that runs the whole platform is docker-compose.yml.
 # `yarn db:up` picks a random free port above 32768, remembers it in the git-ignored .local/ directory and runs this file
 # with POSTGRES_PORT set; then `yarn db:migrate` and `yarn dev`; `yarn db:url` prints the connection strings and

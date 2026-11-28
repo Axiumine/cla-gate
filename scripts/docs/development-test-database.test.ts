@@ -8,12 +8,7 @@ import {
   ALLOW_APP_DATABASE,
   appDatabaseRefusal,
 } from '../../src/server/adapters/db/test-database-guard/test-support.ts';
-import { runPostgresCli } from '../ci/lib/postgres-cli.ts';
-import type { CliDeps } from '../ci/lib/postgres-deps.ts';
-import { collectIo, exists, fakeDocker, findOnPath, ok, readText } from '../ci/lib/test-support.ts';
-import { tempDir } from '../code-caps/test-support.ts';
-import { runDevDbCli } from '../dev/lib/dev-db-cli.ts';
-import { writePort } from '../dev/lib/dev-db-state.ts';
+import { exists, findOnPath, readText } from '../ci/lib/test-support.ts';
 import { codeBlocks, headingsOf, linksOf, placeholder, proseOf, ROOT, sectionsOf } from './test-support.ts';
 
 // docs/development/test-database.md against the code (E19-S10): the guard, the variables, the test role, the skip reasons and
@@ -85,22 +80,19 @@ test('the test role is the one the provisioning script creates, and the inputs i
   expect(everyCommand).toContain('/postgres" yarn test');
 });
 
-test('the grant that the test role needs is the same statement in the SQL block and in both paths, and without it the tests cannot switch role', () => {
+test('the grant that the test role needs is the same statement in the SQL block and in the command, and without it the tests cannot switch role', () => {
   const statement = 'grant cla_app to cla_test with inherit false, set true';
   expect(codeBlocks(page, 'sql').map((block) => block.text)).toContain(`${statement};`);
-  expect(commands.filter((block) => block.text.includes(`-c '${statement}'`))).toHaveLength(2);
+  expect(everyCommand).toContain(`psql -h postgres.gio.lan -U postgres -c '${statement}'`);
   expect(source('src/server/adapters/db/test-support.ts')).toContain('set local role cla_app');
   expect(prose).toContain('permission denied to set role "cla_app"');
 });
 
-test('the dev database commands name the container, the script and the user that docker-compose.dev.yml has', () => {
-  const dev = source('docker-compose.dev.yml');
-  const project = /^name: (\S+)$/m.exec(dev)?.[1];
-  expect(project).toBe('cla-gate-dev');
-  expect(dev).toMatch(/^ {2}postgres:$/m);
-  expect(dev).toContain('./scripts/provision-database.sh:/docker-entrypoint-initdb.d/10-provision-database.sh:ro');
-  expect(everyCommand).toContain(`${project}-postgres-1 sh /docker-entrypoint-initdb.d/10-provision-database.sh`);
-  expect(everyCommand).toContain('-e PGUSER=postgres');
+test('the commands provision and test on postgres.gio.lan with the script of the repository', () => {
+  expect(everyCommand).toContain('PGHOST=postgres.gio.lan PGUSER=postgres');
+  expect(everyCommand).toContain('sh scripts/provision-database.sh');
+  expect(everyCommand).toContain('@postgres.gio.lan/postgres" yarn test');
+  expect(exists(path.join(ROOT, 'scripts/provision-database.sh'))).toBe(true);
 });
 
 test('the gates and the skip reasons are the ones the tests use', () => {
@@ -120,63 +112,32 @@ test('the gates and the skip reasons are the ones the tests use', () => {
 test('every yarn command it names is a script of package.json', () => {
   const scripts = Object.keys(packageSchema.parse(JSON.parse(source('package.json'))).scripts);
   const named = (prose + everyCommand).match(/\byarn [a-z:]+/g)?.map((command) => command.slice('yarn '.length)) ?? [];
-  expect(new Set(named)).toEqual(new Set(['test', 'dev', 'db:up', 'db:url', 'db:migrate', 'ci:postgres']));
+  expect(new Set(named)).toEqual(new Set(['test', 'dev', 'db:migrate']));
   expect(named.filter((name) => !scripts.includes(name))).toEqual([]);
 });
 
-test('it points at yarn db:up and the disposable container, and names no fixed port', () => {
-  expect(page).toContain('`yarn db:up`');
+test('it forbids Docker for development, leaves the container to CI, and names no fixed port', () => {
+  expect(prose).toContain('**Never use Docker for development**');
+  expect(everyCommand).not.toMatch(/docker|\bdb:(?:up|url|down)\b|ci:postgres/);
   expect(page).toContain('`scripts/ci/postgres.ts`');
   expect(exists(path.join(ROOT, 'scripts/ci/postgres.ts'))).toBe(true);
+  expect(prose).toContain('That helper is for CI only: never start it on a development machine.');
+  expect(prose).toContain('Never set `CLA_ROLE_TESTS=1` against `postgres.gio.lan`');
   expect(page).not.toMatch(/\b(?:5432|3000|5173)\b/);
   expect(page).toContain('a random free loopback port above 32768');
 });
 
-/** What `yarn ci:postgres start` prints outside Actions, from the real command with a scripted docker. */
-async function printedByStart(): Promise<string> {
-  const docker = fakeDocker([['inspect', [ok('running healthy')]]]);
-  const deps: CliDeps = {
-    exec: docker.exec,
-    pickPort: () => Promise.resolve(41_000),
-    sleep: () => Promise.resolve(),
-    now: () => 0,
-    randomHex: (bytes) => (bytes === 24 ? 'f'.repeat(48) : 'beef0001'),
-    appendFile: () => undefined,
-  };
-  const { io, out } = collectIo();
-  expect(await runPostgresCli(['start'], {}, io, deps)).toBe(0);
-  return `${out.join('\n')}\n`;
-}
-
-/** The `sed` scripts of the page, in order: each is the text between the quotes after `sed -n`. */
-const sedScripts = [...everyCommand.matchAll(/sed -n '([^']+)'/g)].map((match) => match[1] ?? '');
-
-/** What `sed -n <script>` prints for `input`. */
-function sedPrints(script: string, input: string): string[] {
-  const result = spawnSync(findOnPath('sed'), ['-n', script], { input, encoding: 'utf8' });
-  expect(result.status).toBe(0);
-  return result.stdout.split('\n').slice(0, -1);
-}
-
-test('the sed expression of the CI way exports exactly the two variables that the helper prints and nothing else', async () => {
-  expect(sedScripts).toHaveLength(2);
-  expect(sedPrints(sedScripts[1] ?? '', await printedByStart())).toEqual([
-    'export CLA_PG_CONTAINER=cla-pg-local-beef0001',
-    `export DATABASE_URL=postgres://postgres:${'f'.repeat(48)}@127.0.0.1:41000/postgres`,
-  ]);
-});
-
-test('the sed expression of the dev database path reads the port from what yarn db:url prints', async () => {
-  const root = tempDir();
-  writePort(root, 41_000);
-  const { io, out } = collectIo();
-  const deps = {
-    exec: () => Promise.reject(new Error('no docker here')),
-    pickPort: () => Promise.resolve(41_000),
-    run: () => Promise.resolve(0),
-  };
-  expect(await runDevDbCli(['url'], { root, env: {}, deps, io })).toBe(0);
-  expect(sedPrints(sedScripts[0] ?? '', `${out.join('\n')}\n`)).toEqual(['41000']);
+test('CLAUDE.md, the README and the development page all say never Docker and name postgres.gio.lan', () => {
+  const contract = source('CLAUDE.md');
+  expect(contract).toContain('## NEVER USE DOCKER FOR DEVELOPMENT');
+  expect(contract).toContain('**`postgres.gio.lan`**');
+  expect(source('README.md')).toContain('Developers: **never use Docker**; the database is on `postgres.gio.lan`');
+  const development = source('docs/development.md');
+  expect(development).toContain('**NEVER USE DOCKER FOR DEVELOPMENT.**');
+  const setup = sectionsOf(development, 2).find((section) => section.heading === 'Setup and run');
+  expect(setup).toBeDefined();
+  const run = codeBlocks(development, 'sh').map((block) => block.text);
+  expect(run.filter((text) => /docker|\bdb:(?:up|url|down)\b|ci:postgres/.test(text))).toEqual([]);
 });
 
 test('every shell block is valid shell, and the page has two SQL blocks: the two statements for the leftovers and the grant', () => {
@@ -184,7 +145,7 @@ test('every shell block is valid shell, and the page has two SQL blocks: the two
     .filter((block) => spawnSync(findOnPath('sh'), ['-n'], { input: block.text }).status !== 0)
     .map((block) => block.text.split('\n')[0]);
   expect(broken).toEqual([]);
-  expect(commands).toHaveLength(4);
+  expect(commands).toHaveLength(1);
   expect(codeBlocks(page, 'sql').map((block) => block.text.split('\n').length)).toEqual([2, 1]);
 });
 
