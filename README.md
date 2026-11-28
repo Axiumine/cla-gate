@@ -64,7 +64,7 @@ HTML: `<a href="<PUBLIC_BASE_URL>/sign/<githubRepoId>"><img src="<PUBLIC_BASE_UR
 
 ## Quick start
 
-Prerequisites: Node 26.13 ([mise](https://mise.jdx.dev) or `.nvmrc`), Corepack (`npm install -g corepack && corepack enable`) and Docker.
+Prerequisites: Node 26.13 ([mise](https://mise.jdx.dev) or `.nvmrc`) and Corepack (`npm install -g corepack && corepack enable`). Operators need Docker.
 
 Operators build and start the stack from a checkout, with no registry and nothing published ([install guide](docs/operations/install.md)):
 
@@ -75,11 +75,11 @@ SOURCE_COMMIT=$(git rev-parse HEAD) docker compose --profile tls up --build -d
 
 Then open `/setup`, with the token from `secrets/setup_token`, to create the GitHub App.
 
-Developers:
+Developers: **never use Docker**; the database is on `postgres.gio.lan` ([setup](docs/development.md#never-docker)).
 
 ```sh
 yarn install --immutable   # also installs the git hooks
-yarn db:up                 # PostgreSQL 18 on a random free loopback port
+# with DATABASE_URL and MIGRATION_DATABASE_URL pointing at postgres.gio.lan:
 yarn db:migrate            # applies migrations/ as the owner role, then installs the job queue
 yarn dev                   # server with --watch; prints its address (try /readyz)
 ```
@@ -138,11 +138,11 @@ Everything is strict by default: 100% coverage and type coverage, zero lint find
 
 ## Roadmap
 
-1. **Scaffold** (done): toolchain, hooks and CI passing every gate at 100%, the server foundation, and the extended gates (Semgrep, Trivy, Stryker, Playwright, memlab, Qodana).
+1. **Scaffold** (done): toolchain, hooks, every gate at 100%, the server foundation.
 2. **Core**: GitHub App, webhook intake, PR evaluation, Check Run and comment.
 3. **Signing**: login, CLA versions, consent flow, signature storage.
 4. **Dashboard**: repos, signatures, CSV export, revoke, audit log.
-5. **Hardening**: promote the other stable CI jobs to required checks, raise the mutation floor, e2e and visual baselines for every screen, memlab nightly.
+5. **Hardening**: more required CI jobs, a higher mutation floor, e2e and visual baselines for every screen, memlab nightly.
 6. **Corporate CLA** (in progress).
 
 ## License

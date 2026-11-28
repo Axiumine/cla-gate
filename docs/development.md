@@ -8,7 +8,7 @@ What exists today and how to run it: status, the setup walk-through and every `p
 
 ## Setup and run
 
-Prerequisites: [mise](https://mise.jdx.dev) or any Node 26.13.0, Docker for the local database, [Trivy](https://trivy.dev) (the hooks run it; `mise install` installs the pinned version) and [Semgrep](https://semgrep.dev) (installed by `mise` through pipx at the version pinned in `mise.toml`; the pre-push job skips itself when the binary is absent). Offline, `LEFTHOOK_EXCLUDE=trivy,semgrep` is the one sanctioned hook exclusion; CI still enforces both.
+Prerequisites: [mise](https://mise.jdx.dev) or any Node 26.13.0, access to the PostgreSQL on `postgres.gio.lan` (**never Docker**, see [below](#never-docker)), [Trivy](https://trivy.dev) (the hooks run it; `mise install` installs the pinned version) and [Semgrep](https://semgrep.dev) (installed by `mise` through pipx at the version pinned in `mise.toml`; the pre-push job skips itself when the binary is absent). Offline, `LEFTHOOK_EXCLUDE=trivy,semgrep` is the one sanctioned hook exclusion; CI still enforces both.
 
 ```sh
 mise install                                 # Node 26 first; or: fnm use (reads .nvmrc)
@@ -17,21 +17,32 @@ yarn install --immutable                     # also installs git hooks via posti
 yarn gate                                    # local equivalent of CI's static + coverage jobs
 ```
 
-The real-Postgres suites (`src/server/adapters/jobs/*-real.test.ts`, among them `workers-real.test.ts`, `evaluate-pr-real.test.ts`, `serialisation-real.test.ts` and `repository-jobs-real.test.ts`) run in the CI `postgres` job and are skipped on PGlite; locally they need `yarn ci:postgres start` and `CLA_ROLE_TESTS=1` (see [quality gates](quality-gates.md)).
+### Never Docker
 
-Run the server against a local database:
+**NEVER USE DOCKER FOR DEVELOPMENT.** The development database is the PostgreSQL on **`postgres.gio.lan`**.
+
+- Never run on a development machine: `docker`, `docker compose` (`docker-compose.dev.yml` included), `yarn db:up`, `db:url`, `db:down`, `ci:postgres`, `ci:e2e`, `e2e:update`, `ci:caddy`, `smoke` and `ci:smoke`.
+- Docker stays only where nobody develops: the CI jobs on the runners and the operators' self-hosting stack ([install](operations/install.md)).
+- What needs a container is left to CI: the `postgres`, `e2e`, `caddy` and `container` jobs. A pull request is how you run them.
+
+The server reads two variables. Keep them in a file outside the repository, readable by you only, for example `~/.config/cla/dev.env`:
 
 ```sh
-yarn db:up                                   # PostgreSQL 18 on 127.0.0.1 at a random free port (32769-60999); creates roles cla_owner and cla_app; the test role (CLA_TEST_ROLE) is added by hand, see development/test-database.md
-yarn db:migrate                              # applies migrations/ as the owner role
-yarn dev                                     # node --watch src/server/main.ts as the cla_app role; prints its address, a random free port above 32768
-curl -s http://127.0.0.1:<port>/readyz       # {"status":"ready"}, with the port that yarn dev printed (an explicit PORT wins)
-yarn db:down                                 # stops it; add --volumes to delete the data
+DATABASE_URL=postgres://cla_app:<password>@postgres.gio.lan/cla
+MIGRATION_DATABASE_URL=postgres://cla_owner:<password>@postgres.gio.lan/cla
 ```
 
-The login is off until `SESSION_SECRET`, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are all set ([configuration](configuration.md)). The session cookie is `__Host-cla_session`, `Secure` in every environment (the `__Host-` prefix requires it): `http://localhost` works in Chromium and Firefox, Safari needs an HTTPS tunnel. Every `POST`, `PUT`, `PATCH` and `DELETE` must carry an `Origin` equal to `PUBLIC_BASE_URL`, so a SPA dev server (Vite) must either forward the browser's `Origin` through its proxy or have `PUBLIC_BASE_URL` set to the dev server's own origin.
+The database and its two roles come from `scripts/provision-database.sh`, run once against the server if it is not provisioned yet; it sets the role passwords it is given ([test database](development/test-database.md#the-test-role) shows the command). Then run the server, loading the file in a subshell so that `yarn test` and the git hooks never see these variables:
 
-`yarn db:up` picks the port, writes it to the git-ignored `.local/db.json`, and reuses it while the stack runs, so `docker-compose.dev.yml` (the development database, project `cla-gate-dev`; `docker-compose.yml` is the operator stack) has no default port and fails with a hint if you run `docker compose -f docker-compose.dev.yml` by hand. The roles come from `scripts/provision-database.sh`, the same script the operator stack uses. `yarn dev` and `yarn db:migrate` read that port and use the well-known development passwords in `docker-compose.dev.yml` (a database on 127.0.0.1 only); a `DATABASE_URL` or `MIGRATION_DATABASE_URL` that is already set wins. `yarn db:url [app|owner]` prints the connection string.
+```sh
+(set -a; . ~/.config/cla/dev.env; set +a; yarn db:migrate)   # applies migrations/ as the owner role
+(set -a; . ~/.config/cla/dev.env; set +a; yarn dev)          # node --watch src/server/main.ts as the cla_app role; prints its address, a random free port above 32768
+curl -s http://127.0.0.1:<port>/readyz                       # {"status":"ready"}, with the port that yarn dev printed (an explicit PORT wins)
+```
+
+The real-Postgres suites (`src/server/adapters/jobs/*-real.test.ts`, among them `workers-real.test.ts`, `evaluate-pr-real.test.ts`, `serialisation-real.test.ts` and `repository-jobs-real.test.ts`) run in the CI `postgres` job and are skipped on PGlite; locally they need a test role on `postgres.gio.lan` ([test database](development/test-database.md)). Never set `CLA_ROLE_TESTS=1` against that server: it changes roles of the whole server, and CI runs those tests (see [quality gates](quality-gates.md)).
+
+The login is off until `SESSION_SECRET`, `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are all set ([configuration](configuration.md)). The session cookie is `__Host-cla_session`, `Secure` in every environment (the `__Host-` prefix requires it): `http://localhost` works in Chromium and Firefox, Safari needs an HTTPS tunnel. Every `POST`, `PUT`, `PATCH` and `DELETE` must carry an `Origin` equal to `PUBLIC_BASE_URL`, so a SPA dev server (Vite) must either forward the browser's `Origin` through its proxy or have `PUBLIC_BASE_URL` set to the dev server's own origin.
 
 Operator commands (E22, each prints counts and numeric ids only and exits non-zero on a failure; the steps and exit codes are in [`operations.md`](operations.md)): `node src/server/retention.ts [--dry-run]` runs the retention sweep once (the scheduled job runs it daily at 03:17 UTC; `--dry-run` counts and deletes nothing), and `node src/server/erase.ts --github-id <n> --actor-github-id <n> [--execute]` erases a person's personal data in every installation through `erase_signer_pii` (a dry run unless `--execute`). Both read the server's own environment and connect as the runtime role of `DATABASE_URL`; after `yarn build` the same commands are `node dist/server/retention.js` and `node dist/server/erase.js`, which is how they run in the image.
 
@@ -39,17 +50,17 @@ Production style: `yarn build && yarn start` (`node dist/server/main.js`, which 
 
 The CI `postgres` job does the same with a throw-away container per shard (`yarn ci:postgres start`, then `yarn test --shard=i/4` for each of four shards, then `yarn ci:postgres stop`). It also sets `REQUIRE_REAL_POSTGRES=1` (a real-Postgres-only test then fails on PGlite instead of skipping) and `CLA_ROLE_TESTS=1` (the tests that create or alter cluster-wide roles; never set it against a server that others use), and the suite checks that `server_version_num` is at least 180000 and below 190000. A random port: `yarn ci:port`. Check the workflows against the runner policy: `yarn ci:runners`.
 
-Browser tests: `yarn e2e` needs `yarn build` first and a migrated database whose `DATABASE_URL` is the **owner's** (the specs switch two clock triggers off inside one transaction to give the history fixed times, so the runtime role `cla_app` is refused), for example `DATABASE_URL="$(yarn --silent db:url owner)" yarn e2e:update` after `yarn db:up` and `yarn db:migrate`; the app under test trusts the loopback as its one proxy (`TRUST_PROXY=127.0.0.1`, set by the specs, nothing to configure) (baselines are only ever written inside the pinned container; see [`quality-gates.md`](quality-gates.md), Testing).
+Browser tests: `yarn e2e` needs `yarn build` first and a migrated database whose `DATABASE_URL` is the **owner's** (the specs switch two clock triggers off inside one transaction to give the history fixed times, so the runtime role `cla_app` is refused), for example `(set -a; . ~/.config/cla/dev.env; set +a; DATABASE_URL="$MIGRATION_DATABASE_URL" yarn e2e)` after `yarn db:migrate`; the specs write their fixtures into that database, and the app under test trusts the loopback as its one proxy (`TRUST_PROXY=127.0.0.1`, set by the specs, nothing to configure). Visual baselines are only ever written inside the pinned container, which is Docker, so they are never regenerated on a development machine (see [`quality-gates.md`](quality-gates.md), Testing).
 
 Optional: `gitnexus analyze --skip-agents-md` builds a code knowledge graph (dev tooling only). A webhook tunnel (smee.io or similar) arrives with the GitHub App slice. Script names and their state (exists or deferred) are in the Commands table below. The work queue (epics, stories and their acceptance criteria) is in [`EPICS_STORIES.md`](EPICS_STORIES.md).
 
 ## Commands (`package.json` scripts)
 
-The `State` column says whether the script exists now or is deferred until its tool lands. A deferred script is a contract; do not add a placeholder.
+The `State` column says whether the script exists now or is deferred until its tool lands. A deferred script is a contract; do not add a placeholder. The scripts that start Docker are listed because they exist; on a development machine they are [never run](#never-docker).
 
 | Script | Runs | State |
 |---|---|---|
-| `yarn dev` | `scripts/dev/dev.ts` as the `cla_app` role of `docker-compose.dev.yml` on the port `yarn db:up` chose (via `scripts/dev/db.ts run`): the Fastify dev server (`node --watch src/server/main.ts`) and the Vite dev server, both on random free loopback ports above 32768 (never 3000 or 5173). Vite serves the app and proxies `/api`, `/healthz` and `/readyz` to Fastify; it also serves `/theme-init.js` through its plugin, so the page head is the same as in the build. Stops both on SIGINT or SIGTERM and exits non-zero when either dies | exists |
+| `yarn dev` | `scripts/dev/dev.ts` with the `DATABASE_URL` you set, the `cla_app` role on `postgres.gio.lan` (via `scripts/dev/db.ts run`): the Fastify dev server (`node --watch src/server/main.ts`) and the Vite dev server, both on random free loopback ports above 32768 (never 3000 or 5173). Vite serves the app and proxies `/api`, `/healthz` and `/readyz` to Fastify; it also serves `/theme-init.js` through its plugin, so the page head is the same as in the build. Stops both on SIGINT or SIGTERM and exits non-zero when either dies | exists |
 | `yarn build` | `tsc -b tsconfig.server.json tsconfig.web.build.json` (the server into `dist/server`, the web project type-checked without its tests and test helpers: `tsconfig.web.build.json`, because the image build context has no `e2e/`), then `vite build` into `dist/web`. `yarn typecheck` is the whole solution | exists |
 | `yarn start` | `node dist/server/main.js`; after `yarn build` it serves the app at `/` (`WEB_ROOT` overrides the directory); `yarn dev` still serves it from Vite | exists |
 | `yarn typecheck` | `tsc -b` | exists |
@@ -76,7 +87,7 @@ The `State` column says whether the script exists now or is deferred until its t
 | `yarn trivy` | Two passes: `trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .` and `trivy fs --scanners secret,misconfig --exit-code 1 .` (no severity filter) | exists |
 | `yarn trivy:dev`, `yarn trivy:secrets` | The first pass plus `--include-dev-deps` (nightly CI run only); `trivy fs --scanners secret --exit-code 1 .` (pre-commit, needs no vulnerability database) | exists |
 | `yarn leaks`, `yarn leaks:control` | memlab scenarios through the `@memlab/api` wrapper in `tests/leaks/run.ts` (exit 0 clean, 1 a leak, 2 an error); the control proves the wrapper fails on a deliberate leak, passes a clean page and reports a broken one. The CI `leaks` job runs on the nightly schedule, a manual run and `v*` tags only | exists |
-| `yarn db:migrate` | Apply `migrations/` with `src/server/migrate.ts` as the owner role (`MIGRATION_DATABASE_URL`, development default from `docker-compose.dev.yml` on the port `yarn db:up` chose), then install or upgrade the pg-boss schema and the queues (second step: prints `job queues: up to date`, `job queues created: a, b` or `job queues updated`, and a line when the role `cla_app` does not exist). Production runs `node dist/server/migrate.js` | exists |
+| `yarn db:migrate` | Apply `migrations/` with `src/server/migrate.ts` as the owner role (`MIGRATION_DATABASE_URL`, set to `postgres.gio.lan`), then install or upgrade the pg-boss schema and the queues (second step: prints `job queues: up to date`, `job queues created: a, b` or `job queues updated`, and a line when the role `cla_app` does not exist). Production runs `node dist/server/migrate.js` | exists |
 | `yarn smoke` | `SMOKE=1 vitest run --project smoke`: the container smoke test (`tests/smoke`, E19-S08, S12). It builds the image from the checkout, starts the operator stack in containers, networks and volumes labelled `cla-gate.ci=container` on random loopback ports, and removes them itself, also when it fails. Scenarios: boot and setup mode, the compose files, hardening, the database roles, configured mode, failure injection, backup and restore, and TLS; `scripts/smoke` holds the harness (`Stack`, including `Stack.shell`). Needs real Docker with Compose v2; it is outside `yarn test` and `yarn coverage`. A failed run leaves its compose logs in `reports/smoke/` (the CI artifact `smoke-compose-logs`) | exists |
 | `yarn ci:smoke` | `yarn ci:smoke stop` removes the containers, networks and volumes that carry the label of the current run (`CLA_SMOKE_RUN`) | exists |
 | `yarn ci:caddy` | `yarn ci:caddy validate [origin...]` runs `caddy validate` on `docker/Caddyfile` in a throw-away container of the pinned image with `--network none` and no published port (default origins `https://localhost` and `https://cla.example.com`); `yarn ci:caddy stop` removes it | exists |

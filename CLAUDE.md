@@ -6,31 +6,35 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 
 **Status:** server and screens built (E18-S12 open), no placeholders ([details](docs/development.md#status)).
 
+## NEVER USE DOCKER FOR DEVELOPMENT
+
+Database: PostgreSQL on **`postgres.gio.lan`**. Never run Docker, directly or by script (`db:up`, `ci:postgres`, `e2e:update`, `smoke`): it is for CI and operators only ([setup](docs/development.md#never-docker)).
+
 ## Where things are
 
 | Document | What it holds |
 |---|---|
-| [`README.md`](README.md) | Landing page: product, scope, quick start, documentation map |
-| [`docs/development.md`](docs/development.md) | Status, setup and run, every `package.json` script (exists or deferred) |
+| [`README.md`](README.md) | Product, scope, quick start |
+| [`docs/development.md`](docs/development.md) | Status, setup, every `package.json` script |
 | [`docs/configuration.md`](docs/configuration.md) | Environment variables |
 | [`docs/architecture.md`](docs/architecture.md) | Stack, layering, PR check flow, rules |
 | [`docs/data-model.md`](docs/data-model.md) | Tables, immutability, erasure, database roles |
 | [`docs/security.md`](docs/security.md) | Auth model, role matrix, security and privacy |
-| [`docs/privacy.md`](docs/privacy.md) | Data inventory, retention, erasure, backups |
+| [`docs/privacy.md`](docs/privacy.md) | Data inventory, retention, backups |
 | [`docs/github-app.md`](docs/github-app.md) | App permissions, events, check name, rules |
 | [`docs/operations.md`](docs/operations.md) | Key rotation, backups, poison jobs |
 | [`docs/decisions.md`](docs/decisions.md) | Decisions and reasons, open questions (legal) |
 | [`docs/repository-layout.md`](docs/repository-layout.md) | The directory tree |
 | [`docs/quality-gates.md`](docs/quality-gates.md) | Thresholds, TypeScript, testing, escape hatches |
 | [`docs/toolchain.md`](docs/toolchain.md) | Tool evaluation, hook pipeline, CI jobs |
-| [`docs/tooling-gotchas.md`](docs/tooling-gotchas.md) | Tool facts and traps, GitNexus, open verifications |
+| [`docs/tooling-gotchas.md`](docs/tooling-gotchas.md) | Tool traps, open verifications |
 | [`scripts/code-caps/README.md`](scripts/code-caps/README.md) | The structure-cap ratchet tool (`yarn caps`) |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | PR flow, branch protection, commit policy, changelog rule, licences |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | PR flow, commits, changelog, licences |
 | [`docs/ci-runners.md`](docs/ci-runners.md) | CI runner policy, fork-PR approval |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release notes; every PR adds a line under `[Unreleased]` |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
 | [`docs/EPICS_STORIES.md`](docs/EPICS_STORIES.md) | Work queue (`docs/epics/`); acceptance criteria are part of the definition of done |
 
-`README.md` (at most 10240 bytes) and this file (at most 6144) stay short on purpose; `scripts/docs/doc-size.test.ts` enforces both.
+`scripts/docs/doc-size.test.ts` caps `README.md` at 10240 bytes and this file at 6144.
 
 ## Hard rules (non-negotiable)
 
@@ -48,7 +52,6 @@ Operating contract for Claude Code and humans. CLA Platform: a GitHub App plus R
 ## Cross-cutting rules (detail: [`docs/architecture.md`](docs/architecture.md))
 
 - Layering: `src/shared` imports neither `src/server` nor `src/web`; `src/web` and `src/server` never import each other; decision logic is pure in `src/server/domain`, I/O only in `src/server/adapters`.
-- Immutability and identity: hard rules 5 and 4.
 - Tenancy: every query filters by installation id; cross-tenant tests are mandatory.
 - Boundaries: validate every external input (HTTP, webhooks, GitHub API responses, env) with zod; share schemas through `src/shared`.
 
