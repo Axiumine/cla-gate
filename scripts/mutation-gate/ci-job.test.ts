@@ -82,7 +82,7 @@ function quoted(file: string): string {
 test('the job is named after its shard, waits for static, runs on the shared self-hosted runners and may take five hours', () => {
   expect(job.name).toBe(`mutation (${SHARD})`);
   expect(job.needs).toBe('static');
-  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
+  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64', 'cla-ci']);
   // 300 is the cap the runner guard (rule R4, scripts/ci/lib/runner-rules.ts) gives this job and no other: the initial test
   // run of a shard is up to 240 minutes (stryker.config.mjs, which has the arithmetic and the measurements of the nightly run
   // of 2026-11-23: 15 338 tests at 930 ms each on the slowest shared runner), and the mutants need up to 50 more. The budget
@@ -108,7 +108,7 @@ test('max-parallel limits one workflow run, not the repository, and the document
   expect(workflow.concurrency['cancel-in-progress']).toBe(expression("github.event_name == 'pull_request'"));
   const runners = readText('docs/ci-runners.md');
   const row = runners.split('\n').find((line) => line.startsWith('| `mutation`')) ?? '';
-  expect(row).toContain('one workflow run holds at most one of the three shared runners');
+  expect(row).toContain('one workflow run holds the one runner with at most one shard at a time');
   expect(row).toContain('the limit is per run');
   expect(runners).not.toMatch(/never holds more than two/);
   expect(ciText).not.toMatch(/never holds more than two/);
@@ -116,7 +116,7 @@ test('max-parallel limits one workflow run, not the repository, and the document
   const risk =
     runners.split('\n').find((line) => line.startsWith('- **The mutation matrix and the shared runners')) ?? '';
   expect(risk).toContain('the nightly run, a `v*` tag push and a manual run are different groups and can overlap');
-  expect(risk).toContain('three overlapping runs ask for three runners while the organisation has three');
+  expect(risk).toContain('overlapping runs queue for the one runner that carries `cla-ci`');
   expect(risk).toContain('A push to `main` does not run the `mutation` job');
   for (const stale of [
     'the next push waits as the pending run',

@@ -44,7 +44,7 @@ const workflow = z
 test('the job is named leaks, waits for coverage, runs on the shared self-hosted runners and may take an hour (E18-S12: four screen scenarios of about 5 to 10 minutes each)', () => {
   expect(job.name).toBe('leaks');
   expect(job.needs).toBe('coverage');
-  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
+  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64', 'cla-ci']);
   expect(job['timeout-minutes']).toBe(60);
 });
 

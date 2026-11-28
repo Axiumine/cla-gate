@@ -28,7 +28,7 @@ function indexOfRun(run: string): number {
 
 test('the job is named container, runs on the shared self-hosted runners and may take 15 minutes', () => {
   expect(job.name).toBe('container');
-  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
+  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64', 'cla-ci']);
   expect(job['timeout-minutes']).toBe(15);
 });
 

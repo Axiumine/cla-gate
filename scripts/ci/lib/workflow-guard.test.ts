@@ -6,7 +6,7 @@ import { parse } from 'yaml';
 import { expression } from './test-support.ts';
 import { checkWorkflow, formatViolation } from './workflow-guard.ts';
 
-const SELF = '[self-hosted, Linux, X64]';
+const SELF = '[self-hosted, Linux, X64, cla-ci]';
 const CI = '.github/workflows/ci.yml';
 const RELEASE = '.github/workflows/release.yml';
 const CODEQL = '.github/workflows/codeql.yml';
@@ -25,15 +25,15 @@ function lines(file: string, text: string): string[] {
   return checkWorkflow(file, parsed).map(formatViolation);
 }
 
-const R1_MESSAGE = 'runs-on must be the literal ubuntu-24.04 or the literal list [self-hosted, Linux, X64]';
+const R1_MESSAGE = 'runs-on must be the literal ubuntu-24.04 or the literal list [self-hosted, Linux, X64, cla-ci]';
 
 test.each([
   ['ubuntu-24.04', '    runs-on: ubuntu-24.04'],
   ['a double-quoted ubuntu-24.04', '    runs-on: "ubuntu-24.04"'],
   ['a single-quoted ubuntu-24.04', "    runs-on: 'ubuntu-24.04'"],
   ['the flow list', `    runs-on: ${SELF}`],
-  ['the block list', '    runs-on:\n      - self-hosted\n      - Linux\n      - X64'],
-  ['the quoted flow list', '    runs-on: ["self-hosted", \'Linux\', "X64"]'],
+  ['the block list', '    runs-on:\n      - self-hosted\n      - Linux\n      - X64\n      - cla-ci'],
+  ['the quoted flow list', '    runs-on: ["self-hosted", \'Linux\', "X64", "cla-ci"]'],
   ['an anchored list', `    runs-on: &runner ${SELF}`],
 ])('R1 accepts %s', (_what, runsOn) => {
   expect(lines(CI, workflow({ job: `${runsOn}\n    timeout-minutes: 5` }))).toEqual([]);
@@ -69,8 +69,18 @@ test.each([
   ['self-hosted alone', '    runs-on: self-hosted', '"self-hosted"'],
   ['lower-case labels', '    runs-on: [self-hosted, linux, x64]', '["self-hosted","linux","x64"]'],
   ['a shorter list', '    runs-on: [self-hosted, Linux]', '["self-hosted","Linux"]'],
-  ['a longer list', '    runs-on: [self-hosted, Linux, X64, gpu]', '["self-hosted","Linux","X64","gpu"]'],
-  ['the labels in another order', '    runs-on: [Linux, self-hosted, X64]', '["Linux","self-hosted","X64"]'],
+  ['the list without the cla-ci label', '    runs-on: [self-hosted, Linux, X64]', '["self-hosted","Linux","X64"]'],
+  ['another custom label', '    runs-on: [self-hosted, Linux, X64, gpu]', '["self-hosted","Linux","X64","gpu"]'],
+  [
+    'a longer list',
+    '    runs-on: [self-hosted, Linux, X64, cla-ci, gpu]',
+    '["self-hosted","Linux","X64","cla-ci","gpu"]',
+  ],
+  [
+    'the labels in another order',
+    '    runs-on: [Linux, self-hosted, X64, cla-ci]',
+    '["Linux","self-hosted","X64","cla-ci"]',
+  ],
   ['ubuntu-24.04 in a list', '    runs-on: [ubuntu-24.04]', '["ubuntu-24.04"]'],
   ['the group form', '    runs-on:\n      group: default', '{"group":"default"}'],
   ['the labels form', '    runs-on:\n      labels: [self-hosted]', '{"labels":["self-hosted"]}'],

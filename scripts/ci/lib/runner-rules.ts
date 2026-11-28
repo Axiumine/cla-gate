@@ -4,7 +4,8 @@ import { printable } from '../../code-caps/types.ts';
 import { describe, isList, isMapping, type Mapping, type Violation } from './guard-types.ts';
 
 const HOSTED_RUNNER = 'ubuntu-24.04';
-const SELF_HOSTED_RUNNER: readonly string[] = ['self-hosted', 'Linux', 'X64'];
+/** `cla-ci` is the custom label of the one organisation runner this repository's jobs run on (docs/ci-runners.md). */
+const SELF_HOSTED_RUNNER: readonly string[] = ['self-hosted', 'Linux', 'X64', 'cla-ci'];
 const SELF_HOSTED_JSON = JSON.stringify(SELF_HOSTED_RUNNER);
 const FORBIDDEN_TRIGGERS: ReadonlySet<string> = new Set(['pull_request_target', 'workflow_run']);
 /** A job on a shared persistent host may run for an hour at most; the runner's own limit is days. */
