@@ -20,10 +20,10 @@ const stepSchema = z.object({
 });
 // The two runners the guard allows (docs/ci-runners.md). The break-glass edit changes the first into the second.
 const HOSTED = 'ubuntu-24.04';
-const SELF_HOSTED_LINE = 'runs-on: [self-hosted, Linux, X64]';
+const SELF_HOSTED_LINE = 'runs-on: [self-hosted, Linux, X64, cla-ci]';
 const runnerSchema = z.union([
   z.literal(HOSTED),
-  z.tuple([z.literal('self-hosted'), z.literal('Linux'), z.literal('X64')]),
+  z.tuple([z.literal('self-hosted'), z.literal('Linux'), z.literal('X64'), z.literal('cla-ci')]),
 ]);
 const jobSchema = z.object({
   name: z.string(),
@@ -109,7 +109,7 @@ test('the jobs are static, coverage-shard, coverage, postgres, semgrep, trivy, m
 
 test('every job but qodana runs on the shared self-hosted runners, qodana on ubuntu-24.04, and each has a timeout', () => {
   const runners = new Set(sharedJobs().map(([, job]) => JSON.stringify(job['runs-on'])));
-  expect([...runners]).toEqual([JSON.stringify(['self-hosted', 'Linux', 'X64'])]);
+  expect([...runners]).toEqual([JSON.stringify(['self-hosted', 'Linux', 'X64', 'cla-ci'])]);
   expect(GITHUB_HOSTED_JOBS.map((id) => jobNamed(id)['runs-on'])).toEqual([HOSTED]);
   for (const [id, job] of [...jobs.entries()]) {
     expect(job['timeout-minutes']).toBeGreaterThan(0);

@@ -6,8 +6,9 @@
 # "Repository protection"): renaming a job breaks the rule. The fourth required check, `codeql`, is the closing job of
 # the separate workflow codeql.yml.
 #
-# Runners: every job but one runs on the maintainer's persistent, shared, self-hosted runners, spelled as the literal list
-# [self-hosted, Linux, X64] and never as an expression (a runs-on expression is not a security boundary: on
+# Runners: every job but one runs on one of the maintainer's persistent, shared, self-hosted runners, the one that carries
+# the custom label cla-ci (proxmox1-gio-home-github-ci, since 2026-11-28), spelled as the literal list
+# [self-hosted, Linux, X64, cla-ci] and never as an expression (a runs-on expression is not a security boundary: on
 # pull_request the workflow file comes from the PR). The only protection of that shared host is the fork approval gate.
 # The exception is `qodana` (E20-S08): the one job that holds a secret (QODANA_TOKEN), which the runner policy keeps off the
 # shared runners, so it runs on the literal ubuntu-24.04 (GitHub-hosted, a fresh virtual machine per run). It is also a
@@ -99,7 +100,7 @@ env:
 jobs:
   static:
     name: static
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 15
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs. Also the first look at a
@@ -200,7 +201,7 @@ jobs:
   # A matrix job reports one check per leg (`coverage shard (1/4)` and so on) and none of them is the required one.
   coverage-shard:
     name: coverage shard (${{ matrix.index }}/4)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     # Meant to take 15 to 20 minutes on `app1-gio-home-github-ci`: a quarter of the whole suite, which needed more than the 45
     # minutes of the old job there (28 to 31 for 17 000 tests on 2026-11-04), plus the checkout and the install. 40 leaves
     # room for a loaded runner and stays under the 45 that the one job lost.
@@ -318,7 +319,7 @@ jobs:
     name: coverage
     needs: coverage-shard
     if: ${{ always() }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     # Checkout and install, then a merge of four reports that takes about a minute.
     timeout-minutes: 15
     steps:
@@ -468,7 +469,7 @@ jobs:
   # name of a leg is `postgres (i/4)`; none of them is a required check.
   postgres:
     name: postgres (${{ matrix.index }}/4)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 60
     strategy:
       # One failed shard says nothing about the others.
@@ -577,7 +578,7 @@ jobs:
   # No SARIF upload, no artifact and no cache of rules/: the Semgrep Rules License v1.0 restricts redistribution.
   semgrep:
     name: semgrep
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 20
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs. python3 and pipx are needed
@@ -670,7 +671,7 @@ jobs:
   # No image is built or scanned: Trivy only reads files.
   trivy:
     name: trivy
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 20
     env:
       TRIVY_NO_PROGRESS: "true"
@@ -766,8 +767,8 @@ jobs:
   # mutating code that does not even pass the static checks is wasted time.
   #
   # When it runs: the nightly schedule (always cold, --force, the safety net), a manual run and a v* tag push (a release
-  # candidate). Not on pull requests, and not on a push to main (2026-11-02): a cold sharded run holds two shared runners for
-  # hours, and one per merge would saturate the three runners that other repositories use too.
+  # candidate). Not on pull requests, and not on a push to main (2026-11-02): a cold sharded run holds the shared runner for
+  # days, and one per merge would never let go of a runner that other repositories use too.
   #
   # Skip when nothing changed (E20-S04): the nightly run pays only when something moved. The step `decide` asks the Actions
   # REST API (GET only, the job token with `actions: read`) whether the newest earlier completed run of this workflow of
@@ -793,8 +794,8 @@ jobs:
   #
   # What `max-parallel` does not do, accepted on 2026-11-02: it limits one workflow run, not the repository. The concurrency
   # group of the workflow is `ci-<event>-<ref>`, so the nightly run, a tag push and a manual run are different groups and can
-  # overlap, each with its own shard; three overlapping runs ask for three runners while the organisation has three, and
-  # the jobs of other repositories and the `static` and `coverage` of this one wait behind them. Stopping the older run would
+  # overlap, each with its own shard; this repository's jobs share one runner (the cla-ci label), so each of them waits for
+  # it, and the `static` and `coverage` of a pull request wait behind the shards. Stopping the older run would
   # throw away hours of work, and one group for all events would cancel shards, so the overlap is accepted and not prevented.
   # The overlap is rare: it takes a manual run and a tag push on top of a nightly run that is still working, because a push
   # to main does not run the job. It is listed in docs/ci-runners.md (Known unknowns and risks) and in the Open line of
@@ -824,7 +825,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     # 300 minutes, the one job that the runner guard lets run longer than the 60 minutes of every other (R4, docs/ci-runners.md).
     # Every shard repeats Stryker's initial test run of the whole server suite, serially in one process
     # (dryRunTimeoutMinutes of stryker.config.mjs: 240 minutes, the 15 338 tests of the biggest shard at the 930 ms per test
@@ -982,7 +983,7 @@ jobs:
   e2e:
     name: e2e
     needs: static
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 20
     env:
       E2E_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
@@ -1113,7 +1114,7 @@ jobs:
   # it when the job is cancelled in between. The image is pulled from Docker Hub by the first run; nothing is pushed.
   caddy:
     name: caddy
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 10
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs. The container needs a Docker
@@ -1204,7 +1205,7 @@ jobs:
   # stacks are written to reports/smoke by the test and uploaded when a step fails.
   container:
     name: container
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 15
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs: a Docker daemon the runner user
@@ -1315,7 +1316,7 @@ jobs:
     name: leaks
     needs: coverage
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, cla-ci]
     timeout-minutes: 60
     steps:
       # Fails fast, before anything is downloaded, when the runner lacks what the job needs.

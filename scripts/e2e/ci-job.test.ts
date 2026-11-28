@@ -35,7 +35,7 @@ const rawJob = z
 test('the job is named e2e, waits for static, runs on the shared self-hosted runners and may take 20 minutes', () => {
   expect(job.name).toBe('e2e');
   expect(job.needs).toBe('static');
-  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
+  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64', 'cla-ci']);
   expect(job['timeout-minutes']).toBe(20);
 });
 

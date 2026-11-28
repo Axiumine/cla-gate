@@ -27,7 +27,7 @@ const pinned = /pipx install semgrep==(\d+\.\d+\.\d+)$/m.exec(stepRun(INSTALL))?
 test('the job is named semgrep, has no needs, runs on the shared self-hosted runners and has a timeout', () => {
   expect(job.name).toBe('semgrep');
   expect(job.needs).toBeUndefined();
-  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
+  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64', 'cla-ci']);
   expect(job['timeout-minutes']).toBeGreaterThan(0);
   expect(job['timeout-minutes']).toBeLessThanOrEqual(20);
 });

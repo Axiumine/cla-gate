@@ -13,7 +13,7 @@ function workflow(runsOn: string, extra = ''): string {
   return `on: pull_request\npermissions:\n  contents: read\njobs:\n  build:\n    runs-on: ${runsOn}\n    timeout-minutes: 5\n${extra}`;
 }
 
-const GOOD = workflow('[self-hosted, Linux, X64]');
+const GOOD = workflow('[self-hosted, Linux, X64, cla-ci]');
 const BAD = workflow('ubuntu-latest');
 
 /** Runs the guard over a temp repository holding `files` (paths relative to the repository). */
@@ -38,11 +38,11 @@ function aliasBomb(): string {
 test('workflows in .yml and .yaml, flow or block lists, quoted scalars and anchors all pass', () => {
   const result = guard({
     [`${DIR}/ci.yml`]: GOOD,
-    [`${DIR}/block.yaml`]: workflow('\n      - self-hosted\n      - Linux\n      - X64'),
-    [`${DIR}/quoted.yml`]: workflow('["self-hosted", \'Linux\', "X64"]'),
+    [`${DIR}/block.yaml`]: workflow('\n      - self-hosted\n      - Linux\n      - X64\n      - cla-ci'),
+    [`${DIR}/quoted.yml`]: workflow('["self-hosted", \'Linux\', "X64", "cla-ci"]'),
     [`${DIR}/hosted.yaml`]: workflow('"ubuntu-24.04"'),
     [`${DIR}/anchors.yml`]: workflow(
-      '&r [self-hosted, Linux, X64]',
+      '&r [self-hosted, Linux, X64, cla-ci]',
       '  other:\n    runs-on: *r\n    timeout-minutes: 5\n',
     ),
   });
@@ -76,8 +76,8 @@ test('violations are listed per file in code point order, then summarised, with 
   expect(out).toEqual([]);
   expect(err).toEqual([
     `${DIR}/a.yaml: workflow: R3 trigger pull_request_target is forbidden`,
-    `${DIR}/a.yaml: job "build": R1 runs-on must be the literal ubuntu-24.04 or the literal list [self-hosted, Linux, X64], found "ubuntu-latest"`,
-    `${DIR}/b.yml: job "build": R1 runs-on must be the literal ubuntu-24.04 or the literal list [self-hosted, Linux, X64], found "ubuntu-latest"`,
+    `${DIR}/a.yaml: job "build": R1 runs-on must be the literal ubuntu-24.04 or the literal list [self-hosted, Linux, X64, cla-ci], found "ubuntu-latest"`,
+    `${DIR}/b.yml: job "build": R1 runs-on must be the literal ubuntu-24.04 or the literal list [self-hosted, Linux, X64, cla-ci], found "ubuntu-latest"`,
     'ci runners FAILED: 3 violation(s) in 3 workflow file(s)',
   ]);
 });

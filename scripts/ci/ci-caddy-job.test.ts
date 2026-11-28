@@ -13,7 +13,7 @@ const names = job.steps.map((step) => step.name);
 
 test('the job is named caddy, runs on the shared self-hosted runners and may take 10 minutes', () => {
   expect(job.name).toBe('caddy');
-  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64']);
+  expect(job['runs-on']).toEqual(['self-hosted', 'Linux', 'X64', 'cla-ci']);
   expect(job['timeout-minutes']).toBe(10);
 });
 

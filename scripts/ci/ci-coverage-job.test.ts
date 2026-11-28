@@ -35,7 +35,7 @@ const jobSchema = z.object({
   name: z.string(),
   needs: z.unknown().optional(),
   if: z.string().optional(),
-  'runs-on': z.tuple([z.literal('self-hosted'), z.literal('Linux'), z.literal('X64')]),
+  'runs-on': z.tuple([z.literal('self-hosted'), z.literal('Linux'), z.literal('X64'), z.literal('cla-ci')]),
   'timeout-minutes': z.number(),
   strategy: z.unknown().optional(),
   'continue-on-error': z.unknown().optional(),
